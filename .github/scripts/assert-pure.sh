@@ -25,7 +25,7 @@ pure_crates=("tinyhivemind-core" "tinyhivemind-hive")
 # `async-trait`, which it needs for its ports — but not from the rest. Its
 # ports are boxed `std::future::Future`s, so today it needs none of the three;
 # the exemption exists so that adding one is not a CI failure.
-exempt_async_crates=("tinyhivemind")
+exempt_async_crates=("tinyhivemind" "tinyhivemind-embed" "tinyhivemind-typesafe")
 
 # This is a maintained blocklist of known offenders, not an exhaustive
 # allowlist: it names every async runtime, transport, HTTP client, database

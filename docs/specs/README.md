@@ -63,6 +63,12 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 - [`jev-integration.md`](jev-integration.md) — typed routing distributions,
   admission-gated probabilistic quorum, approval narrowing, and paired Jev
   versus strict-JSON evaluation.
+- [`jev-first-routing.md`](jev-first-routing.md) — Jev-first primary selection,
+  one reasoning escalation, and bounded specialist invitations.
+- [`conversation-surfaces.md`](conversation-surfaces.md) — explicit desk,
+  direct, general, and workflow semantics at the host boundary.
+- [`opencompany-routing-compatibility.md`](opencompany-routing-compatibility.md)
+  — the snapshot boundary for a later storage-preserving host adapter.
 - [`approval.md`](approval.md) — a pure gate for a side-effecting action:
   total approval, standing grants, and epoch-scoped consent.
   - [`approval-testing.md`](approval-testing.md) — the full failure-path test

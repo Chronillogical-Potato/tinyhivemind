@@ -67,9 +67,13 @@ crates/
 │                             # of behavior-grouped submodules once it grows
 ├── tinyhivemind/          # the session runtime: ports, the paging walk, the
 │                       # responder ladder. Lands in P4; see ROADMAP.md.
-└── tinyhivemind-hive/     # bounded group deliberation: traces, salience, quorum
+├── tinyhivemind-hive/     # bounded group deliberation: traces, salience, quorum
                         # with cross-inhibition, the attention market, and the
                         # episode state machine. Pure, opt-in; lands in P8.
+├── tinyhivemind-embed/    # host-neutral conversation surfaces and validated
+│                       # Jev-first routing composition
+└── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
+                        # one transport port; no HTTP client or async runtime
 docs/
 ├── specs/              # behavior and architecture specifications
 ├── plans/              # test-first implementation plans
@@ -101,6 +105,16 @@ alone it belongs in the core crate; if it has to await a read, a write, or a
 model call, it belongs behind a port in the runtime crate. When in doubt, put
 the decision in the core crate and the waiting in the runtime crate — that split
 is what keeps the interesting logic testable without a fixture.
+
+### The embedding crates
+
+`crates/tinyhivemind-embed` names host-neutral conversation surfaces and
+combines semantic routing with deterministic eligibility, escalation, and
+fallback. It never parses a host chat id or names an OpenCompany/OpenHuman
+type. `crates/tinyhivemind-typesafe` builds the exact batched System One
+questions for that surface and converts responses to fixed-point evaluations.
+Its `SystemOneTransport` is the only waiting boundary; HTTP, credentials, and
+retry scheduling remain in the host adapter.
 
 ### The hive crate
 

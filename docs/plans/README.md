@@ -48,3 +48,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
   surface through `tinytools`, both as example-only dev-dependencies.
 - [`jev-integration.md`](jev-integration.md) — land P16, typed selection,
   probabilistic quorum, the native Jev adapter, and paired evaluation.
+- [`jev-first-routing.md`](jev-first-routing.md) — host-neutral conversation
+  surfaces, Jev-first desk routing, bounded hive invitations, and fallback.

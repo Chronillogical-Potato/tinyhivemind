@@ -1,0 +1,21 @@
+[package]
+name = "tinyhivemind-typesafe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Jev System One routing adapter for TinyHiveMind behind a transport port."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tinyhivemind = { workspace = true }
+tinyhivemind-embed = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lints]
+workspace = true
