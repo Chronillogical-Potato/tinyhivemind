@@ -4,6 +4,10 @@
 //! Score, and Noul questions. Code owns ground truth, scoring, prices, and the
 //! markdown table; neither model is asked to grade itself.
 
+mod schema;
+#[cfg(test)]
+mod test;
+
 use std::{
     io::Write as _,
     process::{Command, Stdio},
@@ -11,12 +15,13 @@ use std::{
 };
 
 use serde_json::{Value, json};
-use tinyjevclient::{Answer, Client, EvaluationRequest, EvaluationResponse, Question, Usage};
+use tinyjevclient::{Answer, Client, EvaluationRequest, EvaluationResponse, Usage};
 
 use crate::cli::Options;
 use crate::jev::{
     ActionAssessment, JevSelector, decision_from_response, narrow_effect, turn_request,
 };
+use schema::response_schema;
 use tinyhivemind_hive::{Sequence, TopicId, approval::Effect, responder::Probability};
 
 const BASELINE_MODEL: &str = "openai/gpt-5-mini";
@@ -388,93 +393,6 @@ fn call_baseline(key: &str, request: &EvaluationRequest) -> Result<Sample, Strin
     })
 }
 
-fn response_schema(request: &EvaluationRequest) -> Value {
-    let properties = request
-        .questions
-        .iter()
-        .map(|(id, question)| {
-            let schema = match question {
-                Question::Choice(choice) => {
-                    let options: Vec<&str> = choice.criteria.keys().map(String::as_str).collect();
-                    let probability_properties = choice
-                        .criteria
-                        .keys()
-                        .map(|option| (option.clone(), probability_schema()))
-                        .collect::<serde_json::Map<_, _>>();
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "type": {"type": "string", "const": "choice"},
-                            "choice": {"type": "string", "enum": options},
-                            "probabilities": {
-                                "type": "object",
-                                "properties": probability_properties,
-                                "required": choice.criteria.keys().collect::<Vec<_>>(),
-                                "additionalProperties": false
-                            },
-                            "confidence": probability_schema()
-                        },
-                        "required": ["type", "choice", "probabilities", "confidence"],
-                        "additionalProperties": false
-                    })
-                }
-                Question::Score(score) => {
-                    let keys: Vec<String> = (0..score.criteria.len()).map(|i| i.to_string()).collect();
-                    let probabilities = keys
-                        .iter()
-                        .map(|key| (key.clone(), probability_schema()))
-                        .collect::<serde_json::Map<_, _>>();
-                    let legend = keys
-                        .iter()
-                        .enumerate()
-                        .map(|(index, key)| (key.clone(), score.criteria[index].clone()))
-                        .collect::<serde_json::Map<_, _>>();
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "type": {"type": "string", "const": "score"},
-                            "score": {"type": "number", "minimum": 0, "maximum": score.criteria.len() - 1},
-                            "legend": {"type": "object", "const": legend},
-                            "probabilities": {
-                                "type": "object", "properties": probabilities,
-                                "required": keys, "additionalProperties": false
-                            },
-                            "confidence": probability_schema()
-                        },
-                        "required": ["type", "score", "legend", "probabilities", "confidence"],
-                        "additionalProperties": false
-                    })
-                }
-                Question::Noul(_) => json!({
-                    "type": "object",
-                    "properties": {
-                        "type": {"type": "string", "const": "noul"},
-                        "noul": probability_schema()
-                    },
-                    "required": ["type", "noul"],
-                    "additionalProperties": false
-                }),
-            };
-            (id.clone(), schema)
-        })
-        .collect::<serde_json::Map<_, _>>();
-    json!({
-        "type": "object",
-        "properties": {"answers": {
-            "type": "object",
-            "properties": properties,
-            "required": request.questions.keys().collect::<Vec<_>>(),
-            "additionalProperties": false
-        }},
-        "required": ["answers"],
-        "additionalProperties": false
-    })
-}
-
-fn probability_schema() -> Value {
-    json!({"type": "number", "minimum": 0, "maximum": 1})
-}
-
 fn post_openrouter(key: &str, body: &Value) -> Result<Value, String> {
     let script = format!(
         "url = \"{}\"\nrequest = \"POST\"\nheader = \"Content-Type: application/json\"\nheader = \"Authorization: Bearer {}\"\ndata-binary = \"{}\"\nmax-time = 180\nsilent\nshow-error\nfail-with-body\n",
@@ -735,62 +653,5 @@ fn savings(baseline: f64, hybrid: f64) -> f64 {
         0.0
     } else {
         100.0 * (baseline - hybrid) / baseline
-    }
-}
-
-#[cfg(test)]
-mod test {
-    #![allow(clippy::expect_used, clippy::float_cmp)]
-
-    use super::*;
-
-    #[test]
-    fn cases_cycle_deterministically_with_explicit_truth() {
-        assert_eq!(Case::at(0).route, "reviewer");
-        assert_eq!(Case::at(1).evidence, 1);
-        assert!(Case::at(3).violation);
-        assert_eq!(Case::at(6).route, Case::at(0).route);
-    }
-
-    #[test]
-    fn request_batches_all_three_independent_primitives() {
-        let request = Case::at(0).request();
-        assert!(matches!(request.questions["stance"], Question::Choice(_)));
-        assert!(matches!(request.questions["evidence"], Question::Score(_)));
-        assert!(matches!(request.questions["violation"], Question::Noul(_)));
-        request.validate().expect("valid benchmark request");
-    }
-
-    #[test]
-    fn strict_schema_requires_every_answer_and_distribution_member() {
-        let request = Case::at(0).request();
-        let schema = response_schema(&request);
-        assert_eq!(schema["required"], json!(["answers"]));
-        assert_eq!(
-            schema["properties"]["answers"]["required"],
-            json!(["evidence", "stance", "violation"])
-        );
-        assert_eq!(
-            schema["properties"]["answers"]["properties"]["stance"]["properties"]["probabilities"]
-                ["additionalProperties"],
-            false
-        );
-    }
-
-    #[test]
-    fn percentile_and_delta_helpers_are_total() {
-        let aggregate = Aggregate {
-            latencies: vec![4.0, 1.0, 3.0, 2.0],
-            ..Aggregate::default()
-        };
-        assert_eq!(aggregate.p50(), 2.0);
-        assert_eq!(aggregate.p99(), 3.0);
-        assert_eq!(divide(1.0, 0.0), 0.0);
-        assert_eq!(savings(0.0, 1.0), 0.0);
-    }
-
-    #[test]
-    fn curl_config_escaping_covers_secrets_and_json_control_characters() {
-        assert_eq!(escape("a\\\"\n\r"), "a\\\\\\\"\\n\\r");
     }
 }
