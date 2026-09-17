@@ -27,9 +27,12 @@ An ordinary eligible desk produces one System One request containing one
 candidate. The Choice contains every eligible agent and `none`; it is not a
 multi-label result.
 
-For a desk larger than the configured Choice limit, one batched suitability
-screen produces a bounded shortlist and one final Choice. Non-shortlisted
-candidates remain in the audited fixed-point domain with zero probability.
+For a desk larger than the configured Choice limit, the normal one-request
+path has an explicit, bounded exception: one batched suitability screen first
+produces a bounded shortlist, followed by one final Choice request. Thus an
+oversized desk makes exactly two Jev requests; it never sends an over-limit
+Choice. Non-shortlisted candidates remain in the audited fixed-point domain
+with zero probability.
 
 ## Invariants and constraints
 
@@ -50,7 +53,8 @@ stale snapshots, and failed escalation use the deterministic desk fallback.
 
 ## Acceptance criteria
 
-- Ordinary desk routing performs exactly one batched Jev request.
+- A desk within the configured Choice limit performs exactly one batched Jev
+  request; an oversized desk performs the documented two-request hierarchy.
 - Mentions, DMs, General, and Workflow perform none.
 - No unavailable or non-member id can be accepted.
 - Provider and escalation failures return an auditable fallback reason.

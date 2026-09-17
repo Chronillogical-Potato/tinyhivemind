@@ -18,7 +18,7 @@
 pub mod conversation;
 pub mod routing;
 
-pub use conversation::{ConversationKind, ConversationRef, MessageRoute};
+pub use conversation::{ConversationKind, ConversationRef, MessageRoute, MessageRouteError};
 pub use routing::{
     CandidateProbability, ContributionProbability, EvaluationDisposition, RouteCandidate, Router,
     RouterError, RouterFuture, RoutingEvaluation, RoutingFallback, RoutingPlan, RoutingPolicy,

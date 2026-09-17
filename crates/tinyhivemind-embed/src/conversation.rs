@@ -1,5 +1,7 @@
 //! Explicit host-neutral conversation surfaces and outbound message routes.
 
+use std::{error::Error as StdError, fmt};
+
 use serde::{Deserialize, Serialize};
 use tinyhivemind::Sequence;
 
@@ -58,4 +60,59 @@ pub enum MessageRoute {
         /// Canonical destination desk id.
         desk_id: String,
     },
+}
+
+/// A message route that would violate a deterministic host bound.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MessageRouteError {
+    /// A desk aside names more recipients than the opening-round limit.
+    DeskAsideTooWide {
+        /// Number of recipients named by the authored route.
+        recipient_count: usize,
+        /// Maximum number of recipients the host permits in one round.
+        round_width: usize,
+    },
+}
+
+impl fmt::Display for MessageRouteError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DeskAsideTooWide {
+                recipient_count,
+                round_width,
+            } => write!(
+                formatter,
+                "desk aside names {recipient_count} recipients but the round width is {round_width}"
+            ),
+        }
+    }
+}
+
+impl StdError for MessageRouteError {}
+
+impl MessageRoute {
+    /// Validate this route against the host's opening-round recipient bound.
+    ///
+    /// Hosts must call this before durably writing a `DeskAside`. The bound is
+    /// supplied at the host boundary because it is a routing-policy decision,
+    /// rather than a property of a host-neutral wire payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MessageRouteError::DeskAsideTooWide`] when a desk aside would
+    /// name more recipients than `round_width` permits.
+    pub fn validate_for_round_width(&self, round_width: usize) -> Result<(), MessageRouteError> {
+        match self {
+            Self::DeskAside { recipient_ids } if recipient_ids.len() > round_width => {
+                Err(MessageRouteError::DeskAsideTooWide {
+                    recipient_count: recipient_ids.len(),
+                    round_width,
+                })
+            }
+            Self::CurrentConversation | Self::DirectAgent { .. } | Self::DeskReferral { .. } => {
+                Ok(())
+            }
+            Self::DeskAside { .. } => Ok(()),
+        }
+    }
 }

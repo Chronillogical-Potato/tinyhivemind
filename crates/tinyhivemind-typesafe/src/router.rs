@@ -59,6 +59,11 @@ impl<T> JevRouter<T> {
 impl<T: SystemOneTransport> Router for JevRouter<T> {
     fn evaluate<'a>(&'a self, request: &'a RoutingRequest) -> RouterFuture<'a> {
         Box::pin(async move {
+            if !valid_candidate_ids(request) {
+                return Err(conversion(
+                    "routing candidate ids must be unique, nonempty, and not none",
+                ));
+            }
             let eligible: Vec<_> = request
                 .candidates
                 .iter()
@@ -120,6 +125,15 @@ impl<T: SystemOneTransport> Router for JevRouter<T> {
             convert_response(request, &eligible, &final_response, Some(&screened))
         })
     }
+}
+
+fn valid_candidate_ids(request: &RoutingRequest) -> bool {
+    let ids: BTreeSet<_> = request
+        .candidates
+        .iter()
+        .map(|candidate| candidate.id.as_str())
+        .collect();
+    ids.len() == request.candidates.len() && !ids.contains("") && !ids.contains("none")
 }
 
 fn state(

@@ -183,6 +183,12 @@ async fn invalid_candidate_and_choice_bounds_fail_before_transport() {
     no_candidates.candidates = request(1, 8).candidates;
     no_candidates.policy.choice_option_limit = 1;
     assert!(router.evaluate(&no_candidates).await.is_err());
+    no_candidates.policy.choice_option_limit = 8;
+    no_candidates.candidates = request(2, 8).candidates;
+    no_candidates.candidates[1].id = no_candidates.candidates[0].id.clone();
+    assert!(router.evaluate(&no_candidates).await.is_err());
+    no_candidates.candidates[1].id = "none".into();
+    assert!(router.evaluate(&no_candidates).await.is_err());
     assert!(router.transport().requests.lock().unwrap().is_empty());
 }
 
