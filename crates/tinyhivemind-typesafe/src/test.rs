@@ -40,7 +40,7 @@ impl SystemOneTransport for FakeTransport {
         self.requests.lock().unwrap().push(request.clone());
         let response = self.responses.lock().unwrap().pop_front();
         Box::pin(async move {
-            response.ok_or_else(|| TransportError {
+            response.ok_or_else(|| Error::Transport {
                 status: None,
                 message: "no fake response".into(),
             })
@@ -190,7 +190,14 @@ async fn invalid_candidate_and_choice_bounds_fail_before_transport() {
     no_candidates.candidates[1].id = "none".into();
     assert!(router.evaluate(&no_candidates).await.is_err());
     no_candidates.candidates[1].id = "   ".into();
-    assert!(router.evaluate(&no_candidates).await.is_err());
+    let error = router
+        .evaluate(&no_candidates)
+        .await
+        .expect_err("whitespace ids are rejected");
+    assert!(matches!(
+        error.downcast_ref::<Error>(),
+        Some(Error::InvalidCandidateIds)
+    ));
     assert!(router.transport().requests.lock().unwrap().is_empty());
 }
 
@@ -232,19 +239,19 @@ fn only_rate_limit_and_overload_are_retryable() {
     assert_eq!(classify_retry(401), RetryClass::Permanent);
     assert_eq!(classify_retry(422), RetryClass::Permanent);
     assert_eq!(
-        TransportError {
+        Error::Transport {
             status: Some(429),
             message: "slow down".into(),
         }
         .to_string(),
-        "System One transport returned 429: slow down"
+        "System One transport Some(429): slow down"
     );
     assert_eq!(
-        TransportError {
+        Error::Transport {
             status: None,
             message: "offline".into(),
         }
         .to_string(),
-        "System One transport failed: offline"
+        "System One transport None: offline"
     );
 }
