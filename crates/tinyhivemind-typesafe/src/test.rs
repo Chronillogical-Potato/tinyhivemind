@@ -174,6 +174,18 @@ async fn large_desk_uses_bounded_screening_then_shortlist_choice() {
     assert_eq!(criteria.len(), 3);
 }
 
+#[tokio::test]
+async fn invalid_candidate_and_choice_bounds_fail_before_transport() {
+    let transport = FakeTransport::new([]);
+    let router = JevRouter::with_model(transport, "jev-pinned");
+    let mut no_candidates = request(0, 8);
+    assert!(router.evaluate(&no_candidates).await.is_err());
+    no_candidates.candidates = request(1, 8).candidates;
+    no_candidates.policy.choice_option_limit = 1;
+    assert!(router.evaluate(&no_candidates).await.is_err());
+    assert!(router.transport().requests.lock().unwrap().is_empty());
+}
+
 #[test]
 fn wire_shapes_match_the_system_one_api() {
     let request = SystemOneRequest {
@@ -211,4 +223,20 @@ fn only_rate_limit_and_overload_are_retryable() {
     assert_eq!(classify_retry(529), RetryClass::Retryable);
     assert_eq!(classify_retry(401), RetryClass::Permanent);
     assert_eq!(classify_retry(422), RetryClass::Permanent);
+    assert_eq!(
+        TransportError {
+            status: Some(429),
+            message: "slow down".into(),
+        }
+        .to_string(),
+        "System One transport returned 429: slow down"
+    );
+    assert_eq!(
+        TransportError {
+            status: None,
+            message: "offline".into(),
+        }
+        .to_string(),
+        "System One transport failed: offline"
+    );
 }

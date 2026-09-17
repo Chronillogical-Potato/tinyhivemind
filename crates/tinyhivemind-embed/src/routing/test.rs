@@ -121,6 +121,18 @@ impl Router for FakeRouter {
     }
 }
 
+#[derive(Debug)]
+struct FailingRouter {
+    calls: Arc<AtomicUsize>,
+}
+
+impl Router for FailingRouter {
+    fn evaluate<'a>(&'a self, _request: &'a RoutingRequest) -> RouterFuture<'a> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async move { Err(std::io::Error::other("simulated failure").into()) })
+    }
+}
+
 #[tokio::test]
 async fn explicit_mentions_and_direct_conversations_bypass_semantic_routing() {
     let calls = Arc::new(AtomicUsize::new(0));
@@ -301,8 +313,126 @@ async fn malformed_candidate_snapshots_are_rejected_before_a_provider_call() {
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
+#[tokio::test]
+async fn every_unavailable_provider_path_uses_a_bounded_fallback() {
+    let mut desk = request(ConversationKind::Desk);
+    let absent = route_message(None, None, &desk, None, "eng").await;
+    assert!(matches!(
+        absent,
+        RoutingPlan::Fallback {
+            reason: RoutingFallback::ProviderUnavailable,
+            ..
+        }
+    ));
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let failing = FailingRouter {
+        calls: Arc::clone(&calls),
+    };
+    let failed = route_message(Some(&failing), None, &desk, None, "eng").await;
+    assert!(matches!(
+        failed,
+        RoutingPlan::Fallback {
+            reason: RoutingFallback::ProviderUnavailable,
+            ..
+        }
+    ));
+
+    for candidate in &mut desk.candidates {
+        candidate.available = false;
+    }
+    let unavailable = route_message(Some(&failing), None, &desk, None, "eng").await;
+    assert!(matches!(
+        unavailable,
+        RoutingPlan::Fallback {
+            reason: RoutingFallback::NoEligibleCandidate,
+            ..
+        }
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn one_agent_plan_stale_roster_and_missing_escalator_are_total() {
+    let mut single = evaluation();
+    single.needs_collaboration = probability(100_000);
+    let router = FakeRouter {
+        calls: Arc::new(AtomicUsize::new(0)),
+        evaluation: single,
+    };
+    let one = route_message(
+        Some(&router),
+        None,
+        &request(ConversationKind::Desk),
+        None,
+        "eng",
+    )
+    .await;
+    assert!(matches!(one, RoutingPlan::One { .. }));
+
+    let mut stale = evaluation();
+    stale.roster_version -= 1;
+    let router = FakeRouter {
+        calls: Arc::new(AtomicUsize::new(0)),
+        evaluation: stale,
+    };
+    let stale = route_message(
+        Some(&router),
+        None,
+        &request(ConversationKind::Desk),
+        None,
+        "eng",
+    )
+    .await;
+    assert!(matches!(
+        stale,
+        RoutingPlan::Fallback {
+            reason: RoutingFallback::StaleRoster,
+            ..
+        }
+    ));
+
+    let mut uncertain = evaluation();
+    uncertain.confidence = probability(100_000);
+    let router = FakeRouter {
+        calls: Arc::new(AtomicUsize::new(0)),
+        evaluation: uncertain,
+    };
+    let no_escalator = route_message(
+        Some(&router),
+        None,
+        &request(ConversationKind::Desk),
+        None,
+        "eng",
+    )
+    .await;
+    assert!(matches!(
+        no_escalator,
+        RoutingPlan::Fallback {
+            reason: RoutingFallback::EscalationFailed,
+            ..
+        }
+    ));
+}
+
 #[test]
 fn conversation_and_route_wires_are_explicit() {
+    for (kind, may_open_hive) in [
+        (ConversationKind::Desk, true),
+        (ConversationKind::Direct, false),
+        (ConversationKind::General, false),
+        (ConversationKind::Workflow, false),
+    ] {
+        assert_eq!(
+            ConversationRef {
+                id: "surface".into(),
+                kind,
+                thread_root: None,
+            }
+            .may_open_hive(),
+            may_open_hive
+        );
+    }
     let value = serde_json::to_value(ConversationRef {
         id: "dm-42".into(),
         kind: ConversationKind::Direct,
