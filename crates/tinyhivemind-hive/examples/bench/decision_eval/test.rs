@@ -17,6 +17,7 @@ fn cases_cycle_deterministically_with_explicit_truth() {
 fn request_batches_all_three_independent_primitives() {
     let request = Case::at(0).request();
     assert!(matches!(request.questions["stance"], Question::Choice(_)));
+    assert!(matches!(request.questions["route"], Question::Choice(_)));
     assert!(matches!(request.questions["evidence"], Question::Score(_)));
     assert!(matches!(request.questions["violation"], Question::Noul(_)));
     request.validate().expect("valid benchmark request");
@@ -29,7 +30,7 @@ fn strict_schema_requires_every_answer_and_distribution_member() {
     assert_eq!(schema["required"], json!(["answers"]));
     assert_eq!(
         schema["properties"]["answers"]["required"],
-        json!(["evidence", "stance", "violation"])
+        json!(["evidence", "route", "stance", "violation"])
     );
     assert_eq!(
         schema["properties"]["answers"]["properties"]["stance"]["properties"]["probabilities"]["additionalProperties"],

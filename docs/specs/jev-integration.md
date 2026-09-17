@@ -49,5 +49,9 @@ primitive accuracy, Choice/Noul Brier scores, Score MAE, provider/schema
 failure rate, and diagnostics. Prices are explicit run constants rather than
 claims about future billing.
 
+The outer `--jobs` width applies to baseline work. Jev is capped at four calls
+in flight: the production account accepted widths one and four but returned
+authentication failures at width 32 during the initial campaign probe.
+
 Credentials come only from `TYPESAFE_API_KEY` and `OPENROUTER_API_KEY`; neither
 is placed in process arguments or output.
