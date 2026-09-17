@@ -1,6 +1,6 @@
 # Approval: a pure gate for a side-effecting action
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Owner:** `crates/tinyhivemind-core`, with one port in `crates/tinyhivemind`
 - **Reading:** [`../research/grok-bots/README.md`](../research/grok-bots/README.md)
 - **Decisions:** [ADR 0008](../adr/0008-an-approval-decision-is-total.md),

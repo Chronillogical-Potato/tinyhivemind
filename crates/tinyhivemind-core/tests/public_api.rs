@@ -9,6 +9,7 @@
 
 use tinyhivemind_core::chat::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_conversation};
 use tinyhivemind_core::{
+    approval::{ActionTarget, ScopeKey},
     desk::{Desk, DeskMember, DeskOrder, DeskSet, ResponderMode},
     dispatch::{
         DispatchConversation, DispatchKey, MentionDispatchDecision, MentionDispatchInput,
@@ -18,6 +19,19 @@ use tinyhivemind_core::{
     mention::{MentionAuthor, MentionTarget, direct_responder, mentioned_members, resolve},
     roster::{Person, Roster, RosterMember},
 };
+
+#[test]
+fn approval_scope_is_available_to_consumers() {
+    let key = ScopeKey {
+        actor_id: "agent".into(),
+        call_id: "call".into(),
+        verb: "write".into(),
+        target: ActionTarget::Resource {
+            path: "/repo/file".into(),
+        },
+    };
+    assert!(key.render().contains("agent"));
+}
 
 #[test]
 fn conversation_identity_is_available_to_consumers() {

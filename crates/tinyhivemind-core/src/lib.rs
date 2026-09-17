@@ -42,6 +42,7 @@
 //!
 //! - [`chat`] — conversation identity: which stored chat id names which
 //!   conversation, and the four spellings that mean the default desk.
+//! - [`approval`] — total, fail-closed authorization for one typed action.
 //! - [`desk`] — host-compatible desk records and the borrowed overlay fold.
 //! - [`dispatch`] — bounded selection of at most one mentioned child turn.
 //! - [`error`] — typed failures from malformed records or unresolved desks.
@@ -101,6 +102,7 @@
 //! # Ok::<(), tinyhivemind_core::error::Error>(())
 //! ```
 
+pub mod approval;
 pub mod aside;
 pub mod chat;
 pub mod desk;

@@ -132,6 +132,16 @@ pub enum Error {
         #[source]
         source: BoxError,
     },
+    /// The host-owned approval gate failed unexpectedly.
+    #[error("approval gate failed")]
+    ApprovalGate {
+        /// The host's original error.
+        #[source]
+        source: BoxError,
+    },
+    /// A host answer widened or changed the offered approval scope.
+    #[error("approval answer does not match the offered scope")]
+    InvalidApprovalAnswer,
 }
 
 /// A runtime result.

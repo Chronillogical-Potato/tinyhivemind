@@ -5,11 +5,23 @@
 use tinyhivemind::aside::Audience;
 use tinyhivemind::aside::Viewer;
 use tinyhivemind::{
-    ChannelHead, Conversation, EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, PAGE_SIZE,
-    PRESENT_SET_LIMIT, SCAN_LIMIT, SESSION_WINDOW, Sequence, SessionAuthor, SessionMessage,
-    initialized_state, note_present,
+    ApprovalDecision, ApprovalOutcome, ChannelHead, Conversation, DenyReason, EnqueueOutcome,
+    EnqueueRefusal, MentionDispatchOutcome, PAGE_SIZE, PRESENT_SET_LIMIT, SCAN_LIMIT,
+    SESSION_WINDOW, Sequence, SessionAuthor, SessionMessage, initialized_state, note_present,
     responder::{ResponderRung, SelectionDisposition},
 };
+
+#[test]
+fn root_exports_approval_decisions_and_runtime_outcomes() {
+    let decision = ApprovalDecision::Deny {
+        reason: DenyReason::NoRule,
+    };
+    let outcome = ApprovalOutcome::Denied {
+        reason: DenyReason::NoRule,
+    };
+    assert!(matches!(decision, ApprovalDecision::Deny { .. }));
+    assert!(matches!(outcome, ApprovalOutcome::Denied { .. }));
+}
 
 #[test]
 fn root_exports_runtime_records_and_constants() {
