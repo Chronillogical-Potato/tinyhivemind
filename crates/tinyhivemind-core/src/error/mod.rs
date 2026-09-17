@@ -105,6 +105,9 @@ pub enum Error {
         /// The repeated candidate id.
         agent_id: String,
     },
+    /// A fixed-point model probability exceeded one million parts.
+    #[error("probability must not exceed one million parts")]
+    InvalidProbability,
     /// A reached ladder fallback names no active agent.
     ///
     /// One variant covers an unknown id, a retired one, and a tombstoned one.

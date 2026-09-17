@@ -55,6 +55,7 @@ fn errors_are_typed_standard_errors_with_lowercase_unpunctuated_messages() {
         Error::DuplicateSelectorCandidate {
             agent_id: "a".into(),
         },
+        Error::InvalidProbability,
         Error::NoActiveResponder {
             agent_id: "a".into(),
         },

@@ -109,6 +109,12 @@ to exactly the same standing as one that watched live. This is how
 [honeybee swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29)
 settle a nest site.
 
+For a host with a typed decision model, `standings_with_evaluations` replaces
+each full supporter with fixed-point expected support: a Choice probability
+multiplied by an evidence-quality Score after a Noul policy-violation gate.
+The original fold remains the deterministic full-confidence case; both feed the
+same cross-inhibition, refutation, and consensus algebra.
+
 ```text
 1 planner  !propose #stage Stage the rollout.
 2 scout    !propose #ship  Ship it all at once.

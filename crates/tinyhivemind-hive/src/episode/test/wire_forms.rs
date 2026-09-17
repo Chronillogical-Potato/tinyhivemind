@@ -3,7 +3,7 @@
 
 use super::super::*;
 use super::support::state;
-use crate::quorum::TopicStanding;
+use crate::quorum::{PROBABILITY_SCALE, TopicStanding};
 
 #[test]
 fn the_policy_and_state_pin_their_wire_forms() {
@@ -79,6 +79,7 @@ fn every_step_pins_its_tagged_wire_form() {
                 silenced: Vec::new(),
                 refuted_by: Vec::new(),
                 support: 900,
+                probability_support: u64::from(PROBABILITY_SCALE),
             }],
             visibility: Visibility::Blind,
         })
@@ -92,6 +93,7 @@ fn every_step_pins_its_tagged_wire_form() {
                 "silenced": [],
                 "refuted_by": [],
                 "support": 900,
+                "probability_support": 1_000_000,
             }],
             "visibility": "blind",
         }),

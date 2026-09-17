@@ -445,6 +445,7 @@ defaulted cost constant is worse than a stopped run.
 | `--repeat N` | run a live scenario N times and count both arms |
 | `--json` | print one flat JSON object per arm, ahead of the tables |
 | `--stats-check` | run the statistics module's self-check, and the check arms' own, and exit `0` or `1` |
+| `--decision-eval` | compare Jev with `openai/gpt-5-mini` strict JSON over identical batched Choice, Score, and Noul cases; uses `--episodes` as the paired case count |
 | `calls/ep` (column) | model calls made in off-floor exchange rounds per episode — members *asked*, not rows written, so a declined round costs what it actually cost. Kept out of `cost/ep`, which is each speaker's own cost times its turns |
 | `--timeout SECS` | per-turn deadline for a live agent or HTTP request (default 180) |
 | `--api-base URL` | drive seats directly over HTTP instead of a CLI |

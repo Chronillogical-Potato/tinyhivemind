@@ -116,10 +116,12 @@ mod cli;
 mod compare;
 mod context;
 mod cost;
+mod decision_eval;
 mod federation;
 mod grid;
 mod horizon;
 mod http;
+mod jev;
 mod live;
 mod live_single;
 mod live_swarm;
@@ -263,6 +265,9 @@ fn run(options: &Options) -> Result<(), String> {
         // measures what a turn costs rather than what a protocol decides.
         return calibrate::run(options);
     }
+    if matches!(options.mode, Mode::DecisionEval) {
+        return decision_eval::run(options);
+    }
     if matches!(options.mode, Mode::Grid) {
         // Its own rooms, one set per cell, at that cell's own size and
         // difficulty -- so nothing here generates a room at the single
@@ -303,7 +308,8 @@ fn run(options: &Options) -> Result<(), String> {
         | Mode::StageSweep
         | Mode::FacetSweep
         | Mode::Grid
-        | Mode::Calibrate => Ok(()),
+        | Mode::Calibrate
+        | Mode::DecisionEval => Ok(()),
         Mode::Compare => compare(options, &rooms),
         Mode::Trace => trace(&rooms, &options.policy),
         Mode::Sweep => sweep_policies(options, &rooms),

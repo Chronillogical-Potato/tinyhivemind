@@ -299,6 +299,8 @@ pub(crate) enum Mode {
     /// Measure the cost model's constants against a live endpoint and print
     /// the flags that reproduce them.
     Calibrate,
+    /// Compare Jev with an `OpenRouter` strict-JSON decision baseline.
+    DecisionEval,
 }
 
 impl Options {
@@ -532,6 +534,7 @@ impl Options {
             Mode::Trace => "--trace",
             Mode::StatsCheck => "--stats-check",
             Mode::Calibrate => "--calibrate",
+            Mode::DecisionEval => "--decision-eval",
             Mode::ContextSweep => "--context-sweep",
             Mode::StageSweep => "--stages",
             Mode::FacetSweep => "--facets",

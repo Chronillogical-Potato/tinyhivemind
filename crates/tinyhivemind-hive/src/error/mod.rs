@@ -4,6 +4,7 @@
 mod test;
 
 use thiserror::Error;
+use tinyhivemind::Sequence;
 
 /// A failure produced while folding a deliberation episode.
 ///
@@ -68,6 +69,20 @@ pub enum Error {
     /// [`Self::ZeroDeferCap`].
     #[error("round width must not be zero")]
     ZeroRoundWidth,
+    /// A decision evaluation carried a probability above the fixed-point scale.
+    #[error("decision evaluation probability exceeds one million parts")]
+    InvalidDecisionProbability,
+    /// A stance distribution was empty, duplicated a topic, overflowed, or did not sum to one.
+    #[error("decision evaluation stance is not a complete probability distribution")]
+    InvalidDecisionDistribution,
+    /// An evaluation did not bind to an in-window trace by the same author.
+    #[error("decision evaluation for `{agent_id}` does not match source {sequence}")]
+    StaleDecisionEvaluation {
+        /// Claimed author id.
+        agent_id: String,
+        /// Claimed source sequence.
+        sequence: Sequence,
+    },
     /// A division was asked for on a desk with no active member to own a
     /// facet.
     ///

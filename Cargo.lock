@@ -1030,6 +1030,8 @@ dependencies = [
  "thiserror",
  "tinyhivemind",
  "tinyhivemind-core",
+ "tinyjevclient",
+ "tokio",
 ]
 
 [[package]]
@@ -1045,6 +1047,18 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "tinyjevclient"
+version = "0.2.1"
+source = "git+https://github.com/tinyhumansai/tinyjevclient?rev=f9a6d1bbc8a2bfbbc5d4b5d3a052a64247caacf3#f9a6d1bbc8a2bfbbc5d4b5d3a052a64247caacf3"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
 ]

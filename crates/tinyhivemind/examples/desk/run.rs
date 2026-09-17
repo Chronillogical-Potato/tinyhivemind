@@ -212,6 +212,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             mentions: opening_mentions,
             orchestrator_id: spec.agents[0].id.clone(),
             selection_policy: SelectionPolicy::Disabled,
+            minimum_selection_confidence: tinyhivemind::responder::Probability::ZERO,
         },
         &roster,
         &desks,

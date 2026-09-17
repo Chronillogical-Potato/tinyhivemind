@@ -25,10 +25,12 @@ fn responder_payload_wire_forms_are_exact_and_round_trip() {
         mentions: Vec::new(),
         orchestrator_id: "orch".into(),
         selection_policy: SelectionPolicy::Allowed,
+        minimum_selection_confidence: Probability::new(600_000).unwrap(),
     };
     let request_value = serde_json::json!({
         "message":"Please review", "chat":"eng", "mentions":[],
-        "orchestrator_id":"orch", "selection_policy":"allowed"
+        "orchestrator_id":"orch", "selection_policy":"allowed",
+        "minimum_selection_confidence":600_000
     });
     assert_wire(&request, request_value);
 
@@ -36,11 +38,30 @@ fn responder_payload_wire_forms_are_exact_and_round_trip() {
         message: "Please review".into(),
         desk_id: "eng".into(),
         candidates: vec![candidate.clone()],
+        minimum_confidence: Probability::new(600_000).unwrap(),
     };
     let selection_value = serde_json::json!({
-        "message":"Please review", "desk_id":"eng", "candidates":[candidate_value]
+        "message":"Please review", "desk_id":"eng", "candidates":[candidate_value],
+        "minimum_confidence":600_000
     });
     assert_wire(&selection, selection_value.clone());
+
+    let evaluation = SelectionEvaluation {
+        choice: "alice".into(),
+        probabilities: vec![CandidateProbability {
+            candidate_id: "alice".into(),
+            probability: Probability::ONE,
+        }],
+        confidence: Probability::new(900_000).unwrap(),
+    };
+    assert_wire(
+        &evaluation,
+        serde_json::json!({
+            "choice":"alice",
+            "probabilities":[{"candidate_id":"alice", "probability":1_000_000}],
+            "confidence":900_000
+        }),
+    );
 
     let decision = ResponderDecision {
         responder_id: "alice".into(),
@@ -112,7 +133,8 @@ fn responder_option_fields_are_required_and_accept_null() {
 
     let request = serde_json::json!({
         "message":"Please review", "chat":null, "mentions":[],
-        "orchestrator_id":"orch", "selection_policy":"allowed"
+        "orchestrator_id":"orch", "selection_policy":"allowed",
+        "minimum_selection_confidence":0
     });
     assert_eq!(
         serde_json::from_value::<ResponderRequest>(request.clone())
@@ -135,7 +157,8 @@ fn every_responder_payload_wire_field_is_required() {
 
     let request = serde_json::json!({
         "message":"Please review", "chat":null, "mentions":[],
-        "orchestrator_id":"orch", "selection_policy":"allowed"
+        "orchestrator_id":"orch", "selection_policy":"allowed",
+        "minimum_selection_confidence":0
     });
     assert_required_fields::<ResponderRequest>(
         &request,
@@ -145,13 +168,18 @@ fn every_responder_payload_wire_field_is_required() {
             "mentions",
             "orchestrator_id",
             "selection_policy",
+            "minimum_selection_confidence",
         ],
     );
 
     let selection = serde_json::json!({
-        "message":"Please review", "desk_id":"eng", "candidates":[candidate]
+        "message":"Please review", "desk_id":"eng", "candidates":[candidate],
+        "minimum_confidence":0
     });
-    assert_required_fields::<SelectionRequest>(&selection, &["message", "desk_id", "candidates"]);
+    assert_required_fields::<SelectionRequest>(
+        &selection,
+        &["message", "desk_id", "candidates", "minimum_confidence"],
+    );
 
     let decision = serde_json::json!({
         "responder_id":"alice", "rung":"desk_default", "disposition":"unavailable"

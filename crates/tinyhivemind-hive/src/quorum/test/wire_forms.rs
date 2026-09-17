@@ -27,6 +27,7 @@ fn a_policy_and_standing_pin_their_wire_forms() {
         silenced: vec!["scout".into()],
         refuted_by: vec!["auditor".into()],
         support: 1_400,
+        probability_support: 750_000,
     };
     let value = serde_json::to_value(&standing).expect("serializes");
     assert_eq!(
@@ -37,6 +38,7 @@ fn a_policy_and_standing_pin_their_wire_forms() {
             "silenced": ["scout"],
             "refuted_by": ["auditor"],
             "support": 1_400,
+            "probability_support": 750_000,
         }),
     );
     assert_eq!(

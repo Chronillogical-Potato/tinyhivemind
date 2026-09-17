@@ -60,6 +60,9 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 - [`expert-delegation.md`](expert-delegation.md) — a transactive-memory
   directory folded from grounded deposits and the citations they drew,
   `BidReason::Knows`, and `!defer`.
+- [`jev-integration.md`](jev-integration.md) — typed routing distributions,
+  admission-gated probabilistic quorum, approval narrowing, and paired Jev
+  versus strict-JSON evaluation.
 
 ## Draft and proposed specifications
 
@@ -68,7 +71,7 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   the host.
 - [`shared-medium-schema.md`](shared-medium-schema.md) — draft: what a projected
   message carries, per-conversation read state, digests, and supersession.
-- [`approval.md`](approval.md) — proposed: a pure gate for a side-effecting
+- [`approval.md`](approval.md) — implemented: a pure gate for a side-effecting
   action — `approve` as a total fold, standing grants as a liveness and
   coverage predicate, and epoch-scoped consent that cannot apply backwards.
   - [`approval-testing.md`](approval-testing.md) — the full one-test-per-

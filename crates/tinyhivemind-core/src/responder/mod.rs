@@ -6,8 +6,9 @@ mod test;
 mod types;
 
 pub use types::{
-    ResponderDecision, ResponderPlan, ResponderRequest, ResponderRung, SelectionDisposition,
-    SelectionPolicy, SelectionRequest, SelectorCandidate,
+    CandidateProbability, PROBABILITY_SCALE, Probability, ResponderDecision, ResponderPlan,
+    ResponderRequest, ResponderRung, SelectionDisposition, SelectionEvaluation, SelectionPolicy,
+    SelectionRequest, SelectorCandidate,
 };
 
 use crate::{
@@ -36,6 +37,9 @@ pub fn responder_plan(
 ) -> Result<ResponderPlan> {
     roster.validate()?;
     desks.validate()?;
+    if !request.minimum_selection_confidence.valid() {
+        return Err(Error::InvalidProbability);
+    }
 
     if let Some(id) = direct_responder(&request.mentions, roster) {
         return Ok(decided(id, ResponderRung::ExplicitMention));
@@ -97,6 +101,52 @@ pub fn accept_selection(output: &str, candidates: &[SelectorCandidate]) -> Optio
     Some(first.id.clone())
 }
 
+/// Validate and accept a typed selector evaluation.
+///
+/// The distribution must name every candidate exactly once, contain only
+/// bounded probabilities summing to one, select a highest-probability
+/// candidate, and meet `minimum_confidence`.
+#[must_use]
+pub fn accept_evaluation(
+    evaluation: &SelectionEvaluation,
+    candidates: &[SelectorCandidate],
+    minimum_confidence: Probability,
+) -> Option<String> {
+    if !evaluation.confidence.valid()
+        || !minimum_confidence.valid()
+        || evaluation.confidence < minimum_confidence
+        || evaluation.probabilities.len() != candidates.len()
+    {
+        return None;
+    }
+    let mut sum = 0_u32;
+    let mut selected = None;
+    for candidate in candidates {
+        let mut matching = evaluation
+            .probabilities
+            .iter()
+            .filter(|probability| probability.candidate_id == candidate.id);
+        let probability = matching.next()?;
+        if matching.next().is_some() || !probability.probability.valid() {
+            return None;
+        }
+        sum = sum.checked_add(probability.probability.parts())?;
+        if candidate.id == evaluation.choice {
+            selected = Some(probability.probability);
+        }
+    }
+    let selected = selected?;
+    if sum != PROBABILITY_SCALE
+        || evaluation
+            .probabilities
+            .iter()
+            .any(|probability| probability.probability > selected)
+    {
+        return None;
+    }
+    Some(evaluation.choice.clone())
+}
+
 fn desk_plan(
     request: &ResponderRequest,
     roster: &Roster<'_>,
@@ -129,6 +179,7 @@ fn desk_plan(
             message: request.message.clone(),
             desk_id: desk.id.clone(),
             candidates,
+            minimum_confidence: request.minimum_selection_confidence,
         },
         fallback,
     })

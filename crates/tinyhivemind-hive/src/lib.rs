@@ -199,12 +199,15 @@ pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, 
 pub use division::{Assignment, Division, DivisionPolicy, OwnerReason, divide};
 pub use episode::{
     DEFAULT_REVEALED_WIDTH, DEFAULT_ROUND_WIDTH, EpisodePolicy, EpisodeState, HiveStep, HiveTurn,
-    Phase, Visibility, project_for, step,
+    Phase, Visibility, project_for, step, step_with_evaluations,
 };
 pub use error::{Error, Result};
 pub use exchange::{ExchangePolicy, ExchangeRound, ExchangeState, NoExchangeReason, exchange};
 pub use horizon::{Basis, Horizon};
-pub use quorum::{ConsensusState, QuorumPolicy, TopicStanding, consensus, standings};
+pub use quorum::{
+    AdmissionPolicy, ConsensusState, DecisionEvaluation, PROBABILITY_SCALE, QuorumPolicy,
+    TopicProbability, TopicStanding, consensus, standings, standings_with_evaluations,
+};
 pub use salience::{Salience, SalienceWeights, salience};
 pub use trace::{TRACE_CAP, TopicId, Trace, TraceKind, read, resolve};
 // A host that wants group deliberation takes this crate alone and gets the

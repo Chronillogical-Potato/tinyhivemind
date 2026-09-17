@@ -339,6 +339,7 @@ pub(super) fn apply_mode_flag(options: &mut Options, flag: &str) -> bool {
         "--stats-check" => options.mode = Mode::StatsCheck,
         "--grid" => options.mode = Mode::Grid,
         "--calibrate" => options.mode = Mode::Calibrate,
+        "--decision-eval" => options.mode = Mode::DecisionEval,
         "--trace" => {
             options.trace = true;
             if !matches!(options.mode, Mode::Swarm) {

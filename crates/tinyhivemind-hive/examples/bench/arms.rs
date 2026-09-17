@@ -259,6 +259,7 @@ fn route(
         mentions: Vec::new(),
         orchestrator_id: ids.first().map_or_else(String::new, |id| (*id).to_owned()),
         selection_policy: SelectionPolicy::Allowed,
+        minimum_selection_confidence: tinyhivemind_hive::responder::Probability::ZERO,
     };
 
     let started = Instant::now();

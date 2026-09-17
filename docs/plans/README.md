@@ -46,3 +46,5 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
 - [`a-real-provider-layer.md`](a-real-provider-layer.md) — back the `desk`
   example with `tinyinference` instead of `curl`, and render the room's tool
   surface through `tinytools`, both as example-only dev-dependencies.
+- [`jev-integration.md`](jev-integration.md) — land P16, typed selection,
+  probabilistic quorum, the native Jev adapter, and paired evaluation.
