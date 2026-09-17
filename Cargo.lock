@@ -1054,7 +1054,7 @@ dependencies = [
 [[package]]
 name = "tinyjevclient"
 version = "0.2.1"
-source = "git+https://github.com/tinyhumansai/tinyjevclient?rev=3042c501fa28fae9972c1761543ed94931d79607#3042c501fa28fae9972c1761543ed94931d79607"
+source = "git+https://github.com/tinyhumansai/tinyjevclient?rev=485c51a9e886322a85464fe8802a6e9c09cf16ce#485c51a9e886322a85464fe8802a6e9c09cf16ce"
 dependencies = [
  "httpdate",
  "reqwest",
