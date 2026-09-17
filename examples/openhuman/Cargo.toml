@@ -1,0 +1,21 @@
+[package]
+name = "tinyhivemind-openhuman-example"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# This is deliberately a standalone crate rather than a workspace member.
+# OpenHuman currently requires a newer compiler than TinyHiveMind's Rust 1.88
+# library contract; isolating the proof keeps that dependency and its lockfile
+# out of every library, normal workspace build, and downstream consumer.
+[workspace]
+
+[dependencies]
+anyhow = "1"
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false, features = ["inference"] }
+serde_json = "1"
+tinyhivemind = { path = "../../crates/tinyhivemind" }
+tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }
+tinyhivemind-typesafe = { path = "../../crates/tinyhivemind-typesafe" }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+wiremock = "0.6"

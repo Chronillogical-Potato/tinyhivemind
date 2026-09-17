@@ -1,5 +1,6 @@
 # Build output
 /target/
+/examples/*/target/
 **/*.rs.bk
 *.pdb
 

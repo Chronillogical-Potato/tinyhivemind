@@ -34,6 +34,12 @@ Credentials remain server-side. The adapter may implement
 `SystemOneTransport` with `tinyjevclient` and `TYPESAFE_API_KEY`; neither enters
 library state or serialized routing records.
 
+The standalone [`examples/openhuman`](../../examples/openhuman/README.md)
+proves the dependency direction and turn seam with a real embedded OpenHuman
+`Harness`, exact `JevRouter` questions, and loopback fixtures. It is mechanical
+evidence only: the fixture does not establish live Jev quality or provider
+performance.
+
 ## Acceptance criteria
 
 - No OpenCompany type is named by TinyHiveMind.

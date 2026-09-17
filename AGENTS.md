@@ -81,6 +81,7 @@ docs/
 ├── research/           # the reading behind a mechanism, with its equations
 └── experiments/        # what happened when it was actually run
 wiki/                   # the GitHub wiki, checked out as a submodule
+examples/               # standalone integration proofs outside the workspace
 ```
 
 ### The two-crate split
