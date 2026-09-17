@@ -1,7 +1,8 @@
 # Embedded OpenHuman routing proof
 
-This example runs the real TinyHiveMind `JevRouter` composition and then hands
-the accepted route to one embedded OpenHuman agent.
+This example builds one real OpenHuman `Runtime`, instantiates two independent
+OpenHuman `Agent`s on it, hands those existing handles to TinyHiveMind, and
+then resolves accepted routes back to those same instances.
 
 It is deterministic and offline:
 
@@ -9,8 +10,14 @@ It is deterministic and offline:
   exact questions built by `JevRouter`;
 - a loopback mock serves OpenHuman's incidental backend calls and its
   OpenAI-compatible model call;
-- one ephemeral, read-only OpenHuman `Harness` runs the selected seat with a
-  stable per-agent session id;
+- one ephemeral, read-only OpenHuman runtime owns the `engineering` and `legal`
+  agents, their transcripts, session continuation, and compaction;
+- TinyHiveMind's generic `AgentRegistry<openhuman_embed::Agent>` binds route ids
+  to those instances without constructing agents or storing session state;
+- the engineering agent handles a routed desk turn and a deterministic DM turn
+  on the same OpenHuman session, while the DM makes no System One call;
+- the second provider request preserves every message from the first request as
+  an exact prefix, maximizing the portion eligible for provider prompt caching;
 - no credential, network provider, inherited workspace, or user data is used.
 
 Run the standalone example from the repository root:
@@ -19,8 +26,10 @@ Run the standalone example from the repository root:
 cargo run --manifest-path examples/openhuman/Cargo.toml
 ```
 
-Expected output includes the accepted `engineering` route, exactly one System
-One request, the stable session id, and the mock reply `openhuman-seat-ok`.
+Expected output includes both instantiated agents, the `engineering` desk and
+direct routes, exactly one System One request, two turns on one OpenHuman
+session, a complete cacheable message prefix, and the mock reply
+`openhuman-seat-ok`.
 
 This proves integration mechanics, not Jev routing quality or provider
 performance. Live TypeSafe quality remains the job of the labeled routing
@@ -32,4 +41,4 @@ corpus and paid campaign described in
 | File | Purpose |
 | --- | --- |
 | `Cargo.toml` | Standalone dependency boundary, outside the library workspace and MSRV contract. |
-| `src/main.rs` | System One fixture, route composition, embedded Harness, and assertions. |
+| `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
