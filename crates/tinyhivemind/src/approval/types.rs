@@ -45,7 +45,10 @@ pub enum ApprovalAnswer {
 pub enum AskOutcome {
     /// A new pending approval was durably created.
     Asked,
-    /// The dedupe key already has a pending or completed record.
+    /// The dedupe key already has a pending record.
+    ///
+    /// A completed record must be returned as [`Self::Answered`] so the
+    /// caller observes the durable answer.
     Already,
     /// A final answer was already available.
     Answered {

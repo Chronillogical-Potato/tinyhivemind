@@ -1,6 +1,6 @@
 //! Native Jev adapters for routing, weighted consensus, and approval narrowing.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
 use tinyhivemind_hive::{
@@ -69,7 +69,12 @@ impl Selector for JevSelector {
             let Some(Answer::Choice(answer)) = result.response.answers.get("responder") else {
                 return Err("Jev response omitted the responder Choice".into());
             };
-            let probabilities = fixed_distribution(&answer.probabilities, &answer.choice)
+            let allowed: BTreeSet<String> = request
+                .candidates
+                .iter()
+                .map(|candidate| candidate.id.clone())
+                .collect();
+            let probabilities = fixed_distribution(&answer.probabilities, &answer.choice, &allowed)
                 .map_err(|message| -> tinyhivemind_hive::BoxError { message.into() })?;
             Ok(SelectionEvaluation {
                 choice: answer.choice.clone(),
@@ -89,13 +94,13 @@ impl Selector for JevSelector {
 
 /// Build the batched Choice, Score, and Noul request for one worker output.
 pub(crate) fn turn_request(state: Value, topics: &[TopicId]) -> EvaluationRequest {
-    let abstain = "__abstain";
+    let abstain = abstention_label(topics);
     let mut criteria: BTreeMap<String, Option<Value>> = topics
         .iter()
         .map(|topic| (topic.to_string(), None))
         .collect();
     criteria.insert(
-        abstain.to_owned(),
+        abstain,
         Some(json!("the output supports none of the listed topics")),
     );
     EvaluationRequest::jev(
@@ -135,8 +140,9 @@ pub(crate) fn decision_from_response(
     response: &tinyjevclient::EvaluationResponse,
     source_sequence: Sequence,
     agent_id: &str,
+    topics: &[TopicId],
 ) -> Result<DecisionEvaluation, String> {
-    let abstain = "__abstain";
+    let abstain = abstention_label(topics);
     let Some(Answer::Choice(stance)) = response.answers.get("stance") else {
         return Err("Jev response omitted stance Choice".to_owned());
     };
@@ -146,7 +152,9 @@ pub(crate) fn decision_from_response(
     let Some(Answer::Noul(violation)) = response.answers.get("violation") else {
         return Err("Jev response omitted violation Noul".to_owned());
     };
-    let distribution = fixed_distribution(&stance.probabilities, &stance.choice)?;
+    let mut allowed: BTreeSet<String> = topics.iter().map(ToString::to_string).collect();
+    allowed.insert(abstain.clone());
+    let distribution = fixed_distribution(&stance.probabilities, &stance.choice, &allowed)?;
     let stance = distribution
         .into_iter()
         .map(|(topic, probability)| TopicProbability {
@@ -202,7 +210,11 @@ pub(crate) fn narrow_effect(
 fn fixed_distribution(
     distribution: &BTreeMap<String, f64>,
     selected: &str,
+    allowed: &BTreeSet<String>,
 ) -> Result<Vec<(String, Probability)>, String> {
+    if distribution.keys().collect::<BTreeSet<_>>() != allowed.iter().collect::<BTreeSet<_>>() {
+        return Err("distribution labels do not match the requested alternatives".to_owned());
+    }
     let mut fixed: Vec<(String, u32)> = distribution
         .iter()
         .map(|(label, probability)| Ok((label.clone(), fixed(*probability)?.parts())))
@@ -228,6 +240,14 @@ fn fixed_distribution(
         .collect()
 }
 
+fn abstention_label(topics: &[TopicId]) -> String {
+    let mut label = "__abstain".to_owned();
+    while topics.iter().any(|topic| topic.0 == label) {
+        label.push('_');
+    }
+    label
+}
+
 fn fixed(value: f64) -> Result<Probability, String> {
     if !value.is_finite() || !(0.0..=1.0).contains(&value) {
         return Err("probability must be finite and between zero and one".to_owned());
@@ -240,7 +260,7 @@ fn fixed(value: f64) -> Result<Probability, String> {
 
 #[cfg(test)]
 mod test {
-    #![allow(clippy::expect_used)]
+    #![allow(clippy::expect_used, clippy::panic)]
 
     use super::*;
 
@@ -248,7 +268,8 @@ mod test {
     fn float_distribution_becomes_exact_fixed_point() {
         let distribution =
             BTreeMap::from([("a".to_owned(), 0.333_333_3), ("b".to_owned(), 0.666_666_7)]);
-        let fixed = fixed_distribution(&distribution, "b").expect("converts");
+        let allowed = BTreeSet::from(["a".to_owned(), "b".to_owned()]);
+        let fixed = fixed_distribution(&distribution, "b", &allowed).expect("converts");
         assert_eq!(
             fixed
                 .iter()
@@ -256,6 +277,24 @@ mod test {
                 .sum::<u32>(),
             PROBABILITY_SCALE
         );
+    }
+
+    #[test]
+    fn distribution_labels_must_match_requested_alternatives() {
+        let distribution = BTreeMap::from([("forged".to_owned(), 1.0)]);
+        let allowed = BTreeSet::from(["expected".to_owned()]);
+        assert!(fixed_distribution(&distribution, "forged", &allowed).is_err());
+    }
+
+    #[test]
+    fn abstention_label_never_collides_with_a_topic() {
+        let topics = [TopicId::from("__abstain")];
+        let request = turn_request(json!({}), &topics);
+        let Question::Choice(choice) = &request.questions["stance"] else {
+            panic!("stance is a Choice");
+        };
+        assert!(choice.criteria.contains_key("__abstain"));
+        assert!(choice.criteria.contains_key("__abstain_"));
     }
 
     #[test]

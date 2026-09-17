@@ -63,6 +63,10 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 - [`jev-integration.md`](jev-integration.md) — typed routing distributions,
   admission-gated probabilistic quorum, approval narrowing, and paired Jev
   versus strict-JSON evaluation.
+- [`approval.md`](approval.md) — a pure gate for a side-effecting action:
+  total approval, standing grants, and epoch-scoped consent.
+  - [`approval-testing.md`](approval-testing.md) — the full failure-path test
+    matrix, split out to keep the specification within its line budget.
 
 ## Draft and proposed specifications
 
@@ -71,12 +75,6 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   the host.
 - [`shared-medium-schema.md`](shared-medium-schema.md) — draft: what a projected
   message carries, per-conversation read state, digests, and supersession.
-- [`approval.md`](approval.md) — implemented: a pure gate for a side-effecting
-  action — `approve` as a total fold, standing grants as a liveness and
-  coverage predicate, and epoch-scoped consent that cannot apply backwards.
-  - [`approval-testing.md`](approval-testing.md) — the full one-test-per-
-    failure-path list, split out to keep the spec itself under the per-file
-    line budget.
 - [`private-asides.md`](private-asides.md) — draft: an audience on a stored row
   and a viewer on a query, so two agents on one desk can compare notes without
   the desk reading them; what a non-member sees instead, and what the exchange

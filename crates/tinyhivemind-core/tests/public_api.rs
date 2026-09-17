@@ -9,7 +9,7 @@
 
 use tinyhivemind_core::chat::{GENERAL_DESK, MAIN_THREAD_ID, is_general_chat, same_conversation};
 use tinyhivemind_core::{
-    approval::{ActionTarget, ScopeKey},
+    approval::{ActionTarget, Effect, ScopeKey},
     desk::{Desk, DeskMember, DeskOrder, DeskSet, ResponderMode},
     dispatch::{
         DispatchConversation, DispatchKey, MentionDispatchDecision, MentionDispatchInput,
@@ -26,6 +26,7 @@ fn approval_scope_is_available_to_consumers() {
         actor_id: "agent".into(),
         call_id: "call".into(),
         verb: "write".into(),
+        effect: Effect::Mutating,
         target: ActionTarget::Resource {
             path: "/repo/file".into(),
         },

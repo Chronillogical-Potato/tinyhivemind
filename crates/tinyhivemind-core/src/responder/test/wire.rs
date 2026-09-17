@@ -119,6 +119,11 @@ fn responder_enum_wire_values_are_exact_and_round_trip() {
 }
 
 #[test]
+fn probability_deserialization_rejects_values_above_the_scale() {
+    assert!(serde_json::from_str::<Probability>("1000001").is_err());
+}
+
+#[test]
 fn responder_option_fields_are_required_and_accept_null() {
     let candidate = serde_json::json!({
         "id":"alice", "label":"Alice", "role":"Reviewer", "description":null

@@ -148,12 +148,13 @@ pub struct ScopeKey {
     pub actor_id: String,
     pub call_id: String,
     pub verb: String,
+    pub effect: Effect,
     pub target: ActionTarget,
 }
 ```
 
 This is the reconstruction's `askKey` — one agent, one tool call, one action,
-one target — kept here as four typed fields rather than as one joined string.
+one target and one effect — kept as typed fields rather than one joined string.
 `ScopeKey::render()` exists only for a host that wants one opaque dedupe token;
 it is collision-free by construction, not convention — each field is
 length-prefixed so an embedded NUL cannot fake a boundary, and `ActionTarget`'s
@@ -165,8 +166,8 @@ A grant declares how far past its own call it reaches:
 | `GrantScope` | Covers |
 | --- | --- |
 | `Call` | only requests carrying the same `call_id` |
-| `Action` | any `call_id`, same `(actor_id, verb, target)` |
-| `Resource { root }` | any `call_id`, same `(actor_id, verb)`, and an `ActionTarget::Resource` whose path lies lexically inside `root` |
+| `Action` | any `call_id`, same `(actor_id, verb, effect, target)` |
+| `Resource { root }` | any `call_id`, same `(actor_id, verb, effect)`, with both keys carrying resource paths lexically inside `root` |
 
 `Call` is the reconstruction's default and `completeScope` retiring everything
 not marked `outlivesScope`; `Action` is that mark; `Resource` is its
@@ -257,6 +258,7 @@ pub struct ApprovalRule {
 }
 
 pub enum ApproverRule {
+    Absent,
     Person { id: String },
     PerDesk { default: String, overrides: Vec<DeskApprover> },
 }
@@ -270,6 +272,7 @@ not a bypass. A host that does not want an action gated does not call
 dry-run skip are each a hole in "every send waits for your click", and none of
 them is reproduced.
 
+`ApproverRule::Absent` deterministically denies with `NoApprover`.
 `ApproverRule::PerDesk` resolves the request's `desk_id` through
 `DeskSet::resolve_id` — the existing algebra, including its existing
 `UnknownDesk` and `AmbiguousDesk` failures — and then resolves the chosen id
@@ -352,8 +355,9 @@ authorize, and durably record at most once under a key. The key is
 `ScopeKey::render()` plus the request sequence, computed purely here — gawkbot
 factors out `actionApprovalDedupeKey` with a comment saying it is "pure for
 testability", and this is the same key with an owner. `ApprovalOutcome` is
-`Asked`, `Already`, or `Answered { decision }`; polling intervals, timeouts,
-cards, and the audit row stay with the host.
+`Asked`, `Already`, or `Answered { decision }`. `Already` means pending only;
+a completed record must return its answer. Polling, timeouts, cards, and the
+audit row stay with the host.
 
 That port is the second half of this phase and is specified here only in
 outline; the pure algebra lands first and is useful without it, because a host

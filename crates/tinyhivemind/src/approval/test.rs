@@ -50,11 +50,72 @@ fn request() -> ApprovalRequest {
 }
 
 fn ask(request: &ApprovalRequest) -> ApprovalDecision {
+    ask_with_scope(request, GrantScope::Call)
+}
+
+fn ask_with_scope(request: &ApprovalRequest, scope: GrantScope) -> ApprovalDecision {
     ApprovalDecision::Ask {
         who: "operator".into(),
-        scope: GrantScope::Call,
+        scope,
         key: ScopeKey::for_request(request),
         epoch: request.epoch,
+    }
+}
+
+#[tokio::test]
+async fn narrower_grant_and_refusal_scopes_are_accepted() {
+    let request = request();
+    let offered = GrantScope::Resource {
+        root: "/repo".into(),
+    };
+    for scope in [
+        GrantScope::Call,
+        GrantScope::Action,
+        GrantScope::Resource {
+            root: "/repo/file".into(),
+        },
+    ] {
+        let gate = Gate {
+            calls: AtomicUsize::new(0),
+            outcome: Ok(AskOutcome::Answered {
+                answer: ApprovalAnswer::Approved {
+                    grant: Some(StandingGrant {
+                        scope: scope.clone(),
+                        key: ScopeKey::for_request(&request),
+                        granted_at_epoch: request.epoch,
+                        granted_at_sequence: request.sequence,
+                        granted_at: Millis(1),
+                        expires_at: None,
+                        revoked: false,
+                    }),
+                },
+            }),
+        };
+        assert!(matches!(
+            request_approval(&gate, &request, ask_with_scope(&request, offered.clone()))
+                .await
+                .unwrap(),
+            ApprovalOutcome::Approved { .. }
+        ));
+
+        let gate = Gate {
+            calls: AtomicUsize::new(0),
+            outcome: Ok(AskOutcome::Answered {
+                answer: ApprovalAnswer::Refused {
+                    refusal: Some(RememberedRefusal {
+                        scope,
+                        key: ScopeKey::for_request(&request),
+                        epoch: request.epoch,
+                    }),
+                },
+            }),
+        };
+        assert!(matches!(
+            request_approval(&gate, &request, ask_with_scope(&request, offered.clone()))
+                .await
+                .unwrap(),
+            ApprovalOutcome::Refused { .. }
+        ));
     }
 }
 

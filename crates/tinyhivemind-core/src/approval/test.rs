@@ -273,6 +273,42 @@ fn resource_scope_contains_descendants_not_siblings() {
 }
 
 #[test]
+fn resource_scope_requires_the_grant_key_to_belong_to_its_root() {
+    let mut fixture = Fixture::new();
+    fixture.policy.rules.clear();
+    let mut resource = grant(
+        &fixture,
+        GrantScope::Resource {
+            root: "/repo/src".into(),
+        },
+    );
+    resource.key.target = ActionTarget::Named {
+        name: "/repo/src".into(),
+    };
+    assert_eq!(
+        fixture.decide(&[resource], &[]),
+        ApprovalDecision::Deny {
+            reason: DenyReason::NoRule
+        }
+    );
+}
+
+#[test]
+fn grants_never_cross_effect_classifications() {
+    let mut fixture = Fixture::new();
+    fixture.request.action.effect = Effect::ReadOnly;
+    let read_only = grant(&fixture, GrantScope::Action);
+    fixture.request.action.effect = Effect::Mutating;
+    fixture.policy.rules.clear();
+    assert_eq!(
+        fixture.decide(&[read_only], &[]),
+        ApprovalDecision::Deny {
+            reason: DenyReason::NoRule
+        }
+    );
+}
+
+#[test]
 fn narrowest_earliest_grant_is_the_deterministic_basis() {
     let fixture = Fixture::new();
     let action = grant(&fixture, GrantScope::Action);
@@ -304,6 +340,16 @@ fn asking_names_one_person_and_carries_call_scope() {
 
 #[test]
 fn approver_lookup_failures_share_rendering_but_not_variants() {
+    let mut absent = Fixture::new();
+    absent.policy.rules[0].verdict = RuleVerdict::Ask;
+    absent.policy.approver = ApproverRule::Absent;
+    assert_eq!(
+        absent.decide(&[], &[]),
+        ApprovalDecision::Deny {
+            reason: DenyReason::NoApprover
+        }
+    );
+
     let mut no_person = Fixture::new();
     no_person.policy.rules[0].verdict = RuleVerdict::Ask;
     no_person.policy.approver = ApproverRule::Person {
@@ -343,12 +389,14 @@ fn scope_render_is_collision_free_and_target_tagged() {
         actor_id: "a\0b".into(),
         call_id: "c".into(),
         verb: "v".into(),
+        effect: Effect::Mutating,
         target: ActionTarget::Named { name: "x".into() },
     };
     let second = ScopeKey {
         actor_id: "a".into(),
         call_id: "b\0c".into(),
         verb: "v".into(),
+        effect: Effect::Mutating,
         target: ActionTarget::Named { name: "x".into() },
     };
     assert_ne!(first.render(), second.render());

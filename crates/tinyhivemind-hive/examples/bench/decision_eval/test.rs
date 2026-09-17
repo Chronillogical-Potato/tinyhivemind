@@ -54,3 +54,11 @@ fn percentile_and_delta_helpers_are_total() {
 fn curl_config_escaping_covers_secrets_and_json_control_characters() {
     assert_eq!(escape("a\\\"\n\r"), "a\\\\\\\"\\n\\r");
 }
+
+#[test]
+fn hybrid_parallelism_is_bounded_by_jobs_and_jev_capacity() {
+    assert_eq!(hybrid_parallelism(0), 1);
+    assert_eq!(hybrid_parallelism(1), 1);
+    assert_eq!(hybrid_parallelism(2), 2);
+    assert_eq!(hybrid_parallelism(32), JEV_MAX_IN_FLIGHT as u64);
+}

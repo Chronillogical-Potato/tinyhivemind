@@ -76,8 +76,7 @@ fn answer_outcome(
     match answer {
         ApprovalAnswer::Approved { grant } => {
             if grant.as_ref().is_some_and(|grant| {
-                grant.scope != *offered_scope
-                    || grant.key != *key
+                !scope_within(&grant.scope, &grant.key, offered_scope, key)
                     || grant.granted_at_epoch != epoch
             }) {
                 return Err(crate::Error::InvalidApprovalAnswer);
@@ -86,12 +85,45 @@ fn answer_outcome(
         }
         ApprovalAnswer::Refused { refusal } => {
             if refusal.as_ref().is_some_and(|refusal| {
-                refusal.scope != *offered_scope || refusal.key != *key || refusal.epoch != epoch
+                !scope_within(&refusal.scope, &refusal.key, offered_scope, key)
+                    || refusal.epoch != epoch
             }) {
                 return Err(crate::Error::InvalidApprovalAnswer);
             }
             Ok(ApprovalOutcome::Refused { refusal })
         }
+    }
+}
+
+fn scope_within(
+    claimed: &GrantScope,
+    claimed_key: &ScopeKey,
+    offered: &GrantScope,
+    offered_key: &ScopeKey,
+) -> bool {
+    if claimed_key.call_id != offered_key.call_id
+        || !claimed.covers(claimed_key, claimed_key)
+        || !offered.covers(offered_key, claimed_key)
+    {
+        return false;
+    }
+    match (claimed, offered) {
+        (GrantScope::Call, _)
+        | (GrantScope::Action, GrantScope::Action | GrantScope::Resource { .. }) => true,
+        (
+            GrantScope::Resource { root: claimed_root },
+            GrantScope::Resource { root: offered_root },
+        ) => {
+            let mut root_key = claimed_key.clone();
+            root_key.target = tinyhivemind_core::approval::ActionTarget::Resource {
+                path: claimed_root.clone(),
+            };
+            GrantScope::Resource {
+                root: offered_root.clone(),
+            }
+            .covers(offered_key, &root_key)
+        }
+        _ => false,
     }
 }
 

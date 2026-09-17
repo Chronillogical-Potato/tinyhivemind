@@ -5,6 +5,8 @@ mod test;
 
 mod types;
 
+use types::path_within;
+
 pub use types::{
     Action, ActionTarget, AllowBasis, ApprovalDecision, ApprovalPolicy, ApprovalRequest,
     ApprovalRule, ApproverRule, ConsentEpoch, DefaultVerdict, DenyReason, DeskApprover, Effect,
@@ -54,9 +56,10 @@ pub fn approve(
     }
 
     let key = ScopeKey::for_request(request);
-    if refusals.iter().any(|refusal| {
-        refusal.epoch == request.epoch && scope_covers(&refusal.scope, &refusal.key, &key)
-    }) {
+    if refusals
+        .iter()
+        .any(|refusal| refusal.epoch == request.epoch && refusal.scope.covers(&refusal.key, &key))
+    {
         return denied(DenyReason::RememberedRefusal);
     }
 
@@ -145,7 +148,7 @@ fn best_grant<'a>(
             grant_live(grant, policy, now)
                 && (grant.granted_at_epoch, grant.granted_at_sequence)
                     <= (request.epoch, request.sequence)
-                && scope_covers(&grant.scope, &grant.key, key)
+                && grant.scope.covers(&grant.key, key)
         })
         .min_by_key(|grant| {
             (
@@ -165,20 +168,6 @@ const fn scope_rank(scope: &GrantScope) -> u8 {
     }
 }
 
-fn scope_covers(scope: &GrantScope, held: &ScopeKey, requested: &ScopeKey) -> bool {
-    if held.actor_id != requested.actor_id || held.verb != requested.verb {
-        return false;
-    }
-    match scope {
-        GrantScope::Call => held.call_id == requested.call_id && held.target == requested.target,
-        GrantScope::Action => held.target == requested.target,
-        GrantScope::Resource { root } => matches!(
-            &requested.target,
-            ActionTarget::Resource { path } if path_within(path, root)
-        ),
-    }
-}
-
 fn ask(
     request: &ApprovalRequest,
     policy: &ApprovalPolicy,
@@ -187,6 +176,7 @@ fn ask(
     key: ScopeKey,
 ) -> ApprovalDecision {
     let person_id = match &policy.approver {
+        ApproverRule::Absent => return denied(DenyReason::NoApprover),
         ApproverRule::Person { id } => id.as_str(),
         ApproverRule::PerDesk { default, overrides } => {
             let Ok(desk_id) = desks.resolve_id(&request.conversation.desk_id) else {
@@ -211,18 +201,4 @@ fn ask(
 
 fn has_parent_component(path: &str) -> bool {
     path.split('/').any(|component| component == "..")
-}
-
-fn path_within(path: &str, root: &str) -> bool {
-    if path.is_empty()
-        || root.is_empty()
-        || has_parent_component(path)
-        || has_parent_component(root)
-        || path.starts_with('/') != root.starts_with('/')
-    {
-        return false;
-    }
-    let path: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
-    let root: Vec<&str> = root.split('/').filter(|part| !part.is_empty()).collect();
-    path.starts_with(&root)
 }

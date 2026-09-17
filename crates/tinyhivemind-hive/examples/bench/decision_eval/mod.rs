@@ -64,7 +64,7 @@ async fn run_async(options: &Options) -> Result<(), String> {
     let mut baseline = Aggregate::default();
     let mut hybrid = Aggregate::default();
     baseline.parallelism = u64::try_from(options.jobs.max(1)).unwrap_or(u64::MAX);
-    hybrid.parallelism = u64::try_from(JEV_MAX_IN_FLIGHT).unwrap_or(u64::MAX);
+    hybrid.parallelism = hybrid_parallelism(options.jobs);
     let mut diagnostics = Vec::new();
     let jev_limit = Arc::new(tokio::sync::Semaphore::new(JEV_MAX_IN_FLIGHT));
     let mut pending = tokio::task::JoinSet::new();
@@ -379,12 +379,20 @@ fn post_openrouter(key: &str, body: &Value) -> Result<Value, String> {
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("could not start curl: {error}"))?;
-    child
+    let write_result = child
         .stdin
         .take()
-        .ok_or_else(|| "curl stdin unavailable".to_owned())?
-        .write_all(script.as_bytes())
-        .map_err(|error| format!("could not write curl request: {error}"))?;
+        .ok_or_else(|| "curl stdin unavailable".to_owned())
+        .and_then(|mut stdin| {
+            stdin
+                .write_all(script.as_bytes())
+                .map_err(|error| format!("could not write curl request: {error}"))
+        });
+    if let Err(error) = write_result {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error);
+    }
     let output = child
         .wait_with_output()
         .map_err(|error| format!("curl failed: {error}"))?;
@@ -398,6 +406,10 @@ fn post_openrouter(key: &str, body: &Value) -> Result<Value, String> {
     }
     serde_json::from_slice(&output.stdout)
         .map_err(|error| format!("OpenRouter returned invalid JSON: {error}"))
+}
+
+fn hybrid_parallelism(jobs: usize) -> u64 {
+    u64::try_from(jobs.clamp(1, JEV_MAX_IN_FLIGHT)).unwrap_or(u64::MAX)
 }
 
 fn escape(value: &str) -> String {
@@ -456,9 +468,12 @@ impl Aggregate {
         self.service_time += sample.latency.as_secs_f64();
         self.input += sample.response.usage.input_tokens.unwrap_or(0);
         self.output += sample.response.usage.output_tokens.unwrap_or(0);
-        if let Err(issue) =
-            decision_from_response(&sample.response, Sequence(u64::from(index) + 1), "worker")
-        {
+        if let Err(issue) = decision_from_response(
+            &sample.response,
+            Sequence(u64::from(index) + 1),
+            "worker",
+            &["planner".into(), "reviewer".into()],
+        ) {
             self.failures += 1;
             diagnostics.push(Diagnostic { index, arm, issue });
             return;

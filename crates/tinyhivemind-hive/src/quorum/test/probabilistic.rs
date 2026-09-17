@@ -118,6 +118,48 @@ fn the_latest_evaluation_per_member_replaces_an_earlier_one() {
 }
 
 #[test]
+fn expired_evaluations_are_ignored_before_source_validation() {
+    let transcript = vec![
+        said(1, "planner", "!propose #stage Stage it."),
+        said(5, "critic", "!support #stage ^1 Bound it."),
+    ];
+    let mut narrow = policy(2);
+    narrow.window = 1;
+    let standings = standings_with_evaluations(
+        &read(&transcript),
+        &[evaluation(
+            1,
+            "planner",
+            PROBABILITY_SCALE,
+            PROBABILITY_SCALE,
+        )],
+        Sequence(5),
+        &narrow,
+        &admission(),
+    )
+    .expect("expired evaluations are inert");
+    assert_eq!(standing(&standings, "stage").probability_support, 0);
+}
+
+#[test]
+fn conflicting_duplicate_evaluations_are_rejected() {
+    let transcript = transcript();
+    assert!(matches!(
+        standings_with_evaluations(
+            &read(&transcript),
+            &[
+                evaluation(1, "planner", 800_000, PROBABILITY_SCALE),
+                evaluation(1, "planner", 200_000, PROBABILITY_SCALE),
+            ],
+            Sequence(2),
+            &policy(2),
+            &admission(),
+        ),
+        Err(crate::Error::InvalidDecisionDistribution)
+    ));
+}
+
+#[test]
 fn malformed_and_stale_evaluations_stop_the_fold() {
     let transcript = transcript();
     let mut malformed = evaluation(1, "planner", 500_000, PROBABILITY_SCALE);

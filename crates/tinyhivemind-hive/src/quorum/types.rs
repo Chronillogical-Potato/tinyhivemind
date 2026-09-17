@@ -201,14 +201,13 @@ pub struct TopicStanding {
 }
 
 impl TopicStanding {
-    /// Return whether this topic has reached `policy.threshold` expected
-    /// supporters and
-    /// has not been capped by `policy.refutation_cap` distinct refuters.
+    /// Return whether expected probability support reaches the scaled
+    /// `policy.threshold` after applying the refutation cap.
     ///
     /// The refutation check is a cap rather than a debit. `carried` reads the
-    /// supporter *count*, not the weight, so subtracting from `support` would
-    /// change nothing; capping is the only shape that expresses "this
-    /// hypothesis is dead regardless of how many members like it".
+    /// Probability support is compared with `threshold × PROBABILITY_SCALE`;
+    /// capping remains the shape that expresses "this hypothesis is dead
+    /// regardless of how much expected support it has".
     #[must_use]
     pub fn carried(&self, policy: &QuorumPolicy) -> bool {
         if let Some(cap) = policy.refutation_cap

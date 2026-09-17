@@ -253,15 +253,18 @@ pub fn standings_with_evaluations<'a>(
         .collect();
     let mut latest: BTreeMap<&str, &DecisionEvaluation> = BTreeMap::new();
     for evaluation in evaluations {
+        if !horizon.within(evaluation.source_sequence, policy.window) {
+            continue;
+        }
         validate_evaluation(evaluation, &live)?;
-        if !horizon.within(evaluation.source_sequence, policy.window)
-            || evaluation.violation_probability > admission.maximum_violation_probability
-        {
+        if evaluation.violation_probability > admission.maximum_violation_probability {
             continue;
         }
         let entry = latest.entry(&evaluation.agent_id).or_insert(evaluation);
         if evaluation.source_sequence > entry.source_sequence {
             *entry = evaluation;
+        } else if evaluation.source_sequence == entry.source_sequence && evaluation != *entry {
+            return Err(Error::InvalidDecisionDistribution);
         }
     }
     for standing in &mut folded {

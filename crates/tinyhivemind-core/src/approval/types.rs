@@ -72,7 +72,7 @@ impl ActionTarget {
 }
 
 /// Host-declared side-effect class.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Effect {
     /// Reads state without changing it.
@@ -93,6 +93,8 @@ pub struct ScopeKey {
     pub call_id: String,
     /// Action verb.
     pub verb: String,
+    /// Host-declared effect classification.
+    pub effect: Effect,
     /// Action target.
     pub target: ActionTarget,
 }
@@ -105,6 +107,7 @@ impl ScopeKey {
             actor_id: request.actor_id.clone(),
             call_id: request.call_id.clone(),
             verb: request.action.verb.clone(),
+            effect: request.action.effect,
             target: request.action.target.clone(),
         }
     }
@@ -120,6 +123,14 @@ impl ScopeKey {
             field("a", &self.actor_id),
             field("c", &self.call_id),
             field("v", &self.verb),
+            field(
+                "e",
+                match self.effect {
+                    Effect::ReadOnly => "read_only",
+                    Effect::Mutating => "mutating",
+                    Effect::Unclassified => "unclassified",
+                },
+            ),
             field(tag, target),
         ]
         .concat()
@@ -143,6 +154,30 @@ pub enum GrantScope {
         /// Caller-normalized lexical root.
         root: String,
     },
+}
+
+impl GrantScope {
+    /// Return whether this scope and originating key cover `requested`.
+    #[must_use]
+    pub fn covers(&self, held: &ScopeKey, requested: &ScopeKey) -> bool {
+        if held.actor_id != requested.actor_id
+            || held.verb != requested.verb
+            || held.effect != requested.effect
+        {
+            return false;
+        }
+        match self {
+            Self::Call => held.call_id == requested.call_id && held.target == requested.target,
+            Self::Action => held.target == requested.target,
+            Self::Resource { root } => matches!(
+                (&held.target, &requested.target),
+                (
+                    ActionTarget::Resource { path: held_path },
+                    ActionTarget::Resource { path: requested_path }
+                ) if path_within(held_path, root) && path_within(requested_path, root)
+            ),
+        }
+    }
 }
 
 /// Previously issued standing authority.
@@ -251,6 +286,8 @@ pub enum RuleVerdict {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ApproverRule {
+    /// No person is available to approve requests.
+    Absent,
     /// One person for every request.
     Person {
         /// Exact person id.
@@ -263,6 +300,24 @@ pub enum ApproverRule {
         /// Desk-specific replacements.
         overrides: Vec<DeskApprover>,
     },
+}
+
+fn has_parent_component(path: &str) -> bool {
+    path.split('/').any(|component| component == "..")
+}
+
+pub(super) fn path_within(path: &str, root: &str) -> bool {
+    if path.is_empty()
+        || root.is_empty()
+        || has_parent_component(path)
+        || has_parent_component(root)
+        || path.starts_with('/') != root.starts_with('/')
+    {
+        return false;
+    }
+    let path: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
+    let root: Vec<&str> = root.split('/').filter(|part| !part.is_empty()).collect();
+    path.starts_with(&root)
 }
 
 /// One canonical desk-to-person approver override.

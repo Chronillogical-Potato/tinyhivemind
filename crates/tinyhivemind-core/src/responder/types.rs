@@ -1,6 +1,6 @@
 //! Stable responder selection inputs and decisions.
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use std::fmt;
 
 use crate::mention::Mention;
@@ -9,9 +9,19 @@ use crate::mention::Mention;
 pub const PROBABILITY_SCALE: u32 = 1_000_000;
 
 /// Probability in integer parts per million.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct Probability(u32);
+
+impl<'de> Deserialize<'de> for Probability {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let parts = u32::deserialize(deserializer)?;
+        Self::new(parts).ok_or_else(|| D::Error::custom("probability exceeds 1000000"))
+    }
+}
 
 impl Probability {
     /// Zero probability.

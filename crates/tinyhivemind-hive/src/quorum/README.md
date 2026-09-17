@@ -35,9 +35,9 @@ the benchmark scored them and they lost — see
   argues cited evidence against a topic itself, rather than against any one
   advocate. `refutation_cap` caps a topic out of contention once enough
   distinct grounded refuters have named it; it never silences anybody or
-  removes a supporter, because `carried` reads a supporter *count* and
-  subtracting from `support` would change nothing a cap doesn't already say
-  more directly. See `test/refutation.rs`.
+  removes a supporter. `carried` compares expected fixed-point support with the
+  scaled threshold, while the cap says the hypothesis is dead regardless of
+  how much support remains. See `test/refutation.rs`.
 - **Grounds are weighed, not counted.** Under `require_evidential`, a support
   counts only if its citation chain — followed transitively, inside the
   window only — reaches a `TraceKind::Evidence`. A support citing another
