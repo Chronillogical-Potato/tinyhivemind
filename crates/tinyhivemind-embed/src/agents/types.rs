@@ -118,7 +118,7 @@ impl<A> AgentRegistry<A> {
 }
 
 /// One accepted route id paired with its existing agent instance.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct RoutedAgent<'a, A> {
     /// Canonical routing id.
     pub id: &'a str,
@@ -126,8 +126,16 @@ pub struct RoutedAgent<'a, A> {
     pub agent: &'a A,
 }
 
+impl<A> Copy for RoutedAgent<'_, A> {}
+
+impl<A> Clone for RoutedAgent<'_, A> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
 /// Instantiated agents authorized by one accepted routing plan.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum RoutedAgents<'a, A> {
     /// One direct, semantic, surface-rule, or fallback responder.
     One(RoutedAgent<'a, A>),
@@ -140,4 +148,17 @@ pub enum RoutedAgents<'a, A> {
     },
     /// No agent turn is authorized until the request is clarified.
     Clarify,
+}
+
+impl<A> Clone for RoutedAgents<'_, A> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::One(agent) => Self::One(*agent),
+            Self::Hive { primary, invited } => Self::Hive {
+                primary: *primary,
+                invited: invited.clone(),
+            },
+            Self::Clarify => Self::Clarify,
+        }
+    }
 }

@@ -7,6 +7,12 @@ use tinyhivemind::responder::Probability;
 #[derive(Debug, Eq, PartialEq)]
 struct Agent(&'static str);
 
+struct NotCloneOrCopy;
+
+fn assert_clone<T: Clone>() {}
+
+fn assert_copy<T: Copy>() {}
+
 fn agents() -> Result<AgentRegistry<Agent>, AgentRegistryError> {
     AgentRegistry::new([
         ("engineering", Agent("same engineering instance")),
@@ -121,4 +127,11 @@ fn a_hive_cannot_repeat_an_instantiated_agent() {
             "engineering".into()
         ))
     );
+}
+
+#[test]
+fn borrowed_route_views_do_not_require_traits_from_the_agent() {
+    assert_clone::<RoutedAgent<'static, NotCloneOrCopy>>();
+    assert_copy::<RoutedAgent<'static, NotCloneOrCopy>>();
+    assert_clone::<RoutedAgents<'static, NotCloneOrCopy>>();
 }

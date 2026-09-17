@@ -342,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    /// Exercise routing, loopback provider IO, and the embedded Harness together.
+    /// Exercise routing, loopback provider IO, and the embedded runtime together.
     fn embedded_route_runs_to_completion() {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
