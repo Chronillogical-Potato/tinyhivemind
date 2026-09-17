@@ -1,7 +1,5 @@
 //! Behavior tests for binding accepted routes to existing agent instances.
 
-#![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
-
 use super::*;
 use crate::{EvaluationDisposition, RoutingEvaluation, RoutingFallback, RoutingPlan};
 use tinyhivemind::responder::Probability;
@@ -9,12 +7,11 @@ use tinyhivemind::responder::Probability;
 #[derive(Debug, Eq, PartialEq)]
 struct Agent(&'static str);
 
-fn agents() -> AgentRegistry<Agent> {
+fn agents() -> Result<AgentRegistry<Agent>, AgentRegistryError> {
     AgentRegistry::new([
         ("engineering", Agent("same engineering instance")),
         ("legal", Agent("same legal instance")),
     ])
-    .expect("registry is valid")
 }
 
 fn fallback(id: &str) -> RoutingPlan {
@@ -28,7 +25,7 @@ fn evaluation() -> RoutingEvaluation {
     RoutingEvaluation {
         primary_responder: "engineering".into(),
         primary_probabilities: Vec::new(),
-        confidence: Probability::new(900_000).expect("valid probability"),
+        confidence: Probability::ZERO,
         needs_collaboration: Probability::ZERO,
         needs_clarification: Probability::ZERO,
         contributions: Vec::new(),
@@ -41,70 +38,71 @@ fn evaluation() -> RoutingEvaluation {
 }
 
 #[test]
-fn repeated_routes_return_the_same_instantiated_agent() {
-    let agents = agents();
-    let first = agents.resolve(&fallback("engineering")).expect("resolves");
-    let second = agents.resolve(&fallback("engineering")).expect("resolves");
+fn repeated_routes_return_the_same_instantiated_agent() -> Result<(), Box<dyn std::error::Error>> {
+    let agents = agents()?;
+    let first = agents.resolve(&fallback("engineering"))?;
+    let second = agents.resolve(&fallback("engineering"))?;
     let (RoutedAgents::One(first), RoutedAgents::One(second)) = (first, second) else {
-        panic!("fallbacks resolve one agent")
+        return Err("fallbacks did not resolve one agent".into());
     };
 
     assert!(std::ptr::eq(first.agent, second.agent));
     assert_eq!(first.agent, &Agent("same engineering instance"));
+    Ok(())
 }
 
 #[test]
 fn routing_never_constructs_a_missing_agent() {
     assert_eq!(
-        agents().resolve(&fallback("finance")).unwrap_err(),
-        AgentRegistryError::MissingAgent("finance".to_string())
+        agents()
+            .and_then(|agents| agents.resolve(&fallback("finance")).map(|_| ()))
+            .err(),
+        Some(AgentRegistryError::MissingAgent("finance".to_string()))
     );
 }
 
 #[test]
 fn blank_and_duplicate_registry_ids_fail_closed() {
     assert_eq!(
-        AgentRegistry::new([(" ", Agent("blank"))]).unwrap_err(),
-        AgentRegistryError::BlankId
+        AgentRegistry::new([(" ", Agent("blank"))]).err(),
+        Some(AgentRegistryError::BlankId)
     );
     assert_eq!(
         AgentRegistry::new([
             ("engineering", Agent("first")),
             ("engineering", Agent("second")),
         ])
-        .unwrap_err(),
-        AgentRegistryError::DuplicateId("engineering".to_string())
+        .err(),
+        Some(AgentRegistryError::DuplicateId("engineering".to_string()))
     );
 }
 
 #[test]
-fn a_hive_preserves_primary_then_invitation_order() {
-    let agents = agents();
+fn a_hive_preserves_primary_then_invitation_order() -> Result<(), Box<dyn std::error::Error>> {
+    let agents = agents()?;
     let plan = RoutingPlan::Hive {
         primary_id: "engineering".into(),
         invited_ids: vec!["legal".into()],
         evaluation: evaluation(),
     };
-    let RoutedAgents::Hive { primary, invited } = agents.resolve(&plan).expect("hive resolves")
-    else {
-        panic!("hive plan resolves a hive")
+    let RoutedAgents::Hive { primary, invited } = agents.resolve(&plan)? else {
+        return Err("hive plan did not resolve a hive".into());
     };
 
     assert_eq!(primary.id, "engineering");
     assert_eq!(invited.len(), 1);
     assert_eq!(invited[0].id, "legal");
+    Ok(())
 }
 
 #[test]
-fn a_clarification_authorizes_no_agent_turn() {
+fn a_clarification_authorizes_no_agent_turn() -> Result<(), AgentRegistryError> {
     let plan = RoutingPlan::Clarify {
         evaluation: evaluation(),
     };
 
-    assert!(matches!(
-        agents().resolve(&plan).expect("clarification resolves"),
-        RoutedAgents::Clarify
-    ));
+    assert!(matches!(agents()?.resolve(&plan)?, RoutedAgents::Clarify));
+    Ok(())
 }
 
 #[test]
@@ -116,7 +114,11 @@ fn a_hive_cannot_repeat_an_instantiated_agent() {
     };
 
     assert_eq!(
-        agents().resolve(&plan).unwrap_err(),
-        AgentRegistryError::DuplicateRoutedAgent("engineering".into())
+        agents()
+            .and_then(|agents| agents.resolve(&plan).map(|_| ()))
+            .err(),
+        Some(AgentRegistryError::DuplicateRoutedAgent(
+            "engineering".into()
+        ))
     );
 }
