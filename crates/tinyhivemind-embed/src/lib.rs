@@ -15,10 +15,13 @@
 //! assert!(conversation.may_open_hive());
 //! ```
 
+mod error;
+
 pub mod conversation;
 pub mod routing;
 
-pub use conversation::{ConversationKind, ConversationRef, MessageRoute, MessageRouteError};
+pub use conversation::{ConversationKind, ConversationRef, MessageRoute};
+pub use error::{Error, Result};
 pub use routing::{
     CandidateProbability, ContributionProbability, EvaluationDisposition, RouteCandidate, Router,
     RouterError, RouterFuture, RoutingEvaluation, RoutingFallback, RoutingPlan, RoutingPolicy,
