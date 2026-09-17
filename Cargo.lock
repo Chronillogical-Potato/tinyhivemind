@@ -1054,8 +1054,9 @@ dependencies = [
 [[package]]
 name = "tinyjevclient"
 version = "0.2.1"
-source = "git+https://github.com/tinyhumansai/tinyjevclient?rev=f9a6d1bbc8a2bfbbc5d4b5d3a052a64247caacf3#f9a6d1bbc8a2bfbbc5d4b5d3a052a64247caacf3"
+source = "git+https://github.com/tinyhumansai/tinyjevclient?rev=3042c501fa28fae9972c1761543ed94931d79607#3042c501fa28fae9972c1761543ed94931d79607"
 dependencies = [
+ "httpdate",
  "reqwest",
  "serde",
  "serde_json",
