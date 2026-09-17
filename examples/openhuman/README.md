@@ -25,7 +25,7 @@ One request, the stable session id, and the mock reply `openhuman-seat-ok`.
 This proves integration mechanics, not Jev routing quality or provider
 performance. Live TypeSafe quality remains the job of the labeled routing
 corpus and paid campaign described in
-[`docs/specs/jev-first-routing.md`](../../../../../docs/specs/jev-first-routing.md).
+[`docs/specs/jev-first-routing.md`](../../docs/specs/jev-first-routing.md).
 
 ## Files
 

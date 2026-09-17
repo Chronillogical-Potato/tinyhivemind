@@ -52,6 +52,12 @@ jobs:
       - name: Test default features
         run: cargo test
 
+      # This integration is a standalone Cargo workspace because OpenHuman's
+      # compiler/dependency floor is intentionally newer than the libraries'.
+      # Its test drives the complete route -> embedded Harness path offline.
+      - name: Test the embedded OpenHuman routing proof
+        run: cargo test --locked --manifest-path examples/openhuman/Cargo.toml
+
       # `cargo build --all-targets` only *compiles* an example. `AGENTS.md`
       # promises `cargo run -p tinyhivemind-core --example basic` works, and a
       # compiled example can still fail on its first line.

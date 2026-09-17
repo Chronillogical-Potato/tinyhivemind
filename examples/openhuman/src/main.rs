@@ -26,6 +26,7 @@ struct FixtureTransport {
 }
 
 impl SystemOneTransport for FixtureTransport {
+    /// Return the exact typed fixture after checking the router's question batch.
     fn evaluate<'a>(&'a self, request: &'a SystemOneRequest) -> SystemOneTransportFuture<'a> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
@@ -41,6 +42,7 @@ impl SystemOneTransport for FixtureTransport {
     }
 }
 
+/// Build a high-confidence single-engineer System One response.
 fn fixture_response() -> SystemOneResponse {
     SystemOneResponse {
         model: "jev-fixture".into(),
@@ -70,6 +72,7 @@ fn fixture_response() -> SystemOneResponse {
     }
 }
 
+/// Pair one Noul question id with its fixture probability.
 fn noul(id: &str, probability: f64) -> (String, SystemOneAnswer) {
     (
         id.into(),
@@ -77,6 +80,7 @@ fn noul(id: &str, probability: f64) -> (String, SystemOneAnswer) {
     )
 }
 
+/// Build the immutable two-seat desk request routed by the proof.
 fn request() -> RoutingRequest {
     RoutingRequest {
         message: "Review the launch implementation and compliance risk.".into(),
@@ -109,6 +113,7 @@ fn request() -> RoutingRequest {
     }
 }
 
+/// Build one available route candidate without host-only state.
 fn candidate(id: &str, label: &str, description: &str) -> RouteCandidate {
     RouteCandidate {
         id: id.into(),
@@ -121,10 +126,12 @@ fn candidate(id: &str, label: &str, description: &str) -> RouteCandidate {
     }
 }
 
+/// Convert a checked fixture value into fixed-point probability.
 fn probability(parts: u32) -> Probability {
     Probability::new(parts).expect("fixture probability is bounded")
 }
 
+/// Run the proof on worker threads with enough stack for the embedded agent loop.
 fn main() -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -133,6 +140,7 @@ fn main() -> anyhow::Result<()> {
     runtime.block_on(run())
 }
 
+/// Route once, run exactly the selected OpenHuman seat, and verify every call.
 async fn run() -> anyhow::Result<()> {
     let transport = FixtureTransport::default();
     let router = JevRouter::new(transport);
@@ -202,6 +210,7 @@ async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Disable every optional local service the loopback proof does not need.
 fn offline_config() -> RuntimeConfig {
     let mut config = RuntimeConfig::default();
     config.local_ai.runtime_enabled = false;
@@ -214,6 +223,7 @@ fn offline_config() -> RuntimeConfig {
     config
 }
 
+/// Return the one OpenAI-compatible completion accepted by the proof.
 fn chat_completion() -> serde_json::Value {
     json!({
         "id": "chatcmpl-openhuman-proof",
@@ -234,11 +244,26 @@ mod tests {
     use super::{fixture_response, request};
 
     #[test]
+    /// Keep the typed evaluator fixture aligned with the candidate snapshot.
     fn fixture_matches_the_candidate_snapshot() {
         let request = request();
         let response = fixture_response();
         assert_eq!(request.candidates.len(), 2);
         assert_eq!(response.model, "jev-fixture");
         assert!(response.answers.contains_key("primary_responder"));
+    }
+
+    #[test]
+    /// Exercise routing, loopback provider IO, and the embedded Harness together.
+    fn embedded_route_runs_to_completion() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_stack_size(super::WORKER_STACK_BYTES)
+            .build()
+            .expect("proof runtime builds");
+        runtime
+            .block_on(async { tokio::spawn(super::run()).await })
+            .expect("proof task did not panic")
+            .expect("proof completes");
     }
 }
