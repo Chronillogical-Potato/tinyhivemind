@@ -311,6 +311,18 @@ async fn malformed_candidate_snapshots_are_rejected_before_a_provider_call() {
         }
     ));
     assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+    let mut whitespace = request(ConversationKind::Desk);
+    whitespace.candidates[1].id = "   ".into();
+    let plan = route_message(Some(&router), None, &whitespace, None, "eng").await;
+    assert!(matches!(
+        plan,
+        RoutingPlan::Fallback {
+            reason: RoutingFallback::RejectedOutput,
+            ..
+        }
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

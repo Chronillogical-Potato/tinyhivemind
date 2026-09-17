@@ -41,8 +41,9 @@ Pure acceptance requires an exact Choice domain, an exact fixed-point total, a
 maximal selected alternative, calibrated confidence, the current roster
 version, and one contribution judgment per eligible candidate. Unavailable
 candidates are excluded before inference and rejected if invented by a
-provider. Thresholds are host-supplied calibration artifacts; the library has
-no cookbook defaults.
+provider. Candidate ids are unique, nonblank after trimming, and may not use
+the reserved `none` alternative. Thresholds are host-supplied calibration
+artifacts; the library has no cookbook defaults.
 
 Collaboration retains the primary. Invitations clear the contribution
 threshold, order by probability then effective desk order, and are truncated

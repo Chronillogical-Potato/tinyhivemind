@@ -189,6 +189,8 @@ async fn invalid_candidate_and_choice_bounds_fail_before_transport() {
     assert!(router.evaluate(&no_candidates).await.is_err());
     no_candidates.candidates[1].id = "none".into();
     assert!(router.evaluate(&no_candidates).await.is_err());
+    no_candidates.candidates[1].id = "   ".into();
+    assert!(router.evaluate(&no_candidates).await.is_err());
     assert!(router.transport().requests.lock().unwrap().is_empty());
 }
 

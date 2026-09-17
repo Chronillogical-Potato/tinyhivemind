@@ -141,7 +141,11 @@ fn valid_request(request: &RoutingRequest) -> bool {
         .iter()
         .map(|candidate| candidate.id.as_str())
         .collect();
-    ids.len() == request.candidates.len() && !ids.contains("") && !ids.contains("none")
+    ids.len() == request.candidates.len()
+        && request
+            .candidates
+            .iter()
+            .all(|candidate| !candidate.id.trim().is_empty() && candidate.id != "none")
 }
 
 fn valid_domain(request: &RoutingRequest, evaluation: &RoutingEvaluation) -> bool {
