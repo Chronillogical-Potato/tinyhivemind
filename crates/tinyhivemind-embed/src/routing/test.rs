@@ -458,17 +458,35 @@ fn desk_asides_cannot_exceed_the_opening_round_width() {
     let aside = crate::MessageRoute::DeskAside {
         recipient_ids: vec!["eng".into(), "legal".into(), "operations".into()],
     };
+    let error = aside
+        .validate_for_round_width(2)
+        .expect_err("wide desk aside is rejected");
     assert_eq!(
-        aside.validate_for_round_width(2),
-        Err(crate::MessageRouteError::DeskAsideTooWide {
+        error,
+        crate::MessageRouteError::DeskAsideTooWide {
             recipient_count: 3,
             round_width: 2,
-        })
+        }
+    );
+    assert_eq!(
+        error.to_string(),
+        "desk aside names 3 recipients but the round width is 2"
     );
     assert_eq!(aside.validate_for_round_width(3), Ok(()));
     assert_eq!(
+        crate::MessageRoute::CurrentConversation.validate_for_round_width(0),
+        Ok(())
+    );
+    assert_eq!(
         crate::MessageRoute::DirectAgent {
             agent_id: "legal".into(),
+        }
+        .validate_for_round_width(0),
+        Ok(())
+    );
+    assert_eq!(
+        crate::MessageRoute::DeskReferral {
+            desk_id: "operations".into(),
         }
         .validate_for_round_width(0),
         Ok(())
