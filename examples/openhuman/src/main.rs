@@ -1,14 +1,14 @@
-//! Standalone proof: route one request and run the selected embedded OpenHuman seat.
+//! Standalone proof: route requests onto instantiated OpenHuman agents.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use openhuman_embed::{Access, Harness, Provider, RuntimeConfig, Workspace};
+use openhuman_embed::{Access, Agent, AgentSpec, Provider, Runtime, RuntimeConfig, Workspace};
 use serde_json::json;
 use tinyhivemind::responder::Probability;
 use tinyhivemind_embed::{
-    ConversationKind, ConversationRef, RouteCandidate, RoutingPlan, RoutingPolicy, RoutingRequest,
-    route_message,
+    AgentRegistry, ConversationKind, ConversationRef, RouteCandidate, RoutedAgents, RoutingPolicy,
+    RoutingRequest, route_message,
 };
 use tinyhivemind_typesafe::{
     ChoiceAnswer, JevRouter, NoulAnswer, SystemOneAnswer, SystemOneRequest, SystemOneResponse,
@@ -140,19 +140,8 @@ fn main() -> anyhow::Result<()> {
     runtime.block_on(run())
 }
 
-/// Route once, run exactly the selected OpenHuman seat, and verify every call.
+/// Build one OpenHuman runtime, instantiate its agents, and route onto them.
 async fn run() -> anyhow::Result<()> {
-    let transport = FixtureTransport::default();
-    let router = JevRouter::new(transport);
-    let request = request();
-    let plan = route_message(Some(&router), None, &request, None, "engineering").await;
-    let RoutingPlan::One { responder_id, .. } = &plan else {
-        anyhow::bail!("fixture routing did not select one responder: {plan:?}");
-    };
-    if responder_id != "engineering" {
-        anyhow::bail!("fixture routing selected unexpected responder {responder_id}");
-    }
-
     let backend = MockServer::start().await;
     Mock::given(any())
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -168,7 +157,7 @@ async fn run() -> anyhow::Result<()> {
         .mount(&provider)
         .await;
 
-    let harness = Harness::builder()
+    let runtime = Runtime::builder()
         .config(offline_config())
         .workspace(Workspace::Ephemeral)
         .backend_url(backend.uri())
@@ -179,35 +168,134 @@ async fn run() -> anyhow::Result<()> {
         .access(Access::readonly())
         .build()
         .await?;
-    let session_id = format!("tinyhivemind-openhuman:{responder_id}");
-    let outcome = harness
-        .turn(format!(
-            "You are the {responder_id} seat. Answer without taking actions: {}",
-            request.message
-        ))
-        .session(&session_id)
-        .send()
-        .await?;
-    if outcome.reply != OPENHUMAN_REPLY || outcome.session_id != session_id {
-        anyhow::bail!("embedded OpenHuman outcome did not match the proof contract");
+
+    // OpenHuman owns the runtime and agent lifecycle. TinyHiveMind receives
+    // the already-instantiated handles and never serializes or reconstructs
+    // them between turns.
+    let agents = AgentRegistry::new([
+        (
+            "engineering",
+            runtime.agent(
+                AgentSpec::new("engineering").system_prompt("You are the engineering specialist."),
+            )?,
+        ),
+        (
+            "legal",
+            runtime
+                .agent(AgentSpec::new("legal").system_prompt("You are the legal specialist."))?,
+        ),
+    ])?;
+    if runtime.agent_ids() != ["engineering".to_string(), "legal".to_string()] {
+        anyhow::bail!("OpenHuman runtime did not retain both instantiated agents");
+    }
+
+    let transport = FixtureTransport::default();
+    let router = JevRouter::new(transport);
+    let desk_request = request();
+    let desk_plan = route_message(Some(&router), None, &desk_request, None, "engineering").await;
+    let RoutedAgents::One(engineering) = agents.resolve(&desk_plan)? else {
+        anyhow::bail!("fixture routing did not select one responder: {desk_plan:?}");
+    };
+    let session_id = openhuman_session(engineering.agent);
+    let first = run_turn(engineering.agent, &session_id, &desk_request.message).await?;
+
+    // The same instantiated OpenHuman agent crosses from a desk into a DM.
+    // The deterministic DM route bypasses Jev, and OpenHuman receives the same
+    // session id, so its own transcript/compaction layer carries continuity.
+    let mut direct_request = request();
+    direct_request.message = "Follow up privately with the implementation risk.".into();
+    direct_request.conversation = ConversationRef {
+        id: "operator-engineering".into(),
+        kind: ConversationKind::Direct,
+        thread_root: None,
+    };
+    let direct_plan =
+        route_message(Some(&router), None, &direct_request, None, "engineering").await;
+    let RoutedAgents::One(engineering_again) = agents.resolve(&direct_plan)? else {
+        anyhow::bail!("direct routing did not select one responder: {direct_plan:?}");
+    };
+    if !std::ptr::eq(engineering.agent, engineering_again.agent) {
+        anyhow::bail!("surface change replaced the instantiated OpenHuman agent");
+    }
+    let second = run_turn(
+        engineering_again.agent,
+        &session_id,
+        &direct_request.message,
+    )
+    .await?;
+    if first.reply != OPENHUMAN_REPLY
+        || second.reply != OPENHUMAN_REPLY
+        || first.session_id != session_id
+        || second.session_id != session_id
+    {
+        anyhow::bail!("OpenHuman did not retain one session across both surfaces");
     }
     if router.transport().calls.load(Ordering::SeqCst) != 1 {
-        anyhow::bail!("ordinary desk routing did not make exactly one System One request");
+        anyhow::bail!("the desk plus DM did not make exactly one System One request");
     }
     let provider_requests = provider
         .received_requests()
         .await
-        .ok_or_else(|| anyhow::anyhow!("mock provider did not retain requests"))?
-        .len();
-    if provider_requests != 1 {
-        anyhow::bail!("embedded OpenHuman made {provider_requests} provider calls, expected one");
+        .ok_or_else(|| anyhow::anyhow!("mock provider did not retain requests"))?;
+    if provider_requests.len() != 2 {
+        anyhow::bail!(
+            "embedded OpenHuman made {} provider calls, expected two",
+            provider_requests.len()
+        );
+    }
+    let first_body: serde_json::Value = serde_json::from_slice(&provider_requests[0].body)?;
+    let second_body: serde_json::Value = serde_json::from_slice(&provider_requests[1].body)?;
+    let first_messages = first_body["messages"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("first OpenHuman request has no message history"))?;
+    let second_messages = second_body["messages"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("second OpenHuman request has no message history"))?;
+    if !second_messages.starts_with(first_messages) {
+        anyhow::bail!("OpenHuman changed the prior message prefix between agent turns");
+    }
+    let retained_first_reply = second_messages
+        .iter()
+        .any(|message| message["role"] == "assistant" && message["content"] == OPENHUMAN_REPLY);
+    if !retained_first_reply {
+        anyhow::bail!("OpenHuman did not carry the first reply into the second turn");
     }
 
-    println!("route: {responder_id}");
+    println!("agents: engineering,legal");
+    println!("desk_route: {}", engineering.id);
+    println!("direct_route: {}", engineering_again.id);
     println!("system_one_calls: 1");
-    println!("session: {}", outcome.session_id);
-    println!("reply: {}", outcome.reply);
+    println!("openhuman_session: {session_id}");
+    println!("turns_on_same_session: 2");
+    println!(
+        "cacheable_prefix_messages: {}/{}",
+        first_messages.len(),
+        first_messages.len()
+    );
+    println!("reply: {}", second.reply);
     Ok(())
+}
+
+/// OpenHuman's per-agent transcript key; TinyHiveMind stores no session state.
+fn openhuman_session(agent: &Agent) -> String {
+    format!("tinyhivemind-openhuman:{}", agent.id())
+}
+
+/// Send one turn through the already-instantiated OpenHuman agent.
+async fn run_turn(
+    agent: &Agent,
+    session_id: &str,
+    message: &str,
+) -> Result<openhuman_embed::TurnOutcome, openhuman_embed::AgentError> {
+    agent
+        .turn(format!(
+            "You are the {} seat. Answer without taking actions: {message}",
+            agent.id()
+        ))
+        .session(session_id)
+        .send()
+        .await
+        .map_err(Into::into)
 }
 
 /// Disable every optional local service the loopback proof does not need.

@@ -15,14 +15,21 @@ OpenCompany or OpenHuman before the TinyHiveMind API and evidence land.
 
 ## Proposed behavior
 
-The adapter maps OpenCompany snapshots into `RoutingRequest` and maps accepted
-plans into its existing turn and hive seams. OpenCompany retains one durable
-OpenHuman session per company and agent. Each turn additionally carries a
-`ConversationRef`.
+The adapter builds one OpenHuman `Runtime`, instantiates one OpenHuman `Agent`
+per company agent, and registers those existing handles in
+`AgentRegistry<openhuman_embed::Agent>`. TinyHiveMind resolves accepted plans
+to borrowed handles; it never constructs an agent, serializes a provider
+session id, or recreates an agent between turns. Each turn separately carries
+a `ConversationRef`.
 
 Ordinary desk and direct turns use host-seeded unified-session deltas. Hive
 seats receive attributed episode history and disable history seeding without
 resetting the company-wide watermark.
+
+OpenHuman owns session transcripts, continuation, and compaction. The adapter
+uses the same OpenHuman agent and its stable per-agent thread when that agent
+moves between desks, threads, DMs, General, and workflows. Conversation ids do
+not participate in agent identity.
 
 ## Invariants and constraints
 
@@ -46,6 +53,7 @@ performance.
 - The adapter replaces no storage model.
 - DMs cannot enter a desk quorum.
 - Stable per-agent OpenHuman session ids survive surface changes.
+- TinyHiveMind stores no OpenHuman session registry or transcript.
 
 ## Open questions
 
