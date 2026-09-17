@@ -452,8 +452,9 @@ the library asks the host to reinitialize instead of silently skipping history.
 
 No. The host owns the agent lifecycle, model calls, queueing, storage, and
 authorization. The normal runtime can resolve a direct mention and produce at
-most one turn request; the optional hive crate can select one next speaker for
-a bounded deliberation. The host decides whether to run that turn, what model
+most one turn request; the optional embedding layer can recommend a primary and
+bounded specialist set; the optional hive crate can select a round inside a
+bounded deliberation. The host decides whether to run those turns, what models
 to use, what long-term memory or search to provide, and how to persist the
 result. A workspace such as Buzz could host these mechanics, but it is a
 separate system with its own routing and context policy.
@@ -480,7 +481,7 @@ That prints one deliberation episode turn by turn—the fastest way to see the m
 | | |
 | --- | --- |
 | [Quick start](https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start) | pin it, resolve a mention, read a deliberation |
-| [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the three crates and why they are split that way |
+| [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the crate boundaries and why they are split that way |
 | [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection, and finding your way back into a busy desk |
 | [Recall](https://github.com/tinyhumansai/tinyhivemind/wiki/Recall) | searching the transcript, pinning what must not be lost, and the message budget |
 | [Cross-desk referral](https://github.com/tinyhumansai/tinyhivemind/wiki/Cross-desk-referral) | asking another channel a question, and getting the answer back |

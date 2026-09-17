@@ -1,0 +1,20 @@
+[package]
+name = "tinyhivemind-embed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Host-neutral conversation surfaces and semantic routing composition for TinyHiveMind."
+
+[dependencies]
+serde = { workspace = true }
+tinyhivemind = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

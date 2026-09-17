@@ -1022,6 +1022,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-embed"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tinyhivemind",
+ "tokio",
+]
+
+[[package]]
 name = "tinyhivemind-hive"
 version = "0.2.1"
 dependencies = [
@@ -1031,6 +1041,17 @@ dependencies = [
  "tinyhivemind",
  "tinyhivemind-core",
  "tinyjevclient",
+ "tokio",
+]
+
+[[package]]
+name = "tinyhivemind-typesafe"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tinyhivemind",
+ "tinyhivemind-embed",
  "tokio",
 ]
 
