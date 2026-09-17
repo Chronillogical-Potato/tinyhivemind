@@ -12,7 +12,7 @@ publish = false
 
 [dependencies]
 anyhow = "1"
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false, features = ["inference"] }
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false }
 serde_json = "1"
 tinyhivemind = { path = "../../crates/tinyhivemind" }
 tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }
