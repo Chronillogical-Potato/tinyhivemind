@@ -8,6 +8,7 @@ README.
 | module | question it answers |
 | --- | --- |
 | [`aside`](aside/README.md) | how a private, off-transcript note is scoped to the readers it names |
+| [`approval`](approval/README.md) | whether one typed side-effecting action is allowed, denied, or must be put to one person |
 | [`chat`](chat/README.md) | which stored chat id names which conversation, and which four spellings mean the default desk |
 | [`desk`](desk/README.md) | what a desk is, and who is on it once the declared blueprint is merged with runtime overlays |
 | [`dispatch`](dispatch/README.md) | does one committed reply start a child turn, and for whom |

@@ -24,7 +24,10 @@ use crate::{
     directory::{Directory, directory, validate_policy as validate_directory_policy},
     error::{Error, Result},
     horizon::{Basis, Horizon},
-    quorum::{ConsensusState, consensus, standings},
+    quorum::{
+        AdmissionPolicy, ConsensusState, DecisionEvaluation, consensus, standings,
+        standings_with_evaluations,
+    },
     trace::{TraceKind, read_borrowed},
 };
 use tinyhivemind::{
@@ -67,6 +70,45 @@ pub fn step(
     desks: &DeskSet<'_>,
     policy: &EpisodePolicy,
 ) -> Result<HiveStep> {
+    step_inner(state, transcript, roster, desks, policy, None)
+}
+
+/// Decide the next step using typed semantic evaluations for weighted quorum.
+///
+/// Missing or rejected evaluations contribute no support; malformed or stale
+/// ones stop the fold rather than advancing state.
+///
+/// # Errors
+///
+/// Returns the same policy and snapshot errors as [`step`], plus typed
+/// decision-evaluation validation errors.
+pub fn step_with_evaluations(
+    state: &EpisodeState,
+    transcript: &[SessionMessage],
+    roster: &Roster<'_>,
+    desks: &DeskSet<'_>,
+    policy: &EpisodePolicy,
+    evaluations: &[DecisionEvaluation],
+    admission: &AdmissionPolicy,
+) -> Result<HiveStep> {
+    step_inner(
+        state,
+        transcript,
+        roster,
+        desks,
+        policy,
+        Some((evaluations, admission)),
+    )
+}
+
+fn step_inner(
+    state: &EpisodeState,
+    transcript: &[SessionMessage],
+    roster: &Roster<'_>,
+    desks: &DeskSet<'_>,
+    policy: &EpisodePolicy,
+    evaluated: Option<(&[DecisionEvaluation], &AdmissionPolicy)>,
+) -> Result<HiveStep> {
     roster.validate()?;
     desks.validate()?;
     if policy.defer_cap == Some(0) {
@@ -91,7 +133,12 @@ pub fn step(
         Basis::Sequence => Horizon::at(at),
         Basis::Live => Horizon::over(at, &rows),
     };
-    let standings = standings(&traces, horizon, &policy.quorum)?;
+    let standings = match evaluated {
+        Some((evaluations, admission)) => {
+            standings_with_evaluations(&traces, evaluations, horizon, &policy.quorum, admission)?
+        }
+        None => standings(&traces, horizon, &policy.quorum)?,
+    };
 
     if state.spent >= policy.turn_budget {
         return Ok(HiveStep::Exhausted {

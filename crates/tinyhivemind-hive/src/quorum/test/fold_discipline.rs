@@ -61,6 +61,7 @@ fn carried_reports_whether_a_standing_reached_the_threshold() {
         silenced: Vec::new(),
         refuted_by: Vec::new(),
         support: 1,
+        probability_support: 2 * u64::from(PROBABILITY_SCALE),
     };
     assert!(standing.carried(&policy(2)));
     assert!(!standing.carried(&policy(3)));

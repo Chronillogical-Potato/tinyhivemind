@@ -782,9 +782,9 @@ checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 
 [[package]]
 name = "rustls"
-version = "0.23.44"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6725596c3f2c3a0aef021139e145d4eafe314a6623e4680ca83852b2c67ab2ba"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "once_cell",
  "ring",
@@ -1030,6 +1030,8 @@ dependencies = [
  "thiserror",
  "tinyhivemind",
  "tinyhivemind-core",
+ "tinyjevclient",
+ "tokio",
 ]
 
 [[package]]
@@ -1045,6 +1047,19 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "tinyjevclient"
+version = "0.2.1"
+source = "git+https://github.com/tinyhumansai/tinyjevclient?rev=8d116fc2ac9bceecdad9df7a0c72e0f14ee3fea5#8d116fc2ac9bceecdad9df7a0c72e0f14ee3fea5"
+dependencies = [
+ "httpdate",
+ "reqwest",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
 ]

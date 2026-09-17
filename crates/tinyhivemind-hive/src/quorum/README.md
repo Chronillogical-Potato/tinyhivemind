@@ -11,9 +11,11 @@ has tied two or more.
 Two mechanisms here come from how honeybee swarms actually settle on a nest
 site rather than from voting theory, and both are load-bearing.
 
-**Quorum is local.** A topic carries when `threshold` *distinct* participants
-have supported it within the last `window` sequences — not when it holds a
-majority of anything. The count is order-independent and idempotent, so a
+**Quorum is local and weighted.** A topic carries when its admitted expected
+support reaches `threshold × 1_000_000` within the last `window` sequences.
+The compatibility fold gives each distinct supporter one full unit; the typed
+fold uses each member's latest Choice probability multiplied by normalized
+evidence Score after its Noul violation gate. The result is order-independent and idempotent, so a
 participant that catches up late folds to the same standing as one that
 watched live. `test/fold_discipline.rs` is the regression suite for that
 property.
@@ -33,9 +35,9 @@ the benchmark scored them and they lost — see
   argues cited evidence against a topic itself, rather than against any one
   advocate. `refutation_cap` caps a topic out of contention once enough
   distinct grounded refuters have named it; it never silences anybody or
-  removes a supporter, because `carried` reads a supporter *count* and
-  subtracting from `support` would change nothing a cap doesn't already say
-  more directly. See `test/refutation.rs`.
+  removes a supporter. `carried` compares expected fixed-point support with the
+  scaled threshold, while the cap says the hypothesis is dead regardless of
+  how much support remains. See `test/refutation.rs`.
 - **Grounds are weighed, not counted.** Under `require_evidential`, a support
   counts only if its citation chain — followed transitively, inside the
   window only — reaches a `TraceKind::Evidence`. A support citing another
@@ -47,9 +49,10 @@ the benchmark scored them and they lost — see
 | Item | Purpose |
 | --- | --- |
 | `standings` | Fold traces into one `TopicStanding` per topic, at a given sequence. |
+| `standings_with_evaluations` | Replace full-unit support with source-bound, admitted fixed-point evaluations. |
 | `consensus` | Read standings for `Deliberating` \| `Quorum` \| `Deadlocked`. |
 | `QuorumPolicy` | Threshold, window, `require_grounded`, `refutation_cap`, `require_evidential`. |
-| `TopicStanding` | Supporters, silenced advocates, refuters, and fixed-point weight for one topic. |
+| `TopicStanding` | Supporters, silenced advocates, refuters, salience weight, and expected probability support. |
 | `ConsensusState` | What the standings add up to. |
 
 `standings` and `consensus` are pure folds over a caller-supplied `&[Trace]`
@@ -71,6 +74,7 @@ their supporting indexes); `types.rs` holds the stable `QuorumPolicy`,
 | `test/support_counting.rs` | Plain support counting: proposers, distinct supporters, ungrounded support, the window, and deferral as a non-vote. |
 | `test/cross_inhibition.rs` | The objection mechanism, and the proof it can break a tie a subtracted score cannot. |
 | `test/fold_discipline.rs` | Order-independence, idempotence, and `carried`'s threshold check. |
+| `test/probabilistic.rs` | Fixed-point stance/evidence composition, admission, latest-member replacement, freshness, and malformed distributions. |
 | `test/refutation.rs` | The refutation cap taking a topic out of contention without silencing anyone. |
 | `test/evidential_grounding.rs` | `require_evidential`'s citation-chain gate, including its cycle and window limits. |
 

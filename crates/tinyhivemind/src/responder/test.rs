@@ -15,11 +15,11 @@ use tinyhivemind_core::{
 
 struct StubSelector {
     calls: AtomicUsize,
-    output: std::result::Result<&'static str, ()>,
+    output: std::result::Result<SelectionEvaluation, ()>,
 }
 
 impl StubSelector {
-    fn returning(output: &'static str) -> Self {
+    fn returning(output: SelectionEvaluation) -> Self {
         Self {
             calls: AtomicUsize::new(0),
             output: Ok(output),
@@ -39,7 +39,7 @@ impl Selector for StubSelector {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
             self.output
-                .map(str::to_owned)
+                .clone()
                 .map_err(|()| Box::new(io::Error::other("selector failed")) as BoxError)
         })
     }
@@ -51,11 +51,11 @@ impl Selector for BorrowingSelector {
     fn select<'a>(&'a self, request: &'a SelectionRequest) -> SelectorFuture<'a> {
         Box::pin(async move {
             tokio::task::yield_now().await;
-            if request.message == "Review this" {
-                Ok("bob".to_owned())
+            Ok(evaluation(if request.message == "Review this" {
+                "bob"
             } else {
-                Ok("alice".to_owned())
-            }
+                "alice"
+            }))
         })
     }
 }
@@ -94,6 +94,7 @@ fn fixture() -> (
             mentions: Vec::new(),
             orchestrator_id: "orch".into(),
             selection_policy: SelectionPolicy::Allowed,
+            minimum_selection_confidence: Probability::new(500_000).unwrap(),
         },
         vec![
             SelectorCandidate {
@@ -112,12 +113,37 @@ fn fixture() -> (
     )
 }
 
+fn evaluation(choice: &str) -> SelectionEvaluation {
+    SelectionEvaluation {
+        choice: choice.to_owned(),
+        probabilities: vec![
+            CandidateProbability {
+                candidate_id: "alice".into(),
+                probability: if choice == "alice" {
+                    Probability::new(800_000).unwrap()
+                } else {
+                    Probability::new(200_000).unwrap()
+                },
+            },
+            CandidateProbability {
+                candidate_id: "bob".into(),
+                probability: if choice == "bob" {
+                    Probability::new(800_000).unwrap()
+                } else {
+                    Probability::new(200_000).unwrap()
+                },
+            },
+        ],
+        confidence: Probability::new(600_000).unwrap(),
+    }
+}
+
 #[tokio::test]
 async fn valid_selector_output_is_called_once_and_selects_one_agent() {
     let (members, records, request, details) = fixture();
     let roster = Roster::new(&members, &[], &[]);
     let desks = DeskSet::new(&records, &[], &[], &[], &[]);
-    let selector = StubSelector::returning("BOB.");
+    let selector = StubSelector::returning(evaluation("bob"));
     let selected = choose_responder(Some(&selector), &request, &roster, &desks, &details)
         .await
         .unwrap();
@@ -177,7 +203,9 @@ async fn invalid_selector_output_uses_invalid_output_desk_default() {
     let (members, records, request, details) = fixture();
     let roster = Roster::new(&members, &[], &[]);
     let desks = DeskSet::new(&records, &[], &[], &[], &[]);
-    let selector = StubSelector::returning("bob because reviewer");
+    let mut invalid = evaluation("bob");
+    invalid.probabilities.pop();
+    let selector = StubSelector::returning(invalid);
     let selected = choose_responder(Some(&selector), &request, &roster, &desks, &details)
         .await
         .unwrap();
@@ -193,7 +221,7 @@ async fn immediate_decision_never_calls_selector() {
     request.chat = None;
     let roster = Roster::new(&members, &[], &[]);
     let desks = DeskSet::new(&records, &[], &[], &[], &[]);
-    let selector = StubSelector::returning("bob");
+    let selector = StubSelector::returning(evaluation("bob"));
     let selected = choose_responder(Some(&selector), &request, &roster, &desks, &details)
         .await
         .unwrap();

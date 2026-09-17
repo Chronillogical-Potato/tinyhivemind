@@ -118,6 +118,13 @@ fn api_base_does_not_override_an_explicit_calibrate_mode() {
     );
 }
 
+#[test]
+fn decision_eval_selects_the_paired_live_decision_mode() {
+    let mut options = Options::defaults();
+    assert!(apply_mode_flag(&mut options, "--decision-eval"));
+    assert!(matches!(options.mode, Mode::DecisionEval));
+}
+
 /// The reverse order is the common case and must keep working: a bare
 /// `--api-base` still promotes the parser's own default to `Mode::Live`.
 #[test]

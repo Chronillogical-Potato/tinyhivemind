@@ -49,13 +49,12 @@ deny = []
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-# The `desk` example (crates/tinyhivemind/examples/desk) takes tinyinference and
-# tinytools as dev-dependencies only, pinned to a git rev rather than a
-# published version — neither crate is on crates.io yet. Nothing under
-# crates/* depends on either; `cargo tree -p tinyhivemind -e normal,build`
-# stays clean. See CLAUDE.md's supply-chain note for why this must stay
-# dev-only.
+# Examples take tinyinference, tinytools, and tinyjevclient as dev-dependencies
+# pinned to git revisions rather than published versions. Nothing under
+# crates/* depends on their transports; `.github/scripts/assert-pure.sh` checks
+# the normal/build graph. See AGENTS.md's supply-chain boundary.
 allow-git = [
     "https://github.com/tinyhumansai/tinyinference",
+    "https://github.com/tinyhumansai/tinyjevclient",
     "https://github.com/tinyhumansai/tinytools",
 ]

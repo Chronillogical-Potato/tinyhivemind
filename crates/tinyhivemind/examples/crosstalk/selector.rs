@@ -14,8 +14,8 @@ use crate::host::OPERATOR_ID;
 
 use tinyhivemind::mention::{MentionAuthor, resolve as resolve_mentions};
 use tinyhivemind::responder::{
-    ResponderRequest, SelectionPolicy, Selector, SelectorCandidate, SelectorFuture,
-    choose_responder,
+    CandidateProbability, Probability, ResponderRequest, SelectionEvaluation, SelectionPolicy,
+    Selector, SelectorCandidate, SelectorFuture, accept_selection, choose_responder,
 };
 
 /// One model-backed rung of the responder ladder.
@@ -82,7 +82,26 @@ impl Selector for LadderSelector {
                 // last mile so a `--agent-cmd` run still exercises this rung.
                 Backend::Command { .. } => Err("no selector on a CLI backend".to_owned()),
             };
-            reply.map_err(|message| -> tinyhivemind::BoxError { message.into() })
+            let reply = reply.map_err(|message| -> tinyhivemind::BoxError { message.into() })?;
+            let choice = accept_selection(&reply, &request.candidates).ok_or_else(
+                || -> tinyhivemind::BoxError { "selector named no candidate".into() },
+            )?;
+            Ok(SelectionEvaluation {
+                probabilities: request
+                    .candidates
+                    .iter()
+                    .map(|candidate| CandidateProbability {
+                        candidate_id: candidate.id.clone(),
+                        probability: if candidate.id == choice {
+                            Probability::ONE
+                        } else {
+                            Probability::ZERO
+                        },
+                    })
+                    .collect(),
+                choice,
+                confidence: Probability::ONE,
+            })
         })
     }
 }
@@ -128,6 +147,7 @@ pub(crate) async fn route_opening(
             mentions: opening_mentions,
             orchestrator_id: "planner".to_owned(),
             selection_policy: SelectionPolicy::Allowed,
+            minimum_selection_confidence: Probability::ZERO,
         },
         roster,
         desks,

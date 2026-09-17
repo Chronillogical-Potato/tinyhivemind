@@ -37,6 +37,7 @@ does.
 | [2026-09-09](2026-09-09-run29-narration-as-speech.md) | Does the account fold on a live run? | Aborted at turn 2: a router rung advance killed both turns, and the host delivered their narration as speech. Both fixed; nothing about folding established |
 | [2026-09-09](2026-09-09-desk-lessons.md) | What should be built next after PE 1006? | Working notes and measurements from runs 21–27 |
 | [2026-09-08](2026-09-08-pe1006-tool-room.md) | Does a tool-call room with a standing account beat a fenced one? | PE 1006 solved; re-reading fell to 3% of calls, but no fold ever fired |
+| [2026-09-17](2026-09-17-jev-decision-evaluation.md) | What does Jev buy and cost against GPT-5-mini strict JSON on typed hive decisions? | 43–55× lower tail latency and 99.2% lower estimated cost, with an 11.45-point accuracy tradeoff concentrated in evidence scoring |
 
 ## Reading order
 

@@ -63,6 +63,8 @@ resolves it to `sim/mod.rs` transparently.
 | `live/{agent,desk}.rs` | `LiveAgent`, driving one seat through a CLI subprocess; `LiveDeskAgent`, driving one seat as a member of a swarm desk |
 | `http.rs` | the direct-HTTP backend: the same prompt state over `curl`, the two wire formats, `ask` (which retries) and `ask_once` (which does not, for calibration probes) |
 | `http/usage.rs` | what a run spent and how a seat's total reaches the table: `Usage`, `UsageHandle`, and `usage_of` |
+| `jev.rs` | native Jev conversion for typed responder selection, worker-output evaluations, and approval risk narrowing |
+| `decision_eval/` | the paired Jev versus GPT-5-mini strict-JSON corpus, dynamic schema, metrics table, cost accounting, diagnostics, and tests |
 | `scenario.rs` | the scenario file format, the briefs, and the recorded answer |
 | `scenarios/` | the scenario files themselves: seven hidden profiles across incident triage, logistics, payments fraud and laboratory measurement |
 | `scenario/test.rs` | that every shipped scenario parses, records a truth that is on offer, and gives every member something of its own |

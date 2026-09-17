@@ -36,6 +36,7 @@ pub(super) fn request(chat: Option<&str>) -> ResponderRequest {
         mentions: Vec::new(),
         orchestrator_id: "orch".into(),
         selection_policy: SelectionPolicy::Allowed,
+        minimum_selection_confidence: Probability::ZERO,
     }
 }
 

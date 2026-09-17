@@ -97,9 +97,8 @@ one !support trace, rescored as the room talks past it
      80       █                   62        2531
 ```
 
-The floor under the bars is the trace's standing importance, which is why a
-proposal nobody has touched for eighty messages still outranks a fresh
-question. Recency is the term that moves.
+The floor under the bars is standing importance: an old proposal can outrank a
+fresh question, while recency is the term that moves.
 
 **[Quorum sensing](https://en.wikipedia.org/wiki/Quorum_sensing).** An option
 carries when some number of distinct participants have grounded support for it
@@ -108,6 +107,8 @@ local, order independent and idempotent, so an agent that catches up late folds
 to exactly the same standing as one that watched live. This is how
 [honeybee swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29)
 settle a nest site.
+
+With a typed model, `standings_with_evaluations` uses fixed-point Choice × Score after a Noul gate; see the [quorum module](crates/tinyhivemind-hive/src/quorum/README.md).
 
 ```text
 1 planner  !propose #stage Stage the rollout.
@@ -472,8 +473,7 @@ tinyhivemind = { path = "vendor/tinyhivemind/crates/tinyhivemind" }
 cargo run --release -p tinyhivemind-hive --example bench -- --trace
 ```
 
-That prints one deliberation episode turn by turn, which is the fastest way to
-see what the thing actually does.
+That prints one deliberation episode turn by turn—the fastest way to see the mechanics.
 
 ## Read more
 

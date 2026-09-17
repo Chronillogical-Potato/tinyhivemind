@@ -53,6 +53,7 @@
 //! does not establish — in particular that addressing a peer is not a private
 //! message, because nothing in this crate restricts who may read a row.
 
+pub mod approval;
 pub mod briefing;
 pub mod digest;
 pub mod dispatch;
@@ -66,6 +67,13 @@ pub mod sharing;
 pub mod speech;
 pub mod threads;
 
+pub use approval::{
+    Action, ActionTarget, AllowBasis, ApprovalAnswer, ApprovalDecision, ApprovalFuture,
+    ApprovalGate, ApprovalOutcome, ApprovalPolicy, ApprovalPrompt, ApprovalRequest, ApprovalRule,
+    ApproverRule, AskOutcome, ConsentEpoch, DefaultVerdict, DenyReason, DeskApprover, Effect,
+    GrantScope, Millis, RememberedRefusal, RuleVerdict, ScopeKey, StandingGrant, TargetPattern,
+    approve, request_approval,
+};
 pub use briefing::{
     BrevityPolicy, BriefedTeammate, BriefingNote, MentionDispatchContext, SessionContext,
     SessionInitialization, TeamBriefing, initialize_session, initialize_session_with_context,

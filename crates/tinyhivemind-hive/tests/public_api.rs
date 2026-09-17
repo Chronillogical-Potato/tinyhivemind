@@ -5,12 +5,13 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use tinyhivemind_hive::responder::Probability;
 use tinyhivemind_hive::{
-    AgentThreshold, Bid, BidReason, ConsensusState, Directory, DirectoryEntry, DirectoryPolicy,
-    EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, QuorumPolicy, Salience,
-    SalienceWeights, TRACE_CAP, TopicId, TopicStanding, Trace, TraceKind, Visibility,
-    WEIGHT_CEILING, consensus, directory, floor_holder, project_for, read, resolve, salience,
-    standings, step,
+    AdmissionPolicy, AgentThreshold, Bid, BidReason, ConsensusState, DecisionEvaluation, Directory,
+    DirectoryEntry, DirectoryPolicy, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase,
+    QuorumPolicy, Salience, SalienceWeights, TRACE_CAP, TopicId, TopicProbability, TopicStanding,
+    Trace, TraceKind, Visibility, WEIGHT_CEILING, consensus, directory, floor_holder, project_for,
+    read, resolve, salience, standings, standings_with_evaluations, step,
 };
 // The runtime and the pure algebra arrive through this crate, so a host takes
 // one dependency and the types it hands to `step` are the same types.
@@ -77,6 +78,32 @@ fn root_exports_quorum_standings_and_consensus() {
             topic: TopicId("stage".into()),
         },
     );
+}
+
+#[test]
+fn root_exports_probability_weighted_standings() {
+    let transcript = [said(1, "planner", "!propose #stage")];
+    let evaluations = [DecisionEvaluation {
+        source_sequence: Sequence(1),
+        agent_id: "planner".into(),
+        stance: vec![TopicProbability {
+            topic: Some("stage".into()),
+            probability: Probability::ONE,
+        }],
+        evidence_quality: Probability::ONE,
+        violation_probability: Probability::ZERO,
+    }];
+    let folded = standings_with_evaluations(
+        &read(&transcript),
+        &evaluations,
+        Sequence(1),
+        &QuorumPolicy::DEFAULT,
+        &AdmissionPolicy {
+            maximum_violation_probability: Probability::ZERO,
+        },
+    )
+    .expect("folds");
+    assert_eq!(folded[0].probability_support, 1_000_000);
 }
 
 #[test]

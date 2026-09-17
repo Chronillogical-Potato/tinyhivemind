@@ -37,7 +37,10 @@ mod test;
 
 mod types;
 
-pub use types::{ConsensusState, QuorumPolicy, TopicStanding};
+pub use types::{
+    AdmissionPolicy, ConsensusState, DecisionEvaluation, QuorumPolicy, TopicProbability,
+    TopicStanding,
+};
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -48,6 +51,7 @@ use crate::{
     trace::{TopicId, Trace, TraceKind},
 };
 use tinyhivemind::Sequence;
+pub use tinyhivemind::responder::PROBABILITY_SCALE;
 
 /// Fold traces into one standing per topic.
 ///
@@ -203,6 +207,7 @@ pub fn standings<'a>(
                 .sum();
             TopicStanding {
                 topic: topic.clone(),
+                probability_support: count_probability_support(&supporters),
                 supporters,
                 silenced: silenced.into_iter().map(str::to_owned).collect(),
                 refuted_by,
@@ -210,6 +215,125 @@ pub fn standings<'a>(
             }
         })
         .collect())
+}
+
+fn count_probability_support(supporters: &[String]) -> u64 {
+    u64::try_from(supporters.len())
+        .unwrap_or(u64::MAX)
+        .saturating_mul(u64::from(PROBABILITY_SCALE))
+}
+
+/// Fold traces and replace count-equivalent support with evaluated probability.
+///
+/// Each member contributes at most its latest admitted in-window evaluation.
+/// Missing or rejected evaluations contribute nothing. Cross-inhibition and
+/// refutation remain structural properties of the trace fold and are applied
+/// before probabilistic support is summed.
+///
+/// # Errors
+///
+/// Returns the ordinary standings policy errors, or a typed malformed
+/// evaluation error for an invalid distribution, stale source binding, or
+/// out-of-range probability.
+pub fn standings_with_evaluations<'a>(
+    traces: &[Trace],
+    evaluations: &[DecisionEvaluation],
+    at: impl Into<Horizon<'a>> + Copy,
+    policy: &QuorumPolicy,
+    admission: &AdmissionPolicy,
+) -> Result<Vec<TopicStanding>> {
+    if admission.maximum_violation_probability.parts() > PROBABILITY_SCALE {
+        return Err(Error::InvalidDecisionProbability);
+    }
+    let horizon = at.into();
+    let mut folded = standings(traces, horizon, policy)?;
+    let live: Vec<&Trace> = traces
+        .iter()
+        .filter(|trace| horizon.within(trace.sequence, policy.window))
+        .collect();
+    let allowed_topics: BTreeSet<&TopicId> =
+        folded.iter().map(|standing| &standing.topic).collect();
+    let mut latest: BTreeMap<&str, &DecisionEvaluation> = BTreeMap::new();
+    for evaluation in evaluations {
+        if !horizon.within(evaluation.source_sequence, policy.window) {
+            continue;
+        }
+        validate_evaluation(evaluation, &live, &allowed_topics)?;
+        if evaluation.violation_probability > admission.maximum_violation_probability {
+            continue;
+        }
+        let entry = latest.entry(&evaluation.agent_id).or_insert(evaluation);
+        if evaluation.source_sequence > entry.source_sequence {
+            *entry = evaluation;
+        } else if evaluation.source_sequence == entry.source_sequence && evaluation != *entry {
+            return Err(Error::InvalidDecisionDistribution);
+        }
+    }
+    for standing in &mut folded {
+        let mut support = 0_u64;
+        for agent in &standing.supporters {
+            let Some(evaluation) = latest.get(agent.as_str()) else {
+                continue;
+            };
+            let probability = evaluation
+                .stance
+                .iter()
+                .find(|item| item.topic.as_ref() == Some(&standing.topic))
+                .map_or(0_u64, |item| u64::from(item.probability.parts()));
+            let evidence = u64::from(evaluation.evidence_quality.parts());
+            support = support.saturating_add(
+                probability
+                    .saturating_mul(evidence)
+                    .saturating_add(u64::from(PROBABILITY_SCALE / 2))
+                    / u64::from(PROBABILITY_SCALE),
+            );
+        }
+        standing.probability_support = support;
+    }
+    Ok(folded)
+}
+
+fn validate_evaluation(
+    evaluation: &DecisionEvaluation,
+    live: &[&Trace],
+    allowed_topics: &BTreeSet<&TopicId>,
+) -> Result<()> {
+    if evaluation.evidence_quality.parts() > PROBABILITY_SCALE
+        || evaluation.violation_probability.parts() > PROBABILITY_SCALE
+        || evaluation.stance.is_empty()
+    {
+        return Err(Error::InvalidDecisionProbability);
+    }
+    let authored = live.iter().any(|trace| {
+        trace.sequence == evaluation.source_sequence
+            && trace.agent_id() == Some(evaluation.agent_id.as_str())
+    });
+    if !authored {
+        return Err(Error::StaleDecisionEvaluation {
+            agent_id: evaluation.agent_id.clone(),
+            sequence: evaluation.source_sequence,
+        });
+    }
+    let mut topics: BTreeSet<Option<&TopicId>> = BTreeSet::new();
+    let mut sum = 0_u32;
+    for item in &evaluation.stance {
+        if item.probability.parts() > PROBABILITY_SCALE
+            || item
+                .topic
+                .as_ref()
+                .is_some_and(|topic| !allowed_topics.contains(topic))
+            || !topics.insert(item.topic.as_ref())
+        {
+            return Err(Error::InvalidDecisionDistribution);
+        }
+        sum = sum
+            .checked_add(item.probability.parts())
+            .ok_or(Error::InvalidDecisionDistribution)?;
+    }
+    if sum != PROBABILITY_SCALE {
+        return Err(Error::InvalidDecisionDistribution);
+    }
+    Ok(())
 }
 
 /// What a negative move must satisfy before it counts.

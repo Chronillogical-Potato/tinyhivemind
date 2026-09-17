@@ -7,7 +7,8 @@ The runtime boundary for one optional, tool-less responder-selection call.
 Choosing who answers a message is mostly pure — the responder ladder in
 `tinyhivemind-core` already resolves an explicit mention, a single-member desk, or
 a disabled selection policy without waiting on anything. The one rung that
-cannot be pure is auto-selection: it asks a model to name a candidate. This
+cannot be pure is auto-selection: it asks an evaluator for a typed candidate
+distribution. This
 module is the whole waiting part of that ladder, held to one call, at most
 once, with no transcript, no tools, and no host handles reachable from inside
 it.
@@ -16,17 +17,17 @@ it.
 
 | Item | What it is |
 | --- | --- |
-| `Selector` | trait a host implements to name one candidate id from a `SelectionRequest` |
+| `Selector` | trait a host implements to return a typed distribution over one `SelectionRequest` |
 | `SelectorFuture<'a>` | the boxed, executor-neutral future `Selector::select` returns |
 | `BoxError` | a boxed failure returned by a host selector implementation |
 | `choose_responder(selector, request, roster, desks, candidate_details)` | run the ladder, calling `selector` at most once |
-| re-exported from `tinyhivemind_core::responder` | `ResponderDecision`, `ResponderPlan`, `ResponderRequest`, `ResponderRung`, `SelectionDisposition`, `SelectionPolicy`, `SelectionRequest`, `SelectorCandidate`, `accept_selection`, `responder_plan` |
+| re-exported from `tinyhivemind_core::responder` | typed candidates, fixed-point probabilities, `SelectionEvaluation`, `accept_evaluation`, and the responder ladder payloads |
 
 `responder_plan` (pure, in `tinyhivemind-core`) does the actual ladder walk and
 returns either an already-`Decided` decision or a `Select` request describing
 exactly what to ask a model. `choose_responder` is the thin async shell around
 it: call the selector if one exists and the plan asks for it, validate the
-output, and fall back on absence, failure, or an invalid answer.
+distribution, and fall back on absence, failure, low confidence, or an invalid answer.
 
 ## Constraints worth knowing
 

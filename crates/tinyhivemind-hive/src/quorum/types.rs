@@ -3,6 +3,41 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::trace::TopicId;
+use tinyhivemind::{Sequence, responder::Probability};
+
+/// Admission threshold for one semantic worker-output evaluation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AdmissionPolicy {
+    /// Highest violation probability still admitted to consensus.
+    pub maximum_violation_probability: Probability,
+}
+
+/// One topic or abstention probability in an evaluated worker stance.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TopicProbability {
+    /// Topic receiving probability, or `null` for abstention.
+    pub topic: Option<TopicId>,
+    /// Probability assigned to this outcome.
+    pub probability: Probability,
+}
+
+/// Typed semantic evaluation bound to one authored output.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct DecisionEvaluation {
+    /// Sequence of the exact authored output evaluated.
+    pub source_sequence: Sequence,
+    /// Authenticated author id expected at that sequence.
+    pub agent_id: String,
+    /// Complete Choice distribution across topics plus optional abstention.
+    pub stance: Vec<TopicProbability>,
+    /// Normalized Score result from unsupported (zero) to direct evidence (one).
+    pub evidence_quality: Probability,
+    /// Noul probability that the output violates supplied constraints.
+    pub violation_probability: Probability,
+}
 
 /// Require `refutation_cap` to be written out, even when it is `null`.
 ///
@@ -161,16 +196,18 @@ pub struct TopicStanding {
     pub refuted_by: Vec<String>,
     /// Fixed-point weight of the surviving support.
     pub support: i64,
+    /// Sum of admitted expected supporter contributions in parts per million.
+    pub probability_support: u64,
 }
 
 impl TopicStanding {
-    /// Return whether this topic has reached `policy.threshold` supporters and
-    /// has not been capped by `policy.refutation_cap` distinct refuters.
+    /// Return whether expected probability support reaches the scaled
+    /// `policy.threshold` after applying the refutation cap.
     ///
     /// The refutation check is a cap rather than a debit. `carried` reads the
-    /// supporter *count*, not the weight, so subtracting from `support` would
-    /// change nothing; capping is the only shape that expresses "this
-    /// hypothesis is dead regardless of how many members like it".
+    /// Probability support is compared with `threshold × PROBABILITY_SCALE`;
+    /// capping remains the shape that expresses "this hypothesis is dead
+    /// regardless of how much expected support it has".
     #[must_use]
     pub fn carried(&self, policy: &QuorumPolicy) -> bool {
         if let Some(cap) = policy.refutation_cap
@@ -178,7 +215,8 @@ impl TopicStanding {
         {
             return false;
         }
-        u32::try_from(self.supporters.len()).is_ok_and(|count| count >= policy.threshold)
+        self.probability_support
+            >= u64::from(policy.threshold) * u64::from(super::PROBABILITY_SCALE)
     }
 }
 

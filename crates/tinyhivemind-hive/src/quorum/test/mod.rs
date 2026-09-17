@@ -15,6 +15,7 @@
 mod cross_inhibition;
 mod evidential_grounding;
 mod fold_discipline;
+mod probabilistic;
 mod refutation;
 mod support;
 mod support_counting;

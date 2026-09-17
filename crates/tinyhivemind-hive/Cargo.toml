@@ -31,6 +31,10 @@ tinyhivemind-core = { workspace = true }
 # Pins the exact JSON object shape of every payload type, as elsewhere in the
 # workspace, without adding JSON handling to the runtime dependency graph.
 serde_json = { workspace = true }
+# The benchmark's live Jev arm only; never linked by the hive library.
+tinyjevclient = { workspace = true }
+# The live evaluator runs concurrent async HTTP calls in its own example runtime.
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [features]
 default = []

@@ -10,9 +10,9 @@ on, and optionally one bounded request for a model-assisted selector.
 - `responder_plan` runs the ladder and returns a `ResponderPlan`: either an
   immediate `Decided` outcome or a `Select` request naming the desk's
   effective candidates and a deterministic fallback.
-- `accept_selection` parses a selector's raw text output against the
-  candidate set it was shown, tolerant of case, one trailing period, and one
-  matching quote or backtick wrapper.
+- `accept_evaluation` validates a complete fixed-point candidate distribution,
+  selected maximum, and configured confidence threshold. `accept_selection`
+  remains only for legacy text adapters and benchmark controls.
 - `ResponderRequest`, `SelectionPolicy`, `SelectionRequest`, and
   `SelectorCandidate` are the stable inputs.
 - `ResponderPlan`, `ResponderDecision`, `ResponderRung`, and
@@ -54,8 +54,9 @@ matching detail gets a synthesized candidate: its id as both id and label, role
 - `responder_plan` validates the roster and desk snapshots first and fails
   closed on a structural error.
 - The `Select` variant always carries a deterministic first-candidate
-  fallback, so a host with no selector, or a selector that errors or returns
-  something `accept_selection` rejects, still has exactly one agent to run.
+  fallback, so a host with no selector, or an evaluator that errors, omits a
+  candidate, returns a malformed distribution, or falls below confidence,
+  still has exactly one agent to run.
 - `accept_selection` accepts only output that resolves, after trimming, one
   optional trailing period, and one optional matching wrapper, to exactly one
   candidate id by case-insensitive comparison. Anything else — empty text,

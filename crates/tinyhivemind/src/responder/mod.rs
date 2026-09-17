@@ -8,8 +8,9 @@ use std::{error::Error as StdError, future::Future, pin::Pin};
 use tinyhivemind_core::{desk::DeskSet, roster::Roster};
 
 pub use tinyhivemind_core::responder::{
-    ResponderDecision, ResponderPlan, ResponderRequest, ResponderRung, SelectionDisposition,
-    SelectionPolicy, SelectionRequest, SelectorCandidate, accept_selection, responder_plan,
+    CandidateProbability, PROBABILITY_SCALE, Probability, ResponderDecision, ResponderPlan,
+    ResponderRequest, ResponderRung, SelectionDisposition, SelectionEvaluation, SelectionPolicy,
+    SelectionRequest, SelectorCandidate, accept_evaluation, accept_selection, responder_plan,
 };
 
 /// A boxed failure returned by a host selector implementation.
@@ -20,14 +21,14 @@ pub type BoxError = Box<dyn StdError + Send + Sync + 'static>;
 /// Its lifetime permits the future to borrow both the selector and its
 /// [`SelectionRequest`]; neither borrow is required to be `'static`.
 pub type SelectorFuture<'a> =
-    Pin<Box<dyn Future<Output = std::result::Result<String, BoxError>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = std::result::Result<SelectionEvaluation, BoxError>> + Send + 'a>>;
 
 /// A model-backed chooser with no transcript, tools, or host handles.
 ///
 /// The trait is object-safe and receives only a raw message, canonical desk id,
 /// and the bounded effective candidates assembled by the pure core.
 pub trait Selector: Send + Sync {
-    /// Return text intended to name one candidate id.
+    /// Return a typed distribution over every candidate.
     ///
     /// The shared lifetime explicitly binds the returned future to both
     /// `self` and `request`, allowing an implementation to borrow either for
@@ -65,7 +66,9 @@ pub async fn choose_responder(
             let Ok(output) = selector.select(&request).await else {
                 return Ok(fallback);
             };
-            let Some(responder_id) = accept_selection(&output, &request.candidates) else {
+            let Some(responder_id) =
+                accept_evaluation(&output, &request.candidates, request.minimum_confidence)
+            else {
                 fallback.disposition = SelectionDisposition::InvalidOutput;
                 return Ok(fallback);
             };

@@ -11,6 +11,11 @@ and returns one of five outcomes. It never appends, never waits, and never calls
 back into the host — so the whole state machine is testable without a fixture,
 an executor, or a mock.
 
+`step_with_evaluations` is the typed production path: it takes the same state
+plus source-bound Choice, Score, and Noul snapshots and uses probabilistic
+standings. Missing/rejected evaluations add no support; malformed or stale
+ones stop the transition.
+
 ```text
 validate roster + desks + policy
   └─ fold traces (above the watermark,

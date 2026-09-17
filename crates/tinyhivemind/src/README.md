@@ -8,6 +8,7 @@ about a live session; see its own `README.md` for the how and why.
 | --- | --- |
 | [`session`](session) | How does a turn walk a host-owned, globally sequenced log into an attributed, audience-filtered transcript? |
 | [`briefing`](briefing) | What ephemeral context (teammates, coordination rules, history, threads, pins) does one viewer's turn open with? |
+| [`approval`](approval) | How does a pure ask decision reach one host-owned atomic human approval boundary? |
 | [`sharing`](sharing) | How does a host hand an already-briefed session only what changed since its last watermark, instead of re-briefing it? |
 | [`search`](search) | How does a turn reach a message or thread outside its window, on request? |
 | [`pins`](pins) | Which messages does every turn see whether or not it asked? |
