@@ -468,6 +468,11 @@ impl Aggregate {
         self.service_time += sample.latency.as_secs_f64();
         self.input += sample.response.usage.input_tokens.unwrap_or(0);
         self.output += sample.response.usage.output_tokens.unwrap_or(0);
+        if let Err(issue) = validate_scored_answers(&sample.response) {
+            self.failures += 1;
+            diagnostics.push(Diagnostic { index, arm, issue });
+            return;
+        }
         if let Err(issue) = decision_from_response(
             &sample.response,
             Sequence(u64::from(index) + 1),
@@ -580,6 +585,36 @@ impl Aggregate {
     fn cost(&self, input_price: f64, output_price: f64) -> f64 {
         (self.input_per_case() * input_price + self.output_per_case() * output_price) / 1_000_000.0
     }
+}
+
+fn validate_scored_answers(response: &EvaluationResponse) -> Result<(), String> {
+    for (id, kind, present) in [
+        (
+            "route",
+            "Choice",
+            matches!(response.answers.get("route"), Some(Answer::Choice(_))),
+        ),
+        (
+            "stance",
+            "Choice",
+            matches!(response.answers.get("stance"), Some(Answer::Choice(_))),
+        ),
+        (
+            "evidence",
+            "Score",
+            matches!(response.answers.get("evidence"), Some(Answer::Score(_))),
+        ),
+        (
+            "violation",
+            "Noul",
+            matches!(response.answers.get("violation"), Some(Answer::Noul(_))),
+        ),
+    ] {
+        if !present {
+            return Err(format!("response omitted required {id} {kind}"));
+        }
+    }
+    Ok(())
 }
 
 fn classify_failure(issue: &str) -> &'static str {

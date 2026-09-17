@@ -160,6 +160,26 @@ fn conflicting_duplicate_evaluations_are_rejected() {
 }
 
 #[test]
+fn evaluations_cannot_assign_probability_to_unknown_topics() {
+    let transcript = transcript();
+    let mut unknown = evaluation(1, "planner", 0, PROBABILITY_SCALE);
+    unknown.stance = vec![TopicProbability {
+        topic: Some("phantom".into()),
+        probability: Probability::ONE,
+    }];
+    assert!(matches!(
+        standings_with_evaluations(
+            &read(&transcript),
+            &[unknown],
+            Sequence(2),
+            &policy(2),
+            &admission(),
+        ),
+        Err(crate::Error::InvalidDecisionDistribution)
+    ));
+}
+
+#[test]
 fn malformed_and_stale_evaluations_stop_the_fold() {
     let transcript = transcript();
     let mut malformed = evaluation(1, "planner", 500_000, PROBABILITY_SCALE);

@@ -221,6 +221,10 @@ fn fixed_distribution(
         .collect::<Result<_, String>>()?;
     let sum: i64 = fixed.iter().map(|(_, value)| i64::from(*value)).sum();
     let delta = i64::from(PROBABILITY_SCALE) - sum;
+    let rounding_tolerance = i64::try_from(distribution.len()).unwrap_or(i64::MAX);
+    if delta.abs() > rounding_tolerance {
+        return Err("distribution total exceeds rounding tolerance".to_owned());
+    }
     let (_, selected_probability) = fixed
         .iter_mut()
         .find(|(label, _)| label == selected)
@@ -284,6 +288,17 @@ mod test {
         let distribution = BTreeMap::from([("forged".to_owned(), 1.0)]);
         let allowed = BTreeSet::from(["expected".to_owned()]);
         assert!(fixed_distribution(&distribution, "forged", &allowed).is_err());
+    }
+
+    #[test]
+    fn malformed_distribution_totals_are_not_normalized() {
+        let allowed = BTreeSet::from(["a".to_owned(), "b".to_owned()]);
+        for distribution in [
+            BTreeMap::from([("a".to_owned(), 0.0), ("b".to_owned(), 0.0)]),
+            BTreeMap::from([("a".to_owned(), 0.6), ("b".to_owned(), 0.6)]),
+        ] {
+            assert!(fixed_distribution(&distribution, "a", &allowed).is_err());
+        }
     }
 
     #[test]

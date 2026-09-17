@@ -251,12 +251,14 @@ pub fn standings_with_evaluations<'a>(
         .iter()
         .filter(|trace| horizon.within(trace.sequence, policy.window))
         .collect();
+    let allowed_topics: BTreeSet<&TopicId> =
+        folded.iter().map(|standing| &standing.topic).collect();
     let mut latest: BTreeMap<&str, &DecisionEvaluation> = BTreeMap::new();
     for evaluation in evaluations {
         if !horizon.within(evaluation.source_sequence, policy.window) {
             continue;
         }
-        validate_evaluation(evaluation, &live)?;
+        validate_evaluation(evaluation, &live, &allowed_topics)?;
         if evaluation.violation_probability > admission.maximum_violation_probability {
             continue;
         }
@@ -291,7 +293,11 @@ pub fn standings_with_evaluations<'a>(
     Ok(folded)
 }
 
-fn validate_evaluation(evaluation: &DecisionEvaluation, live: &[&Trace]) -> Result<()> {
+fn validate_evaluation(
+    evaluation: &DecisionEvaluation,
+    live: &[&Trace],
+    allowed_topics: &BTreeSet<&TopicId>,
+) -> Result<()> {
     if evaluation.evidence_quality.parts() > PROBABILITY_SCALE
         || evaluation.violation_probability.parts() > PROBABILITY_SCALE
         || evaluation.stance.is_empty()
@@ -311,7 +317,13 @@ fn validate_evaluation(evaluation: &DecisionEvaluation, live: &[&Trace]) -> Resu
     let mut topics: BTreeSet<Option<&TopicId>> = BTreeSet::new();
     let mut sum = 0_u32;
     for item in &evaluation.stance {
-        if item.probability.parts() > PROBABILITY_SCALE || !topics.insert(item.topic.as_ref()) {
+        if item.probability.parts() > PROBABILITY_SCALE
+            || item
+                .topic
+                .as_ref()
+                .is_some_and(|topic| !allowed_topics.contains(topic))
+            || !topics.insert(item.topic.as_ref())
+        {
             return Err(Error::InvalidDecisionDistribution);
         }
         sum = sum

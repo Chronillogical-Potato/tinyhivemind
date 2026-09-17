@@ -81,7 +81,7 @@ async-trait = "0.1"
 anyhow = "1"
 # EXAMPLE-ONLY. The benchmark's Jev arm uses the native System One client;
 # library crates keep only provider-neutral fixed-point decision snapshots.
-tinyjevclient = { git = "https://github.com/tinyhumansai/tinyjevclient", rev = "8d116fc2ac9bceecdad9df7a0c72e0f14ee3fea5" }
+tinyjevclient = { git = "https://github.com/tinyhumansai/tinyjevclient", rev = "8d116fc2ac9bceecdad9df7a0c72e0f14ee3fea5", default-features = false }
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything

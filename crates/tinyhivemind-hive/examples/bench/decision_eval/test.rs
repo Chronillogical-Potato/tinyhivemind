@@ -62,3 +62,17 @@ fn hybrid_parallelism_is_bounded_by_jobs_and_jev_capacity() {
     assert_eq!(hybrid_parallelism(2), 2);
     assert_eq!(hybrid_parallelism(32), JEV_MAX_IN_FLIGHT as u64);
 }
+
+#[test]
+fn missing_scored_answers_are_rejected() {
+    let response: EvaluationResponse = serde_json::from_value(json!({
+        "model": "test",
+        "answers": {},
+        "usage": {"input_tokens": 1, "output_tokens": 1}
+    }))
+    .expect("response shape");
+    assert_eq!(
+        validate_scored_answers(&response),
+        Err("response omitted required route Choice".to_owned())
+    );
+}
