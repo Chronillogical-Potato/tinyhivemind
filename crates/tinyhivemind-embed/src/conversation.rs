@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use tinyhivemind::Sequence;
 
+use crate::{Error, Result};
+
 /// The semantic surface on which a turn is running.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -38,7 +40,7 @@ impl ConversationRef {
 }
 
 /// Where an agent-authored message should be durably written.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MessageRoute {
     /// Reply on the conversation where this turn is running.
@@ -49,6 +51,7 @@ pub enum MessageRoute {
         agent_id: String,
     },
     /// Write a private row inside the current desk.
+    #[non_exhaustive]
     DeskAside {
         /// Canonical recipient agent ids.
         recipient_ids: Vec<String>,
@@ -58,4 +61,27 @@ pub enum MessageRoute {
         /// Canonical destination desk id.
         desk_id: String,
     },
+}
+
+impl MessageRoute {
+    /// Build a desk aside whose recipients fit within the host's opening round.
+    ///
+    /// The `DeskAside` variant is non-exhaustive and `MessageRoute` is output
+    /// only, so embedding hosts construct a bounded aside through this method
+    /// before durably writing it. The host supplies the bound because it is a
+    /// routing-policy decision rather than a property of the wire payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DeskAsideTooWide`] when a desk aside would
+    /// name more recipients than `round_width` permits.
+    pub fn desk_aside(recipient_ids: Vec<String>, round_width: usize) -> Result<Self> {
+        if recipient_ids.len() > round_width {
+            return Err(Error::DeskAsideTooWide {
+                recipient_count: recipient_ids.len(),
+                round_width,
+            });
+        }
+        Ok(Self::DeskAside { recipient_ids })
+    }
 }

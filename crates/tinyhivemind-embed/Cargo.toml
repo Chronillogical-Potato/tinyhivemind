@@ -11,6 +11,7 @@ description = "Host-neutral conversation surfaces and semantic routing compositi
 [dependencies]
 serde = { workspace = true }
 tinyhivemind = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

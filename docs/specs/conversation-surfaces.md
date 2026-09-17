@@ -28,6 +28,10 @@ reset a session watermark.
 `CurrentConversation`, `DirectAgent`, `DeskAside`, and `DeskReferral` are
 distinct typed routes. A direct route creates or reuses the host's canonical
 DM; an aside remains inside one desk; a referral returns non-voting evidence.
+An embedding host constructs an aside through `MessageRoute::desk_aside`,
+supplying its configured opening-round width. The `DeskAside` variant is
+non-exhaustive and routes are output-only, so a persisted aside cannot name
+more immediate recipients than that bound.
 
 ## Invariants and constraints
 

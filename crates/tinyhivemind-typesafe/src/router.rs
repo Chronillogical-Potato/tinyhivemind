@@ -1,10 +1,6 @@
 //! Jev question construction, bounded hierarchy, and fixed-point conversion.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    error::Error as StdError,
-    fmt,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
 use tinyhivemind::responder::{PROBABILITY_SCALE, Probability};
@@ -14,7 +10,7 @@ use tinyhivemind_embed::routing::{
 };
 
 use crate::{
-    ChoiceAnswer, NoulAnswer, NoulCriteria, Question, SystemOneAnswer, SystemOneRequest,
+    ChoiceAnswer, Error, NoulAnswer, NoulCriteria, Question, SystemOneAnswer, SystemOneRequest,
     SystemOneResponse, SystemOneTransport,
 };
 
@@ -59,18 +55,19 @@ impl<T> JevRouter<T> {
 impl<T: SystemOneTransport> Router for JevRouter<T> {
     fn evaluate<'a>(&'a self, request: &'a RoutingRequest) -> RouterFuture<'a> {
         Box::pin(async move {
+            if !valid_candidate_ids(request) {
+                return Err(boxed(Error::InvalidCandidateIds));
+            }
             let eligible: Vec<_> = request
                 .candidates
                 .iter()
                 .filter(|candidate| candidate.available)
                 .collect();
             if eligible.is_empty() {
-                return Err(conversion("routing request has no eligible candidates"));
+                return Err(boxed(Error::NoEligibleCandidates));
             }
             if request.policy.choice_option_limit < 2 {
-                return Err(conversion(
-                    "choice option limit must include one candidate and none",
-                ));
+                return Err(boxed(Error::InvalidChoiceOptionLimit));
             }
             let state = state(request, &eligible)?;
             if eligible.len() < request.policy.choice_option_limit {
@@ -122,6 +119,19 @@ impl<T: SystemOneTransport> Router for JevRouter<T> {
     }
 }
 
+fn valid_candidate_ids(request: &RoutingRequest) -> bool {
+    let ids: BTreeSet<_> = request
+        .candidates
+        .iter()
+        .map(|candidate| candidate.id.as_str())
+        .collect();
+    ids.len() == request.candidates.len()
+        && request
+            .candidates
+            .iter()
+            .all(|candidate| !candidate.id.trim().is_empty() && candidate.id != "none")
+}
+
 fn state(
     request: &RoutingRequest,
     eligible: &[&tinyhivemind_embed::RouteCandidate],
@@ -135,7 +145,7 @@ fn state(
         "roster_version": request.roster_version,
         "routing_policy": request.policy,
     }))
-    .map_err(boxed)
+    .map_err(|source| boxed(Error::SerializeState { source }))
 }
 
 fn normal_questions(
@@ -387,45 +397,10 @@ pub const fn classify_retry(status: u16) -> RetryClass {
     }
 }
 
-/// Failure reported by a host System One transport.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TransportError {
-    /// HTTP-like status when one exists.
-    pub status: Option<u16>,
-    /// Provider-safe diagnostic.
-    pub message: String,
-}
-
-impl fmt::Display for TransportError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.status {
-            Some(status) => write!(
-                formatter,
-                "System One transport returned {status}: {}",
-                self.message
-            ),
-            None => write!(formatter, "System One transport failed: {}", self.message),
-        }
-    }
-}
-
-impl StdError for TransportError {}
-
-#[derive(Debug)]
-struct ConversionError(&'static str);
-
-impl fmt::Display for ConversionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.0)
-    }
-}
-
-impl StdError for ConversionError {}
-
 fn conversion(message: &'static str) -> tinyhivemind_embed::routing::RouterError {
-    Box::new(ConversionError(message))
+    boxed(Error::InvalidProviderResponse { message })
 }
 
-fn boxed(error: impl StdError + Send + Sync + 'static) -> tinyhivemind_embed::routing::RouterError {
+fn boxed(error: Error) -> tinyhivemind_embed::routing::RouterError {
     Box::new(error)
 }
