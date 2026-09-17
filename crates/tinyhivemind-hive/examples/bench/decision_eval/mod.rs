@@ -417,9 +417,11 @@ fn post_openrouter(key: &str, body: &Value) -> Result<Value, String> {
         .wait_with_output()
         .map_err(|error| format!("curl failed: {error}"))?;
     if !output.status.success() {
+        let body = String::from_utf8_lossy(&output.stdout);
         return Err(format!(
-            "OpenRouter request failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "OpenRouter request failed: {}; body: {}",
+            String::from_utf8_lossy(&output.stderr),
+            body.chars().take(1_000).collect::<String>(),
         ));
     }
     serde_json::from_slice(&output.stdout)

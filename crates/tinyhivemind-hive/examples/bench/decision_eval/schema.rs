@@ -43,14 +43,25 @@ pub(super) fn response_schema(request: &EvaluationRequest) -> Value {
                     let legend = keys
                         .iter()
                         .enumerate()
-                        .map(|(index, key)| (key.clone(), score.criteria[index].clone()))
+                        .map(|(index, key)| {
+                            (
+                                key.clone(),
+                                json!({
+                                    "type": "string",
+                                    "const": score.criteria[index]
+                                }),
+                            )
+                        })
                         .collect::<serde_json::Map<_, _>>();
                     json!({
                         "type": "object",
                         "properties": {
                             "type": {"type": "string", "const": "score"},
                             "score": {"type": "number", "minimum": 0, "maximum": score.criteria.len() - 1},
-                            "legend": {"type": "object", "const": legend},
+                            "legend": {
+                                "type": "object", "properties": legend,
+                                "required": keys, "additionalProperties": false
+                            },
                             "probabilities": {
                                 "type": "object", "properties": probabilities,
                                 "required": keys, "additionalProperties": false
