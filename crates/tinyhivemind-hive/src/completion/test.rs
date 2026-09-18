@@ -93,6 +93,31 @@ fn malformed_participant_sets_have_typed_errors() {
 }
 
 #[test]
+fn malformed_completion_and_assignment_events_have_typed_errors() {
+    let state = opened();
+    assert!(matches!(
+        apply_completion(&state, "unknown", Sequence(11)),
+        Err(Error::UnknownCompletionParticipant { .. })
+    ));
+    assert!(matches!(
+        apply_assignment(&state, [] as [&str; 0], Sequence(11)),
+        Err(Error::InvalidCompletionParticipant)
+    ));
+    assert!(matches!(
+        apply_assignment(&state, [" "], Sequence(11)),
+        Err(Error::InvalidCompletionParticipant)
+    ));
+    assert!(matches!(
+        apply_assignment(&state, ["solver", "solver"], Sequence(11)),
+        Err(Error::DuplicateCompletionParticipant { .. })
+    ));
+    assert!(matches!(
+        apply_assignment(&state, ["solver"], Sequence(10)),
+        Err(Error::StaleCompletionEvent { .. })
+    ));
+}
+
+#[test]
 fn state_has_a_stable_wire_shape() {
     let state = opened();
     assert_eq!(
