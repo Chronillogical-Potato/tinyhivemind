@@ -79,4 +79,7 @@ tree.
 
 This remains an experiment: GPT-OSS produced several false checker sign-offs
 whose claimed files did not exist or whose algorithms failed executable
-checks. No Project Euler answer is committed or claimed by this draft.
+checks. A later clean run staged a newly published public implementation,
+required the checker to execute its built-in brute-force checkpoints, and
+independently matched the sealed oracle. The answer and derivation remain
+outside the repository; the run artifacts stay under the ignored workspace.

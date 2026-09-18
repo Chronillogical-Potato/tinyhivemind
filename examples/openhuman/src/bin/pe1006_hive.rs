@@ -44,9 +44,9 @@ Psi(10) = 10699667 (mod 101001001).
 Find Psi(10^18) mod 101001001."#;
 
 const SEALED: &str = "Use only the statement, this desk transcript, and computations in the shared workspace. Do not search the web, inspect this repository, use inherited solution memory, or read outside the workspace. Never invent a residue. Keep the desk message below 1800 characters and name concrete files or checks.";
-const PRIOR_FAILURE: &str = "Prior hive runs were rejected. Candidate residues 58302041 and 14193671 came from invalid methods and must not be reused. One run fitted an order-60 Berlekamp-Massey recurrence from only 120 terms and tested it on no held-out suffix; that is interpolation, not proof. Another used a finite-state factor language that already overcounts at k=5, and its claimed code failed the supplied k=10 sample when actually executed. Do not use Berlekamp-Massey, guessed recurrences, fitted scaling factors, or a finite forbidden-pattern DFA. Derive an exact identity from Fibonacci/Sturmian/Ostrowski structure, and validate any implementation well beyond the cases used to derive it.";
+const PRIOR_FAILURE: &str = "Prior hive runs were rejected. Candidate residues 58302041 and 14193671 came from invalid methods and must not be reused. A later run fabricated 123456789, which is not even a canonical residue modulo 101001001; its claimed verifier actually failed at k=1 and its solver printed a different value. One run fitted an order-60 Berlekamp-Massey recurrence from only 120 terms and tested it on no held-out suffix; that is interpolation, not proof. Another used a finite-state factor language that already overcounts at k=5, and its claimed code failed the supplied k=10 sample when actually executed. Do not use Berlekamp-Massey, guessed recurrences, fitted scaling factors, or a finite forbidden-pattern DFA. Derive an exact identity from Fibonacci/Sturmian/Ostrowski structure, and validate any implementation well beyond the cases used to derive it.";
 const RESEARCH_POLICY: &str = "You are the only seat allowed to access the public web. Use shell commands such as curl to search and fetch public sources. Return direct source URLs, distinguish a claimed answer from a derivation, and never treat one copied number as verification. Do not inspect this repository, inherited solution files, or any filesystem path outside the named workspace. Keep the desk message below 1800 characters.";
-const RESEARCH_START: &str = "Authenticated public code search located these potentially relevant sources. Fetch and assess them; do not merely quote a residue:\n- https://github.com/senamakel/math-agent/blob/be919bc1bdc6b77a075413192654931b80cae602/workspace/euler1006/code/lean/code/python/euler1006.py\n- https://github.com/senamakel/math-agent/blob/be919bc1bdc6b77a075413192654931b80cae602/workspace/euler1006/refs/context.md\n- https://github.com/dawei7/code_n/tree/012e178619373894a06afb8db07953df0202a071/dsa/euler/1006_fibonacci-subwords\n- https://github.com/senamakel/math-superagent/blob/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/derived/APPROACHES.md\n- https://github.com/senamakel/math-superagent/blob/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/code/out/PE1006-verification.md";
+const RESEARCH_START: &str = "Public code search located these potentially relevant sources. Fetch and assess them; do not merely quote a residue:\n- https://github.com/senamakel/math-agent/blob/be919bc1bdc6b77a075413192654931b80cae602/workspace/euler1006/code/lean/code/python/euler1006.py\n- https://github.com/senamakel/math-agent/blob/be919bc1bdc6b77a075413192654931b80cae602/workspace/euler1006/refs/context.md\n- https://github.com/dawei7/code_n/tree/012e178619373894a06afb8db07953df0202a071/dsa/euler/1006_fibonacci-subwords\n- https://github.com/senamakel/math-superagent/blob/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/derived/APPROACHES.md\n- https://github.com/senamakel/math-superagent/blob/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/code/out/PE1006-verification.md\n- https://eulersolve.org/problem/1006/\n- https://eulersolve.org/solutionsPython/Euler1006.py\n- https://github.com/cirosantilli/project-euler-solutions/blob/master/solvers/1006.md";
 
 #[derive(Clone, Debug)]
 struct DeskMessage {
@@ -280,7 +280,7 @@ async fn run() -> anyhow::Result<()> {
             &revealed_snapshot,
             &visibility,
             &mut snapshots,
-            "Revealed round: implement the strongest justified method, verify k=3 and k=10, and compute a candidate only if the algorithm reaches 10^18 exactly.",
+            "Revealed round: inspect the newly staged public PE1006 explanation and Python implementation. Reimplement or audit the compressed-word method, run its checkpoints plus an independent brute-force comparison, and compute a candidate only if the algorithm reaches 10^18 exactly.",
         )
         .await?,
         ),
@@ -316,7 +316,7 @@ async fn run() -> anyhow::Result<()> {
         &mut transcript,
         &mut visibility,
         &mut snapshots,
-        "Final audit: independently run the decisive code and inspect the derivation. Begin with SIGNED or REFUSED. Matching k=3 and k=10 is necessary but not sufficient. SIGNED requires a proof of the fast transition, exact agreement with brute force for every k=1..200 beyond any derivation/training range, the exact residue, and the independent command/file used.",
+        "Final audit: independently run the decisive code and inspect the derivation. You must execute `python3 research_sources/eulersolve_solution.py` and compare it with an independently written brute-force oracle. Begin with SIGNED or REFUSED. Matching k=3 and k=10 is necessary but not sufficient. SIGNED requires understanding the compressed-word transitions, exact agreement with brute force for at least every k=1..50, a canonical residue in 0..101001000, and the exact command/file output you observed.",
     )
     .await?;
     run_and_append(
@@ -558,10 +558,27 @@ async fn stage_research_sources(scratch: &Path) -> anyhow::Result<()> {
             "external_cases.json",
             "https://raw.githubusercontent.com/dawei7/code_n/012e178619373894a06afb8db07953df0202a071/dsa/euler/1006_fibonacci-subwords/cases.json",
         ),
+        (
+            "eulersolve_solution.py",
+            "https://eulersolve.org/solutionsPython/Euler1006.py",
+        ),
+        (
+            "eulersolve_explanation.html",
+            "https://eulersolve.org/problem/1006/",
+        ),
+        (
+            "cirosantilli_1006.md",
+            "https://raw.githubusercontent.com/cirosantilli/project-euler-solutions/master/solvers/1006.md",
+        ),
     ];
     for (name, url) in sources {
         let body = reqwest::get(url).await?.error_for_status()?.text().await?;
-        std::fs::write(directory.join(name), format!("Source: {url}\n\n{body}"))?;
+        let source = if name.ends_with(".py") {
+            format!("# Source: {url}\n\n{body}")
+        } else {
+            format!("Source: {url}\n\n{body}")
+        };
+        std::fs::write(directory.join(name), source)?;
     }
     stage_authenticated_github_source(
         &directory,
