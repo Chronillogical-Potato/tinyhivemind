@@ -71,6 +71,18 @@ all three canonical graders returned zero:
 **Smoke score: 0/3 (0%).** The partial column is grader diagnostics, not the
 DeepSWE reward and not an alternative score.
 
+Provider-reported usage was:
+
+| task | billed requests | input tokens | output tokens | cached input subset | cost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `abs-module-cache-flags` | 120 | 1,087,847 | 25,059 | 615,936 | $1.976399 |
+| `abs-stepped-slices` | 162 | 2,379,696 | 29,732 | 1,095,936 | $4.626041 |
+| `actionlint-action-pinning-lint` | 125 | 1,452,767 | 21,953 | 759,808 | $2.636114 |
+| **total** | **407** | **4,920,310** | **76,744** | **2,471,680** | **$9.238554** |
+
+The cached count is a subset of input tokens, not additional usage. Every cost
+record identified its source as `provider_charged`.
+
 The runner rejected a pending round when it would cross the 24-turn cap. It
 exited before serializing `result.json` or the committed-turn counter, so an
 exact per-task committed-turn count is unavailable. Raw evidence establishes
