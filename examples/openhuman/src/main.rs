@@ -84,6 +84,7 @@ fn noul(id: &str, probability: f64) -> (String, SystemOneAnswer) {
 fn request() -> RoutingRequest {
     RoutingRequest {
         message: "Review the launch implementation and compliance risk.".into(),
+        source: tinyhivemind_embed::RoutingSource::DeskMessage,
         conversation: ConversationRef {
             id: "launch".into(),
             kind: ConversationKind::Desk,

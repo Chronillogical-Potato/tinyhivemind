@@ -8,7 +8,7 @@ mod types;
 pub use types::{
     CandidateProbability, ContributionProbability, EvaluationDisposition, RouteCandidate, Router,
     RouterError, RouterFuture, RoutingEvaluation, RoutingFallback, RoutingPlan, RoutingPolicy,
-    RoutingRequest,
+    RoutingRequest, RoutingSource,
 };
 
 use std::collections::BTreeSet;
@@ -54,6 +54,18 @@ pub async fn route_message(
         }
         ConversationKind::Desk => {}
     }
+    if request.source != RoutingSource::DeskMessage {
+        return fallback(fallback_responder, RoutingFallback::RejectedOutput);
+    }
+    route_semantic(primary, reasoning, request, fallback_responder).await
+}
+
+async fn route_semantic(
+    primary: Option<&(dyn Router + '_)>,
+    reasoning: Option<&(dyn Router + '_)>,
+    request: &RoutingRequest,
+    fallback_responder: &str,
+) -> RoutingPlan {
     if !request
         .candidates
         .iter()
@@ -89,6 +101,34 @@ pub async fn route_message(
             }
         }
     }
+}
+
+/// Route one agent-authored broadcast through the same accepted Choice and
+/// bounded `>20%` recipient rule as an unaddressed desk message.
+///
+/// The request must carry [`RoutingSource::AgentBroadcast`], must name a desk,
+/// and must exclude the author from its candidates. Invalid provenance fails
+/// to the caller-supplied deterministic destination without invoking a model.
+pub async fn route_broadcast(
+    primary: Option<&(dyn Router + '_)>,
+    reasoning: Option<&(dyn Router + '_)>,
+    request: &RoutingRequest,
+    fallback_responder: &str,
+) -> RoutingPlan {
+    let valid_source = match &request.source {
+        RoutingSource::AgentBroadcast { author_id } => {
+            !author_id.trim().is_empty()
+                && !request
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.id == *author_id)
+        }
+        RoutingSource::DeskMessage => false,
+    };
+    if request.conversation.kind != ConversationKind::Desk || !valid_source {
+        return fallback(fallback_responder, RoutingFallback::InvalidBroadcast);
+    }
+    route_semantic(primary, reasoning, request, fallback_responder).await
 }
 
 fn accept(request: &RoutingRequest, evaluation: RoutingEvaluation) -> Accepted {

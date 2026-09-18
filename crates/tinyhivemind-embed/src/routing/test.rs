@@ -19,6 +19,7 @@ fn probability(parts: u32) -> Probability {
 fn request(kind: ConversationKind) -> RoutingRequest {
     RoutingRequest {
         message: "Assess the contract risk and implementation impact".into(),
+        source: RoutingSource::DeskMessage,
         conversation: ConversationRef {
             id: "legal-engineering".into(),
             kind,
@@ -169,6 +170,58 @@ async fn explicit_mentions_and_direct_conversations_bypass_semantic_routing() {
         }
     ));
     assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn agent_broadcast_uses_one_choice_and_cannot_route_back_to_its_author() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut broadcast = request(ConversationKind::Desk);
+    broadcast.source = RoutingSource::AgentBroadcast {
+        author_id: "eng".into(),
+    };
+    broadcast.candidates.remove(0);
+    let mut broadcast_evaluation = evaluation();
+    broadcast_evaluation.primary_responder = "legal".into();
+    broadcast_evaluation.primary_probabilities = vec![
+        CandidateProbability {
+            candidate_id: "legal".into(),
+            probability: probability(900_000),
+        },
+        CandidateProbability {
+            candidate_id: "none".into(),
+            probability: probability(100_000),
+        },
+    ];
+    broadcast_evaluation.contributions.remove(0);
+    let router = FakeRouter {
+        calls: Arc::clone(&calls),
+        evaluation: broadcast_evaluation,
+    };
+    let plan = route_broadcast(Some(&router), None, &broadcast, "legal").await;
+    assert!(matches!(
+        plan,
+        RoutingPlan::One { responder_id, .. } if responder_id == "legal"
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    broadcast.candidates.push(RouteCandidate {
+        id: "eng".into(),
+        label: "Engineer".into(),
+        role: None,
+        description: None,
+        capabilities: vec![],
+        learned_topics: vec![],
+        available: true,
+    });
+    let rejected = route_broadcast(Some(&router), None, &broadcast, "legal").await;
+    assert_eq!(
+        rejected,
+        RoutingPlan::Fallback {
+            responder_id: "legal".into(),
+            reason: RoutingFallback::InvalidBroadcast,
+        }
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

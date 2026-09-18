@@ -16,6 +16,7 @@ use serde_json::json;
 use tinyhivemind::{Sequence, responder::Probability};
 use tinyhivemind_embed::{
     ConversationKind, ConversationRef, RouteCandidate, Router, RoutingPolicy, RoutingRequest,
+    RoutingSource,
 };
 
 use super::*;
@@ -51,6 +52,7 @@ impl SystemOneTransport for FakeTransport {
 fn request(candidate_count: usize, option_limit: usize) -> RoutingRequest {
     RoutingRequest {
         message: "Review the rollout and its legal exposure".into(),
+        source: RoutingSource::DeskMessage,
         conversation: ConversationRef {
             id: "launch".into(),
             kind: ConversationKind::Desk,
@@ -137,7 +139,7 @@ async fn ordinary_desk_is_one_batched_request_with_choice_and_all_nouls() {
         .expect("evaluation converts");
     assert_eq!(evaluation.primary_responder, "agent-0");
     assert_eq!(evaluation.model_identity, "jev-1.13");
-    assert_eq!(evaluation.question_schema_version, 1);
+    assert_eq!(evaluation.question_schema_version, 2);
     let requests = router.transport().requests.lock().unwrap();
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].questions.len(), 6);
@@ -146,6 +148,29 @@ async fn ordinary_desk_is_one_batched_request_with_choice_and_all_nouls() {
         Question::Choice { .. }
     ));
     assert_eq!(requests[0].state["roster_version"], 12);
+    assert_eq!(requests[0].state["source"]["kind"], "desk_message");
+}
+
+#[tokio::test]
+async fn agent_broadcast_is_a_choice_for_the_best_handoff_recipient() {
+    let transport =
+        FakeTransport::new([response(&["agent-0", "agent-1", "none"], "agent-1", true)]);
+    let router = JevRouter::new(transport);
+    let mut broadcast = request(2, 8);
+    broadcast.source = RoutingSource::AgentBroadcast {
+        author_id: "planner".into(),
+    };
+    router
+        .evaluate(&broadcast)
+        .await
+        .expect("broadcast evaluation converts");
+    let requests = router.transport().requests.lock().unwrap();
+    assert_eq!(requests[0].state["source"]["kind"], "agent_broadcast");
+    assert_eq!(requests[0].state["source"]["author_id"], "planner");
+    let Question::Choice { instructions, .. } = &requests[0].questions["primary_responder"] else {
+        panic!("broadcast recipient is selected by Choice");
+    };
+    assert!(instructions.as_str().unwrap().contains("handing off"));
 }
 
 #[tokio::test]

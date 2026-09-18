@@ -7,6 +7,19 @@ use tinyhivemind::responder::Probability;
 
 use crate::ConversationRef;
 
+/// Why semantic routing is being requested.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RoutingSource {
+    /// An operator or person authored an unaddressed desk message.
+    DeskMessage,
+    /// An agent called `broadcast` to hand work to the best-placed teammates.
+    AgentBroadcast {
+        /// Canonical id of the agent handing off the work.
+        author_id: String,
+    },
+}
+
 /// One candidate visible to semantic routing.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -51,6 +64,8 @@ pub struct RoutingPolicy {
 pub struct RoutingRequest {
     /// Exact authored message.
     pub message: String,
+    /// Provenance and semantic intent of the message being routed.
+    pub source: RoutingSource,
     /// Canonical conversation and semantic surface.
     pub conversation: ConversationRef,
     /// Desk purpose supplied by the host.
@@ -141,6 +156,8 @@ pub enum RoutingFallback {
     ProviderUnavailable,
     /// Provider output failed pure validation.
     RejectedOutput,
+    /// An agent broadcast had invalid provenance or included its author.
+    InvalidBroadcast,
     /// The candidate snapshot changed before acceptance.
     StaleRoster,
     /// The one permitted reasoning escalation failed.

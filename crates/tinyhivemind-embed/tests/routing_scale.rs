@@ -11,7 +11,7 @@ use tinyhivemind::responder::Probability;
 use tinyhivemind_embed::{
     CandidateProbability, ContributionProbability, ConversationKind, ConversationRef,
     EvaluationDisposition, RouteCandidate, Router, RouterFuture, RoutingEvaluation, RoutingPlan,
-    RoutingPolicy, RoutingRequest, route_message,
+    RoutingPolicy, RoutingRequest, RoutingSource, route_message,
 };
 
 #[derive(Clone, Debug)]
@@ -90,6 +90,7 @@ fn evaluation(request: &RoutingRequest) -> RoutingEvaluation {
 fn request(desk: usize, kind: ConversationKind) -> RoutingRequest {
     RoutingRequest {
         message: format!("coordinate request for desk {desk}"),
+        source: RoutingSource::DeskMessage,
         conversation: ConversationRef {
             id: format!("desk-{desk}"),
             kind,

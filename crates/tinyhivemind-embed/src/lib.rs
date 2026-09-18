@@ -29,5 +29,6 @@ pub use error::{Error, Result};
 pub use routing::{
     CONCURRENT_CHOICE_THRESHOLD_PARTS, CandidateProbability, ContributionProbability,
     EvaluationDisposition, RouteCandidate, Router, RouterError, RouterFuture, RoutingEvaluation,
-    RoutingFallback, RoutingPlan, RoutingPolicy, RoutingRequest, route_message,
+    RoutingFallback, RoutingPlan, RoutingPolicy, RoutingRequest, RoutingSource, route_broadcast,
+    route_message,
 };

@@ -5,9 +5,9 @@
 
 ## Problem
 
-An unaddressed desk message needs semantic specialist selection before an
-expensive agent turn, without allowing a model to decide eligibility, fan-out,
-or fallback policy.
+An unaddressed desk message or agent-authored handoff needs semantic specialist
+selection before an expensive agent turn, without allowing a model to decide
+eligibility, fan-out, or fallback policy.
 
 ## Goals and non-goals
 
@@ -20,6 +20,11 @@ It does not authorize actions, manage sessions, or replace host storage.
 Explicit agent mentions and direct conversations must not invoke semantic
 routing. General and workflow surfaces retain host-defined single-responder
 behavior.
+
+An agent `broadcast` is a second explicit routing source. It is valid only on a
+desk, carries its author's canonical id, and excludes that author from the
+candidate snapshot. Jev receives the exact handoff and selects which eligible
+teammate should take it up with the same Choice primitive.
 
 An ordinary eligible desk produces one System One request containing one
 `primary_responder` Choice, `needs_collaboration`, `needs_clarification`, and
@@ -64,6 +69,8 @@ stale snapshots, and failed escalation use the deterministic desk fallback.
   performs exactly one batched Jev request; an oversized desk performs the
   documented two-request hierarchy.
 - Mentions, DMs, General, and Workflow perform none.
+- A valid agent broadcast performs the same one normal Choice request; invalid
+  provenance or a self-candidate performs none.
 - No unavailable or non-member id can be accepted.
 - Provider and escalation failures return an auditable fallback reason.
 - A hive plan cannot exceed `round_width`.

@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use tinyhivemind::responder::{PROBABILITY_SCALE, Probability};
 use tinyhivemind_embed::routing::{
     CandidateProbability, ContributionProbability, EvaluationDisposition, Router, RouterFuture,
-    RoutingEvaluation, RoutingRequest,
+    RoutingEvaluation, RoutingRequest, RoutingSource,
 };
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Current stable question-schema version recorded in routing evaluations.
-const QUESTION_SCHEMA_VERSION: u32 = 1;
+const QUESTION_SCHEMA_VERSION: u32 = 2;
 const PRIMARY: &str = "primary_responder";
 const COLLABORATION: &str = "needs_collaboration";
 const CLARIFICATION: &str = "needs_clarification";
@@ -74,7 +74,7 @@ impl<T: SystemOneTransport> Router for JevRouter<T> {
                 let wire = SystemOneRequest {
                     state,
                     model: self.model.clone(),
-                    questions: normal_questions(&eligible),
+                    questions: normal_questions(request, &eligible),
                 };
                 let response = self.transport.evaluate(&wire).await.map_err(boxed)?;
                 return convert_response(request, &eligible, &response, None);
@@ -107,7 +107,10 @@ impl<T: SystemOneTransport> Router for JevRouter<T> {
             let final_request = SystemOneRequest {
                 state,
                 model: self.model.clone(),
-                questions: BTreeMap::from([(PRIMARY.to_owned(), primary_question(&shortlist))]),
+                questions: BTreeMap::from([(
+                    PRIMARY.to_owned(),
+                    primary_question(request, &shortlist),
+                )]),
             };
             let final_response = self
                 .transport
@@ -138,6 +141,7 @@ fn state(
 ) -> Result<Value, tinyhivemind_embed::routing::RouterError> {
     serde_json::to_value(json!({
         "message": request.message,
+        "source": request.source,
         "conversation": request.conversation,
         "desk_purpose": request.desk_purpose,
         "thread_context": request.thread_context,
@@ -149,10 +153,11 @@ fn state(
 }
 
 fn normal_questions(
+    request: &RoutingRequest,
     eligible: &[&tinyhivemind_embed::RouteCandidate],
 ) -> BTreeMap<String, Question> {
     let mut questions = screening_questions(eligible);
-    questions.insert(PRIMARY.to_owned(), primary_question(eligible));
+    questions.insert(PRIMARY.to_owned(), primary_question(request, eligible));
     questions
 }
 
@@ -198,7 +203,10 @@ fn screening_questions(
     questions
 }
 
-fn primary_question(eligible: &[&tinyhivemind_embed::RouteCandidate]) -> Question {
+fn primary_question(
+    request: &RoutingRequest,
+    eligible: &[&tinyhivemind_embed::RouteCandidate],
+) -> Question {
     let mut criteria: BTreeMap<String, Option<Value>> = eligible
         .iter()
         .map(|candidate| {
@@ -220,10 +228,16 @@ fn primary_question(eligible: &[&tinyhivemind_embed::RouteCandidate]) -> Questio
             "No listed candidate is a competent primary responder for this request"
         )),
     );
-    Question::Choice {
-        instructions: json!(
-            "Which eligible candidate is the best primary responder for `message`? Select `none` when no candidate is competent."
+    let instructions = match &request.source {
+        RoutingSource::DeskMessage => {
+            "Which eligible candidate is the best primary responder for `message`? Select `none` when no candidate is competent.".to_owned()
+        }
+        RoutingSource::AgentBroadcast { author_id } => format!(
+            "Agent `{author_id}` is handing off `message`. Which eligible teammate is best placed to take up that work? Select `none` when no candidate is competent."
         ),
+    };
+    Question::Choice {
+        instructions: json!(instructions),
         criteria,
     }
 }
