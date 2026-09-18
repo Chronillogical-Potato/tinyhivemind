@@ -7,6 +7,19 @@ use tinyhivemind::responder::Probability;
 
 use crate::ConversationRef;
 
+/// Why semantic routing is being requested.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RoutingSource {
+    /// An operator or person authored an unaddressed desk message.
+    DeskMessage,
+    /// An agent called `broadcast` to hand work to the best-placed teammates.
+    AgentBroadcast {
+        /// Canonical id of the agent handing off the work.
+        author_id: String,
+    },
+}
+
 /// One candidate visible to semantic routing.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -35,10 +48,6 @@ pub struct RoutingPolicy {
     pub minimum_confidence: Probability,
     /// Higher confidence required when the request is high impact.
     pub high_impact_minimum_confidence: Probability,
-    /// Probability at which collaboration is selected.
-    pub collaboration_threshold: Probability,
-    /// Probability at which an additional candidate is invited.
-    pub contribution_threshold: Probability,
     /// Probability at which missing routing information requires escalation.
     pub clarification_threshold: Probability,
     /// Probability at which the high-impact confidence rule applies.
@@ -55,6 +64,8 @@ pub struct RoutingPolicy {
 pub struct RoutingRequest {
     /// Exact authored message.
     pub message: String,
+    /// Provenance and semantic intent of the message being routed.
+    pub source: RoutingSource,
     /// Canonical conversation and semantic surface.
     pub conversation: ConversationRef,
     /// Desk purpose supplied by the host.
@@ -113,11 +124,11 @@ pub struct RoutingEvaluation {
     pub primary_probabilities: Vec<CandidateProbability>,
     /// Choice distribution concentration.
     pub confidence: Probability,
-    /// Whether one competent agent is insufficient.
+    /// Whether one competent agent is insufficient, retained for audit.
     pub needs_collaboration: Probability,
     /// Whether essential routing information is absent.
     pub needs_clarification: Probability,
-    /// Independent distinct-contribution probabilities.
+    /// Independent distinct-contribution probabilities retained for audit.
     pub contributions: Vec<ContributionProbability>,
     /// Whether errors would have unusually serious consequences.
     pub high_impact: Probability,
@@ -145,6 +156,8 @@ pub enum RoutingFallback {
     ProviderUnavailable,
     /// Provider output failed pure validation.
     RejectedOutput,
+    /// An agent broadcast had invalid provenance or included its author.
+    InvalidBroadcast,
     /// The candidate snapshot changed before acceptance.
     StaleRoster,
     /// The one permitted reasoning escalation failed.
@@ -164,7 +177,8 @@ pub enum RoutingPlan {
         /// Accepted semantic evaluation.
         evaluation: RoutingEvaluation,
     },
-    /// Open one bounded desk-scoped hive episode.
+    /// Open one bounded desk-scoped hive episode whose primary and invited
+    /// agents receive the message concurrently in the opening round.
     Hive {
         /// Canonical primary responder id.
         primary_id: String,

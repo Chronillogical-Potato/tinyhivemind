@@ -8,7 +8,7 @@ mod types;
 pub use types::{
     CandidateProbability, ContributionProbability, EvaluationDisposition, RouteCandidate, Router,
     RouterError, RouterFuture, RoutingEvaluation, RoutingFallback, RoutingPlan, RoutingPolicy,
-    RoutingRequest,
+    RoutingRequest, RoutingSource,
 };
 
 use std::collections::BTreeSet;
@@ -16,6 +16,12 @@ use std::collections::BTreeSet;
 use tinyhivemind::responder::PROBABILITY_SCALE;
 
 use crate::ConversationKind;
+
+/// Choice probability above which an additional eligible desk agent receives
+/// the message in the same bounded opening round.
+///
+/// The comparison is strict: exactly 20% remains single-responder routing.
+pub const CONCURRENT_CHOICE_THRESHOLD_PARTS: u32 = 200_000;
 
 enum Accepted {
     Plan(RoutingPlan),
@@ -48,6 +54,18 @@ pub async fn route_message(
         }
         ConversationKind::Desk => {}
     }
+    if request.source != RoutingSource::DeskMessage {
+        return fallback(fallback_responder, RoutingFallback::RejectedOutput);
+    }
+    route_semantic(primary, reasoning, request, fallback_responder).await
+}
+
+async fn route_semantic(
+    primary: Option<&(dyn Router + '_)>,
+    reasoning: Option<&(dyn Router + '_)>,
+    request: &RoutingRequest,
+    fallback_responder: &str,
+) -> RoutingPlan {
     if !request
         .candidates
         .iter()
@@ -85,6 +103,34 @@ pub async fn route_message(
     }
 }
 
+/// Route one agent-authored broadcast through the same accepted Choice and
+/// bounded `>20%` recipient rule as an unaddressed desk message.
+///
+/// The request must carry [`RoutingSource::AgentBroadcast`], must name a desk,
+/// and must exclude the author from its candidates. Invalid provenance fails
+/// to the caller-supplied deterministic destination without invoking a model.
+pub async fn route_broadcast(
+    primary: Option<&(dyn Router + '_)>,
+    reasoning: Option<&(dyn Router + '_)>,
+    request: &RoutingRequest,
+    fallback_responder: &str,
+) -> RoutingPlan {
+    let valid_source = match &request.source {
+        RoutingSource::AgentBroadcast { author_id } => {
+            !author_id.trim().is_empty()
+                && !request
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.id == *author_id)
+        }
+        RoutingSource::DeskMessage => false,
+    };
+    if request.conversation.kind != ConversationKind::Desk || !valid_source {
+        return fallback(fallback_responder, RoutingFallback::InvalidBroadcast);
+    }
+    route_semantic(primary, reasoning, request, fallback_responder).await
+}
+
 fn accept(request: &RoutingRequest, evaluation: RoutingEvaluation) -> Accepted {
     accept_inner(request, evaluation, true)
 }
@@ -106,15 +152,8 @@ fn accept_inner(
         return Accepted::Rejected(RoutingFallback::RejectedOutput);
     }
     let policy = &request.policy;
-    let collaboration_conflict = evaluation.needs_collaboration >= policy.collaboration_threshold
-        && policy.round_width > 1
-        && !evaluation.contributions.iter().any(|entry| {
-            entry.candidate_id != evaluation.primary_responder
-                && entry.probability >= policy.contribution_threshold
-        });
     let uncertain = evaluation.confidence < policy.minimum_confidence
         || evaluation.needs_clarification >= policy.clarification_threshold
-        || collaboration_conflict
         || (evaluation.high_impact >= policy.high_impact_threshold
             && evaluation.confidence < policy.high_impact_minimum_confidence);
     if uncertain && may_escalate {
@@ -202,17 +241,19 @@ fn valid_domain(request: &RoutingRequest, evaluation: &RoutingEvaluation) -> boo
 fn compose_plan(request: &RoutingRequest, evaluation: RoutingEvaluation) -> Accepted {
     let policy = &request.policy;
     let primary_id = evaluation.primary_responder.clone();
-    if evaluation.needs_collaboration < policy.collaboration_threshold || policy.round_width <= 1 {
+    if policy.round_width <= 1 {
         return Accepted::Plan(RoutingPlan::One {
             responder_id: primary_id,
             evaluation,
         });
     }
     let mut invited: Vec<_> = evaluation
-        .contributions
+        .primary_probabilities
         .iter()
         .filter(|entry| {
-            entry.candidate_id != primary_id && entry.probability >= policy.contribution_threshold
+            entry.candidate_id != primary_id
+                && entry.candidate_id != "none"
+                && entry.probability.parts() > CONCURRENT_CHOICE_THRESHOLD_PARTS
         })
         .collect();
     invited.sort_by(|left, right| {
@@ -225,7 +266,13 @@ fn compose_plan(request: &RoutingRequest, evaluation: RoutingEvaluation) -> Acce
         .into_iter()
         .take(policy.round_width.saturating_sub(1))
         .map(|entry| entry.candidate_id.clone())
-        .collect();
+        .collect::<Vec<_>>();
+    if invited_ids.is_empty() {
+        return Accepted::Plan(RoutingPlan::One {
+            responder_id: primary_id,
+            evaluation,
+        });
+    }
     Accepted::Plan(RoutingPlan::Hive {
         primary_id,
         invited_ids,

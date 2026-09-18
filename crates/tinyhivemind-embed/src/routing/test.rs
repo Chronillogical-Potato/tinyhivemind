@@ -19,6 +19,7 @@ fn probability(parts: u32) -> Probability {
 fn request(kind: ConversationKind) -> RoutingRequest {
     RoutingRequest {
         message: "Assess the contract risk and implementation impact".into(),
+        source: RoutingSource::DeskMessage,
         conversation: ConversationRef {
             id: "legal-engineering".into(),
             kind,
@@ -59,8 +60,6 @@ fn request(kind: ConversationKind) -> RoutingRequest {
         policy: RoutingPolicy {
             minimum_confidence: probability(600_000),
             high_impact_minimum_confidence: probability(800_000),
-            collaboration_threshold: probability(600_000),
-            contribution_threshold: probability(600_000),
             clarification_threshold: probability(700_000),
             high_impact_threshold: probability(700_000),
             round_width: 2,
@@ -174,7 +173,59 @@ async fn explicit_mentions_and_direct_conversations_bypass_semantic_routing() {
 }
 
 #[tokio::test]
-async fn contribution_nouls_open_a_bounded_hive_in_desk_order_after_probability() {
+async fn agent_broadcast_uses_one_choice_and_cannot_route_back_to_its_author() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut broadcast = request(ConversationKind::Desk);
+    broadcast.source = RoutingSource::AgentBroadcast {
+        author_id: "eng".into(),
+    };
+    broadcast.candidates.remove(0);
+    let mut broadcast_evaluation = evaluation();
+    broadcast_evaluation.primary_responder = "legal".into();
+    broadcast_evaluation.primary_probabilities = vec![
+        CandidateProbability {
+            candidate_id: "legal".into(),
+            probability: probability(900_000),
+        },
+        CandidateProbability {
+            candidate_id: "none".into(),
+            probability: probability(100_000),
+        },
+    ];
+    broadcast_evaluation.contributions.remove(0);
+    let router = FakeRouter {
+        calls: Arc::clone(&calls),
+        evaluation: broadcast_evaluation,
+    };
+    let plan = route_broadcast(Some(&router), None, &broadcast, "legal").await;
+    assert!(matches!(
+        plan,
+        RoutingPlan::One { responder_id, .. } if responder_id == "legal"
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    broadcast.candidates.push(RouteCandidate {
+        id: "eng".into(),
+        label: "Engineer".into(),
+        role: None,
+        description: None,
+        capabilities: vec![],
+        learned_topics: vec![],
+        available: true,
+    });
+    let rejected = route_broadcast(Some(&router), None, &broadcast, "legal").await;
+    assert_eq!(
+        rejected,
+        RoutingPlan::Fallback {
+            responder_id: "legal".into(),
+            reason: RoutingFallback::InvalidBroadcast,
+        }
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn choice_probabilities_open_a_bounded_hive() {
     let calls = Arc::new(AtomicUsize::new(0));
     let router = FakeRouter {
         calls: Arc::clone(&calls),
@@ -259,7 +310,7 @@ async fn uncertainty_receives_exactly_one_reasoning_escalation() {
 }
 
 #[tokio::test]
-async fn conflicting_collaboration_judgments_escalate_then_fall_back() {
+async fn contribution_nouls_do_not_override_choice_fanout() {
     let mut conflicting = evaluation();
     for contribution in &mut conflicting.contributions {
         contribution.probability = probability(100_000);
@@ -282,15 +333,93 @@ async fn conflicting_collaboration_judgments_escalate_then_fall_back() {
         "eng",
     )
     .await;
-    assert_eq!(
-        plan,
-        RoutingPlan::Fallback {
-            responder_id: "eng".into(),
-            reason: RoutingFallback::EscalationFailed,
-        }
-    );
+    assert!(matches!(plan, RoutingPlan::Hive { .. }));
     assert_eq!(primary_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(reasoning_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(reasoning_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn choice_fanout_is_strictly_above_twenty_percent() {
+    assert_eq!(CONCURRENT_CHOICE_THRESHOLD_PARTS, 200_000);
+    let mut at_threshold = evaluation();
+    at_threshold.needs_collaboration = Probability::ZERO;
+    at_threshold.primary_probabilities[0].probability = probability(700_000);
+    at_threshold.primary_probabilities[1].probability = probability(200_000);
+    for contribution in &mut at_threshold.contributions {
+        contribution.probability = Probability::ZERO;
+    }
+    let router = FakeRouter {
+        calls: Arc::new(AtomicUsize::new(0)),
+        evaluation: at_threshold.clone(),
+    };
+    let one = route_message(
+        Some(&router),
+        None,
+        &request(ConversationKind::Desk),
+        None,
+        "eng",
+    )
+    .await;
+    assert!(matches!(one, RoutingPlan::One { .. }));
+
+    at_threshold.primary_probabilities[0].probability = probability(699_999);
+    at_threshold.primary_probabilities[1].probability = probability(200_001);
+    let router = FakeRouter {
+        calls: Arc::new(AtomicUsize::new(0)),
+        evaluation: at_threshold,
+    };
+    let hive = route_message(
+        Some(&router),
+        None,
+        &request(ConversationKind::Desk),
+        None,
+        "eng",
+    )
+    .await;
+    let RoutingPlan::Hive { invited_ids, .. } = hive else {
+        panic!("more than twenty percent opens a hive")
+    };
+    assert_eq!(invited_ids, ["legal"]);
+}
+
+#[tokio::test]
+async fn choice_fanout_is_probability_ordered_then_bounded_by_round_width() {
+    let mut desk = request(ConversationKind::Desk);
+    desk.candidates[2].id = "ops".into();
+    desk.candidates[2].available = true;
+    let mut ranked = evaluation();
+    ranked.primary_probabilities = vec![
+        CandidateProbability {
+            candidate_id: "eng".into(),
+            probability: probability(450_000),
+        },
+        CandidateProbability {
+            candidate_id: "legal".into(),
+            probability: probability(250_000),
+        },
+        CandidateProbability {
+            candidate_id: "ops".into(),
+            probability: probability(250_000),
+        },
+        CandidateProbability {
+            candidate_id: "none".into(),
+            probability: probability(50_000),
+        },
+    ];
+    ranked.contributions.push(ContributionProbability {
+        candidate_id: "ops".into(),
+        probability: Probability::ZERO,
+    });
+    let router = FakeRouter {
+        calls: Arc::new(AtomicUsize::new(0)),
+        evaluation: ranked,
+    };
+
+    let plan = route_message(Some(&router), None, &desk, None, "eng").await;
+    let RoutingPlan::Hive { invited_ids, .. } = plan else {
+        panic!("choice fanout opens a hive")
+    };
+    assert_eq!(invited_ids, ["legal"]);
 }
 
 #[tokio::test]
@@ -368,6 +497,8 @@ async fn every_unavailable_provider_path_uses_a_bounded_fallback() {
 async fn one_agent_plan_stale_roster_and_missing_escalator_are_total() {
     let mut single = evaluation();
     single.needs_collaboration = probability(100_000);
+    single.primary_probabilities[0].probability = probability(700_000);
+    single.primary_probabilities[1].probability = probability(200_000);
     let router = FakeRouter {
         calls: Arc::new(AtomicUsize::new(0)),
         evaluation: single,

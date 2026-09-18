@@ -5,9 +5,9 @@
 
 ## Problem
 
-An unaddressed desk message needs semantic specialist selection before an
-expensive agent turn, without allowing a model to decide eligibility, fan-out,
-or fallback policy.
+An unaddressed desk message or agent-authored handoff needs semantic specialist
+selection before an expensive agent turn, without allowing a model to decide
+eligibility, fan-out, or fallback policy.
 
 ## Goals and non-goals
 
@@ -21,11 +21,17 @@ Explicit agent mentions and direct conversations must not invoke semantic
 routing. General and workflow surfaces retain host-defined single-responder
 behavior.
 
+An agent `broadcast` is a second explicit routing source. It is valid only on a
+desk, carries its author's canonical id, and excludes that author from the
+candidate snapshot. Jev receives the exact handoff and selects which eligible
+teammate should take it up with the same Choice primitive.
+
 An ordinary eligible desk produces one System One request containing one
 `primary_responder` Choice, `needs_collaboration`, `needs_clarification`, and
 `high_impact` Nouls, plus one independent `contributes_<agent>` Noul per
 candidate. The Choice contains every eligible agent and `none`; it is not a
-multi-label result.
+multi-label judgment, but its competing-option probabilities are retained as a
+code-owned bounded fan-out signal.
 
 When its eligible candidate count plus the reserved `none` alternative exceeds
 the configured Choice limit, a desk takes the normal one-request path's
@@ -45,9 +51,13 @@ provider. Candidate ids are unique, nonblank after trimming, and may not use
 the reserved `none` alternative. Thresholds are host-supplied calibration
 artifacts; the library has no cookbook defaults.
 
-Collaboration retains the primary. Invitations clear the contribution
-threshold, order by probability then effective desk order, and are truncated
-so the opening round is no wider than `round_width`.
+The maximum-probability Choice is the primary. Every other eligible agent whose
+Choice probability is strictly greater than 20% receives the same message in
+the opening round, regardless of the collaboration or contribution Nouls.
+Invitations order by Choice probability then effective desk order and are
+truncated so the opening round is no wider than `round_width`. `none` is never
+dispatched. Exactly 20% remains single-responder routing. Contribution Nouls
+remain in the evaluation for audit and calibration but do not select recipients.
 
 Well-formed uncertain or high-impact evaluations may receive one reasoning
 escalation over the identical snapshot. Transport failures, malformed output,
@@ -59,11 +69,14 @@ stale snapshots, and failed escalation use the deterministic desk fallback.
   performs exactly one batched Jev request; an oversized desk performs the
   documented two-request hierarchy.
 - Mentions, DMs, General, and Workflow perform none.
+- A valid agent broadcast performs the same one normal Choice request; invalid
+  provenance or a self-candidate performs none.
 - No unavailable or non-member id can be accepted.
 - Provider and escalation failures return an auditable fallback reason.
 - A hive plan cannot exceed `round_width`.
 
 ## Open questions
 
-The calibrated threshold values and the final provider Choice option limit are
-deployment evidence, not library defaults.
+The confidence, clarification, and high-impact thresholds and the final
+provider Choice option limit are deployment evidence. The strict 20% Choice
+fan-out threshold is the routing policy implemented here.

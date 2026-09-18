@@ -111,9 +111,10 @@ A seat says one thing per turn by **calling a tool**, not by writing a marker:
 | tool | what it does |
 | --- | --- |
 | `desk_post(message)` | say one thing to the whole desk |
+| `desk_broadcast(message)` | ask semantic routing to hand work to the best-placed teammates |
 | `desk_dm(to[], message)` | say it to named seats instead |
 | `desk_read(limit)` | read further back than the window it was handed |
-| `desk_close(message)` | say one last thing and report the work finished |
+| `desk_complete_episode(message)` | say one last thing and explicitly report assigned work finished |
 
 Text a seat produces outside a tool call is its own thinking and reaches
 nobody — and the host enforces that rather than only asking for it. A turn that
@@ -133,7 +134,7 @@ seat while it can still fix it.
 each name, description and argument as data; `tools.rs` renders that into JSON
 Schema for the MCP server and into `tinytools::Tool` for a host that runs an
 agent loop in its own process, and both go through one `invoke`. A seat sees
-the same four tools whichever way it was reached. `--tool-surface` prints them.
+the same five tools whichever way it was reached. `--tool-surface` prints them.
 
 `mcp.rs` is that server, and it is this same binary re-executed
 (`--mcp-server`). It never writes the transcript. It appends to a per-turn

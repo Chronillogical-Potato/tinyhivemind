@@ -7,11 +7,12 @@
 
 use tinyhivemind_hive::responder::Probability;
 use tinyhivemind_hive::{
-    AdmissionPolicy, AgentThreshold, Bid, BidReason, ConsensusState, DecisionEvaluation, Directory,
-    DirectoryEntry, DirectoryPolicy, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase,
-    QuorumPolicy, Salience, SalienceWeights, TRACE_CAP, TopicId, TopicProbability, TopicStanding,
-    Trace, TraceKind, Visibility, WEIGHT_CEILING, consensus, directory, floor_holder, project_for,
-    read, resolve, salience, standings, standings_with_evaluations, step,
+    AdmissionPolicy, AgentThreshold, Bid, BidReason, CompletionEpisodeState, CompletionStep,
+    ConsensusState, DecisionEvaluation, Directory, DirectoryEntry, DirectoryPolicy, EpisodePolicy,
+    EpisodeState, HiveStep, HiveTurn, Phase, QuorumPolicy, Salience, SalienceWeights, TRACE_CAP,
+    TopicId, TopicProbability, TopicStanding, Trace, TraceKind, Visibility, WEIGHT_CEILING,
+    apply_assignment, apply_completion, completion_status, consensus, directory, floor_holder,
+    project_for, read, resolve, salience, standings, standings_with_evaluations, step,
 };
 // The runtime and the pure algebra arrive through this crate, so a host takes
 // one dependency and the types it hands to `step` are the same types.
@@ -50,6 +51,34 @@ fn root_exports_the_trace_grammar_and_its_cap() {
 
     let folded: Vec<Trace> = read(&[said(1, "planner", "!question")]);
     assert_eq!(folded.len(), 1);
+}
+
+#[test]
+fn root_exports_completion_driven_episodes() {
+    let conversation = Conversation {
+        desk_id: "engineering".into(),
+        desk_name: "Engineering".into(),
+        thread_root: None,
+    };
+    let opened =
+        CompletionEpisodeState::opened(conversation, Sequence(10), ["implementer", "reviewer"])
+            .expect("participants are valid");
+    let implementer_done =
+        apply_completion(&opened, "implementer", Sequence(11)).expect("implementer is assigned");
+    let completed = apply_completion(&implementer_done, "reviewer", Sequence(12))
+        .expect("reviewer is assigned");
+    assert!(matches!(
+        completion_status(&completed),
+        CompletionStep::Complete { .. }
+    ));
+    let reopened = apply_assignment(&completed, ["reviewer"], Sequence(13))
+        .expect("a routed handoff reassigns the reviewer");
+    assert_eq!(
+        completion_status(&reopened),
+        CompletionStep::Active {
+            pending_ids: vec!["reviewer".into()]
+        }
+    );
 }
 
 #[test]

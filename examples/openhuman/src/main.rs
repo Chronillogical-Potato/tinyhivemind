@@ -84,6 +84,7 @@ fn noul(id: &str, probability: f64) -> (String, SystemOneAnswer) {
 fn request() -> RoutingRequest {
     RoutingRequest {
         message: "Review the launch implementation and compliance risk.".into(),
+        source: tinyhivemind_embed::RoutingSource::DeskMessage,
         conversation: ConversationRef {
             id: "launch".into(),
             kind: ConversationKind::Desk,
@@ -103,8 +104,6 @@ fn request() -> RoutingRequest {
         policy: RoutingPolicy {
             minimum_confidence: probability(600_000),
             high_impact_minimum_confidence: probability(800_000),
-            collaboration_threshold: probability(600_000),
-            contribution_threshold: probability(600_000),
             clarification_threshold: probability(700_000),
             high_impact_threshold: probability(700_000),
             round_width: 2,
@@ -342,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    /// Exercise routing, loopback provider IO, and the embedded Harness together.
+    /// Exercise routing, loopback provider IO, and the embedded runtime together.
     fn embedded_route_runs_to_completion() {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()

@@ -23,7 +23,7 @@ after the fact.
 | --- | --- |
 | `mod.rs` | `interpret`, `commit_utterance`, `check_recipients`, `addressed_peers`, `read_limit` |
 | `types.rs` | `Utterance`, `ToolCall`, `UtteranceRejection`, `CallArguments`, `CommittedUtterance`, `ParameterKind` |
-| `tools.rs` | `tool_specs()` — the four tools, their descriptions and their arguments, as data |
+| `tools.rs` | `tool_specs()` — the five tools, their descriptions and their arguments, as data |
 | `fence.rs` | `extract_post`, for the two callers that cannot reach a tool |
 | `test/` | `parse`, `commit`, `tools`, `fence`, and the shared `support` fixture |
 
@@ -58,6 +58,12 @@ after the fact.
 - **The bookkeeping is the host's.** `spent` and `unsettled` are folded from
   the host's own journal, because neither is derivable from arguments this
   crate is given.
+- **A `broadcast` is a routing request.** It appends a desk-visible handoff;
+  the embedding host selects its recipients through the semantic router. It is
+  not an unbounded send-to-all operation.
+- **Completion is explicit and individual.** `complete_episode` reports that
+  the author finished its latest assignment. The completion-driven episode,
+  not this fold, decides whether every assigned agent is done.
 
 ## Reading
 

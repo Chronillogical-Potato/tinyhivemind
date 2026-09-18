@@ -94,6 +94,32 @@ pub enum Error {
         /// The desk that came back with no active member.
         desk_id: String,
     },
+    /// A completion-driven episode was opened without an assigned agent.
+    #[error("completion-driven episode requires at least one participant")]
+    NoCompletionParticipants,
+    /// A completion participant or assignment id was blank.
+    #[error("completion participant id must not be blank")]
+    InvalidCompletionParticipant,
+    /// The same completion participant was named twice.
+    #[error("duplicate completion participant `{agent_id}`")]
+    DuplicateCompletionParticipant {
+        /// Repeated agent id.
+        agent_id: String,
+    },
+    /// A completion event named an agent outside the episode.
+    #[error("unknown completion participant `{agent_id}`")]
+    UnknownCompletionParticipant {
+        /// Unknown agent id.
+        agent_id: String,
+    },
+    /// A completion or assignment event did not advance the agent's work.
+    #[error("stale completion event for `{agent_id}` at sequence {sequence:?}")]
+    StaleCompletionEvent {
+        /// Agent whose assignment would move backward.
+        agent_id: String,
+        /// Rejected event sequence.
+        sequence: Sequence,
+    },
 }
 
 impl From<tinyhivemind_core::error::Error> for Error {

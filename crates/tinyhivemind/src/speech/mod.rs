@@ -99,7 +99,10 @@ pub fn interpret(
         "post" => Ok(ToolCall::Speak(Utterance::Post {
             message: text(arguments, "message")?,
         })),
-        "close" => Ok(ToolCall::Speak(Utterance::Close {
+        "broadcast" => Ok(ToolCall::Speak(Utterance::Broadcast {
+            message: text(arguments, "message")?,
+        })),
+        "complete_episode" | "close" => Ok(ToolCall::Speak(Utterance::CompleteEpisode {
             message: text(arguments, "message")?,
         })),
         "dm" => {
@@ -231,6 +234,8 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
             audience: Audience::Desk,
             mentions,
             closing: request.utterance.closing(),
+            completes_episode: request.utterance.completes_episode(),
+            broadcasting: request.utterance.broadcasting(),
             refusal: None,
         });
     }
@@ -275,6 +280,8 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
         audience,
         mentions,
         closing: request.utterance.closing(),
+        completes_episode: request.utterance.completes_episode(),
+        broadcasting: request.utterance.broadcasting(),
         refusal,
     })
 }

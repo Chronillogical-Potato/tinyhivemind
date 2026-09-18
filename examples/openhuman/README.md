@@ -42,3 +42,44 @@ corpus and paid campaign described in
 | --- | --- |
 | `Cargo.toml` | Standalone dependency boundary, outside the library workspace and MSRV contract. |
 | `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
+| `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS five-agent, web-assisted hive experiment with stable OpenHuman sessions. |
+
+Run the live hive experiment through OpenRouter:
+
+```sh
+cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin pe1006_hive
+```
+
+The run requires `OPENROUTER_API_KEY`, authenticated `gh` access for one
+research source, and a machine OpenHuman configuration whose memory driver is
+`tinycortex`. It uses model id `openai/gpt-oss-120b:nitro` unconditionally and
+writes into one durable shared workspace. By default that workspace is
+`examples/openhuman/workspace/pe1006`; set `OPENHUMAN_HIVE_WORKSPACE` to use a
+different directory.
+
+The runner creates these files without overwriting existing agent edits:
+
+```text
+AGENTS.md                 shared working agreement and role boundaries
+MEMORY.md                 durable, evidence-linked agent learnings
+TASK.md                   official task statement
+research_sources/         mirrored public research inputs
+runs/run-<pid>/            one attributed transcript and OpenHuman runtime
+  turns/README.md          index of every agent turn and stable session id
+  turns/NNN-agent/         exact prompt, reply, and JSON metadata snapshot
+```
+
+All five agents use the workspace root as their `action_dir`, can read and
+write shared files, and are instructed to update `MEMORY.md` only with
+reproduced findings. Per-run OpenHuman/TinyCortex state remains isolated under
+that run's directory, while the explicit workspace memory survives. The turn
+snapshots record application-level prompts and final replies; OpenHuman's raw
+session data and tool events remain under the same run's `openhuman-runtime/`
+tree.
+
+This remains an experiment: GPT-OSS produced several false checker sign-offs
+whose claimed files did not exist or whose algorithms failed executable
+checks. A later clean run staged a newly published public implementation,
+required the checker to execute its built-in brute-force checkpoints, and
+independently matched the sealed oracle. The answer and derivation remain
+outside the repository; the run artifacts stay under the ignored workspace.

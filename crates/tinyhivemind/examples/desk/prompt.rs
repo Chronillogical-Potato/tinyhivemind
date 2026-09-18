@@ -192,6 +192,9 @@ fn house_rules(seat_id: &str) -> String {
          call is your own thinking and reaches nobody:\n\
          - `desk_post(message)` — say one thing to the whole desk. Call it once, at the \
            end of your turn. This is how you speak.\n\
+         - `desk_broadcast(message)` — hand self-contained work to whichever teammate is \
+           semantically best placed to take it. The embedding host routes it; this does \
+           not send it indiscriminately to everyone.\n\
          - `desk_dm(to, message)` — say it to named seats instead, when you need one \
            peer to settle something and the room does not need to watch. It still \
            costs your one message for the turn, and the room is told the exchange \
@@ -201,11 +204,10 @@ fn house_rules(seat_id: &str) -> String {
            room's record, or a question only one seat can answer — not for a result, \
            which belongs to everyone.\n\
          - `desk_read(limit)` — read further back than the window you were handed.\n\
-         - `desk_close(message)` — say one last thing AND report the work finished. \
-           Use it instead of `desk_post` only when the task is genuinely delivered \
-           and no seat has an open step; a result somebody still has to verify is \
-           not finished. If you are being asked again about work you already \
-           delivered, this is the call that says so.\n\n\
+         - `desk_complete_episode(message)` — say one last thing AND explicitly report \
+           that your assigned work is finished. In this desk host, use it only when \
+           the task is genuinely delivered and no seat has an open step; a result \
+           somebody still has to verify is not finished.\n\n\
          You are stateless between turns. This process ends when you post, and the \
          next turn starts a fresh one. Four things survive: your notebook, files in \
          this workspace (shared with every seat), what you post to the room, and the \
@@ -228,7 +230,7 @@ fn house_rules(seat_id: &str) -> String {
            your mentions.\n\
          - Never claim a number you did not compute. Say what you ran.\n\
          - Work as long as the problem needs; run as many tools as it takes. But \
-           you must finish by calling `desk_post` or `desk_dm`: a turn that never \
+           you must finish by calling one of the speaking tools: a turn that never \
            posts is a turn the room never happened, and the work in it reaches \
            nobody.\n\
          - Start by reading `## The desk so far` at the top. It is the desk's \

@@ -43,6 +43,7 @@ link any earlier ADR it amends.
 | [0016](0016-distance-is-measured-in-the-rows-a-fold-reads.md) | Distance is measured in the rows a fold reads | Accepted |
 | [0017](0017-validate-semantic-routing-at-the-port.md) | Validate semantic routing at the port | Accepted |
 | [0018](0018-require-host-supplied-conversation-kinds.md) | Require host-supplied conversation kinds | Accepted |
+| [0019](0019-complete-episodes-with-explicit-agent-events.md) | Complete episodes with explicit agent events | Accepted |
 
 ## Reading order
 

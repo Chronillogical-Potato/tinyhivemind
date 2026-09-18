@@ -171,7 +171,7 @@ fn a_desk_that_works_a_problem_and_closes_it_commits_exactly_these_rows() {
         ),
         (
             "lead",
-            "close",
+            "complete_episode",
             "ANSWER: 62418970. @checker signed off; nothing is open",
             &[],
         ),
@@ -211,7 +211,7 @@ fn a_desk_that_works_a_problem_and_closes_it_commits_exactly_these_rows() {
                 refusal: None,
             },
         ],
-        "a close ends the desk holding its message, and nothing after it runs",
+        "explicit completion ends the desk holding its message, and nothing after it runs",
     );
 }
 

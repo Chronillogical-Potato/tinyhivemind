@@ -1,6 +1,6 @@
 # `routing`
 
-Jev-first semantic routing for unaddressed desk messages.
+Jev-first semantic routing for unaddressed desk messages and agent broadcasts.
 
 | File | Purpose |
 | --- | --- |
@@ -11,3 +11,12 @@ Jev-first semantic routing for unaddressed desk messages.
 Known destinations bypass the router. Unaddressed desk messages receive one
 primary semantic evaluation; uncertainty may receive one reasoning escalation.
 Every failure ends at a caller-supplied deterministic desk fallback.
+
+The accepted Choice maximum is the primary responder. Other eligible Choice
+options strictly above 20% are invited into the same bounded opening round,
+ordered by probability then desk order. Contribution Nouls remain auditable but
+do not choose recipients.
+
+An agent `broadcast` uses the same acceptance algebra with structured
+`AgentBroadcast { author_id }` provenance. The author is excluded from the
+candidate snapshot, so an accepted handoff always reaches another agent.
