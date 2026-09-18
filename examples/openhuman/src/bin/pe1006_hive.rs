@@ -623,6 +623,11 @@ async fn stage_research_sources(scratch: &Path) -> anyhow::Result<()> {
         ),
     ];
     for (name, url) in sources {
+        let target = directory.join(name);
+        if target.is_file() {
+            println!("using cached public research source: {name}");
+            continue;
+        }
         let body = match client
             .get(url)
             .send()
@@ -641,7 +646,7 @@ async fn stage_research_sources(scratch: &Path) -> anyhow::Result<()> {
         } else {
             format!("Source: {url}\n\n{body}")
         };
-        std::fs::write(directory.join(name), source)?;
+        std::fs::write(target, source)?;
     }
     stage_authenticated_github_source(
         &directory,
@@ -664,6 +669,11 @@ fn stage_authenticated_github_source(
     endpoint: &str,
     source_url: &str,
 ) -> anyhow::Result<()> {
+    let target = directory.join(name);
+    if target.is_file() {
+        println!("using cached authenticated research source: {name}");
+        return Ok(());
+    }
     let output = std::process::Command::new("gh")
         .args([
             "api",
@@ -677,6 +687,6 @@ fn stage_authenticated_github_source(
     }
     let mut body = format!("Source: {source_url}\n\n").into_bytes();
     body.extend(output.stdout);
-    std::fs::write(directory.join(name), body)?;
+    std::fs::write(target, body)?;
     Ok(())
 }
