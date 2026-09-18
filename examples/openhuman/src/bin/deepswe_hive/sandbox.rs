@@ -25,7 +25,10 @@ pub(super) use preflight::preflight_with_limits;
 pub(super) use test_support::shell_with_limits_at;
 
 const DEFAULT_IMAGE: &str = "tinyhivemind-deepswe:local";
-const COMMAND_TIMEOUT_SECONDS: &str = "600";
+// Keep both Docker deadlines inside the 600-second model-turn deadline so the
+// MCP server retains time to remove a timed-out container before it is stopped.
+const COMMAND_TIMEOUT_SECONDS: &str = "540";
+const ACTION_TIMEOUT: Duration = Duration::from_secs(570);
 pub(super) const INSPECTOR_TIMEOUT: Duration = Duration::from_secs(600);
 pub(super) const MAX_PATCH_BYTES: u64 = 32 * 1024 * 1024;
 pub(super) const MAX_ACTION_OUTPUT_BYTES: u64 = 1024 * 1024;
@@ -261,7 +264,7 @@ exit "${statuses[0]}"
     }
 
     fn action<const N: usize>(&self, args: [&str; N], input: &[u8]) -> anyhow::Result<ShellOutput> {
-        self.action_with_limits(args, input, INSPECTOR_TIMEOUT, MAX_ACTION_OUTPUT_BYTES)
+        self.action_with_limits(args, input, ACTION_TIMEOUT, MAX_ACTION_OUTPUT_BYTES)
     }
 
     fn action_with_limits<const N: usize>(
