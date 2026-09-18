@@ -89,7 +89,7 @@ pub(super) fn serve(server: &Server) -> anyhow::Result<()> {
             Ok(result) => json!({"jsonrpc":"2.0", "id":id, "result":result}),
             Err(error) => json!({
                 "jsonrpc":"2.0", "id":id,
-                "result":{"isError":true,"content":[{"type":"text","text":error}]}
+                "error":{"code":-32601,"message":error}
             }),
         };
         writeln!(stdout, "{response}")?;
@@ -263,9 +263,8 @@ fn take(
 }
 
 pub(super) fn clear(path: &Path) -> anyhow::Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("hive outbox has no parent"))?;
+    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
     let parent_metadata = std::fs::symlink_metadata(parent)?;
     if !parent_metadata.is_dir() || parent_metadata.file_type().is_symlink() {
         anyhow::bail!("hive outbox parent must be a prepared directory");
@@ -284,8 +283,7 @@ pub(super) fn clear(path: &Path) -> anyhow::Result<()> {
 }
 
 pub(super) fn drain(path: &Path) -> anyhow::Result<Vec<Utterance>> {
-    Ok(std::fs::read_to_string(path)
-        .unwrap_or_default()
+    Ok(std::fs::read_to_string(path)?
         .lines()
         .map(serde_json::from_str)
         .collect::<Result<_, _>>()?)

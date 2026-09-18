@@ -239,7 +239,7 @@ async fn run() -> anyhow::Result<()> {
     let engineering_again = hive
         .binding(recipient_id)
         .ok_or_else(|| anyhow::anyhow!("private route selected an unbound agent"))?;
-    if !std::ptr::eq(&engineering.agent, &engineering_again.agent) {
+    if engineering.runtime_agent_id() != engineering_again.runtime_agent_id() {
         anyhow::bail!("surface change replaced the instantiated OpenHuman agent");
     }
     let second = run_turn(&engineering_again.agent, &session_id, dm_message).await?;

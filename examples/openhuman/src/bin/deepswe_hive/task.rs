@@ -145,10 +145,12 @@ impl Task {
 
     fn git_bytes<const N: usize>(&self, args: [&str; N], action: &str) -> anyhow::Result<Vec<u8>> {
         let output = Command::new("git")
+            .arg("-c")
+            .arg("core.fsmonitor=false")
             .args(args)
             .current_dir(&self.repo_path)
             .env_clear()
-            .env("PATH", "/usr/bin:/bin:/usr/local/bin")
+            .env("PATH", std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin:/usr/local/bin".into()))
             .output()?;
         if !output.status.success() {
             anyhow::bail!(
@@ -243,10 +245,12 @@ impl GitLayout {
 
 fn git<const N: usize>(repo_path: &Path, args: [&str; N], action: &str) -> anyhow::Result<String> {
     let output = Command::new("git")
+        .arg("-c")
+        .arg("core.fsmonitor=false")
         .args(args)
         .current_dir(repo_path)
         .env_clear()
-        .env("PATH", "/usr/bin:/bin:/usr/local/bin")
+        .env("PATH", std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin:/usr/local/bin".into()))
         .output()?;
     if !output.status.success() {
         anyhow::bail!(
