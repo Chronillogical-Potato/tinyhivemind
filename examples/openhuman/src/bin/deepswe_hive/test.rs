@@ -1,6 +1,6 @@
 //! Contract tests for DeepSWE input, output, Git, and confinement behavior.
 
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -468,6 +468,40 @@ fn inspector_timeout_kills_a_hung_docker_cli() {
         Some(InspectorFailure::TimedOut { .. })
     ));
     assert!(started.elapsed() < Duration::from_secs(15));
+}
+
+#[test]
+fn sandbox_runs_as_the_checkout_owner() {
+    let (directory, task) = fixture();
+    let docker = directory.path().join("fake-docker-owner");
+    let removed = directory.path().join("fake-container-removed");
+    std::fs::write(
+        &docker,
+        format!(
+            "#!/bin/sh\ncase \"$1\" in\nversion) printf fixture ;;\ncreate) rm -f '{}'; printf abcdef1234567890 ;;\ninspect) if test -e '{}'; then printf 'Error: No such object: %s' \"$2\" >&2; exit 1; fi; printf '[{{\"HostConfig\":{{\"NetworkMode\":\"none\"}},\"Mounts\":[{{\"Destination\":\"/workspace\",\"RW\":true}},{{\"Destination\":\"/workspace/.git\",\"RW\":false}}]}}]' ;;\nstart) printf sandbox-ready ;;\nrm) touch '{}' ;;\n*) exit 1 ;;\nesac\n",
+            removed.display(),
+            removed.display(),
+            removed.display(),
+        ),
+    )
+    .expect("fake Docker");
+    let mut permissions = std::fs::metadata(&docker).expect("metadata").permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&docker, permissions).expect("executable fake Docker");
+    let sandbox = DockerSandbox::preflight(SandboxConfig {
+        repo_path: task.repo_path.clone(),
+        image: "local-fixture".into(),
+        docker,
+    })
+    .expect("preflight");
+    let metadata = std::fs::metadata(&task.repo_path).expect("checkout metadata");
+    let expected = format!("{}:{}", metadata.uid(), metadata.gid());
+    let args = action_arguments(&sandbox).expect("action arguments");
+
+    assert!(
+        args.windows(2)
+            .any(|pair| pair == ["--user", expected.as_str()])
+    );
 }
 
 #[test]

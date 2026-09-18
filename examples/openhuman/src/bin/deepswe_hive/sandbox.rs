@@ -125,6 +125,7 @@ pub(super) struct DockerSandbox {
     config: SandboxConfig,
     mask: Arc<tempfile::TempDir>,
     git: GitLayout,
+    user: String,
 }
 
 #[derive(Debug)]
@@ -145,7 +146,13 @@ impl DockerSandbox {
     pub(super) fn file_read(&self, path: &str) -> anyhow::Result<String> {
         validate_relative(path)?;
         let output = self.action(
-            ["sh", "-c", "cat -- \"/workspace/$1\"", "deepswe-read", path],
+            [
+                "sh",
+                "-c",
+                "target=/workspace/$1; resolved=$(realpath -m -- \"$target\") || exit; case \"$resolved\" in /workspace/*) cat -- \"$target\" ;; *) exit 1 ;; esac",
+                "deepswe-read",
+                path,
+            ],
             &[],
         )?;
         require_success(output, "read file").map(|output| output.stdout)
@@ -157,7 +164,7 @@ impl DockerSandbox {
             [
                 "sh",
                 "-c",
-                "target=/workspace/$1; mkdir -p -- \"$(dirname -- \"$target\")\" && cat > \"$target\"",
+                "target=/workspace/$1; resolved=$(realpath -m -- \"$target\") || exit; case \"$resolved\" in /workspace/*) mkdir -p -- \"$(dirname -- \"$target\")\" && cat > \"$target\" ;; *) exit 1 ;; esac",
                 "deepswe-write",
                 path,
             ],
@@ -328,6 +335,7 @@ fn mask_source(sandbox: &DockerSandbox) -> PathBuf {
 fn action_args(sandbox: &DockerSandbox, create: bool) -> anyhow::Result<Vec<String>> {
     Ok(container_args(
         &sandbox.config,
+        &sandbox.user,
         false,
         [
             mount(&sandbox.config.repo_path, "/workspace", true)?,
@@ -361,11 +369,18 @@ fn inspector_args(sandbox: &DockerSandbox) -> anyhow::Result<Vec<String>> {
             false,
         )?);
     }
-    Ok(container_args(&sandbox.config, false, mounts, false))
+    Ok(container_args(
+        &sandbox.config,
+        &sandbox.user,
+        false,
+        mounts,
+        false,
+    ))
 }
 
 fn container_args(
     config: &SandboxConfig,
+    user: &str,
     remove: bool,
     mounts: impl IntoIterator<Item = String>,
     create: bool,
@@ -387,6 +402,8 @@ fn container_args(
         "ALL".into(),
         "--security-opt".into(),
         "no-new-privileges".into(),
+        "--user".into(),
+        user.into(),
     ]);
     for value in mounts {
         args.extend(["--mount".into(), value]);
