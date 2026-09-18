@@ -42,7 +42,7 @@ corpus and paid campaign described in
 | --- | --- |
 | `Cargo.toml` | Standalone dependency boundary, outside the library workspace and MSRV contract. |
 | `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
-| `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS five-agent, web-assisted hive experiment with stable OpenHuman sessions. |
+| `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS completion-driven hive with stable OpenHuman sessions and live TypeSafe routing. |
 
 Run the live hive experiment through OpenRouter:
 
@@ -76,6 +76,11 @@ that run's directory, while the explicit workspace memory survives. The turn
 snapshots record application-level prompts and final replies; OpenHuman's raw
 session data and tool events remain under the same run's `openhuman-runtime/`
 tree.
+
+The live runner exposes `broadcast` and `complete_episode` through a local MCP
+server. A broadcast receives a fresh TypeSafe Choice over eligible teammates;
+the Choice maximum and any option strictly above 20% are assigned. Agents stay
+pending after broadcasts and finish only through explicit completion calls.
 
 This remains an experiment: GPT-OSS produced several false checker sign-offs
 whose claimed files did not exist or whose algorithms failed executable

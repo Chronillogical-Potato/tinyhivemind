@@ -13,12 +13,13 @@ publish = false
 [dependencies]
 anyhow = "1"
 # The live hive uses OpenHuman's native runtime, agents, sessions, and TinyCortex module.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false, features = ["modules"] }
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false, features = ["mcp", "modules"] }
 # Public research sources are mirrored into the isolated run workspace before turns start.
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde_json = "1"
 tinyhivemind = { path = "../../crates/tinyhivemind" }
 tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }
+tinyhivemind-hive = { path = "../../crates/tinyhivemind-hive" }
 tinyhivemind-typesafe = { path = "../../crates/tinyhivemind-typesafe" }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 wiremock = "0.6"
