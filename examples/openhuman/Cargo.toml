@@ -12,7 +12,10 @@ publish = false
 
 [dependencies]
 anyhow = "1"
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false }
+# The live hive uses OpenHuman's native runtime, agents, sessions, and TinyCortex module.
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false, features = ["modules"] }
+# Public research sources are mirrored into the isolated run workspace before turns start.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 serde_json = "1"
 tinyhivemind = { path = "../../crates/tinyhivemind" }
 tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }

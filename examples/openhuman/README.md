@@ -42,3 +42,20 @@ corpus and paid campaign described in
 | --- | --- |
 | `Cargo.toml` | Standalone dependency boundary, outside the library workspace and MSRV contract. |
 | `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
+| `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS five-agent, web-assisted hive experiment with stable OpenHuman sessions. |
+
+Run the live hive experiment through OpenRouter:
+
+```sh
+cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin pe1006_hive
+```
+
+The run requires `OPENROUTER_API_KEY`, authenticated `gh` access for one
+research source, and a machine OpenHuman configuration whose memory driver is
+`tinycortex`. It uses model id `openai/gpt-oss-120b:nitro` unconditionally and
+writes scratch programs, a run-local OpenHuman workspace, mirrored sources,
+and the final attributed trace to a process-specific temporary directory.
+
+This remains an experiment: GPT-OSS produced several false checker sign-offs
+whose claimed files did not exist or whose algorithms failed executable
+checks. No Project Euler answer is committed or claimed by this draft.
