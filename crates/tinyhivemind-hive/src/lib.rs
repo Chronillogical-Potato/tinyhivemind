@@ -31,7 +31,17 @@
 //!
 //! See `docs/adr/0015-the-division-of-labour-is-the-default-shape.md`.
 //!
-//! # An episode is a sequence of bounded rounds
+//! # Two episode modes
+//!
+//! [`completion`] tracks persistent agents doing assigned work. It advances
+//! only when an agent explicitly calls `complete_episode` or an accepted
+//! semantic broadcast assigns new work. It does not infer completion from
+//! prose, quorum, or a turn count.
+//!
+//! The deliberation episode below remains the mode for reaching a decision by
+//! quorum.
+//!
+//! ## A deliberation episode is a sequence of bounded rounds
 //!
 //! [`step`] is what decides one *facet* when its owner cannot decide it alone.
 //! It is not deprecated by the division and is kept as the arm the division was
@@ -181,6 +191,7 @@
 //! ```
 
 pub mod attention;
+pub mod completion;
 pub mod directory;
 pub mod division;
 pub mod episode;
@@ -194,6 +205,10 @@ pub mod trace;
 pub use attention::{
     AgentThreshold, Bid, BidReason, BudgetPolicy, BudgetRequest, BudgetShare, BudgetVerdict,
     allocate_chars, bids, floor_holder, floor_round,
+};
+pub use completion::{
+    CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
+    apply_completion, status as completion_status,
 };
 pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, directory};
 pub use division::{Assignment, Division, DivisionPolicy, OwnerReason, divide};

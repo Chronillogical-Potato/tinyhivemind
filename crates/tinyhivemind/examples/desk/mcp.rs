@@ -1,7 +1,7 @@
 //! Serving the room's tools over MCP, and collecting what a seat called.
 //!
 //! Everything about *what* the tools are and *what* a call means lives in
-//! [`tinyhivemind::speech`]: the four specs, their descriptions, the validation,
+//! [`tinyhivemind::speech`]: the five specs, their descriptions, the validation,
 //! and the fold from an accepted call to a row. Rendering that surface and
 //! running one call against it lives in [`crate::tools`], shared with the
 //! `tinytools` path. This module is the transport under both — a minimal MCP

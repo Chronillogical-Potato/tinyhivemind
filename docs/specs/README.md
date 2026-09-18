@@ -67,6 +67,8 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   one reasoning escalation, and bounded specialist invitations.
 - [`conversation-surfaces.md`](conversation-surfaces.md) — explicit desk,
   direct, general, and workflow semantics at the host boundary.
+- [`completion-driven-episodes.md`](completion-driven-episodes.md) — explicit
+  per-agent completion and TypeSafe-routed agent broadcasts.
 - [`opencompany-routing-compatibility.md`](opencompany-routing-compatibility.md)
   — the snapshot boundary for a later storage-preserving host adapter.
 - [`approval.md`](approval.md) — a pure gate for a side-effecting action:

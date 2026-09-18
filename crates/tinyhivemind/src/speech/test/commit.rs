@@ -139,19 +139,35 @@ fn the_marker_a_seat_writes_reaches_the_same_audience_as_the_tool() {
 }
 
 #[test]
-fn a_close_appends_its_row_and_says_the_work_is_finished() {
+fn completion_appends_its_row_and_says_the_agents_work_is_finished() {
     let committed = commit(
         "lead",
-        &Utterance::Close {
+        &Utterance::CompleteEpisode {
             message: "Psi(10^18) = 62418970, signed off by @checker".into(),
         },
     );
     assert!(committed.closing, "the host is told, and the host decides");
+    assert!(committed.completes_episode);
+    assert!(!committed.broadcasting);
     assert_eq!(committed.audience, Audience::Desk);
     assert_eq!(
         committed.content, "Psi(10^18) = 62418970, signed off by @checker",
         "the message is never lost to the closing",
     );
+}
+
+#[test]
+fn a_broadcast_appends_a_desk_row_and_requests_semantic_routing() {
+    let committed = commit(
+        "lead",
+        &Utterance::Broadcast {
+            message: "Have a solver derive the recurrence".into(),
+        },
+    );
+    assert_eq!(committed.audience, Audience::Desk);
+    assert!(committed.broadcasting);
+    assert!(!committed.completes_episode);
+    assert!(!committed.closing);
 }
 
 #[test]

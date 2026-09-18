@@ -31,9 +31,9 @@ fn a_post_is_one_utterance_with_its_message_trimmed() {
 }
 
 #[test]
-fn a_close_carries_its_message_and_says_the_work_is_finished() {
+fn complete_episode_carries_its_message_and_says_the_agents_work_is_finished() {
     let utterance = said(
-        "close",
+        "complete_episode",
         &CallArguments {
             message: Some("Psi(10^18) = 62418970; checker signed off"),
             ..Default::default()
@@ -44,7 +44,22 @@ fn a_close_carries_its_message_and_says_the_work_is_finished() {
         utterance.message(),
         "Psi(10^18) = 62418970; checker signed off"
     );
-    assert!(!post("anything").closing(), "only a close closes");
+    assert!(utterance.completes_episode());
+    assert!(!post("anything").closing(), "only completion closes");
+    assert!(!post("anything").completes_episode());
+}
+
+#[test]
+fn broadcast_carries_work_for_semantic_routing() {
+    let utterance = said(
+        "broadcast",
+        &CallArguments {
+            message: Some("Prove the recurrence independently"),
+            ..Default::default()
+        },
+    );
+    assert!(utterance.broadcasting());
+    assert_eq!(utterance.message(), "Prove the recurrence independently");
 }
 
 #[test]
@@ -85,7 +100,7 @@ fn a_dm_naming_the_same_seat_twice_names_it_once() {
 #[test]
 fn refuses_a_message_that_is_absent_or_only_whitespace() {
     for message in [None, Some(""), Some("   \n ")] {
-        for tool in ["post", "close", "dm"] {
+        for tool in ["post", "complete_episode", "broadcast", "dm"] {
             let to = ["checker".to_string()];
             assert_eq!(
                 interpret(
@@ -101,6 +116,18 @@ fn refuses_a_message_that_is_absent_or_only_whitespace() {
             );
         }
     }
+}
+
+#[test]
+fn legacy_close_is_still_accepted_but_not_advertised() {
+    let utterance = said(
+        "close",
+        &CallArguments {
+            message: Some("done"),
+            ..Default::default()
+        },
+    );
+    assert!(utterance.completes_episode());
 }
 
 #[test]
@@ -234,6 +261,12 @@ fn the_wire_form_is_what_a_host_writes_and_reads_back() {
             serde_json::json!({ "kind": "post", "message": "B holds" }),
         ),
         (
+            Utterance::Broadcast {
+                message: "verify this".into(),
+            },
+            serde_json::json!({ "kind": "broadcast", "message": "verify this" }),
+        ),
+        (
             Utterance::Dm {
                 to: vec!["checker".into()],
                 message: "recheck".into(),
@@ -241,10 +274,10 @@ fn the_wire_form_is_what_a_host_writes_and_reads_back() {
             serde_json::json!({ "kind": "dm", "to": ["checker"], "message": "recheck" }),
         ),
         (
-            Utterance::Close {
+            Utterance::CompleteEpisode {
                 message: "delivered".into(),
             },
-            serde_json::json!({ "kind": "close", "message": "delivered" }),
+            serde_json::json!({ "kind": "complete_episode", "message": "delivered" }),
         ),
     ];
     for (utterance, wire) in cases {
@@ -254,4 +287,13 @@ fn the_wire_form_is_what_a_host_writes_and_reads_back() {
             utterance,
         );
     }
+    assert_eq!(
+        serde_json::from_value::<Utterance>(
+            serde_json::json!({"kind":"close", "message":"legacy"})
+        )
+        .expect("legacy close rows remain readable"),
+        Utterance::CompleteEpisode {
+            message: "legacy".into()
+        }
+    );
 }

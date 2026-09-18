@@ -7,8 +7,8 @@
 //!
 //! The descriptions are contract text rather than documentation. They are the
 //! only place a seat is told that what it writes outside a tool call reaches
-//! nobody, and the only place it is told that one `close` is different from
-//! one more `post`. A host renders them verbatim.
+//! nobody, and the only place it is told that `complete_episode` is different
+//! from one more `post`. A host renders them verbatim.
 //!
 //! The names here are bare. A host that namespaces its tools — an MCP server
 //! called `desk` serving `post` presents it as `desk_post` — prefixes them,
@@ -68,6 +68,21 @@ const SPECS: &[ToolSpec] = &[
         }],
     },
     ToolSpec {
+        name: "broadcast",
+        description: "Send work or a finding to whichever teammates are semantically best placed \
+                      to take it. The host routes this message with one TypeSafe Choice over the \
+                      currently eligible team; it is not a broadcast-to-all fan-out. Call this \
+                      when the right recipient is about the meaning, not a known @id.",
+        parameters: &[ToolParameter {
+            name: "message",
+            description: Some(
+                "The self-contained work, finding, or request another agent should take up.",
+            ),
+            kind: ParameterKind::Text,
+            required: true,
+        }],
+    },
+    ToolSpec {
         name: "dm",
         description: "Say one thing to named peers instead of the whole desk. Use it to settle a \
                       disagreement without spending the room's attention; the room is told the \
@@ -89,12 +104,11 @@ const SPECS: &[ToolSpec] = &[
         ],
     },
     ToolSpec {
-        name: "close",
-        description: "Say one last thing and report that the desk's work is finished. Call this \
-                      instead of `post` only when the task is genuinely done and no seat has an \
-                      open step — a result someone still has to verify is not done. If you are \
-                      being asked again about work you have already delivered, this is the call \
-                      that says so.",
+        name: "complete_episode",
+        description: "Say one last thing and report that you have finished your assigned work in \
+                      this episode. Call this instead of `post` only when you have no open step. \
+                      The episode completes after every currently assigned agent has called it; \
+                      a later routed broadcast may assign new work and reopen that recipient.",
         parameters: &[ToolParameter {
             name: "message",
             description: Some("The result, and why nothing is left open."),

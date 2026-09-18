@@ -241,10 +241,13 @@ fn an_accepted_call_reaches_the_outbox_and_says_so() {
     );
     assert_eq!(
         call(
-            &request("close", &serde_json::json!({ "message": "delivered" })),
+            &request(
+                "complete_episode",
+                &serde_json::json!({ "message": "delivered" }),
+            ),
             &serving(&outbox, Path::new("/nope"))
         ),
-        Ok("posted to the desk; the desk will close after this turn".into()),
+        Ok("posted to the desk; your episode assignment is complete".into()),
     );
     assert_eq!(drain_outbox(&outbox).len(), 3);
 }
@@ -267,7 +270,7 @@ fn a_refused_call_reaches_the_seat_and_not_the_room() {
             "unknown tool shout",
         ),
         (
-            request("close", &serde_json::json!({ "message": "   " })),
+            request("complete_episode", &serde_json::json!({ "message": "   " })),
             "`message` must be a non-empty string",
         ),
     ];

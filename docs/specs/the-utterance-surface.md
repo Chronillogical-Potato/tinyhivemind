@@ -93,7 +93,7 @@ as targets rather than as prose to be re-parsed.
 
 A new module in the runtime crate, holding:
 
-- `Utterance` — `Post { message }`, `Dm { to, message }`, `Close { message }`,
+- `Utterance` — `Post`, `Broadcast`, `Dm`, and `CompleteEpisode`,
   the shape the example already has, with its serde representation pinned.
 - `parse_utterance(&Value) -> Result<Utterance, UtteranceRejection>` — the
   validation currently split between the MCP `call` arm and `parse_utterance`
@@ -101,7 +101,8 @@ A new module in the runtime crate, holding:
   `NoRecipients`, `UnknownRecipient { id }`, …) and carries the sentence a host
   hands back to the seat.
 - `tool_specs() -> &'static [ToolSpec]` — name, description and JSON schema for
-  `desk_post`, `desk_dm`, `desk_read` and `desk_close`, as data. A host serving
+  `desk_post`, `desk_broadcast`, `desk_dm`, `desk_complete_episode`, and
+  `desk_read`, as data. A host serving
   MCP renders them; a host on a different tool protocol renders them its way.
   The description text is part of the contract, because it is the only place a
   seat is told that text outside a call reaches nobody.
@@ -117,7 +118,7 @@ commit_utterance(&CommitRequest) -> Result<CommittedUtterance>
 `CommitRequest` borrows what the caller already holds: the utterance, the
 speaker, the roster, the desk set, and the transcript view `aside::address`
 needs. `CommittedUtterance` carries the content, the resolved `Audience`, the
-`Vec<Mention>` dispatch will read, `closing: bool`, and
+`Vec<Mention>` dispatch will read, explicit completion and broadcast flags, and
 `refusal: Option<AsideRefusal>` naming why a requested aside was declined.
 
 This replaces the block in `run.rs` that resolves mentions, rebuilds the dm list
@@ -140,8 +141,10 @@ does so. It does not require any other host to.
   replaces the first; it does not add a turn.
 - Text outside a tool call becomes no row.
 - A refused aside is a desk row plus a stated reason, never silence.
-- `desk_close` appends its row and *then* closes: the host decides, and the
-  message is never lost to the closing.
+- `desk_complete_episode` appends its row and records that agent's current
+  assignment complete; the message is never lost to completion.
+- `desk_broadcast` appends its row before the embedding host routes it
+  semantically; it does not address every desk member.
 - The library holds no outbox, no notebook and no account. It holds the rules.
 - The transcript stays append-only; nothing here edits a row.
 
@@ -188,10 +191,9 @@ does so. It does not require any other host to.
   waits on a log, so the *tool* is data here but its handler is host code
   against `SessionLog`. A thin `speech::read_request` fold that bounds `limit`
   would put the clamping in one place; it may not be worth a type.
-- **Is `desk_close` one tool or a flag on `desk_post`?** Two tools cost a
-  seat one more description to read; a flag risks being set by a seat that
-  merely wants to sound finished. Run 28 argues for keeping it distinct and
-  loudly described, and that is what is proposed, on one run's evidence.
+- `desk_complete_episode` is a distinct tool rather than a flag on
+  `desk_post`: completion is an explicit event and cannot be ambiguously
+  combined with an ordinary post.
 - **What does the host do with a turn that calls nothing?** Silence is legible
   now, and the ladder's landing phase is the current answer. Whether a
   never-spoke turn should be *refused* and retried is unsettled.

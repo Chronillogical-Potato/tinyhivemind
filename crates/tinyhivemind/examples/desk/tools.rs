@@ -1,13 +1,13 @@
 //! Rendering the room's tool surface, and running one call against it.
 //!
-//! [`tinyhivemind::speech`] states the four tools once, as data. This module
+//! [`tinyhivemind::speech`] states the five tools once, as data. This module
 //! turns that data into the two shapes this host needs — a JSON Schema for the
 //! MCP server, and an implementation of [`tinytools::Tool`] for a host that
 //! runs an agent loop in its own process — and gives both the same
 //! [`invoke`] underneath.
 //!
 //! Two renderers over one statement is the whole point. A seat sees the same
-//! four tools, with the same descriptions and the same bounds, whichever way
+//! five tools, with the same descriptions and the same bounds, whichever way
 //! the host reached it, and neither renderer restates anything.
 
 use serde_json::Value;
@@ -85,8 +85,11 @@ pub(crate) fn invoke(name: &str, arguments: &Value, serving: &Serving) -> Result
             let refusal = mcp::price(&utterance, serving)?;
             let acknowledgement = match (&utterance, refusal) {
                 (Utterance::Post { .. }, _) => "posted to the desk".to_string(),
-                (Utterance::Close { .. }, _) => {
-                    "posted to the desk; the desk will close after this turn".to_string()
+                (Utterance::Broadcast { .. }, _) => {
+                    "posted to the desk for semantic routing to the team".to_string()
+                }
+                (Utterance::CompleteEpisode { .. }, _) => {
+                    "posted to the desk; your episode assignment is complete".to_string()
                 }
                 (Utterance::Dm { to, .. }, None) => format!("sent to @{}", to.join(", @")),
                 (Utterance::Dm { .. }, Some(reason)) => format!(

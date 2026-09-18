@@ -58,7 +58,7 @@ fn the_last_of_several_calls_stands() {
     let said = settle(&outbox, &mut output).expect("the seat spoke");
     assert_eq!(
         said.utterance,
-        Utterance::Close {
+        Utterance::CompleteEpisode {
             message: "settled".into()
         },
         "one message per turn, and the seat meant the second",

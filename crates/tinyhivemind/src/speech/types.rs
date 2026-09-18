@@ -20,6 +20,12 @@ pub enum Utterance {
         /// The text to append.
         message: String,
     },
+    /// A desk-visible message that asks the host to select its recipients
+    /// semantically from the current team.
+    Broadcast {
+        /// The work or finding to route through the host's semantic router.
+        message: String,
+    },
     /// A message for named peers only.
     Dm {
         /// The peers addressed, without the `@`.
@@ -27,12 +33,12 @@ pub enum Utterance {
         /// The text to append.
         message: String,
     },
-    /// A message that also reports the desk's work finished.
+    /// A message that also reports the author's current assignment finished.
     ///
     /// The seat is reporting, not ending the desk: the host still appends the
-    /// message and still decides. A room with no way to say this spends every
-    /// remaining round being nudged to restate an answer it already gave.
-    Close {
+    /// message and decides whether every assigned participant is complete.
+    #[serde(rename = "complete_episode", alias = "close")]
+    CompleteEpisode {
         /// The text to append.
         message: String,
     },
@@ -43,14 +49,30 @@ impl Utterance {
     #[must_use]
     pub fn message(&self) -> &str {
         match self {
-            Self::Post { message } | Self::Dm { message, .. } | Self::Close { message } => message,
+            Self::Post { message }
+            | Self::Broadcast { message }
+            | Self::Dm { message, .. }
+            | Self::CompleteEpisode { message } => message,
         }
     }
 
-    /// Whether accepting this utterance reports the desk's work finished.
+    /// Legacy spelling for whether this utterance reports assignment completion.
     #[must_use]
     pub const fn closing(&self) -> bool {
-        matches!(self, Self::Close { .. })
+        matches!(self, Self::CompleteEpisode { .. })
+    }
+
+    /// Whether accepting this utterance records this agent's assignment as
+    /// complete in a completion-driven episode.
+    #[must_use]
+    pub const fn completes_episode(&self) -> bool {
+        matches!(self, Self::CompleteEpisode { .. })
+    }
+
+    /// Whether accepting this utterance requests semantic team routing.
+    #[must_use]
+    pub const fn broadcasting(&self) -> bool {
+        matches!(self, Self::Broadcast { .. })
     }
 }
 
@@ -107,7 +129,7 @@ pub enum UtteranceRejection {
 /// representation stops and the algebra starts.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CallArguments<'a> {
-    /// The `message` argument of `post`, `dm` and `close`.
+    /// The `message` argument of every speaking tool.
     pub message: Option<&'a str>,
     /// The `to` argument of `dm`.
     pub to: &'a [String],
@@ -124,8 +146,12 @@ pub struct CommittedUtterance {
     pub audience: Audience,
     /// The mentions dispatch reads to decide whose turn is next.
     pub mentions: Vec<Mention>,
-    /// Whether the seat reported the desk's work finished.
+    /// Legacy completion flag retained for hosts built against `close`.
     pub closing: bool,
+    /// Whether the author explicitly completed its current episode assignment.
+    pub completes_episode: bool,
+    /// Whether the appended desk row must be routed semantically to teammates.
+    pub broadcasting: bool,
     /// Why a requested aside was declined, when one was.
     ///
     /// A refusal is not a failure: the row is appended to the whole desk,

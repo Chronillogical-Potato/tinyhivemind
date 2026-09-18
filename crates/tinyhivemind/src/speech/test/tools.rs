@@ -5,9 +5,12 @@
 use crate::speech::{CallArguments, ParameterKind, READ_DEFAULT, READ_MAX, interpret, tool_specs};
 
 #[test]
-fn serves_exactly_the_four_tools_a_seat_may_call() {
+fn serves_exactly_the_five_tools_a_seat_may_call() {
     let names: Vec<&str> = tool_specs().iter().map(|spec| spec.name).collect();
-    assert_eq!(names, vec!["post", "dm", "close", "read"]);
+    assert_eq!(
+        names,
+        vec!["post", "broadcast", "dm", "complete_episode", "read"]
+    );
 }
 
 #[test]
@@ -74,12 +77,14 @@ fn speaking_is_described_as_the_only_way_to_be_heard() {
         post.description.contains("reaches nobody"),
         "a seat is told, here and nowhere else, that its free text is not speech",
     );
-    let close = tool_specs()
+    let complete = tool_specs()
         .iter()
-        .find(|spec| spec.name == "close")
-        .expect("close is served");
+        .find(|spec| spec.name == "complete_episode")
+        .expect("completion is served");
     assert!(
-        close.description.contains("instead of `post`"),
-        "a seat is told close replaces post rather than following it",
+        complete.description.contains("finished your assigned work"),
+        "a seat is told completion is about its own assignment",
     );
+    assert!(tool_specs().iter().any(|spec| spec.name == "broadcast"));
+    assert!(!tool_specs().iter().any(|spec| spec.name == "close"));
 }

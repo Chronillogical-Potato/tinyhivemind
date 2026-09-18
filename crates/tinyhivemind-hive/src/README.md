@@ -7,6 +7,7 @@ public surface; this file is only the index.
 | module | answers |
 | --- | --- |
 | [`attention/`](attention/README.md) | Who takes the floor this turn, and how much of a bounded prompt each context source gets. |
+| [`completion/`](completion/README.md) | Whether every currently assigned agent explicitly completed its work, and which routed broadcasts reopen work. |
 | [`directory/`](directory/README.md) | Who knows what — transactive memory folded from grounded deposits and the citations they drew. |
 | [`division/`](division/README.md) | A task's facets, split across the seats that own them, and what each owner reads. The one mechanism here whose default is *on*. |
 | [`episode/`](episode/README.md) | The pure state machine: given a transcript, who speaks next, and has the room finished. |
