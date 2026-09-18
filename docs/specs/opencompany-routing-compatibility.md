@@ -15,12 +15,13 @@ OpenCompany or OpenHuman before the TinyHiveMind API and evidence land.
 
 ## Proposed behavior
 
-The adapter builds one OpenHuman `Runtime`, instantiates one OpenHuman `Agent`
-per company agent, and registers those existing handles in
-`AgentRegistry<openhuman_embed::Agent>`. TinyHiveMind resolves accepted plans
-to borrowed handles; it never constructs an agent, serializes a provider
-session id, or recreates an agent between turns. Each turn separately carries
-a `ConversationRef`.
+The host builds one OpenHuman `Runtime` and instantiates one OpenHuman `Agent`
+per company agent. The `tinyhivemind-openhuman` adapter binds those existing
+handles to canonical ids in a validated `OpenHumanHive`. It resolves accepted
+plans to borrowed handles and drives completion state only from host-committed
+events; it never constructs an agent, serializes a provider session id, or
+recreates an agent between turns. Each turn separately carries a
+`ConversationRef`.
 
 Ordinary desk and direct turns use host-seeded unified-session deltas. Hive
 seats receive attributed episode history and disable history seeding without
@@ -57,5 +58,5 @@ performance.
 
 ## Open questions
 
-The adapter lands only after the upstream TinyHiveMind change merges and its
-live evidence is stable.
+The OpenCompany host integration still lands only after the upstream
+TinyHiveMind change merges and its live evidence is stable.

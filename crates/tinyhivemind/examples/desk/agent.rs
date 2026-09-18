@@ -41,7 +41,7 @@ use tinyhivemind::speech::fence;
 /// exhausted the ladder carried 48k of context and 374 output tokens, while
 /// probes answered in 3s throughout; it was a dead call, not a slow one, and
 /// doubling the cap only doubled what its death cost the turn.
-const STALL_AFTER: Duration = Duration::from_secs(900);
+const STALL_AFTER: Duration = Duration::from_mins(15);
 
 /// What one turn produced.
 #[derive(Clone, Debug, Default)]

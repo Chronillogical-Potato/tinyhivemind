@@ -11,8 +11,9 @@ ignore = []
 
 [licenses]
 # Licenses accepted for this crate and its dependencies. Keep GPL-3.0-only for
-# the template crate itself; the remaining entries cover compatible dependency
-# licenses commonly encountered by Rust projects.
+# the template crate itself and GPL-3.0-or-later for the pinned OpenHuman
+# example adapter; the remaining entries cover compatible dependency licenses
+# commonly encountered by Rust projects.
 allow = [
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
@@ -20,6 +21,7 @@ allow = [
     "BSD-3-Clause",
     "CDLA-Permissive-2.0",
     "GPL-3.0-only",
+    "GPL-3.0-or-later",
     "ISC",
     "MIT",
     "MPL-2.0",
@@ -49,11 +51,12 @@ deny = []
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-# Examples take tinyinference, tinytools, and tinyjevclient as dev-dependencies
-# pinned to git revisions rather than published versions. Nothing under
+# Examples take OpenHuman, tinyinference, tinytools, and tinyjevclient as
+# revision-pinned git dependencies rather than published versions. Nothing under
 # crates/* depends on their transports; `.github/scripts/assert-pure.sh` checks
 # the normal/build graph. See AGENTS.md's supply-chain boundary.
 allow-git = [
+    "https://github.com/tinyhumansai/openhuman",
     "https://github.com/tinyhumansai/tinyinference",
     "https://github.com/tinyhumansai/tinyjevclient",
     "https://github.com/tinyhumansai/tinytools",

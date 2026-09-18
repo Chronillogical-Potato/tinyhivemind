@@ -5,11 +5,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use openhuman_embed::{Access, Agent, AgentSpec, Provider, Runtime, RuntimeConfig, Workspace};
 use serde_json::json;
-use tinyhivemind::responder::Probability;
-use tinyhivemind_embed::{
-    AgentRegistry, ConversationKind, ConversationRef, RouteCandidate, RoutedAgents, RoutingPolicy,
-    RoutingRequest, route_message,
+use tinyhivemind::{
+    desk::{Desk, ResponderMode},
+    responder::Probability,
 };
+use tinyhivemind_embed::{
+    ConversationKind, ConversationRef, MessageRoute, RouteCandidate, RoutingPolicy, RoutingRequest,
+};
+use tinyhivemind_openhuman::{AgentBinding, HiveGraph, OpenHumanHive};
 use tinyhivemind_typesafe::{
     ChoiceAnswer, JevRouter, NoulAnswer, SystemOneAnswer, SystemOneRequest, SystemOneResponse,
     SystemOneTransport, SystemOneTransportFuture, TokenUsage,
@@ -171,57 +174,75 @@ async fn run() -> anyhow::Result<()> {
     // OpenHuman owns the runtime and agent lifecycle. TinyHiveMind receives
     // the already-instantiated handles and never serializes or reconstructs
     // them between turns.
-    let agents = AgentRegistry::new([
-        (
-            "engineering",
-            runtime.agent(
-                AgentSpec::new("engineering").system_prompt("You are the engineering specialist."),
-            )?,
+    let hive = OpenHumanHive::new(
+        HiveGraph::new(
+            Desk {
+                id: "launch".into(),
+                name: "Launch".into(),
+                description: Some("ship reliable, compliant software".into()),
+                members: vec!["engineering".into(), "legal".into()],
+                responder_mode: ResponderMode::Auto,
+            },
+            request().candidates,
         ),
-        (
-            "legal",
-            runtime
-                .agent(AgentSpec::new("legal").system_prompt("You are the legal specialist."))?,
-        ),
-    ])?;
+        vec![
+            AgentBinding::new(
+                "engineering",
+                runtime.agent(
+                    AgentSpec::new("engineering")
+                        .system_prompt("You are the engineering specialist."),
+                )?,
+            ),
+            AgentBinding::new(
+                "legal",
+                runtime.agent(
+                    AgentSpec::new("legal").system_prompt("You are the legal specialist."),
+                )?,
+            ),
+        ],
+    )?;
     if runtime.agent_ids() != ["engineering".to_string(), "legal".to_string()] {
         anyhow::bail!("OpenHuman runtime did not retain both instantiated agents");
     }
 
     let transport = FixtureTransport::default();
     let router = JevRouter::new(transport);
-    let desk_request = request();
-    let desk_plan = route_message(Some(&router), None, &desk_request, None, "engineering").await;
-    let RoutedAgents::One(engineering) = agents.resolve(&desk_plan)? else {
+    let fixture_request = request();
+    let desk_request = hive.desk_request(
+        fixture_request.message,
+        fixture_request.thread_context,
+        fixture_request.conversation.thread_root,
+        fixture_request.roster_version,
+        fixture_request.policy,
+    );
+    let desk_plan = hive
+        .route_desk(Some(&router), None, &desk_request, None, "engineering")
+        .await?;
+    let resolved = hive.resolve_plan(&desk_plan)?;
+    let [engineering] = resolved.as_slice() else {
         anyhow::bail!("fixture routing did not select one responder: {desk_plan:?}");
     };
-    let session_id = openhuman_session(engineering.agent);
-    let first = run_turn(engineering.agent, &session_id, &desk_request.message).await?;
+    let session_id = openhuman_session(&engineering.agent);
+    let first = run_turn(&engineering.agent, &session_id, &desk_request.message).await?;
 
     // The same instantiated OpenHuman agent crosses from a desk into a DM.
     // The deterministic DM route bypasses Jev, and OpenHuman receives the same
     // session id, so its own transcript/compaction layer carries continuity.
-    let mut direct_request = request();
-    direct_request.message = "Follow up privately with the implementation risk.".into();
-    direct_request.conversation = ConversationRef {
-        id: "operator-engineering".into(),
-        kind: ConversationKind::Direct,
-        thread_root: None,
+    let dm_message = "Follow up privately with the implementation risk.";
+    let dm_route = hive.resolve_dm("legal", &["engineering".into()], 2)?;
+    let MessageRoute::DeskAside { recipient_ids, .. } = dm_route else {
+        anyhow::bail!("private hive route escaped the desk");
     };
-    let direct_plan =
-        route_message(Some(&router), None, &direct_request, None, "engineering").await;
-    let RoutedAgents::One(engineering_again) = agents.resolve(&direct_plan)? else {
-        anyhow::bail!("direct routing did not select one responder: {direct_plan:?}");
+    let [recipient_id] = recipient_ids.as_slice() else {
+        anyhow::bail!("private hive route did not select exactly one responder");
     };
-    if !std::ptr::eq(engineering.agent, engineering_again.agent) {
+    let engineering_again = hive
+        .binding(recipient_id)
+        .ok_or_else(|| anyhow::anyhow!("private route selected an unbound agent"))?;
+    if engineering.runtime_agent_id() != engineering_again.runtime_agent_id() {
         anyhow::bail!("surface change replaced the instantiated OpenHuman agent");
     }
-    let second = run_turn(
-        engineering_again.agent,
-        &session_id,
-        &direct_request.message,
-    )
-    .await?;
+    let second = run_turn(&engineering_again.agent, &session_id, dm_message).await?;
     if first.reply != OPENHUMAN_REPLY
         || second.reply != OPENHUMAN_REPLY
         || first.session_id != session_id
@@ -261,8 +282,8 @@ async fn run() -> anyhow::Result<()> {
     }
 
     println!("agents: engineering,legal");
-    println!("desk_route: {}", engineering.id);
-    println!("direct_route: {}", engineering_again.id);
+    println!("desk_route: {}", engineering.hive_agent_id);
+    println!("direct_route: {}", engineering_again.hive_agent_id);
     println!("system_one_calls: 1");
     println!("openhuman_session: {session_id}");
     println!("turns_on_same_session: 2");

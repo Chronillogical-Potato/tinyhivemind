@@ -5,21 +5,26 @@ edition = "2024"
 publish = false
 
 # This is deliberately a standalone crate rather than a workspace member.
-# OpenHuman currently requires a newer compiler than TinyHiveMind's Rust 1.88
-# library contract; isolating the proof keeps that dependency and its lockfile
-# out of every library, normal workspace build, and downstream consumer.
+# Its live binaries and independent lockfile keep experiment-only dependencies
+# out of normal workspace builds while exercising the OpenHuman library adapter.
 [workspace]
 
 [dependencies]
 anyhow = "1"
+futures = "0.3"
 # The live hive uses OpenHuman's native runtime, agents, sessions, and TinyCortex module.
 openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false, features = ["mcp", "modules"] }
 # Public research sources are mirrored into the isolated run workspace before turns start.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tinyhivemind = { path = "../../crates/tinyhivemind" }
 tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }
 tinyhivemind-hive = { path = "../../crates/tinyhivemind-hive" }
+tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman" }
 tinyhivemind-typesafe = { path = "../../crates/tinyhivemind-typesafe" }
 tokio = { version = "1", features = ["rt-multi-thread"] }
+tempfile = "3"
+# The inspector must terminate a hung Docker CLI from the host side.
+wait-timeout = "0.2"
 wiremock = "0.6"

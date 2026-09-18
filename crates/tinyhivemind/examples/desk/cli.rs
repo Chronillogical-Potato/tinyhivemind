@@ -120,7 +120,7 @@ impl Options {
             chair_every: 6,
             resume_sessions: false,
             window: 40,
-            timeout: Duration::from_secs(2400),
+            timeout: Duration::from_mins(40),
             cortex_base: std::env::var("CORTEX_BASE").ok(),
             cortex_key: std::env::var("CORTEX_API_KEY").ok(),
             library_scope: "org:math/problem:euler1006/kind:library".into(),

@@ -1,0 +1,26 @@
+[package]
+name = "tinyhivemind-openhuman"
+description = "First-class OpenHuman agent bindings for TinyHiveMind"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+
+[dependencies]
+openhuman-embed.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tinyhivemind.workspace = true
+tinyhivemind-core.workspace = true
+tinyhivemind-embed.workspace = true
+tinyhivemind-hive.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

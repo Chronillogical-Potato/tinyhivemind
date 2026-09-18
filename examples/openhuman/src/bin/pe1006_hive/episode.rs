@@ -1,9 +1,7 @@
 //! Problem roles, semantic candidates, and completion-tool compatibility.
 
-use std::collections::VecDeque;
-
 use tinyhivemind::speech::{CallArguments, ToolCall, Utterance, interpret};
-use tinyhivemind_embed::{RouteCandidate, RoutingPlan};
+use tinyhivemind_embed::RouteCandidate;
 
 use super::RESEARCH_START;
 
@@ -93,37 +91,6 @@ pub(super) fn route_candidates(problem: &str, exclude: Option<&str>) -> Vec<Rout
         available: true,
     })
     .collect()
-}
-
-pub(super) fn routed_ids(plan: &RoutingPlan) -> Vec<String> {
-    match plan {
-        RoutingPlan::One { responder_id, .. } | RoutingPlan::Fallback { responder_id, .. } => {
-            vec![responder_id.clone()]
-        }
-        RoutingPlan::Hive {
-            primary_id,
-            invited_ids,
-            ..
-        } => std::iter::once(primary_id.clone())
-            .chain(invited_ids.iter().cloned())
-            .collect(),
-        RoutingPlan::Clarify { .. } => Vec::new(),
-    }
-}
-
-pub(super) fn enqueue(queue: &mut VecDeque<String>, id: &str) {
-    if !queue.iter().any(|queued| queued == id) {
-        queue.push_back(id.into());
-    }
-}
-
-pub(super) fn deterministic_broadcast_fallback(author: &str) -> &'static str {
-    match author {
-        "theory" | "researcher" => "solver",
-        "solver" | "lead" => "checker",
-        "checker" => "lead",
-        _ => "lead",
-    }
 }
 
 pub(super) fn recover_tool_call(text: &str) -> Option<Utterance> {
