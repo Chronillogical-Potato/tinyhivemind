@@ -264,6 +264,23 @@ fn resolves_routes_and_keeps_dms_private_to_the_hive() {
     ));
 }
 
+#[test]
+fn rejects_invalid_private_recipient_sets() {
+    let hive = hive(&["one", "two"]);
+    assert!(matches!(
+        hive.resolve_dm("one", &[], 1),
+        Err(Error::EmptyDmRecipients)
+    ));
+    assert!(matches!(
+        hive.resolve_dm("one", &["two".into(), "two".into()], 2),
+        Err(Error::DuplicateDmRecipient { .. })
+    ));
+    assert!(matches!(
+        hive.resolve_dm("one", &["two".into()], 0),
+        Err(Error::DmTooWide { .. })
+    ));
+}
+
 #[derive(Debug)]
 struct CountingRouter(Arc<AtomicUsize>);
 
