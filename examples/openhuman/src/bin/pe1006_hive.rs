@@ -179,7 +179,7 @@ async fn run() -> anyhow::Result<()> {
             "You are the web researcher. Locate public derivations, implementations, or corroborating results and report exact URLs plus the useful mathematical steps.",
         )?,
     ])?;
-    let router = JevRouter::new(typesafe_support::Transport::new(typesafe_api_key));
+    let router = JevRouter::new(typesafe_support::Transport::new(typesafe_api_key)?);
     let mut roster_version = 1_u64;
     let initial_request = typesafe_support::request(
         TASK,
@@ -581,6 +581,9 @@ fn memory_services() -> ServiceSet {
 async fn stage_research_sources(scratch: &Path) -> anyhow::Result<()> {
     let directory = scratch.join("research_sources");
     std::fs::create_dir_all(&directory)?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()?;
     let sources = [
         (
             "rauzy.md",
@@ -620,7 +623,19 @@ async fn stage_research_sources(scratch: &Path) -> anyhow::Result<()> {
         ),
     ];
     for (name, url) in sources {
-        let body = reqwest::get(url).await?.error_for_status()?.text().await?;
+        let body = match client
+            .get(url)
+            .send()
+            .await
+            .and_then(|reply| reply.error_for_status())
+        {
+            Ok(reply) => reply.text().await?,
+            Err(error) if name != "eulersolve_solution.py" => {
+                println!("optional research source unavailable: {name} ({error})");
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
         let source = if name.ends_with(".py") {
             format!("# Source: {url}\n\n{body}")
         } else {

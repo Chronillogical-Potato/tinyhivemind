@@ -16,11 +16,13 @@ pub(super) struct Transport {
 }
 
 impl Transport {
-    pub(super) fn new(api_key: String) -> Self {
-        Self {
-            client: reqwest::Client::new(),
+    pub(super) fn new(api_key: String) -> Result<Self, reqwest::Error> {
+        Ok(Self {
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()?,
             api_key,
-        }
+        })
     }
 }
 
