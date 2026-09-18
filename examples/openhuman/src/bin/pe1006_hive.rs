@@ -264,8 +264,8 @@ async fn run() -> anyhow::Result<()> {
         if utterances.is_empty() {
             let misses = missed_tools.entry(id.clone()).or_default();
             *misses = misses.saturating_add(1);
-            if *misses >= 2 {
-                anyhow::bail!("@{id} twice failed to call a TinyHiveMind tool")
+            if *misses >= 4 {
+                anyhow::bail!("@{id} four times failed to call a TinyHiveMind tool")
             }
             println!("[no-hive-tool] @{id}; rescheduling once");
             enqueue(&mut queue, &id);
