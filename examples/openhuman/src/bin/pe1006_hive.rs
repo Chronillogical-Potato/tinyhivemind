@@ -527,10 +527,10 @@ fn completion_assignment(problem: &str, id: &str) -> String {
 fn completion_assignment_1008(id: &str) -> String {
     let role = match id {
         "theory" => {
-            "Derive a closed expression for the x^10 coefficient using Lagrange or Newton interpolation at nodes n^2. Track the extra monic x^(N+1) term and reduce the answer to sums/products computable modulo 10^9+7. Validate the derivation for small N, then broadcast the exact formula to solver."
+            "Read FAILED_RUN.md first. Derive a full-node expression for the x^10 coefficient using Newton divided differences at square nodes or full Lagrange coefficients expressed through elementary symmetric polynomials. Track the extra monic x^(N+1) term. Prove an O(N poly(10)) or better formula modulo 10^9+7, validate for complete interpolation systems with N>10, then broadcast it to solver."
         }
         "solver" => {
-            "Implement the exact PE1008 coefficient formula modulo 10^9+7. Construct interpolation polynomials directly for small N and compare the formula, then scale to N=10^7. Broadcast the candidate, code path, and checks to checker; complete only after checker evidence arrives."
+            "Read FAILED_RUN.md first. Implement the full-node PE1008 coefficient formula modulo 10^9+7; never truncate to eleven rows. Construct complete interpolation polynomials directly for several small N>10 and compare coefficient x^10, then scale to N=10^7. Broadcast the candidate, code path, and checks to checker; complete only after checker evidence arrives."
         }
         "checker" => {
             "Independently derive or brute-force the x^10 coefficient for several small N and compare the solver's formula. Audit modular inverses and the contribution from the required monic x^(N+1) term. Complete only with command-backed sign-off or broadcast a counterexample."
@@ -627,6 +627,26 @@ fn deterministic_broadcast_fallback(author: &str) -> &'static str {
 }
 
 fn recover_tool_call(text: &str) -> Option<tinyhivemind::speech::Utterance> {
+    let trimmed = text.trim();
+    for (prefix, name) in [
+        ("broadcast:", "broadcast"),
+        ("complete_episode:", "complete_episode"),
+    ] {
+        if let Some(message) = trimmed.strip_prefix(prefix) {
+            let message = message.trim().trim_matches('"');
+            let call = tinyhivemind::speech::interpret(
+                name,
+                &tinyhivemind::speech::CallArguments {
+                    message: Some(message),
+                    ..Default::default()
+                },
+            )
+            .ok()?;
+            if let tinyhivemind::speech::ToolCall::Speak(utterance) = call {
+                return Some(utterance);
+            }
+        }
+    }
     let start = text.find('{')?;
     let end = text.rfind('}')?;
     let value: serde_json::Value = serde_json::from_str(&text[start..=end]).ok()?;
