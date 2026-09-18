@@ -445,8 +445,24 @@ fn run_container(
 ) -> anyhow::Result<ContainerStatus> {
     let control = tempfile::tempdir()?;
     let cidfile = control.path().join("container.cid");
+    let container_name = format!(
+        "deepswe-{}",
+        control
+            .path()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow::anyhow!("temporary control directory has no UTF-8 name"))?
+    );
     if container_args.first().is_some_and(|arg| arg == "run") {
-        container_args.splice(1..1, ["--cidfile".into(), cidfile.display().to_string()]);
+        container_args.splice(
+            1..1,
+            [
+                "--cidfile".into(),
+                cidfile.display().to_string(),
+                "--name".into(),
+                container_name.clone(),
+            ],
+        );
     }
     if input.len() > MAX_ACTION_INPUT_BYTES {
         return Err(InspectorFailure::ActionInputTooLarge {
@@ -490,7 +506,7 @@ fn run_container(
             Err(error.into())
         }
     };
-    let cleanup = cleanup_container(config, &cidfile);
+    let cleanup = cleanup_container(config, &cidfile, &container_name);
     let status = finish_with_cleanup(result, cleanup)?;
     let stdout_bytes = read_bounded(stdout.path(), MAX_ACTION_OUTPUT_BYTES)?;
     let stderr_bytes = read_bounded(stderr.path(), MAX_ACTION_OUTPUT_BYTES)?;

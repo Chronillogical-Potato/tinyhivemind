@@ -11,18 +11,19 @@ use super::{InspectorFailure, SandboxConfig, command};
 
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(2);
 
-pub(super) fn cleanup_container(config: &SandboxConfig, cidfile: &Path) -> anyhow::Result<()> {
-    let id = std::fs::read_to_string(cidfile).map_err(|error| InspectorFailure::CleanupFailed {
-        detail: format!("cannot read cidfile: {error}"),
-    })?;
-    let id = id.trim();
-    if id.is_empty() {
-        return Err(InspectorFailure::CleanupFailed {
-            detail: "cidfile was empty".into(),
-        }
-        .into());
-    }
-    cleanup_container_id(config, id)
+pub(super) fn cleanup_container(
+    config: &SandboxConfig,
+    cidfile: &Path,
+    container_name: &str,
+) -> anyhow::Result<()> {
+    let id = std::fs::read_to_string(cidfile)
+        .ok()
+        .and_then(|id| {
+            let id = id.trim();
+            (!id.is_empty()).then(|| id.to_owned())
+        })
+        .unwrap_or_else(|| container_name.to_owned());
+    cleanup_container_id(config, &id)
 }
 
 pub(super) fn cleanup_container_id(config: &SandboxConfig, id: &str) -> anyhow::Result<()> {
