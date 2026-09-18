@@ -1,22 +1,26 @@
 //! Web-assisted OpenRouter GPT-OSS OpenHuman hive experiment for Project Euler 1006.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::future::join_all;
 use openhuman_embed::{
-    Access, Agent, AgentDefinitionSpec, AgentSpec, McpServer, Provider, Runtime, RuntimeConfig,
+    Access, AgentDefinitionSpec, AgentSpec, McpServer, Provider, Runtime, RuntimeConfig,
     ServiceSet, ToolScopeSpec, Workspace,
 };
 use serde_json::json;
-use tinyhivemind_embed::{AgentRegistry, RoutingSource, route_broadcast, route_message};
+use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind_hive::{
     CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
-    apply_completion, completion_status,
+    completion_status,
+};
+use tinyhivemind_openhuman::{
+    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, HostAction,
+    OpenHumanHive,
 };
 use tinyhivemind_typesafe::JevRouter;
-use tokio::time::timeout;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -24,20 +28,21 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 mod episode_support;
 #[path = "pe1006_hive/tools.rs"]
 mod hive_tools;
+#[path = "pe1006_hive/round.rs"]
+mod round_support;
 #[path = "pe1006_hive/typesafe.rs"]
 mod typesafe_support;
 #[path = "pe1006_hive/workspace.rs"]
 mod workspace_support;
 
-use episode_support::{
-    completion_assignment, deterministic_broadcast_fallback, enqueue, recover_tool_call,
-    role_prompt, route_candidates, routed_ids,
-};
+use episode_support::{completion_assignment, recover_tool_call, role_prompt, route_candidates};
+use round_support::{TurnContext, prepare_seat_turn, seat_turn};
 use workspace_support::{TurnSnapshots, hive_workspace, initialize_workspace};
 
 const MODEL: &str = "openai/gpt-oss-120b:nitro";
 const PROVIDER_BASE: &str = "https://openrouter.ai/api/v1";
 const TURN_TIMEOUT: Duration = Duration::from_secs(600);
+const MAX_TURNS: u32 = 25;
 const TASK_1006: &str = r#"Starting with two strings S_0 = 0 and S_1 = 01, define S_n as the
 concatenation S_(n-1)S_(n-2) for n >= 2.
 
@@ -175,7 +180,7 @@ async fn run() -> anyhow::Result<()> {
             .build()
             .await?,
     );
-    let agents = AgentRegistry::new([
+    let bindings = vec![
         instantiated(
             &runtime,
             &workspace,
@@ -216,18 +221,42 @@ async fn run() -> anyhow::Result<()> {
             "researcher",
             role_prompt(&problem, "researcher"),
         )?,
-    ])?;
+    ];
+    let team = ["theory", "solver", "checker", "lead", "researcher"];
+    let hive = OpenHumanHive::new(
+        HiveGraph::new(
+            Desk {
+                id: format!("pe{problem}"),
+                name: format!("PE{problem}"),
+                description: Some(format!(
+                    "derive and independently verify the exact Project Euler {problem} answer"
+                )),
+                members: team.iter().map(|id| (*id).into()).collect(),
+                responder_mode: ResponderMode::Auto,
+            },
+            route_candidates(&problem, None),
+        ),
+        bindings,
+    )?;
     let router = JevRouter::new(typesafe_support::Transport::new(typesafe_api_key)?);
     let mut roster_version = 1_u64;
-    let initial_request = typesafe_support::request(
+    let routing_policy = typesafe_support::routing_policy();
+    let thread_context = typesafe_support::thread_context();
+    let initial_request = hive.desk_request(
         task,
-        RoutingSource::DeskMessage,
-        route_candidates(&problem, None),
+        thread_context.clone(),
+        Some(tinyhivemind::Sequence(1)),
         roster_version,
-        &problem,
+        routing_policy.clone(),
     );
-    let route = route_message(Some(&router), None, &initial_request, None, "lead").await;
-    let mut selected = routed_ids(&route);
+    let route = hive
+        .route_desk(Some(&router), None, &initial_request, None, "lead")
+        .await?;
+    let mut selected = hive
+        .resolve_plan(&route)?
+        .iter()
+        .map(|binding| binding.hive_agent_id.clone())
+        .collect::<Vec<_>>();
     if selected.is_empty() {
         selected.push("lead".into());
     }
@@ -245,7 +274,6 @@ async fn run() -> anyhow::Result<()> {
     let mut transcript = Vec::new();
     let mut visibility = Visibility::default();
     let mut snapshots = TurnSnapshots::new(&run_dir)?;
-    let team = ["theory", "solver", "checker", "lead", "researcher"];
     let mut episode = CompletionEpisodeState {
         conversation: tinyhivemind::Conversation {
             desk_id: format!("pe{problem}"),
@@ -268,57 +296,90 @@ async fn run() -> anyhow::Result<()> {
         selected.iter().map(String::as_str),
         tinyhivemind::Sequence(sequence),
     )?;
-    let mut queue: VecDeque<String> = selected.into();
+    let driver = CompletionDriver::new(&hive, routing_policy.round_width)?;
+    let mut driver_state = driver.start(episode)?;
     let mut route_trace = vec![route];
     let mut missed_tools: BTreeMap<String, u8> = BTreeMap::new();
     let mut turns = 0_u32;
-
-    while !matches!(completion_status(&episode), CompletionStep::Complete { .. }) && turns < 25 {
-        let Some(id) = queue.pop_front() else {
+    while !matches!(
+        completion_status(driver_state.episode()),
+        CompletionStep::Complete { .. }
+    ) {
+        let pending = driver.pending_round(&driver_state)?;
+        if pending.is_empty() {
             anyhow::bail!("completion episode has pending work but no scheduled agent")
-        };
-        turns += 1;
-        let agent = agents
-            .get(&id)
-            .ok_or_else(|| anyhow::anyhow!("missing {id}"))?;
-        let outbox = outbox_dir.join(format!("{id}.jsonl"));
-        let turn = seat_turn(
-            agent,
-            &id,
-            TurnContext {
-                transcript: &transcript,
-                visibility: &visibility,
-                snapshots: &mut snapshots,
-                outbox: &outbox,
-                assignment: &completion_assignment(&problem, &id),
-                task,
-                prior_failure,
-                problem: &problem,
-            },
-        )
-        .await?;
-        visibility.mark_delivered(&id, transcript.len());
-        let mut utterances = turn.utterances;
-        if utterances.is_empty()
-            && let Some(recovered) = recover_tool_call(&turn.reply)
-        {
-            println!("[compatibility-recovered-tool-call] @{id}");
-            utterances.push(recovered);
         }
-        if utterances.is_empty() {
-            let misses = missed_tools.entry(id.clone()).or_default();
-            *misses = misses.saturating_add(1);
-            if *misses >= 4 {
-                anyhow::bail!("@{id} four times failed to call a TinyHiveMind tool")
+        ensure_round_fits(turns, pending.agents().len())?;
+        let transcript_len = transcript.len();
+        let prepared = pending
+            .agents()
+            .iter()
+            .map(|pending_agent| {
+                let id = pending_agent.hive_agent_id;
+                prepare_seat_turn(
+                    pending_agent.agent.clone(),
+                    id,
+                    TurnContext {
+                        transcript: &transcript,
+                        visibility: &visibility,
+                        outbox: outbox_dir.join(format!("{id}.jsonl")),
+                        assignment: completion_assignment(&problem, id),
+                        task,
+                        prior_failure,
+                        problem: &problem,
+                    },
+                    &mut snapshots,
+                )
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let outcomes = join_all(prepared.into_iter().map(seat_turn)).await;
+        let mut round_utterances = Vec::with_capacity(outcomes.len());
+        let mut retry_round = false;
+        for outcome in outcomes {
+            let mut outcome = outcome?;
+            snapshots.complete(outcome.snapshot, &outcome.reply)?;
+            visibility.mark_delivered(&outcome.id, transcript_len);
+            if outcome.utterances.is_empty()
+                && let Some(recovered) = recover_tool_call(&outcome.reply)
+            {
+                println!("[compatibility-recovered-tool-call] @{}", outcome.id);
+                outcome.utterances.push(recovered);
             }
-            println!("[no-hive-tool] @{id}; rescheduling once");
-            enqueue(&mut queue, &id);
+            if outcome.utterances.is_empty() {
+                let misses = missed_tools.entry(outcome.id.clone()).or_default();
+                *misses = misses.saturating_add(1);
+                if *misses >= 4 {
+                    anyhow::bail!(
+                        "@{} four times failed to call a TinyHiveMind tool",
+                        outcome.id
+                    )
+                }
+                println!("[no-hive-tool] @{}; rescheduling round", outcome.id);
+                retry_round = true;
+                continue;
+            }
+            if outcome.utterances.len() != 1 {
+                anyhow::bail!(
+                    "@{} emitted {} TinyHiveMind actions; exactly one is required",
+                    outcome.id,
+                    outcome.utterances.len()
+                )
+            }
+            missed_tools.remove(&outcome.id);
+            round_utterances.push((outcome.id, outcome.utterances.remove(0)));
+        }
+        turns = turns.saturating_add(u32::try_from(pending.agents().len()).unwrap_or(u32::MAX));
+        if retry_round {
             continue;
         }
-        missed_tools.remove(&id);
-        for utterance in utterances {
+
+        let mut committed = Vec::with_capacity(round_utterances.len());
+        for (id, utterance) in round_utterances {
             sequence = sequence.saturating_add(1);
-            match utterance {
+            if matches!(utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
+                roster_version = roster_version.saturating_add(1);
+            }
+            match &utterance {
                 tinyhivemind::speech::Utterance::Broadcast { message } => {
                     let index = transcript.len();
                     transcript.push(DeskMessage {
@@ -326,34 +387,6 @@ async fn run() -> anyhow::Result<()> {
                         body: format!("BROADCAST: {message}"),
                     });
                     visibility.mark_own(&id, index);
-                    roster_version = roster_version.saturating_add(1);
-                    let request = typesafe_support::request(
-                        &message,
-                        RoutingSource::AgentBroadcast {
-                            author_id: id.clone(),
-                        },
-                        route_candidates(&problem, Some(&id)),
-                        roster_version,
-                        &problem,
-                    );
-                    let plan = route_broadcast(Some(&router), None, &request, "lead").await;
-                    let mut recipients = routed_ids(&plan);
-                    if recipients.is_empty() {
-                        recipients.push(deterministic_broadcast_fallback(&id).into());
-                    }
-                    println!("[broadcast] @{id} -> {}", recipients.join(","));
-                    route_trace.push(plan);
-                    if !recipients.is_empty() {
-                        episode = apply_assignment(
-                            &episode,
-                            recipients.iter().map(String::as_str),
-                            tinyhivemind::Sequence(sequence),
-                        )?;
-                        for recipient in recipients {
-                            enqueue(&mut queue, &recipient);
-                        }
-                    }
-                    enqueue(&mut queue, &id);
                 }
                 tinyhivemind::speech::Utterance::CompleteEpisode { message } => {
                     let index = transcript.len();
@@ -362,15 +395,53 @@ async fn run() -> anyhow::Result<()> {
                         body: format!("COMPLETE: {message}"),
                     });
                     visibility.mark_own(&id, index);
-                    episode = apply_completion(&episode, &id, tinyhivemind::Sequence(sequence))?;
-                    println!("[complete_episode] @{id}");
                 }
                 tinyhivemind::speech::Utterance::Post { .. }
                 | tinyhivemind::speech::Utterance::Dm { .. } => {
                     anyhow::bail!("MCP completion surface emitted an unsupported utterance")
                 }
             }
+            if !matches!(utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
+                println!("[complete_episode] @{id}");
+            }
+            committed.push(CommittedUtterance {
+                author_id: id,
+                sequence: tinyhivemind::Sequence(sequence),
+                utterance,
+            });
         }
+        let routing = committed.iter().any(|event| {
+            matches!(
+                event.utterance,
+                tinyhivemind::speech::Utterance::Broadcast { .. }
+            )
+        });
+        let transition = driver
+            .apply_committed_round(
+                &driver_state,
+                &pending,
+                committed,
+                routing.then_some(BroadcastRouting {
+                    primary: Some(&router),
+                    reasoning: None,
+                    policy: &routing_policy,
+                    roster_version,
+                    thread_context: &thread_context,
+                }),
+            )
+            .await?;
+        for action in &transition.actions {
+            match action {
+                HostAction::RunAgents { agent_ids, plan } => {
+                    println!("[broadcast] -> {}", agent_ids.join(","));
+                    route_trace.push(plan.clone());
+                }
+                HostAction::DeliverDm { .. } => {
+                    anyhow::bail!("MCP completion surface emitted an unsupported DM")
+                }
+            }
+        }
+        driver_state = transition.state;
     }
     std::fs::write(
         run_dir.join("routing-trace.json"),
@@ -378,9 +449,12 @@ async fn run() -> anyhow::Result<()> {
     )?;
     std::fs::write(
         run_dir.join("completion-state.json"),
-        serde_json::to_vec_pretty(&episode)?,
+        serde_json::to_vec_pretty(&driver_state)?,
     )?;
-    println!("completion_status: {:?}", completion_status(&episode));
+    println!(
+        "completion_status: {:?}",
+        completion_status(driver_state.episode())
+    );
 
     let trace = transcript
         .iter()
@@ -392,6 +466,19 @@ async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn ensure_round_fits(turns: u32, round_size: usize) -> anyhow::Result<()> {
+    let round_size = u32::try_from(round_size)
+        .map_err(|_| anyhow::anyhow!("round size exceeds the turn counter"))?;
+    if round_size > MAX_TURNS.saturating_sub(turns) {
+        anyhow::bail!("next round of {round_size} would exceed {MAX_TURNS} turns");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "pe1006_hive/test.rs"]
+mod test;
+
 fn instantiated(
     runtime: &Runtime,
     workspace: &Path,
@@ -399,7 +486,7 @@ fn instantiated(
     problem: &str,
     id: &'static str,
     role: String,
-) -> anyhow::Result<(&'static str, Agent)> {
+) -> anyhow::Result<AgentBinding> {
     let runtime_id = format!("{id}-pe{problem}-{}", std::process::id());
     let tools = vec![
         "file_read".into(),
@@ -441,74 +528,8 @@ fn instantiated(
                 .mcp(mcp)
                 .action_dir(workspace),
         )
-        .map(|agent| (id, agent))
+        .map(|agent| AgentBinding::new(id, agent))
         .map_err(Into::into)
-}
-
-async fn seat_turn(agent: &Agent, id: &str, context: TurnContext<'_>) -> anyhow::Result<SeatTurn> {
-    hive_tools::clear(context.outbox)?;
-    let first = context
-        .visibility
-        .seen
-        .get(id)
-        .is_none_or(BTreeSet::is_empty);
-    let delta = context.visibility.delta(id, context.transcript);
-    let policy = if id == "researcher" {
-        RESEARCH_POLICY
-    } else {
-        SEALED
-    };
-    let prompt = format!(
-        "{}{}\n\n## New desk messages\n{}\n\n## This assignment\n{}\n\nThe durable shared workspace is `{}`. Read `AGENTS.md` and `MEMORY.md` before working. Write role-prefixed artifacts there and update `MEMORY.md` only with reproduced, evidence-linked learnings. Do not write or read `/tmp/openhuman` or any other directory.\n\nYou MUST end this turn with exactly one TinyHiveMind action through `mcp_call_tool` on server `tinyhive`: call remote tool `broadcast` with a self-contained message when another teammate should take work, or `complete_episode` with your evidence-dense final result when your assignment is done. First use `mcp_list_tools` if needed. Text outside that MCP call is private thinking and is not delivered to the team.",
-        if first {
-            format!(
-                "## Official statement\n{}\n\n## Prior experiment status\n{}\n\n",
-                context.task, context.prior_failure
-            )
-        } else {
-            String::new()
-        },
-        policy,
-        if delta.is_empty() { "(none)" } else { &delta },
-        context.assignment,
-        agent.action_dir().display(),
-    );
-    let session_id = format!(
-        "tinyhivemind-pe{}-run-{}:{id}",
-        context.problem,
-        std::process::id()
-    );
-    let snapshot = context
-        .snapshots
-        .begin(id, agent.id(), &session_id, &prompt)?;
-    let outcome = timeout(TURN_TIMEOUT, agent.turn(prompt).session(&session_id).send())
-        .await
-        .map_err(|_| anyhow::anyhow!("@{id} timed out"))??;
-    context.snapshots.complete(snapshot, &outcome.reply)?;
-    println!(
-        "[completed] @{id}: {}",
-        outcome.reply.chars().take(500).collect::<String>()
-    );
-    Ok(SeatTurn {
-        reply: outcome.reply,
-        utterances: hive_tools::drain(context.outbox)?,
-    })
-}
-
-struct TurnContext<'a> {
-    transcript: &'a [DeskMessage],
-    visibility: &'a Visibility,
-    snapshots: &'a mut TurnSnapshots,
-    outbox: &'a Path,
-    assignment: &'a str,
-    task: &'a str,
-    prior_failure: &'a str,
-    problem: &'a str,
-}
-
-struct SeatTurn {
-    reply: String,
-    utterances: Vec<tinyhivemind::speech::Utterance>,
 }
 
 async fn inherited_config() -> anyhow::Result<RuntimeConfig> {

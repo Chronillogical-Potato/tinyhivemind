@@ -29,7 +29,7 @@ const STALL_RESTARTS: usize = 1;
 /// empty directory. This second phase runs in the seat's own session with its
 /// tools still attached, which is what a tool-less wrap-up cannot do: it can
 /// summarize a turn but it cannot save one.
-const LANDING_TIMEOUT: Duration = Duration::from_secs(720);
+const LANDING_TIMEOUT: Duration = Duration::from_mins(12);
 
 /// Everything one turn's delivery needs from the desk around it.
 pub(crate) struct Delivery<'a> {

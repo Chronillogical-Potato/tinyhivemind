@@ -1,10 +1,7 @@
 //! Live TypeSafe transport and routing request construction.
 
-use tinyhivemind::Sequence;
 use tinyhivemind::responder::Probability;
-use tinyhivemind_embed::{
-    ConversationKind, ConversationRef, RouteCandidate, RoutingPolicy, RoutingRequest, RoutingSource,
-};
+use tinyhivemind_embed::RoutingPolicy;
 use tinyhivemind_typesafe::{
     Error, SystemOneRequest, SystemOneResponse, SystemOneTransport, SystemOneTransportFuture,
 };
@@ -59,34 +56,17 @@ impl SystemOneTransport for Transport {
     }
 }
 
-pub(super) fn request(
-    message: &str,
-    source: RoutingSource,
-    candidates: Vec<RouteCandidate>,
-    roster_version: u64,
-    problem: &str,
-) -> RoutingRequest {
-    RoutingRequest {
-        message: message.into(),
-        source,
-        conversation: ConversationRef {
-            id: format!("pe{problem}"),
-            kind: ConversationKind::Desk,
-            thread_root: Some(Sequence(1)),
-        },
-        desk_purpose: Some(format!(
-            "derive and independently verify the exact Project Euler {problem} answer"
-        )),
-        thread_context: vec!["Only explicit completion ends an assignment".into()],
-        candidates,
-        roster_version,
-        policy: RoutingPolicy {
-            minimum_confidence: Probability::ZERO,
-            high_impact_minimum_confidence: Probability::ZERO,
-            clarification_threshold: Probability::ONE,
-            high_impact_threshold: Probability::ONE,
-            round_width: 5,
-            choice_option_limit: 8,
-        },
+pub(super) fn routing_policy() -> RoutingPolicy {
+    RoutingPolicy {
+        minimum_confidence: Probability::ZERO,
+        high_impact_minimum_confidence: Probability::ZERO,
+        clarification_threshold: Probability::ONE,
+        high_impact_threshold: Probability::ONE,
+        round_width: 5,
+        choice_option_limit: 8,
     }
+}
+
+pub(super) fn thread_context() -> Vec<String> {
+    vec!["Only explicit completion ends an assignment".into()]
 }

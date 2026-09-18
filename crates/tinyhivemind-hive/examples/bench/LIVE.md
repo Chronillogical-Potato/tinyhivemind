@@ -316,11 +316,12 @@ cargo run --release -p tinyhivemind-hive --example bench -- --swarm \
   --api-base http://127.0.0.1:6969 --model <model> --jobs 16
 ```
 
-**No dependency is added to this repository by any of that** — the seam is a
-URL, and the harness still talks to it through `curl` over stdin. That matters
-for more than tidiness: `tinyhivemind-hive` is a pure crate, OpenHuman is
-GPL-3.0 and vendors a large tree, and a dev-dependency on it would put both
-facts inside this workspace for no gain.
+**No dependency is added to the benchmark or `tinyhivemind-hive` by any of
+that** — this seam remains a URL, and the harness still talks to it through
+`curl` over stdin. The root workspace now also contains the separate
+`tinyhivemind-openhuman` adapter with a direct `openhuman-embed` dependency,
+but the benchmark does not use it. Keeping that boundary explicit preserves
+`tinyhivemind-hive` as a pure crate under `.github/scripts/assert-pure.sh`.
 
 The real ceiling on `--jobs` is not the machine. A hundred concurrent seats is a
 hundred concurrent `curl` processes, which any developer machine will run; what

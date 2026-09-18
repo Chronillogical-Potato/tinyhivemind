@@ -17,7 +17,7 @@ exclude = ["worktrees"]
 [workspace.package]
 version = "0.2.1"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.96"
 license = "GPL-3.0-only"
 repository = "https://github.com/tinyhumansai/tinyhivemind"
 
@@ -44,6 +44,10 @@ tinyhivemind-embed = { path = "crates/tinyhivemind-embed" }
 # Exact System One wire types and Jev question construction behind one host
 # transport port; it deliberately contains no HTTP client or async runtime.
 tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
+# Canonical OpenHuman agent handles for the first-class embedding adapter. The
+# adapter keeps default features off because it only binds already-built agents;
+# the consuming host chooses the runtime capabilities it enables.
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.

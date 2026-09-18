@@ -2908,18 +2908,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-openhuman"
+version = "0.2.1"
+dependencies = [
+ "openhuman-embed",
+ "serde",
+ "thiserror 2.0.20",
+ "tinyhivemind",
+ "tinyhivemind-core",
+ "tinyhivemind-embed",
+ "tinyhivemind-hive",
+]
+
+[[package]]
 name = "tinyhivemind-openhuman-example"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "futures",
  "openhuman-embed",
  "reqwest",
+ "serde",
  "serde_json",
+ "tempfile",
  "tinyhivemind",
  "tinyhivemind-embed",
  "tinyhivemind-hive",
+ "tinyhivemind-openhuman",
  "tinyhivemind-typesafe",
  "tokio",
+ "wait-timeout",
  "wiremock",
 ]
 

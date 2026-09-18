@@ -43,7 +43,7 @@ use crate::{
 };
 
 /// How long a seat gets to write the message it never got round to writing.
-const WRAP_UP_TIMEOUT: Duration = Duration::from_secs(600);
+const WRAP_UP_TIMEOUT: Duration = Duration::from_mins(10);
 
 /// Where a turn's tool calls to the room are collected, under the workspace.
 ///
@@ -126,7 +126,7 @@ pub(crate) async fn run(options: Options) -> Result<(), BoxError> {
             key,
             &options.library_scope,
             &options.session_scope,
-            Duration::from_secs(120),
+            Duration::from_mins(2),
         )),
         _ => None,
     };
