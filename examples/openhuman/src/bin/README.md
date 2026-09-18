@@ -2,4 +2,5 @@
 
 | File | Purpose |
 | --- | --- |
-| `pe1006_hive.rs` | Web-assisted OpenRouter GPT-OSS five-agent Project Euler 1006 experiment on one OpenHuman runtime. |
+| `pe1006_hive.rs` | Web-assisted five-agent experiment with a durable shared workspace, explicit agent memory, and one OpenHuman runtime per run. |
+| `pe1006_hive/workspace.rs` | Workspace templates, non-overwriting initialization, and exact per-turn prompt/reply snapshots. |

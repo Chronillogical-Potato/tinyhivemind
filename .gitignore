@@ -1,6 +1,7 @@
 # Build output
 /target/
 /examples/*/target/
+/examples/openhuman/workspace/
 **/*.rs.bk
 *.pdb
 

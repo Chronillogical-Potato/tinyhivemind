@@ -19,6 +19,11 @@ use tokio::time::timeout;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+#[path = "pe1006_hive/workspace.rs"]
+mod workspace_support;
+
+use workspace_support::{TurnSnapshots, hive_workspace, initialize_workspace};
+
 const MODEL: &str = "openai/gpt-oss-120b:nitro";
 const PROVIDER_BASE: &str = "https://openrouter.ai/api/v1";
 const TURN_TIMEOUT: Duration = Duration::from_secs(600);
@@ -38,9 +43,9 @@ Psi(10) = 10699667 (mod 101001001).
 
 Find Psi(10^18) mod 101001001."#;
 
-const SEALED: &str = "Use only the statement, this desk transcript, and computations in the shared scratch directory. Do not search the web, inspect this repository, use inherited solution memory, or read outside the scratch directory. Never invent a residue. Keep the desk message below 1800 characters and name concrete files or checks.";
+const SEALED: &str = "Use only the statement, this desk transcript, and computations in the shared workspace. Do not search the web, inspect this repository, use inherited solution memory, or read outside the workspace. Never invent a residue. Keep the desk message below 1800 characters and name concrete files or checks.";
 const PRIOR_FAILURE: &str = "Prior hive runs were rejected. Candidate residues 58302041 and 14193671 came from invalid methods and must not be reused. One run fitted an order-60 Berlekamp-Massey recurrence from only 120 terms and tested it on no held-out suffix; that is interpolation, not proof. Another used a finite-state factor language that already overcounts at k=5, and its claimed code failed the supplied k=10 sample when actually executed. Do not use Berlekamp-Massey, guessed recurrences, fitted scaling factors, or a finite forbidden-pattern DFA. Derive an exact identity from Fibonacci/Sturmian/Ostrowski structure, and validate any implementation well beyond the cases used to derive it.";
-const RESEARCH_POLICY: &str = "You are the only seat allowed to access the public web. Use shell commands such as curl to search and fetch public sources. Return direct source URLs, distinguish a claimed answer from a derivation, and never treat one copied number as verification. Do not inspect this repository, inherited solution files, or any filesystem path outside the named scratch directory. Keep the desk message below 1800 characters.";
+const RESEARCH_POLICY: &str = "You are the only seat allowed to access the public web. Use shell commands such as curl to search and fetch public sources. Return direct source URLs, distinguish a claimed answer from a derivation, and never treat one copied number as verification. Do not inspect this repository, inherited solution files, or any filesystem path outside the named workspace. Keep the desk message below 1800 characters.";
 const RESEARCH_START: &str = "Authenticated public code search located these potentially relevant sources. Fetch and assess them; do not merely quote a residue:\n- https://github.com/senamakel/math-agent/blob/be919bc1bdc6b77a075413192654931b80cae602/workspace/euler1006/code/lean/code/python/euler1006.py\n- https://github.com/senamakel/math-agent/blob/be919bc1bdc6b77a075413192654931b80cae602/workspace/euler1006/refs/context.md\n- https://github.com/dawei7/code_n/tree/012e178619373894a06afb8db07953df0202a071/dsa/euler/1006_fibonacci-subwords\n- https://github.com/senamakel/math-superagent/blob/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/derived/APPROACHES.md\n- https://github.com/senamakel/math-superagent/blob/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/code/out/PE1006-verification.md";
 
 #[derive(Clone, Debug)]
@@ -100,13 +105,12 @@ async fn run() -> anyhow::Result<()> {
         .mount(&backend)
         .await;
 
-    let scratch = std::env::temp_dir().join(format!(
-        "tinyhivemind-openhuman-pe1006-{}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&scratch)?;
-    std::fs::write(scratch.join("TASK.md"), TASK)?;
-    stage_research_sources(&scratch).await?;
+    let workspace = hive_workspace();
+    let run_id = format!("run-{}", std::process::id());
+    let run_dir = workspace.join("runs").join(&run_id);
+    initialize_workspace(&workspace)?;
+    std::fs::create_dir_all(&run_dir)?;
+    stage_research_sources(&workspace).await?;
 
     let config = inherited_config().await?;
     if config.subsystems.memory.driver != "tinycortex" {
@@ -118,7 +122,7 @@ async fn run() -> anyhow::Result<()> {
     let runtime = Arc::new(
         Runtime::builder()
             .config(config)
-            .workspace(Workspace::dir(scratch.join("openhuman-runtime")))
+            .workspace(Workspace::dir(run_dir.join("openhuman-runtime")))
             .services(memory_services())
             .backend_url(backend.uri())
             .provider(Provider::openai_compatible(PROVIDER_BASE, api_key).model(MODEL))
@@ -129,31 +133,31 @@ async fn run() -> anyhow::Result<()> {
     let agents = AgentRegistry::new([
         instantiated(
             &runtime,
-            &scratch,
+            &workspace,
             "theory",
             "You are the Fibonacci-word combinatorics specialist. Derive exact structure and logarithmic formulas; test every claimed identity on small k.",
         )?,
         instantiated(
             &runtime,
-            &scratch,
+            &workspace,
             "solver",
             "You are the implementation specialist. Turn proven formulas into exact modular code, run it, and report reproducible commands and residues.",
         )?,
         instantiated(
             &runtime,
-            &scratch,
+            &workspace,
             "checker",
             "You are the adversarial verifier. Independently reproduce samples, attack extrapolations, and sign only an exact candidate supported by code.",
         )?,
         instantiated(
             &runtime,
-            &scratch,
+            &workspace,
             "lead",
             "You coordinate the desk. Reconcile disagreements, demand missing evidence, and state a final residue only after checker sign-off.",
         )?,
         instantiated(
             &runtime,
-            &scratch,
+            &workspace,
             "researcher",
             "You are the web researcher. Locate public derivations, implementations, or corroborating results and report exact URLs plus the useful mathematical steps.",
         )?,
@@ -174,16 +178,19 @@ async fn run() -> anyhow::Result<()> {
     );
     println!("model: {MODEL}");
     println!("memory_driver: tinycortex");
-    println!("scratch: {}", scratch.display());
+    println!("workspace: {}", workspace.display());
+    println!("run_dir: {}", run_dir.display());
 
     let mut transcript = Vec::new();
     let mut visibility = Visibility::default();
+    let mut snapshots = TurnSnapshots::new(&run_dir)?;
 
     run_and_append(
         &agents,
         "researcher",
         &mut transcript,
         &mut visibility,
+        &mut snapshots,
         &format!("Research first: inspect the public documents mirrored under `research_sources/` and cite their original URLs. Then use authenticated `gh search repos 'project euler answers'` and inspect problem-1006 paths or answer indexes without searching for a known residue. Extract an exact method or independently reported result; do not merely quote a number.\n\n{RESEARCH_START}"),
     )
     .await?;
@@ -201,6 +208,7 @@ async fn run() -> anyhow::Result<()> {
             "theory",
             &transcript,
             &visibility,
+            &mut snapshots,
             "Blind round: independently derive the mathematical structure needed for an exact O(polylog k) solution. Write theory_* files only.",
         )
         .await?,
@@ -214,6 +222,7 @@ async fn run() -> anyhow::Result<()> {
             "solver",
             &transcript,
             &visibility,
+            &mut snapshots,
             "Blind round: independently search for an exact fast algorithm and implement brute-force sample oracles. Write solver_* files only.",
         )
         .await?,
@@ -227,6 +236,7 @@ async fn run() -> anyhow::Result<()> {
             "checker",
             &transcript,
             &visibility,
+            &mut snapshots,
             "Blind round: independently reproduce both supplied samples and identify proof obligations any huge-k method must meet. Write checker_* files only.",
         )
         .await?,
@@ -239,6 +249,7 @@ async fn run() -> anyhow::Result<()> {
         "lead",
         &mut transcript,
         &mut visibility,
+        &mut snapshots,
         "Read the blind round. Produce a concrete reconciliation: accepted facts, rejected shortcuts, and one sharply scoped next task for each specialist.",
     )
     .await?;
@@ -254,6 +265,7 @@ async fn run() -> anyhow::Result<()> {
             "theory",
             &revealed_snapshot,
             &visibility,
+            &mut snapshots,
             "Revealed round: address the lead's questions and peer evidence. Derive the missing arbitrary-k bridge exactly; reject any empirical recurrence without proof.",
         )
         .await?,
@@ -267,6 +279,7 @@ async fn run() -> anyhow::Result<()> {
             "solver",
             &revealed_snapshot,
             &visibility,
+            &mut snapshots,
             "Revealed round: implement the strongest justified method, verify k=3 and k=10, and compute a candidate only if the algorithm reaches 10^18 exactly.",
         )
         .await?,
@@ -280,6 +293,7 @@ async fn run() -> anyhow::Result<()> {
             "checker",
             &revealed_snapshot,
             &visibility,
+            &mut snapshots,
             "Revealed round: run peers' code independently, find counterexamples, and specify what remains before sign-off.",
         )
         .await?,
@@ -292,6 +306,7 @@ async fn run() -> anyhow::Result<()> {
         "lead",
         &mut transcript,
         &mut visibility,
+        &mut snapshots,
         "Synthesize a candidate solution from the revealed round. If evidence is insufficient, assign exactly one repair task instead of guessing. If sufficient, state the residue and ask checker for final sign-off.",
     )
     .await?;
@@ -300,6 +315,7 @@ async fn run() -> anyhow::Result<()> {
         "checker",
         &mut transcript,
         &mut visibility,
+        &mut snapshots,
         "Final audit: independently run the decisive code and inspect the derivation. Begin with SIGNED or REFUSED. Matching k=3 and k=10 is necessary but not sufficient. SIGNED requires a proof of the fast transition, exact agreement with brute force for every k=1..200 beyond any derivation/training range, the exact residue, and the independent command/file used.",
     )
     .await?;
@@ -308,6 +324,7 @@ async fn run() -> anyhow::Result<()> {
         "lead",
         &mut transcript,
         &mut visibility,
+        &mut snapshots,
         "Close the run. If checker signed, state the exact answer and minimal evidence chain. If checker refused, say unsolved and name the precise blocker; do not guess.",
     )
     .await?;
@@ -317,27 +334,22 @@ async fn run() -> anyhow::Result<()> {
         .map(|row| format!("## @{}\n\n{}", row.author, row.body))
         .collect::<Vec<_>>()
         .join("\n\n");
-    std::fs::write(scratch.join("HIVE_TRANSCRIPT.md"), &trace)?;
+    std::fs::write(run_dir.join("HIVE_TRANSCRIPT.md"), &trace)?;
     println!("\n{trace}");
     Ok(())
 }
 
 fn instantiated(
     runtime: &Runtime,
-    scratch: &Path,
+    workspace: &Path,
     id: &'static str,
     role: &str,
 ) -> Result<(&'static str, Agent), openhuman_embed::AgentError> {
     let runtime_id = format!("{id}-pe1006-{}", std::process::id());
-    let tools = if matches!(id, "solver" | "checker" | "researcher") {
-        ToolScopeSpec::Named(vec![
-            "shell".into(),
-            "file_read".into(),
-            "file_write".into(),
-        ])
-    } else {
-        ToolScopeSpec::Named(Vec::new())
-    };
+    let mut tools = vec!["file_read".into(), "file_write".into()];
+    if matches!(id, "solver" | "checker" | "researcher") {
+        tools.push("shell".into());
+    }
     let policy = if id == "researcher" {
         RESEARCH_POLICY
     } else {
@@ -349,15 +361,15 @@ fn instantiated(
                 .system_prompt(format!("{role}\n\n{policy}"))
                 .definition(
                     AgentDefinitionSpec::new()
-                        .tools(tools)
+                        .tools(ToolScopeSpec::Named(tools))
                         .max_iterations(if matches!(id, "solver" | "checker" | "researcher") {
                             6
                         } else {
-                            1
+                            4
                         })
                         .temperature(0.0),
                 )
-                .action_dir(scratch),
+                .action_dir(workspace),
         )
         .map(|agent| (id, agent))
 }
@@ -367,6 +379,7 @@ async fn seat_turn(
     id: &str,
     transcript: &[DeskMessage],
     visibility: &Visibility,
+    snapshots: &mut TurnSnapshots,
     assignment: &str,
 ) -> anyhow::Result<String> {
     let first = visibility.seen.get(id).is_none_or(BTreeSet::is_empty);
@@ -377,7 +390,7 @@ async fn seat_turn(
         SEALED
     };
     let prompt = format!(
-        "{}{}\n\n## New desk messages\n{}\n\n## This turn\n{}\n\nThe only permitted scratch directory is `{}`. Work there when computation is needed; do not write or read `/tmp/openhuman` or any other directory. Return one evidence-dense desk message; do not narrate tool use.",
+        "{}{}\n\n## New desk messages\n{}\n\n## This turn\n{}\n\nThe durable shared workspace is `{}`. Read `AGENTS.md` and `MEMORY.md` before working. Write role-prefixed artifacts there and update `MEMORY.md` only with reproduced, evidence-linked learnings. Do not write or read `/tmp/openhuman` or any other directory. Return one evidence-dense desk message; do not narrate tool use.",
         if first {
             format!(
                 "## Official statement\n{TASK}\n\n## Rejected prior experiment\n{PRIOR_FAILURE}\n\n"
@@ -390,18 +403,12 @@ async fn seat_turn(
         assignment,
         agent.action_dir().display(),
     );
-    let outcome = timeout(
-        TURN_TIMEOUT,
-        agent
-            .turn(prompt)
-            .session(format!(
-                "tinyhivemind-pe1006-run-{}:{id}",
-                std::process::id()
-            ))
-            .send(),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("@{id} timed out"))??;
+    let session_id = format!("tinyhivemind-pe1006-run-{}:{id}", std::process::id());
+    let snapshot = snapshots.begin(id, agent.id(), &session_id, &prompt)?;
+    let outcome = timeout(TURN_TIMEOUT, agent.turn(prompt).session(&session_id).send())
+        .await
+        .map_err(|_| anyhow::anyhow!("@{id} timed out"))??;
+    snapshots.complete(snapshot, &outcome.reply)?;
     println!(
         "[completed] @{id}: {}",
         outcome.reply.chars().take(500).collect::<String>()
@@ -433,12 +440,13 @@ async fn run_and_append(
     id: &str,
     transcript: &mut Vec<DeskMessage>,
     visibility: &mut Visibility,
+    snapshots: &mut TurnSnapshots,
     assignment: &str,
 ) -> anyhow::Result<()> {
     let agent = agents
         .get(id)
         .ok_or_else(|| anyhow::anyhow!("missing {id}"))?;
-    let body = seat_turn(agent, id, transcript, visibility, assignment).await?;
+    let body = seat_turn(agent, id, transcript, visibility, snapshots, assignment).await?;
     visibility.mark_delivered(id, transcript.len());
     let index = transcript.len();
     transcript.push(DeskMessage {
