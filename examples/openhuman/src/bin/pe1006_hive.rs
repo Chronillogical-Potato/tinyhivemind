@@ -34,7 +34,7 @@ use workspace_support::{TurnSnapshots, hive_workspace, initialize_workspace};
 const MODEL: &str = "openai/gpt-oss-120b:nitro";
 const PROVIDER_BASE: &str = "https://openrouter.ai/api/v1";
 const TURN_TIMEOUT: Duration = Duration::from_secs(600);
-const TASK: &str = r#"Starting with two strings S_0 = 0 and S_1 = 01, define S_n as the
+const TASK_1006: &str = r#"Starting with two strings S_0 = 0 and S_1 = 01, define S_n as the
 concatenation S_(n-1)S_(n-2) for n >= 2.
 
 For example, S_2 = 010, S_3 = 01001, and S_4 = 01001010.
@@ -49,6 +49,18 @@ Psi(3) = 20302. You are also given
 Psi(10) = 10699667 (mod 101001001).
 
 Find Psi(10^18) mod 101001001."#;
+const TASK_1008: &str = r#"Define the (N,M)-functional inverse of x^2 to be the monic
+polynomial Q(x) of degree N+1 such that Q(n^2) is congruent to n modulo M for
+all integers 0 <= n <= N and all coefficients are non-negative and smaller
+than M.
+
+For example, the (2,7)-functional inverse of x^2 is
+x^3 + 3x^2 + 4x.
+
+Find the coefficient of x^10 in the (10^7, 10^9+7)-functional inverse of x^2.
+
+Source: https://projecteuler.net/problem=1008"#;
+const TASK: &str = TASK_1006;
 
 const SEALED: &str = "Use only the statement, this desk transcript, and computations in the shared workspace. Do not search the web, inspect this repository, use inherited solution memory, or read outside the workspace. Never invent a residue. Keep the desk message below 1800 characters and name concrete files or checks.";
 const PRIOR_FAILURE: &str = "Prior hive runs were rejected. Candidate residues 58302041 and 14193671 came from invalid methods and must not be reused. A later run fabricated 123456789, which is not even a canonical residue modulo 101001001; its claimed verifier actually failed at k=1 and its solver printed a different value. One run fitted an order-60 Berlekamp-Massey recurrence from only 120 terms and tested it on no held-out suffix; that is interpolation, not proof. Another used a finite-state factor language that already overcounts at k=5, and its claimed code failed the supplied k=10 sample when actually executed. Do not use Berlekamp-Massey, guessed recurrences, fitted scaling factors, or a finite forbidden-pattern DFA. Derive an exact identity from Fibonacci/Sturmian/Ostrowski structure, and validate any implementation well beyond the cases used to derive it.";
@@ -105,6 +117,15 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run() -> anyhow::Result<()> {
+    let problem = std::env::var("OPENHUMAN_HIVE_PROBLEM").unwrap_or_else(|_| "1006".into());
+    let (task, prior_failure) = match problem.as_str() {
+        "1006" => (TASK_1006, PRIOR_FAILURE),
+        "1008" => (
+            TASK_1008,
+            "No prior attempts are supplied. Derive the result independently and verify it on small N before scaling.",
+        ),
+        other => anyhow::bail!("unsupported hive problem {other}"),
+    };
     let api_key = std::env::var("OPENROUTER_API_KEY")?;
     let typesafe_api_key = std::env::var("TYPESAFE_API_KEY")?;
     let backend = MockServer::start().await;
@@ -121,8 +142,16 @@ async fn run() -> anyhow::Result<()> {
     let run_dir = workspace.join("runs").join(&run_id);
     let outbox_dir = run_dir.join("hive-tool-outboxes");
     initialize_workspace(&workspace)?;
+    if problem == "1008" {
+        std::fs::write(
+            workspace.join("TASK.md"),
+            format!("# Project Euler 1008\n\n{task}\n"),
+        )?;
+    }
     std::fs::create_dir_all(&run_dir)?;
-    stage_research_sources(&workspace).await?;
+    if problem == "1006" {
+        stage_research_sources(&workspace).await?;
+    }
 
     let config = inherited_config().await?;
     if config.subsystems.memory.driver != "tinycortex" {
@@ -147,45 +176,51 @@ async fn run() -> anyhow::Result<()> {
             &runtime,
             &workspace,
             &outbox_dir,
+            &problem,
             "theory",
-            "You are the Fibonacci-word combinatorics specialist. Derive exact structure and logarithmic formulas; test every claimed identity on small k.",
+            role_prompt(&problem, "theory"),
         )?,
         instantiated(
             &runtime,
             &workspace,
             &outbox_dir,
+            &problem,
             "solver",
-            "You are the implementation specialist. Turn proven formulas into exact modular code, run it, and report reproducible commands and residues.",
+            role_prompt(&problem, "solver"),
         )?,
         instantiated(
             &runtime,
             &workspace,
             &outbox_dir,
+            &problem,
             "checker",
-            "You are the adversarial verifier. Independently reproduce samples, attack extrapolations, and sign only an exact candidate supported by code.",
+            role_prompt(&problem, "checker"),
         )?,
         instantiated(
             &runtime,
             &workspace,
             &outbox_dir,
+            &problem,
             "lead",
-            "You coordinate the desk. Reconcile disagreements, demand missing evidence, and state a final residue only after checker sign-off.",
+            role_prompt(&problem, "lead"),
         )?,
         instantiated(
             &runtime,
             &workspace,
             &outbox_dir,
+            &problem,
             "researcher",
-            "You are the web researcher. Locate public derivations, implementations, or corroborating results and report exact URLs plus the useful mathematical steps.",
+            role_prompt(&problem, "researcher"),
         )?,
     ])?;
     let router = JevRouter::new(typesafe_support::Transport::new(typesafe_api_key)?);
     let mut roster_version = 1_u64;
     let initial_request = typesafe_support::request(
-        TASK,
+        task,
         RoutingSource::DeskMessage,
-        route_candidates(None),
+        route_candidates(&problem, None),
         roster_version,
+        &problem,
     );
     let route = route_message(Some(&router), None, &initial_request, None, "lead").await;
     let mut selected = routed_ids(&route);
@@ -209,8 +244,8 @@ async fn run() -> anyhow::Result<()> {
     let team = ["theory", "solver", "checker", "lead", "researcher"];
     let mut episode = CompletionEpisodeState {
         conversation: tinyhivemind::Conversation {
-            desk_id: "pe1006".into(),
-            desk_name: "PE1006".into(),
+            desk_id: format!("pe{problem}"),
+            desk_name: format!("PE{problem}"),
             thread_root: None,
         },
         watermark: tinyhivemind::Sequence(0),
@@ -246,11 +281,16 @@ async fn run() -> anyhow::Result<()> {
         let turn = seat_turn(
             agent,
             &id,
-            &transcript,
-            &visibility,
-            &mut snapshots,
-            &outbox,
-            &completion_assignment(&id),
+            TurnContext {
+                transcript: &transcript,
+                visibility: &visibility,
+                snapshots: &mut snapshots,
+                outbox: &outbox,
+                assignment: &completion_assignment(&problem, &id),
+                task,
+                prior_failure,
+                problem: &problem,
+            },
         )
         .await?;
         visibility.mark_delivered(&id, transcript.len());
@@ -288,8 +328,9 @@ async fn run() -> anyhow::Result<()> {
                         RoutingSource::AgentBroadcast {
                             author_id: id.clone(),
                         },
-                        route_candidates(Some(&id)),
+                        route_candidates(&problem, Some(&id)),
                         roster_version,
+                        &problem,
                     );
                     let plan = route_broadcast(Some(&router), None, &request, "lead").await;
                     let mut recipients = routed_ids(&plan);
@@ -351,10 +392,11 @@ fn instantiated(
     runtime: &Runtime,
     workspace: &Path,
     outbox_dir: &Path,
+    problem: &str,
     id: &'static str,
-    role: &str,
+    role: String,
 ) -> anyhow::Result<(&'static str, Agent)> {
-    let runtime_id = format!("{id}-pe1006-{}", std::process::id());
+    let runtime_id = format!("{id}-pe{problem}-{}", std::process::id());
     let tools = vec![
         "file_read".into(),
         "file_write".into(),
@@ -399,18 +441,14 @@ fn instantiated(
         .map_err(Into::into)
 }
 
-async fn seat_turn(
-    agent: &Agent,
-    id: &str,
-    transcript: &[DeskMessage],
-    visibility: &Visibility,
-    snapshots: &mut TurnSnapshots,
-    outbox: &Path,
-    assignment: &str,
-) -> anyhow::Result<SeatTurn> {
-    hive_tools::clear(outbox)?;
-    let first = visibility.seen.get(id).is_none_or(BTreeSet::is_empty);
-    let delta = visibility.delta(id, transcript);
+async fn seat_turn(agent: &Agent, id: &str, context: TurnContext<'_>) -> anyhow::Result<SeatTurn> {
+    hive_tools::clear(context.outbox)?;
+    let first = context
+        .visibility
+        .seen
+        .get(id)
+        .is_none_or(BTreeSet::is_empty);
+    let delta = context.visibility.delta(id, context.transcript);
     let policy = if id == "researcher" {
         RESEARCH_POLICY
     } else {
@@ -420,30 +458,48 @@ async fn seat_turn(
         "{}{}\n\n## New desk messages\n{}\n\n## This assignment\n{}\n\nThe durable shared workspace is `{}`. Read `AGENTS.md` and `MEMORY.md` before working. Write role-prefixed artifacts there and update `MEMORY.md` only with reproduced, evidence-linked learnings. Do not write or read `/tmp/openhuman` or any other directory.\n\nYou MUST end this turn with exactly one TinyHiveMind action through `mcp_call_tool` on server `tinyhive`: call remote tool `broadcast` with a self-contained message when another teammate should take work, or `complete_episode` with your evidence-dense final result when your assignment is done. First use `mcp_list_tools` if needed. Text outside that MCP call is private thinking and is not delivered to the team.",
         if first {
             format!(
-                "## Official statement\n{TASK}\n\n## Rejected prior experiment\n{PRIOR_FAILURE}\n\n"
+                "## Official statement\n{}\n\n## Prior experiment status\n{}\n\n",
+                context.task, context.prior_failure
             )
         } else {
             String::new()
         },
         policy,
         if delta.is_empty() { "(none)" } else { &delta },
-        assignment,
+        context.assignment,
         agent.action_dir().display(),
     );
-    let session_id = format!("tinyhivemind-pe1006-run-{}:{id}", std::process::id());
-    let snapshot = snapshots.begin(id, agent.id(), &session_id, &prompt)?;
+    let session_id = format!(
+        "tinyhivemind-pe{}-run-{}:{id}",
+        context.problem,
+        std::process::id()
+    );
+    let snapshot = context
+        .snapshots
+        .begin(id, agent.id(), &session_id, &prompt)?;
     let outcome = timeout(TURN_TIMEOUT, agent.turn(prompt).session(&session_id).send())
         .await
         .map_err(|_| anyhow::anyhow!("@{id} timed out"))??;
-    snapshots.complete(snapshot, &outcome.reply)?;
+    context.snapshots.complete(snapshot, &outcome.reply)?;
     println!(
         "[completed] @{id}: {}",
         outcome.reply.chars().take(500).collect::<String>()
     );
     Ok(SeatTurn {
         reply: outcome.reply,
-        utterances: hive_tools::drain(outbox)?,
+        utterances: hive_tools::drain(context.outbox)?,
     })
+}
+
+struct TurnContext<'a> {
+    transcript: &'a [DeskMessage],
+    visibility: &'a Visibility,
+    snapshots: &'a mut TurnSnapshots,
+    outbox: &'a Path,
+    assignment: &'a str,
+    task: &'a str,
+    prior_failure: &'a str,
+    problem: &'a str,
 }
 
 struct SeatTurn {
@@ -451,7 +507,10 @@ struct SeatTurn {
     utterances: Vec<tinyhivemind::speech::Utterance>,
 }
 
-fn completion_assignment(id: &str) -> String {
+fn completion_assignment(problem: &str, id: &str) -> String {
+    if problem == "1008" {
+        return completion_assignment_1008(id);
+    }
     let role = match id {
         "researcher" => format!(
             "Audit the provenance of the staged EulerSolve and cirosantilli sources. Broadcast the exact public method and file paths to the best implementation or verification specialist. {RESEARCH_START}"
@@ -465,9 +524,55 @@ fn completion_assignment(id: &str) -> String {
     format!("{role}\nDo not repeat already-settled work from the desk delta.")
 }
 
-fn route_candidates(exclude: Option<&str>) -> Vec<RouteCandidate> {
+fn completion_assignment_1008(id: &str) -> String {
+    let role = match id {
+        "theory" => {
+            "Derive a closed expression for the x^10 coefficient using Lagrange or Newton interpolation at nodes n^2. Track the extra monic x^(N+1) term and reduce the answer to sums/products computable modulo 10^9+7. Validate the derivation for small N, then broadcast the exact formula to solver."
+        }
+        "solver" => {
+            "Implement the exact PE1008 coefficient formula modulo 10^9+7. Construct interpolation polynomials directly for small N and compare the formula, then scale to N=10^7. Broadcast the candidate, code path, and checks to checker; complete only after checker evidence arrives."
+        }
+        "checker" => {
+            "Independently derive or brute-force the x^10 coefficient for several small N and compare the solver's formula. Audit modular inverses and the contribution from the required monic x^(N+1) term. Complete only with command-backed sign-off or broadcast a counterexample."
+        }
+        "lead" => {
+            "Reconcile only proved formulas and executable checks. Broadcast the most useful unresolved proof or verification task; complete only after independent checker sign-off."
+        }
+        "researcher" => {
+            "Find general references on interpolation at square nodes, inverse Vandermonde coefficients, and symmetric-polynomial formulas. Do not search for PE1008 answers or published solution code. Broadcast cited mathematical identities to the best specialist."
+        }
+        _ => {
+            "Advance the sealed PE1008 derivation and use a TinyHiveMind tool to hand off or complete."
+        }
+    };
+    format!("{role}\nThis is a sealed run: do not search for or use PE1008 answers.")
+}
+
+fn role_prompt(problem: &str, id: &str) -> String {
+    if problem == "1008" {
+        return match id {
+            "theory" => "You are the algebra and interpolation specialist. Derive exact coefficient identities and prove every reduction.".into(),
+            "solver" => "You are the modular implementation specialist. Turn proved formulas into efficient code and validate against direct interpolation for small N.".into(),
+            "checker" => "You are the adversarial verifier. Independently derive small cases, attack sign/index errors, and sign only command-backed exact results.".into(),
+            "lead" => "You coordinate the sealed PE1008 desk and accept only independently checked mathematical evidence.".into(),
+            "researcher" => "You may research general interpolation mathematics, but must not search for PE1008 answers or solution implementations.".into(),
+            _ => "You are a PE1008 specialist.".into(),
+        };
+    }
+    match id {
+        "theory" => "You are the Fibonacci-word combinatorics specialist. Derive exact structure and logarithmic formulas; test every claimed identity on small k.".into(),
+        "solver" => "You are the implementation specialist. Turn proven formulas into exact modular code, run it, and report reproducible commands and residues.".into(),
+        "checker" => "You are the adversarial verifier. Independently reproduce samples, attack extrapolations, and sign only an exact candidate supported by code.".into(),
+        "lead" => "You coordinate the desk. Reconcile disagreements, demand missing evidence, and state a final residue only after checker sign-off.".into(),
+        "researcher" => "You are the web researcher. Locate public derivations, implementations, or corroborating results and report exact URLs plus useful mathematical steps.".into(),
+        _ => "You are a PE1006 specialist.".into(),
+    }
+}
+
+fn route_candidates(problem: &str, exclude: Option<&str>) -> Vec<RouteCandidate> {
+    let topic = format!("Project Euler {problem}");
     [
-        ("theory", "Fibonacci-word combinatorics and exact proofs"),
+        ("theory", "algebraic structure and exact proofs"),
         (
             "solver",
             "exact modular implementation and executable checks",
@@ -484,7 +589,7 @@ fn route_candidates(exclude: Option<&str>) -> Vec<RouteCandidate> {
         role: Some(description.into()),
         description: Some(description.into()),
         capabilities: vec![description.into()],
-        learned_topics: vec!["Project Euler 1006".into()],
+        learned_topics: vec![topic.clone()],
         available: true,
     })
     .collect()

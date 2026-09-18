@@ -64,16 +64,19 @@ pub(super) fn request(
     source: RoutingSource,
     candidates: Vec<RouteCandidate>,
     roster_version: u64,
+    problem: &str,
 ) -> RoutingRequest {
     RoutingRequest {
         message: message.into(),
         source,
         conversation: ConversationRef {
-            id: "pe1006".into(),
+            id: format!("pe{problem}"),
             kind: ConversationKind::Desk,
             thread_root: Some(Sequence(1)),
         },
-        desk_purpose: Some("derive and independently verify an exact PE1006 residue".into()),
+        desk_purpose: Some(format!(
+            "derive and independently verify the exact Project Euler {problem} answer"
+        )),
         thread_context: vec!["Only explicit completion ends an assignment".into()],
         candidates,
         roster_version,
