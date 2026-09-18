@@ -367,7 +367,7 @@ fn cleanup_timeout_is_bounded_and_typed() {
 }
 
 #[test]
-fn real_docker_caps_action_and_patch_files_before_host_buffering() {
+fn live_real_docker_caps_action_and_patch_files_before_host_buffering() {
     if std::env::var_os("DEEPSWE_REAL_DOCKER_TEST").is_none() {
         return;
     }
@@ -416,7 +416,7 @@ fn real_docker_caps_action_and_patch_files_before_host_buffering() {
 }
 
 #[test]
-fn real_docker_preflight_leaves_no_named_container() {
+fn live_real_docker_preflight_leaves_no_named_container() {
     if std::env::var_os("DEEPSWE_REAL_DOCKER_TEST").is_none() {
         return;
     }

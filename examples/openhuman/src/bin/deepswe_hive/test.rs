@@ -427,6 +427,11 @@ fn hive_mcp_writes_only_native_tool_calls_and_separates_protocol_errors() {
         serde_json::json!(3),
     );
     assert_eq!(response["result"]["isError"], true);
+    std::fs::write(&outbox, vec![b'x'; 64 * 1024 + 1]).expect("oversized outbox");
+    assert!(super::mcp::drain(&outbox)
+        .expect_err("oversized outbox is rejected")
+        .to_string()
+        .contains("exceeds"));
 }
 
 #[test]
@@ -466,7 +471,7 @@ fn inspector_timeout_kills_a_hung_docker_cli() {
 }
 
 #[test]
-fn real_docker_fixture_flow_confines_actions_and_captures_new_files() {
+fn live_real_docker_fixture_flow_confines_actions_and_captures_new_files() {
     if std::env::var_os("DEEPSWE_REAL_DOCKER_TEST").is_none() {
         return;
     }

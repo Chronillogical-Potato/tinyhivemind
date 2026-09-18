@@ -9,6 +9,8 @@ use tinyhivemind::speech::{CallArguments, ToolCall, Utterance, interpret};
 
 use super::sandbox::{DockerSandbox, SandboxConfig};
 
+const MAX_OUTBOX_BYTES: u64 = 64 * 1024;
+
 #[derive(Debug)]
 pub(super) enum Server {
     Hive { agent: String, outbox: PathBuf },
@@ -335,6 +337,13 @@ pub(super) fn clear(path: &Path) -> anyhow::Result<()> {
 }
 
 pub(super) fn drain(path: &Path) -> anyhow::Result<Vec<Utterance>> {
+    let metadata = std::fs::symlink_metadata(path)?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        anyhow::bail!("hive outbox must be a prepared regular file")
+    }
+    if metadata.len() > MAX_OUTBOX_BYTES {
+        anyhow::bail!("hive outbox exceeds {MAX_OUTBOX_BYTES}-byte limit")
+    }
     Ok(std::fs::read_to_string(path)?
         .lines()
         .map(serde_json::from_str)

@@ -198,11 +198,11 @@ impl DockerSandbox {
         let script = r#"set +e
 set -o pipefail
 {
-  git -c core.hooksPath=/dev/null -c diff.external= -c core.quotePath=true diff --binary --no-ext-diff --no-textconv "$1" -- . || exit "$?"
-  git -c core.hooksPath=/dev/null ls-files --others --exclude-standard -z |
+  git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c diff.external= -c core.quotePath=true diff --binary --no-ext-diff --no-textconv "$1" -- . || exit "$?"
+  git -c core.hooksPath=/dev/null -c core.fsmonitor=false ls-files --others --exclude-standard -z |
     LC_ALL=C sort -z |
     while IFS= read -r -d '' file; do
-      git -c core.hooksPath=/dev/null -c diff.external= -c core.quotePath=true diff --binary --no-ext-diff --no-textconv --no-index -- /dev/null "$file" || test "$?" -eq 1
+      git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c diff.external= -c core.quotePath=true diff --binary --no-ext-diff --no-textconv --no-index -- /dev/null "$file" || test "$?" -eq 1
     done
 } | head -c "$2" > /tmp/deepswe.patch
 statuses=("${PIPESTATUS[@]}")

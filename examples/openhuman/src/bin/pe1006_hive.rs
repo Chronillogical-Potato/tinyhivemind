@@ -388,7 +388,7 @@ async fn run() -> anyhow::Result<()> {
                 .remove(id)
                 .ok_or_else(|| anyhow::anyhow!("round did not retain {id}'s action"))?;
             sequence = sequence.saturating_add(1);
-            if matches!(utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
+            if matches!(&utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
                 roster_version = roster_version.saturating_add(1);
             }
             match &utterance {
@@ -413,7 +413,7 @@ async fn run() -> anyhow::Result<()> {
                     anyhow::bail!("MCP completion surface emitted an unsupported utterance")
                 }
             }
-            if !matches!(utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
+            if !matches!(&utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
                 println!("[complete_episode] @{id}");
             }
             committed.push(CommittedUtterance {
@@ -424,7 +424,7 @@ async fn run() -> anyhow::Result<()> {
         }
         let routing = committed.iter().any(|event| {
             matches!(
-                event.utterance,
+                &event.utterance,
                 tinyhivemind::speech::Utterance::Broadcast { .. }
             )
         });
