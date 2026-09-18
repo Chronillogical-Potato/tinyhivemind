@@ -73,8 +73,6 @@ fn request(candidate_count: usize, option_limit: usize) -> RoutingRequest {
         policy: RoutingPolicy {
             minimum_confidence: Probability::ZERO,
             high_impact_minimum_confidence: Probability::ZERO,
-            collaboration_threshold: Probability::ONE,
-            contribution_threshold: Probability::ONE,
             clarification_threshold: Probability::ONE,
             high_impact_threshold: Probability::ONE,
             round_width: 2,

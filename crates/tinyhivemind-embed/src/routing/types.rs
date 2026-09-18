@@ -35,10 +35,6 @@ pub struct RoutingPolicy {
     pub minimum_confidence: Probability,
     /// Higher confidence required when the request is high impact.
     pub high_impact_minimum_confidence: Probability,
-    /// Probability at which collaboration is selected.
-    pub collaboration_threshold: Probability,
-    /// Probability at which an additional candidate is invited.
-    pub contribution_threshold: Probability,
     /// Probability at which missing routing information requires escalation.
     pub clarification_threshold: Probability,
     /// Probability at which the high-impact confidence rule applies.
@@ -113,11 +109,11 @@ pub struct RoutingEvaluation {
     pub primary_probabilities: Vec<CandidateProbability>,
     /// Choice distribution concentration.
     pub confidence: Probability,
-    /// Whether one competent agent is insufficient.
+    /// Whether one competent agent is insufficient, retained for audit.
     pub needs_collaboration: Probability,
     /// Whether essential routing information is absent.
     pub needs_clarification: Probability,
-    /// Independent distinct-contribution probabilities.
+    /// Independent distinct-contribution probabilities retained for audit.
     pub contributions: Vec<ContributionProbability>,
     /// Whether errors would have unusually serious consequences.
     pub high_impact: Probability,
@@ -164,7 +160,8 @@ pub enum RoutingPlan {
         /// Accepted semantic evaluation.
         evaluation: RoutingEvaluation,
     },
-    /// Open one bounded desk-scoped hive episode.
+    /// Open one bounded desk-scoped hive episode whose primary and invited
+    /// agents receive the message concurrently in the opening round.
     Hive {
         /// Canonical primary responder id.
         primary_id: String,

@@ -103,8 +103,6 @@ fn request() -> RoutingRequest {
         policy: RoutingPolicy {
             minimum_confidence: probability(600_000),
             high_impact_minimum_confidence: probability(800_000),
-            collaboration_threshold: probability(600_000),
-            contribution_threshold: probability(600_000),
             clarification_threshold: probability(700_000),
             high_impact_threshold: probability(700_000),
             round_width: 2,

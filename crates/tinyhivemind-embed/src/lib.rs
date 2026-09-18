@@ -27,7 +27,7 @@ pub use agents::{AgentRegistry, AgentRegistryError, RoutedAgent, RoutedAgents};
 pub use conversation::{ConversationKind, ConversationRef, MessageRoute};
 pub use error::{Error, Result};
 pub use routing::{
-    CandidateProbability, ContributionProbability, EvaluationDisposition, RouteCandidate, Router,
-    RouterError, RouterFuture, RoutingEvaluation, RoutingFallback, RoutingPlan, RoutingPolicy,
-    RoutingRequest, route_message,
+    CONCURRENT_CHOICE_THRESHOLD_PARTS, CandidateProbability, ContributionProbability,
+    EvaluationDisposition, RouteCandidate, Router, RouterError, RouterFuture, RoutingEvaluation,
+    RoutingFallback, RoutingPlan, RoutingPolicy, RoutingRequest, route_message,
 };

@@ -38,19 +38,22 @@ fn evaluation(request: &RoutingRequest) -> RoutingEvaluation {
         .filter(|candidate| candidate.available)
         .collect();
     let primary = eligible[0].id.clone();
-    let remainder = 300_000 / u32::try_from(eligible.len() - 1).expect("several candidates");
-    let mut assigned = 600_000_u32;
+    let tail_count = u32::try_from(eligible.len() - 3).expect("several candidates");
+    let tail_each = 10_000 / tail_count;
+    let mut tail_assigned = 0_u32;
     let mut primary_probabilities = vec![CandidateProbability {
         candidate_id: primary.clone(),
-        probability: probability(600_000),
+        probability: probability(450_000),
     }];
     for (index, candidate) in eligible.iter().skip(1).enumerate() {
-        let parts = if index + 2 == eligible.len() {
-            900_000 - assigned
-        } else {
-            remainder
+        let parts = match index {
+            0 | 1 => 220_000,
+            _ if index + 2 == eligible.len() => 10_000 - tail_assigned,
+            _ => {
+                tail_assigned += tail_each;
+                tail_each
+            }
         };
-        assigned += parts;
         primary_probabilities.push(CandidateProbability {
             candidate_id: candidate.id.clone(),
             probability: probability(parts),
@@ -109,8 +112,6 @@ fn request(desk: usize, kind: ConversationKind) -> RoutingRequest {
         policy: RoutingPolicy {
             minimum_confidence: probability(600_000),
             high_impact_minimum_confidence: probability(800_000),
-            collaboration_threshold: probability(600_000),
-            contribution_threshold: probability(600_000),
             clarification_threshold: probability(700_000),
             high_impact_threshold: probability(700_000),
             round_width: 4,
@@ -137,7 +138,7 @@ async fn one_thousand_agents_across_one_hundred_desks_remain_bounded() {
         let RoutingPlan::Hive { invited_ids, .. } = plan else {
             panic!("desk request should open a hive");
         };
-        assert!(invited_ids.len() <= 3);
+        assert_eq!(invited_ids.len(), 2);
     }
     assert_eq!(calls.load(Ordering::SeqCst), 100);
 }
