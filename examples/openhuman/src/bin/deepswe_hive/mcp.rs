@@ -15,6 +15,11 @@ pub(super) enum Server {
     Workspace { sandbox: DockerSandbox },
 }
 
+enum CallError {
+    InvalidParams(String),
+    Execution(String),
+}
+
 pub(super) fn requested() -> anyhow::Result<Option<Server>> {
     let mut args = std::env::args().skip(1);
     let Some(mode) = args.next() else {
@@ -69,33 +74,49 @@ pub(super) fn serve(server: &Server) -> anyhow::Result<()> {
         let Some(id) = request.get("id").cloned() else {
             continue;
         };
-        let result = match request
-            .get("method")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-        {
-            "initialize" => Ok(json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": server.name(), "version": env!("CARGO_PKG_VERSION")}
-            })),
-            "ping" => Ok(json!({})),
-            "tools/list" => Ok(json!({"tools": descriptors(server)})),
-            "tools/call" => call(server, &request)
-                .map(|text| json!({"content": [{"type": "text", "text": text}]})),
-            other => Err(format!("unknown method {other}")),
-        };
-        let response = match result {
-            Ok(result) => json!({"jsonrpc":"2.0", "id":id, "result":result}),
-            Err(error) => json!({
-                "jsonrpc":"2.0", "id":id,
-                "error":{"code":-32601,"message":error}
-            }),
-        };
+        let response = response(server, &request, id);
         writeln!(stdout, "{response}")?;
         stdout.flush()?;
     }
     Ok(())
+}
+
+pub(super) fn response(server: &Server, request: &Value, id: Value) -> Value {
+    match request
+        .get("method")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+    {
+        "initialize" => success(
+            id,
+            json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": server.name(), "version": env!("CARGO_PKG_VERSION")}
+            }),
+        ),
+        "ping" => success(id, json!({})),
+        "tools/list" => success(id, json!({"tools": descriptors(server)})),
+        "tools/call" => match call(server, request) {
+            Ok(text) => success(id, json!({"content": [{"type": "text", "text": text}]})),
+            Err(CallError::InvalidParams(error)) => json!({
+                    "jsonrpc":"2.0", "id":id,
+                    "error":{"code":-32602,"message":error}
+                }),
+            Err(CallError::Execution(error)) => json!({
+                    "jsonrpc":"2.0", "id":id,
+                    "result":{"content":[{"type":"text","text":error}],"isError":true}
+                }),
+        },
+        other => json!({
+                "jsonrpc":"2.0", "id":id,
+                "error":{"code":-32601,"message":format!("unknown method {other}")}
+            }),
+    }
+}
+
+fn success(id: Value, result: Value) -> Value {
+    json!({"jsonrpc":"2.0", "id":id, "result":result})
 }
 
 impl Server {
@@ -107,18 +128,49 @@ impl Server {
     }
 }
 
-fn call(server: &Server, request: &Value) -> Result<String, String> {
-    let name = request
-        .pointer("/params/name")
+fn call(server: &Server, request: &Value) -> Result<String, CallError> {
+    let params = request
+        .get("params")
+        .and_then(Value::as_object)
+        .ok_or_else(|| CallError::InvalidParams("tools/call requires params".into()))?;
+    let name = params
+        .get("name")
         .and_then(Value::as_str)
-        .unwrap_or_default();
-    let args = request
-        .pointer("/params/arguments")
-        .cloned()
-        .unwrap_or_else(|| json!({}));
+        .ok_or_else(|| CallError::InvalidParams("tools/call requires a tool name".into()))?;
+    let args = params
+        .get("arguments")
+        .and_then(Value::as_object)
+        .ok_or_else(|| CallError::InvalidParams("tools/call requires object arguments".into()))?;
+    let required = match server {
+        Server::Hive { .. } => match name {
+            "broadcast" | "complete_episode" => ["message"].as_slice(),
+            _ => return Err(CallError::InvalidParams(format!("unknown hive tool {name}"))),
+        },
+        Server::Workspace { .. } => match name {
+            "file_read" => ["path"].as_slice(),
+            "file_write" => ["path", "content"].as_slice(),
+            "file_edit" => ["path", "old", "new"].as_slice(),
+            "shell" | "test" => ["command"].as_slice(),
+            _ => {
+                return Err(CallError::InvalidParams(format!(
+                    "unknown workspace tool {name}"
+                )));
+            }
+        },
+    };
+    for field in required {
+        if !args.get(*field).is_some_and(Value::is_string) {
+            return Err(CallError::InvalidParams(format!("missing {field}")));
+        }
+    }
+    let args = Value::Object(args.clone());
     match server {
-        Server::Hive { agent, outbox } => hive_call(agent, outbox, name, &args),
-        Server::Workspace { sandbox } => workspace_call(sandbox, name, &args),
+        Server::Hive { agent, outbox } => {
+            hive_call(agent, outbox, name, &args).map_err(CallError::Execution)
+        }
+        Server::Workspace { sandbox } => {
+            workspace_call(sandbox, name, &args).map_err(CallError::Execution)
+        }
     }
 }
 

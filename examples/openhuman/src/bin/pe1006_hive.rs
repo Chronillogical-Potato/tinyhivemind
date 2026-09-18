@@ -309,72 +309,84 @@ async fn run() -> anyhow::Result<()> {
         if pending.is_empty() {
             anyhow::bail!("completion episode has pending work but no scheduled agent")
         }
-        ensure_round_fits(turns, pending.agents().len())?;
         let transcript_len = transcript.len();
-        let prepared = pending
+        let round_agents: BTreeMap<_, _> = pending
             .agents()
             .iter()
             .map(|pending_agent| {
-                let id = pending_agent.hive_agent_id;
-                prepare_seat_turn(
-                    pending_agent.agent.clone(),
-                    id,
-                    TurnContext {
-                        transcript: &transcript,
-                        visibility: &visibility,
-                        outbox: outbox_dir.join(format!("{id}.jsonl")),
-                        assignment: completion_assignment(&problem, id),
-                        task,
-                        prior_failure,
-                        problem: &problem,
-                    },
-                    &mut snapshots,
-                )
+                (pending_agent.hive_agent_id.to_owned(), pending_agent.agent.clone())
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-        let outcomes = join_all(prepared.into_iter().map(seat_turn)).await;
-        let mut round_utterances = Vec::with_capacity(outcomes.len());
-        let mut retry_round = false;
-        for outcome in outcomes {
-            let mut outcome = outcome?;
-            snapshots.complete(outcome.snapshot, &outcome.reply)?;
-            visibility.mark_delivered(&outcome.id, transcript_len);
-            if outcome.utterances.is_empty()
-                && let Some(recovered) = recover_tool_call(&outcome.reply)
-            {
-                println!("[compatibility-recovered-tool-call] @{}", outcome.id);
-                outcome.utterances.push(recovered);
-            }
-            if outcome.utterances.is_empty() {
-                let misses = missed_tools.entry(outcome.id.clone()).or_default();
-                *misses = misses.saturating_add(1);
-                if *misses >= 4 {
+            .collect();
+        let mut remaining: Vec<_> = round_agents.keys().cloned().collect();
+        let mut round_utterances = BTreeMap::new();
+        while !remaining.is_empty() {
+            ensure_round_fits(turns, remaining.len())?;
+            let prepared = remaining
+                .iter()
+                .map(|id| {
+                    let agent = round_agents
+                        .get(id)
+                        .ok_or_else(|| anyhow::anyhow!("pending agent disappeared from round"))?;
+                    prepare_seat_turn(
+                        agent.clone(),
+                        id,
+                        TurnContext {
+                            transcript: &transcript,
+                            visibility: &visibility,
+                            outbox: outbox_dir.join(format!("{id}.jsonl")),
+                            assignment: completion_assignment(&problem, id),
+                            task,
+                            prior_failure,
+                            problem: &problem,
+                        },
+                        &mut snapshots,
+                    )
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let outcomes = join_all(prepared.into_iter().map(seat_turn)).await;
+            turns = turns.saturating_add(u32::try_from(outcomes.len()).unwrap_or(u32::MAX));
+            let mut retry = Vec::new();
+            for outcome in outcomes {
+                let mut outcome = outcome?;
+                snapshots.complete(outcome.snapshot, &outcome.reply)?;
+                visibility.mark_delivered(&outcome.id, transcript_len);
+                if outcome.utterances.is_empty()
+                    && let Some(recovered) = recover_tool_call(&outcome.reply)
+                {
+                    println!("[compatibility-recovered-tool-call] @{}", outcome.id);
+                    outcome.utterances.push(recovered);
+                }
+                if outcome.utterances.is_empty() {
+                    let misses = missed_tools.entry(outcome.id.clone()).or_default();
+                    *misses = misses.saturating_add(1);
+                    if *misses >= 4 {
+                        anyhow::bail!(
+                            "@{} four times failed to call a TinyHiveMind tool",
+                            outcome.id
+                        )
+                    }
+                    println!("[no-hive-tool] @{}; retrying only that seat", outcome.id);
+                    retry.push(outcome.id);
+                    continue;
+                }
+                if outcome.utterances.len() != 1 {
                     anyhow::bail!(
-                        "@{} four times failed to call a TinyHiveMind tool",
-                        outcome.id
+                        "@{} emitted {} TinyHiveMind actions; exactly one is required",
+                        outcome.id,
+                        outcome.utterances.len()
                     )
                 }
-                println!("[no-hive-tool] @{}; rescheduling round", outcome.id);
-                retry_round = true;
-                continue;
+                missed_tools.remove(&outcome.id);
+                round_utterances.insert(outcome.id, outcome.utterances.remove(0));
             }
-            if outcome.utterances.len() != 1 {
-                anyhow::bail!(
-                    "@{} emitted {} TinyHiveMind actions; exactly one is required",
-                    outcome.id,
-                    outcome.utterances.len()
-                )
-            }
-            missed_tools.remove(&outcome.id);
-            round_utterances.push((outcome.id, outcome.utterances.remove(0)));
-        }
-        turns = turns.saturating_add(u32::try_from(pending.agents().len()).unwrap_or(u32::MAX));
-        if retry_round {
-            continue;
+            remaining = retry;
         }
 
         let mut committed = Vec::with_capacity(round_utterances.len());
-        for (id, utterance) in round_utterances {
+        for id in round_agents.keys() {
+            let utterance = round_utterances
+                .remove(id)
+                .ok_or_else(|| anyhow::anyhow!("round did not retain {id}'s action"))?;
             sequence = sequence.saturating_add(1);
             if matches!(utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
                 roster_version = roster_version.saturating_add(1);
@@ -405,7 +417,7 @@ async fn run() -> anyhow::Result<()> {
                 println!("[complete_episode] @{id}");
             }
             committed.push(CommittedUtterance {
-                author_id: id,
+                author_id: id.clone(),
                 sequence: tinyhivemind::Sequence(sequence),
                 utterance,
             });

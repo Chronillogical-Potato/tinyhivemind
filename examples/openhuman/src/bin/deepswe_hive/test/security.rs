@@ -115,39 +115,27 @@ fn every_deepswe_artifact_target_must_be_absent() {
 }
 
 #[test]
-fn nonempty_or_symlinked_outbox_is_rejected_before_external_setup() {
+fn preexisting_outbox_directory_is_rejected_before_external_setup() {
     let (_directory, task) = repository_fixture();
-    for symlink in [false, true] {
-        let output_parent = TempDir::new().expect("output parent");
-        let output = output_parent.path().join("result.json");
-        let outbox = output_parent.path().join("outboxes");
-        std::fs::create_dir(&outbox).expect("outbox");
-        let child = outbox.join("lead.jsonl");
-        if symlink {
-            std::os::unix::fs::symlink(output_parent.path().join("missing"), &child)
-                .expect("outbox symlink");
-        } else {
-            std::fs::write(&child, "stale action\n").expect("stale action");
-        }
-        let error = prepare_artifacts(&task, &output).expect_err("stale outbox rejected");
-        assert!(error.to_string().contains("already exists"), "{error:#}");
-    }
+    let output_parent = TempDir::new().expect("output parent");
+    let output = output_parent.path().join("result.json");
+    std::fs::create_dir(output_parent.path().join("outboxes")).expect("outbox");
+    let error = prepare_artifacts(&task, &output).expect_err("stale outbox rejected");
+    assert!(error.to_string().contains("already exists"), "{error:#}");
 }
 
 #[test]
-fn outbox_initialization_refuses_a_preexisting_child_or_symlink() {
-    for symlink in [false, true] {
-        let directory = TempDir::new().expect("outbox directory");
-        let child = directory.path().join("lead.jsonl");
-        if symlink {
-            std::os::unix::fs::symlink(directory.path().join("missing"), &child)
-                .expect("outbox symlink");
-        } else {
-            std::fs::create_dir(&child).expect("non-file child");
-        }
-        let error = super::super::mcp::clear(&child).expect_err("hostile child rejected");
-        assert!(error.to_string().contains("regular file"), "{error:#}");
-    }
+fn outbox_initialization_truncates_regular_files_and_rejects_hostile_children() {
+    let directory = TempDir::new().expect("outbox directory");
+    let child = directory.path().join("lead.jsonl");
+    std::fs::write(&child, "stale action\n").expect("regular child");
+    super::super::mcp::clear(&child).expect("regular child truncates");
+    assert!(std::fs::read_to_string(&child).expect("read child").is_empty());
+    std::fs::remove_file(&child).expect("remove child");
+    std::os::unix::fs::symlink(directory.path().join("missing"), &child)
+        .expect("outbox symlink");
+    let error = super::super::mcp::clear(&child).expect_err("hostile child rejected");
+    assert!(error.to_string().contains("regular file"), "{error:#}");
 }
 
 #[test]

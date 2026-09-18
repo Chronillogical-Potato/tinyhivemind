@@ -378,12 +378,55 @@ fn refuses_to_schedule_a_round_past_the_exact_turn_cap() {
 }
 
 #[test]
-fn assistant_json_is_not_recovered_as_a_committed_hive_action() {
+fn docker_mounts_reject_delimiter_paths_before_argument_rendering() {
+    for (source, destination) in [("/tmp/source,comma", "/workspace"), ("/tmp/source", "/workspace,comma")] {
+        let error = super::sandbox::mount(std::path::Path::new(source), destination, false)
+            .expect_err("comma cannot enter Docker mount syntax");
+        assert!(error.to_string().contains("commas"));
+    }
+}
+
+#[test]
+fn hive_mcp_writes_only_native_tool_calls_and_separates_protocol_errors() {
     let directory = TempDir::new().expect("outbox directory");
-    let outbox = directory.path().join("assistant-json.jsonl");
+    let outbox = directory.path().join("lead.jsonl");
     super::mcp::clear(&outbox).expect("clear outbox");
-    let _assistant_reply = r#"{"tool":"tinyhive.broadcast","arguments":{"message":"test passed"}}"#;
-    assert!(super::mcp::drain(&outbox).expect("drain outbox").is_empty());
+    let server = super::mcp::Server::Hive {
+        agent: "lead".into(),
+        outbox: outbox.clone(),
+    };
+    let response = super::mcp::response(
+        &server,
+        &serde_json::json!({
+            "method": "tools/call",
+            "params": {"name": "broadcast", "arguments": {"message": "test passed"}}
+        }),
+        serde_json::json!(1),
+    );
+    assert_eq!(response["result"]["content"][0]["type"], "text");
+    assert!(matches!(
+        super::mcp::drain(&outbox).expect("drain outbox").as_slice(),
+        [tinyhivemind::speech::Utterance::Broadcast { message }] if message == "test passed"
+    ));
+    for request in [
+        serde_json::json!({"method": "unknown"}),
+        serde_json::json!({"method": "tools/call", "params": {"name": "unknown", "arguments": {}}}),
+        serde_json::json!({"method": "tools/call", "params": {"name": "broadcast", "arguments": {}}}),
+    ] {
+        let response = super::mcp::response(&server, &request, serde_json::json!(2));
+        let expected = if request["method"] == "unknown" { -32601 } else { -32602 };
+        assert_eq!(response["error"]["code"], expected);
+    }
+    std::fs::remove_file(&outbox).expect("remove prepared outbox");
+    let response = super::mcp::response(
+        &server,
+        &serde_json::json!({
+            "method": "tools/call",
+            "params": {"name": "broadcast", "arguments": {"message": "retry"}}
+        }),
+        serde_json::json!(3),
+    );
+    assert_eq!(response["result"]["isError"], true);
 }
 
 #[test]
@@ -455,7 +498,7 @@ fn real_docker_fixture_flow_confines_actions_and_captures_new_files() {
     task.validate().expect("valid checked-in fixture copy");
     let sandbox = DockerSandbox::preflight(SandboxConfig::from_env(task.repo_path.clone()))
         .expect("real Docker preflight");
-    let args = action_arguments(&sandbox);
+    let args = action_arguments(&sandbox).expect("mount arguments");
     assert!(args.windows(2).any(|pair| pair == ["--network", "none"]));
     assert!(
         args.iter()

@@ -114,7 +114,7 @@ fn create_inspect_start(
     timeout: Duration,
     max_bytes: u64,
 ) -> anyhow::Result<()> {
-    let mut create_args = action_args(sandbox, true);
+    let mut create_args = action_args(sandbox, true)?;
     create_args.splice(
         1..1,
         [

@@ -210,8 +210,8 @@ test "${statuses[1]}" -eq 0 || exit "${statuses[1]}"
 exit "${statuses[0]}"
 "#;
         let cap = max_bytes.saturating_add(1).to_string();
-        let mut args = inspector_args(self);
-        add_mount(&mut args, mount(patch_file, "/tmp/deepswe.patch", true))?;
+        let mut args = inspector_args(self)?;
+        add_mount(&mut args, mount(patch_file, "/tmp/deepswe.patch", true)?)?;
         let output = run_container_output(
             &self.config,
             args,
@@ -282,10 +282,10 @@ exit "${statuses[0]}"
             }
             .into());
         }
-        let mut container_args = action_args(self, false);
+        let mut container_args = action_args(self, false)?;
         add_mount(
             &mut container_args,
-            mount(output, "/tmp/deepswe-action-output", true),
+            mount(output, "/tmp/deepswe-action-output", true)?,
         )?;
         let cap = max_bytes.saturating_add(1).to_string();
         let wrapper = r#"set +e
@@ -325,32 +325,32 @@ fn mask_source(sandbox: &DockerSandbox) -> PathBuf {
     sandbox.mask.path().join("git-mask")
 }
 
-fn action_args(sandbox: &DockerSandbox, create: bool) -> Vec<String> {
-    container_args(
+fn action_args(sandbox: &DockerSandbox, create: bool) -> anyhow::Result<Vec<String>> {
+    Ok(container_args(
         &sandbox.config,
         false,
         [
-            mount(&sandbox.config.repo_path, "/workspace", true),
-            mount(&mask_source(sandbox), "/workspace/.git", false),
+            mount(&sandbox.config.repo_path, "/workspace", true)?,
+            mount(&mask_source(sandbox), "/workspace/.git", false)?,
         ],
         create,
-    )
+    ))
 }
 
-fn inspector_args(sandbox: &DockerSandbox) -> Vec<String> {
-    let mut mounts = vec![mount(&sandbox.config.repo_path, "/workspace", false)];
+fn inspector_args(sandbox: &DockerSandbox) -> anyhow::Result<Vec<String>> {
+    let mut mounts = vec![mount(&sandbox.config.repo_path, "/workspace", false)?];
     mounts.push(mount(
         &sandbox.config.repo_path.join(".git"),
         "/workspace/.git",
         false,
-    ));
+    )?);
     let standard_git_dir = sandbox.config.repo_path.join(".git").canonicalize().ok();
     if standard_git_dir.as_ref() != Some(&sandbox.git.git_dir) {
         mounts.push(mount(
             &sandbox.git.git_dir,
             &sandbox.git.git_dir.display().to_string(),
             false,
-        ));
+        )?);
     }
     if sandbox.git.common_dir != sandbox.git.git_dir
         && standard_git_dir.as_ref() != Some(&sandbox.git.common_dir)
@@ -359,9 +359,9 @@ fn inspector_args(sandbox: &DockerSandbox) -> Vec<String> {
             &sandbox.git.common_dir,
             &sandbox.git.common_dir.display().to_string(),
             false,
-        ));
+        )?);
     }
-    container_args(&sandbox.config, false, mounts, false)
+    Ok(container_args(&sandbox.config, false, mounts, false))
 }
 
 fn container_args(
@@ -403,12 +403,13 @@ fn container_args(
     args
 }
 
-fn mount(source: &Path, destination: &str, writable: bool) -> String {
+pub(super) fn mount(source: &Path, destination: &str, writable: bool) -> anyhow::Result<String> {
+    let source = source.display().to_string();
+    if source.contains(',') || destination.contains(',') {
+        anyhow::bail!("Docker bind mount paths must not contain commas")
+    }
     let readonly = if writable { "" } else { ",readonly" };
-    format!(
-        "type=bind,src={},dst={destination}{readonly}",
-        source.display()
-    )
+    Ok(format!("type=bind,src={source},dst={destination}{readonly}"))
 }
 
 fn run_container_output(
@@ -475,7 +476,7 @@ fn run_container(
     staged_input.as_file_mut().sync_all()?;
     add_mount(
         &mut container_args,
-        mount(staged_input.path(), CONTAINER_INPUT, false),
+        mount(staged_input.path(), CONTAINER_INPUT, false)?,
     )?;
     let stdout = tempfile::NamedTempFile::new()?;
     let stderr = tempfile::NamedTempFile::new()?;
@@ -562,7 +563,7 @@ fn command(config: &SandboxConfig) -> Command {
 }
 
 #[cfg(test)]
-pub(super) fn action_arguments(sandbox: &DockerSandbox) -> Vec<String> {
+pub(super) fn action_arguments(sandbox: &DockerSandbox) -> anyhow::Result<Vec<String>> {
     action_args(sandbox, false)
 }
 
