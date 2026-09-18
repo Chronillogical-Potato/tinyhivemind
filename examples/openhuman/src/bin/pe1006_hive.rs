@@ -1,33 +1,44 @@
 //! Web-assisted OpenRouter GPT-OSS OpenHuman hive experiment for Project Euler 1006.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use openhuman_embed::{
-    Access, Agent, AgentDefinitionSpec, AgentSpec, Provider, Runtime, RuntimeConfig, ServiceSet,
-    ToolScopeSpec, Workspace,
+    Access, Agent, AgentDefinitionSpec, AgentSpec, McpServer, Provider, Runtime, RuntimeConfig,
+    ServiceSet, ToolScopeSpec, Workspace,
 };
 use serde_json::json;
-use tinyhivemind::responder::Probability;
-use tinyhivemind_embed::{
-    AgentRegistry, CandidateProbability, ContributionProbability, EvaluationDisposition,
-    RoutedAgents, RoutingEvaluation, RoutingPlan,
+use tinyhivemind_embed::{AgentRegistry, RoutingSource, route_broadcast, route_message};
+use tinyhivemind_hive::{
+    CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
+    apply_completion, completion_status,
 };
+use tinyhivemind_typesafe::JevRouter;
 use tokio::time::timeout;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+#[path = "pe1006_hive/episode.rs"]
+mod episode_support;
+#[path = "pe1006_hive/tools.rs"]
+mod hive_tools;
+#[path = "pe1006_hive/typesafe.rs"]
+mod typesafe_support;
 #[path = "pe1006_hive/workspace.rs"]
 mod workspace_support;
 
+use episode_support::{
+    completion_assignment, deterministic_broadcast_fallback, enqueue, recover_tool_call,
+    role_prompt, route_candidates, routed_ids,
+};
 use workspace_support::{TurnSnapshots, hive_workspace, initialize_workspace};
 
 const MODEL: &str = "openai/gpt-oss-120b:nitro";
 const PROVIDER_BASE: &str = "https://openrouter.ai/api/v1";
 const TURN_TIMEOUT: Duration = Duration::from_secs(600);
-const TASK: &str = r#"Starting with two strings S_0 = 0 and S_1 = 01, define S_n as the
+const TASK_1006: &str = r#"Starting with two strings S_0 = 0 and S_1 = 01, define S_n as the
 concatenation S_(n-1)S_(n-2) for n >= 2.
 
 For example, S_2 = 010, S_3 = 01001, and S_4 = 01001010.
@@ -42,6 +53,18 @@ Psi(3) = 20302. You are also given
 Psi(10) = 10699667 (mod 101001001).
 
 Find Psi(10^18) mod 101001001."#;
+const TASK_1008: &str = r#"Define the (N,M)-functional inverse of x^2 to be the monic
+polynomial Q(x) of degree N+1 such that Q(n^2) is congruent to n modulo M for
+all integers 0 <= n <= N and all coefficients are non-negative and smaller
+than M.
+
+For example, the (2,7)-functional inverse of x^2 is
+x^3 + 3x^2 + 4x.
+
+Find the coefficient of x^10 in the (10^7, 10^9+7)-functional inverse of x^2.
+
+Source: https://projecteuler.net/problem=1008"#;
+const TASK: &str = TASK_1006;
 
 const SEALED: &str = "Use only the statement, this desk transcript, and computations in the shared workspace. Do not search the web, inspect this repository, use inherited solution memory, or read outside the workspace. Never invent a residue. Keep the desk message below 1800 characters and name concrete files or checks.";
 const PRIOR_FAILURE: &str = "Prior hive runs were rejected. Candidate residues 58302041 and 14193671 came from invalid methods and must not be reused. A later run fabricated 123456789, which is not even a canonical residue modulo 101001001; its claimed verifier actually failed at k=1 and its solver printed a different value. One run fitted an order-60 Berlekamp-Massey recurrence from only 120 terms and tested it on no held-out suffix; that is interpolation, not proof. Another used a finite-state factor language that already overcounts at k=5, and its claimed code failed the supplied k=10 sample when actually executed. Do not use Berlekamp-Massey, guessed recurrences, fitted scaling factors, or a finite forbidden-pattern DFA. Derive an exact identity from Fibonacci/Sturmian/Ostrowski structure, and validate any implementation well beyond the cases used to derive it.";
@@ -87,6 +110,9 @@ impl Visibility {
 }
 
 fn main() -> anyhow::Result<()> {
+    if let Some(server) = hive_tools::requested()? {
+        return hive_tools::serve(&server);
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(16 * 1024 * 1024)
@@ -95,7 +121,17 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run() -> anyhow::Result<()> {
+    let problem = std::env::var("OPENHUMAN_HIVE_PROBLEM").unwrap_or_else(|_| "1006".into());
+    let (task, prior_failure) = match problem.as_str() {
+        "1006" => (TASK_1006, PRIOR_FAILURE),
+        "1008" => (
+            TASK_1008,
+            "No prior attempts are supplied. Derive the result independently and verify it on small N before scaling.",
+        ),
+        other => anyhow::bail!("unsupported hive problem {other}"),
+    };
     let api_key = std::env::var("OPENROUTER_API_KEY")?;
+    let typesafe_api_key = std::env::var("TYPESAFE_API_KEY")?;
     let backend = MockServer::start().await;
     Mock::given(any())
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -108,9 +144,18 @@ async fn run() -> anyhow::Result<()> {
     let workspace = hive_workspace();
     let run_id = format!("run-{}", std::process::id());
     let run_dir = workspace.join("runs").join(&run_id);
+    let outbox_dir = run_dir.join("hive-tool-outboxes");
     initialize_workspace(&workspace)?;
+    if problem == "1008" {
+        std::fs::write(
+            workspace.join("TASK.md"),
+            format!("# Project Euler 1008\n\n{task}\n"),
+        )?;
+    }
     std::fs::create_dir_all(&run_dir)?;
-    stage_research_sources(&workspace).await?;
+    if problem == "1006" {
+        stage_research_sources(&workspace).await?;
+    }
 
     let config = inherited_config().await?;
     if config.subsystems.memory.driver != "tinycortex" {
@@ -134,48 +179,64 @@ async fn run() -> anyhow::Result<()> {
         instantiated(
             &runtime,
             &workspace,
+            &outbox_dir,
+            &problem,
             "theory",
-            "You are the Fibonacci-word combinatorics specialist. Derive exact structure and logarithmic formulas; test every claimed identity on small k.",
+            role_prompt(&problem, "theory"),
         )?,
         instantiated(
             &runtime,
             &workspace,
+            &outbox_dir,
+            &problem,
             "solver",
-            "You are the implementation specialist. Turn proven formulas into exact modular code, run it, and report reproducible commands and residues.",
+            role_prompt(&problem, "solver"),
         )?,
         instantiated(
             &runtime,
             &workspace,
+            &outbox_dir,
+            &problem,
             "checker",
-            "You are the adversarial verifier. Independently reproduce samples, attack extrapolations, and sign only an exact candidate supported by code.",
+            role_prompt(&problem, "checker"),
         )?,
         instantiated(
             &runtime,
             &workspace,
+            &outbox_dir,
+            &problem,
             "lead",
-            "You coordinate the desk. Reconcile disagreements, demand missing evidence, and state a final residue only after checker sign-off.",
+            role_prompt(&problem, "lead"),
         )?,
         instantiated(
             &runtime,
             &workspace,
+            &outbox_dir,
+            &problem,
             "researcher",
-            "You are the web researcher. Locate public derivations, implementations, or corroborating results and report exact URLs plus the useful mathematical steps.",
+            role_prompt(&problem, "researcher"),
         )?,
     ])?;
-    let route = hive_plan();
-    let RoutedAgents::Hive { primary, invited } = agents.resolve(&route)? else {
-        anyhow::bail!("sealed route did not open a hive")
-    };
-    println!("runtime_agents: {}", runtime.agent_ids().join(","));
-    println!(
-        "hive_route: primary={} invited={}",
-        primary.id,
-        invited
-            .iter()
-            .map(|seat| seat.id)
-            .collect::<Vec<_>>()
-            .join(",")
+    let router = JevRouter::new(typesafe_support::Transport::new(typesafe_api_key)?);
+    let mut roster_version = 1_u64;
+    let initial_request = typesafe_support::request(
+        task,
+        RoutingSource::DeskMessage,
+        route_candidates(&problem, None),
+        roster_version,
+        &problem,
     );
+    let route = route_message(Some(&router), None, &initial_request, None, "lead").await;
+    let mut selected = routed_ids(&route);
+    if selected.is_empty() {
+        selected.push("lead".into());
+    }
+    std::fs::write(
+        run_dir.join("initial-route.json"),
+        serde_json::to_vec_pretty(&route)?,
+    )?;
+    println!("runtime_agents: {}", runtime.agent_ids().join(","));
+    println!("initial_route: {}", selected.join(","));
     println!("model: {MODEL}");
     println!("memory_driver: tinycortex");
     println!("workspace: {}", workspace.display());
@@ -184,150 +245,142 @@ async fn run() -> anyhow::Result<()> {
     let mut transcript = Vec::new();
     let mut visibility = Visibility::default();
     let mut snapshots = TurnSnapshots::new(&run_dir)?;
+    let team = ["theory", "solver", "checker", "lead", "researcher"];
+    let mut episode = CompletionEpisodeState {
+        conversation: tinyhivemind::Conversation {
+            desk_id: format!("pe{problem}"),
+            desk_name: format!("PE{problem}"),
+            thread_root: None,
+        },
+        watermark: tinyhivemind::Sequence(0),
+        participants: team
+            .iter()
+            .map(|id| ParticipantCompletion {
+                agent_id: (*id).into(),
+                assigned_at: tinyhivemind::Sequence(0),
+                completed_at: Some(tinyhivemind::Sequence(0)),
+            })
+            .collect(),
+    };
+    let mut sequence = 1_u64;
+    episode = apply_assignment(
+        &episode,
+        selected.iter().map(String::as_str),
+        tinyhivemind::Sequence(sequence),
+    )?;
+    let mut queue: VecDeque<String> = selected.into();
+    let mut route_trace = vec![route];
+    let mut missed_tools: BTreeMap<String, u8> = BTreeMap::new();
+    let mut turns = 0_u32;
 
-    run_and_append(
-        &agents,
-        "researcher",
-        &mut transcript,
-        &mut visibility,
-        &mut snapshots,
-        &format!("Research first: inspect the public documents mirrored under `research_sources/` and cite their original URLs. Then use authenticated `gh search repos 'project euler answers'` and inspect problem-1006 paths or answer indexes without searching for a known residue. Extract an exact method or independently reported result; do not merely quote a number.\n\n{RESEARCH_START}"),
-    )
-    .await?;
-
-    // Run against one provider connection at a time while keeping the round
-    // blind between specialists: each sees the same researcher evidence, but
-    // none of their own results enters the transcript until all three return.
-    let blind = [
-        (
-            "theory",
-            seat_turn(
-            agents
-                .get("theory")
-                .ok_or_else(|| anyhow::anyhow!("missing theory"))?,
-            "theory",
-            &transcript,
-            &visibility,
-            &mut snapshots,
-            "Blind round: independently derive the mathematical structure needed for an exact O(polylog k) solution. Write theory_* files only.",
+    while !matches!(completion_status(&episode), CompletionStep::Complete { .. }) && turns < 25 {
+        let Some(id) = queue.pop_front() else {
+            anyhow::bail!("completion episode has pending work but no scheduled agent")
+        };
+        turns += 1;
+        let agent = agents
+            .get(&id)
+            .ok_or_else(|| anyhow::anyhow!("missing {id}"))?;
+        let outbox = outbox_dir.join(format!("{id}.jsonl"));
+        let turn = seat_turn(
+            agent,
+            &id,
+            TurnContext {
+                transcript: &transcript,
+                visibility: &visibility,
+                snapshots: &mut snapshots,
+                outbox: &outbox,
+                assignment: &completion_assignment(&problem, &id),
+                task,
+                prior_failure,
+                problem: &problem,
+            },
         )
-        .await?,
-        ),
-        (
-            "solver",
-            seat_turn(
-            agents
-                .get("solver")
-                .ok_or_else(|| anyhow::anyhow!("missing solver"))?,
-            "solver",
-            &transcript,
-            &visibility,
-            &mut snapshots,
-            "Blind round: independently search for an exact fast algorithm and implement brute-force sample oracles. Write solver_* files only.",
-        )
-        .await?,
-        ),
-        (
-            "checker",
-            seat_turn(
-            agents
-                .get("checker")
-                .ok_or_else(|| anyhow::anyhow!("missing checker"))?,
-            "checker",
-            &transcript,
-            &visibility,
-            &mut snapshots,
-            "Blind round: independently reproduce both supplied samples and identify proof obligations any huge-k method must meet. Write checker_* files only.",
-        )
-        .await?,
-        ),
-    ];
-    append_round(&mut transcript, &mut visibility, blind);
-
-    run_and_append(
-        &agents,
-        "lead",
-        &mut transcript,
-        &mut visibility,
-        &mut snapshots,
-        "Read the blind round. Produce a concrete reconciliation: accepted facts, rejected shortcuts, and one sharply scoped next task for each specialist.",
-    )
-    .await?;
-
-    let revealed_snapshot = transcript.clone();
-    let revealed = [
-        (
-            "theory",
-            seat_turn(
-            agents
-                .get("theory")
-                .ok_or_else(|| anyhow::anyhow!("missing theory"))?,
-            "theory",
-            &revealed_snapshot,
-            &visibility,
-            &mut snapshots,
-            "Revealed round: address the lead's questions and peer evidence. Derive the missing arbitrary-k bridge exactly; reject any empirical recurrence without proof.",
-        )
-        .await?,
-        ),
-        (
-            "solver",
-            seat_turn(
-            agents
-                .get("solver")
-                .ok_or_else(|| anyhow::anyhow!("missing solver"))?,
-            "solver",
-            &revealed_snapshot,
-            &visibility,
-            &mut snapshots,
-            "Revealed round: inspect the newly staged public PE1006 explanation and Python implementation. Reimplement or audit the compressed-word method, run its checkpoints plus an independent brute-force comparison, and compute a candidate only if the algorithm reaches 10^18 exactly.",
-        )
-        .await?,
-        ),
-        (
-            "checker",
-            seat_turn(
-            agents
-                .get("checker")
-                .ok_or_else(|| anyhow::anyhow!("missing checker"))?,
-            "checker",
-            &revealed_snapshot,
-            &visibility,
-            &mut snapshots,
-            "Revealed round: run peers' code independently, find counterexamples, and specify what remains before sign-off.",
-        )
-        .await?,
-        ),
-    ];
-    append_round(&mut transcript, &mut visibility, revealed);
-
-    run_and_append(
-        &agents,
-        "lead",
-        &mut transcript,
-        &mut visibility,
-        &mut snapshots,
-        "Synthesize a candidate solution from the revealed round. If evidence is insufficient, assign exactly one repair task instead of guessing. If sufficient, state the residue and ask checker for final sign-off.",
-    )
-    .await?;
-    run_and_append(
-        &agents,
-        "checker",
-        &mut transcript,
-        &mut visibility,
-        &mut snapshots,
-        "Final audit: independently run the decisive code and inspect the derivation. You must execute `python3 research_sources/eulersolve_solution.py` and compare it with an independently written brute-force oracle. Begin with SIGNED or REFUSED. Matching k=3 and k=10 is necessary but not sufficient. SIGNED requires understanding the compressed-word transitions, exact agreement with brute force for at least every k=1..50, a canonical residue in 0..101001000, and the exact command/file output you observed.",
-    )
-    .await?;
-    run_and_append(
-        &agents,
-        "lead",
-        &mut transcript,
-        &mut visibility,
-        &mut snapshots,
-        "Close the run. If checker signed, state the exact answer and minimal evidence chain. If checker refused, say unsolved and name the precise blocker; do not guess.",
-    )
-    .await?;
+        .await?;
+        visibility.mark_delivered(&id, transcript.len());
+        let mut utterances = turn.utterances;
+        if utterances.is_empty()
+            && let Some(recovered) = recover_tool_call(&turn.reply)
+        {
+            println!("[compatibility-recovered-tool-call] @{id}");
+            utterances.push(recovered);
+        }
+        if utterances.is_empty() {
+            let misses = missed_tools.entry(id.clone()).or_default();
+            *misses = misses.saturating_add(1);
+            if *misses >= 4 {
+                anyhow::bail!("@{id} four times failed to call a TinyHiveMind tool")
+            }
+            println!("[no-hive-tool] @{id}; rescheduling once");
+            enqueue(&mut queue, &id);
+            continue;
+        }
+        missed_tools.remove(&id);
+        for utterance in utterances {
+            sequence = sequence.saturating_add(1);
+            match utterance {
+                tinyhivemind::speech::Utterance::Broadcast { message } => {
+                    let index = transcript.len();
+                    transcript.push(DeskMessage {
+                        author: id.clone(),
+                        body: format!("BROADCAST: {message}"),
+                    });
+                    visibility.mark_own(&id, index);
+                    roster_version = roster_version.saturating_add(1);
+                    let request = typesafe_support::request(
+                        &message,
+                        RoutingSource::AgentBroadcast {
+                            author_id: id.clone(),
+                        },
+                        route_candidates(&problem, Some(&id)),
+                        roster_version,
+                        &problem,
+                    );
+                    let plan = route_broadcast(Some(&router), None, &request, "lead").await;
+                    let mut recipients = routed_ids(&plan);
+                    if recipients.is_empty() {
+                        recipients.push(deterministic_broadcast_fallback(&id).into());
+                    }
+                    println!("[broadcast] @{id} -> {}", recipients.join(","));
+                    route_trace.push(plan);
+                    if !recipients.is_empty() {
+                        episode = apply_assignment(
+                            &episode,
+                            recipients.iter().map(String::as_str),
+                            tinyhivemind::Sequence(sequence),
+                        )?;
+                        for recipient in recipients {
+                            enqueue(&mut queue, &recipient);
+                        }
+                    }
+                    enqueue(&mut queue, &id);
+                }
+                tinyhivemind::speech::Utterance::CompleteEpisode { message } => {
+                    let index = transcript.len();
+                    transcript.push(DeskMessage {
+                        author: id.clone(),
+                        body: format!("COMPLETE: {message}"),
+                    });
+                    visibility.mark_own(&id, index);
+                    episode = apply_completion(&episode, &id, tinyhivemind::Sequence(sequence))?;
+                    println!("[complete_episode] @{id}");
+                }
+                tinyhivemind::speech::Utterance::Post { .. }
+                | tinyhivemind::speech::Utterance::Dm { .. } => {
+                    anyhow::bail!("MCP completion surface emitted an unsupported utterance")
+                }
+            }
+        }
+    }
+    std::fs::write(
+        run_dir.join("routing-trace.json"),
+        serde_json::to_vec_pretty(&route_trace)?,
+    )?;
+    std::fs::write(
+        run_dir.join("completion-state.json"),
+        serde_json::to_vec_pretty(&episode)?,
+    )?;
+    println!("completion_status: {:?}", completion_status(&episode));
 
     let trace = transcript
         .iter()
@@ -342,19 +395,38 @@ async fn run() -> anyhow::Result<()> {
 fn instantiated(
     runtime: &Runtime,
     workspace: &Path,
+    outbox_dir: &Path,
+    problem: &str,
     id: &'static str,
-    role: &str,
-) -> Result<(&'static str, Agent), openhuman_embed::AgentError> {
-    let runtime_id = format!("{id}-pe1006-{}", std::process::id());
-    let mut tools = vec!["file_read".into(), "file_write".into()];
-    if matches!(id, "solver" | "checker" | "researcher") {
-        tools.push("shell".into());
-    }
+    role: String,
+) -> anyhow::Result<(&'static str, Agent)> {
+    let runtime_id = format!("{id}-pe{problem}-{}", std::process::id());
+    let tools = vec![
+        "file_read".into(),
+        "file_write".into(),
+        "mcp_list_tools".into(),
+        "mcp_call_tool".into(),
+        "shell".into(),
+    ];
     let policy = if id == "researcher" {
         RESEARCH_POLICY
     } else {
         SEALED
     };
+    let executable = std::env::current_exe()?;
+    let mcp = McpServer::stdio(
+        "tinyhive",
+        executable.to_string_lossy(),
+        [
+            "--hive-tools".to_string(),
+            "--agent".to_string(),
+            id.to_string(),
+            "--outbox".to_string(),
+            outbox_dir.join(format!("{id}.jsonl")).display().to_string(),
+        ],
+    )
+    .allow_tools(["broadcast", "complete_episode"])
+    .description("Completion-driven TinyHiveMind episode tools");
     runtime
         .agent(
             AgentSpec::new(runtime_id)
@@ -362,156 +434,81 @@ fn instantiated(
                 .definition(
                     AgentDefinitionSpec::new()
                         .tools(ToolScopeSpec::Named(tools))
-                        .max_iterations(if matches!(id, "solver" | "checker" | "researcher") {
-                            6
-                        } else {
-                            4
-                        })
+                        .disallow_tools(["run_code", "ask_docs"])
+                        .max_iterations(12)
                         .temperature(0.0),
                 )
+                .mcp(mcp)
                 .action_dir(workspace),
         )
         .map(|agent| (id, agent))
+        .map_err(Into::into)
 }
 
-async fn seat_turn(
-    agent: &Agent,
-    id: &str,
-    transcript: &[DeskMessage],
-    visibility: &Visibility,
-    snapshots: &mut TurnSnapshots,
-    assignment: &str,
-) -> anyhow::Result<String> {
-    let first = visibility.seen.get(id).is_none_or(BTreeSet::is_empty);
-    let delta = visibility.delta(id, transcript);
+async fn seat_turn(agent: &Agent, id: &str, context: TurnContext<'_>) -> anyhow::Result<SeatTurn> {
+    hive_tools::clear(context.outbox)?;
+    let first = context
+        .visibility
+        .seen
+        .get(id)
+        .is_none_or(BTreeSet::is_empty);
+    let delta = context.visibility.delta(id, context.transcript);
     let policy = if id == "researcher" {
         RESEARCH_POLICY
     } else {
         SEALED
     };
     let prompt = format!(
-        "{}{}\n\n## New desk messages\n{}\n\n## This turn\n{}\n\nThe durable shared workspace is `{}`. Read `AGENTS.md` and `MEMORY.md` before working. Write role-prefixed artifacts there and update `MEMORY.md` only with reproduced, evidence-linked learnings. Do not write or read `/tmp/openhuman` or any other directory. Return one evidence-dense desk message; do not narrate tool use.",
+        "{}{}\n\n## New desk messages\n{}\n\n## This assignment\n{}\n\nThe durable shared workspace is `{}`. Read `AGENTS.md` and `MEMORY.md` before working. Write role-prefixed artifacts there and update `MEMORY.md` only with reproduced, evidence-linked learnings. Do not write or read `/tmp/openhuman` or any other directory.\n\nYou MUST end this turn with exactly one TinyHiveMind action through `mcp_call_tool` on server `tinyhive`: call remote tool `broadcast` with a self-contained message when another teammate should take work, or `complete_episode` with your evidence-dense final result when your assignment is done. First use `mcp_list_tools` if needed. Text outside that MCP call is private thinking and is not delivered to the team.",
         if first {
             format!(
-                "## Official statement\n{TASK}\n\n## Rejected prior experiment\n{PRIOR_FAILURE}\n\n"
+                "## Official statement\n{}\n\n## Prior experiment status\n{}\n\n",
+                context.task, context.prior_failure
             )
         } else {
             String::new()
         },
         policy,
         if delta.is_empty() { "(none)" } else { &delta },
-        assignment,
+        context.assignment,
         agent.action_dir().display(),
     );
-    let session_id = format!("tinyhivemind-pe1006-run-{}:{id}", std::process::id());
-    let snapshot = snapshots.begin(id, agent.id(), &session_id, &prompt)?;
+    let session_id = format!(
+        "tinyhivemind-pe{}-run-{}:{id}",
+        context.problem,
+        std::process::id()
+    );
+    let snapshot = context
+        .snapshots
+        .begin(id, agent.id(), &session_id, &prompt)?;
     let outcome = timeout(TURN_TIMEOUT, agent.turn(prompt).session(&session_id).send())
         .await
         .map_err(|_| anyhow::anyhow!("@{id} timed out"))??;
-    snapshots.complete(snapshot, &outcome.reply)?;
+    context.snapshots.complete(snapshot, &outcome.reply)?;
     println!(
         "[completed] @{id}: {}",
         outcome.reply.chars().take(500).collect::<String>()
     );
-    Ok(outcome.reply)
+    Ok(SeatTurn {
+        reply: outcome.reply,
+        utterances: hive_tools::drain(context.outbox)?,
+    })
 }
 
-fn append_round<const N: usize>(
-    transcript: &mut Vec<DeskMessage>,
-    visibility: &mut Visibility,
-    rows: [(&str, String); N],
-) {
-    let delivered = transcript.len();
-    for (id, _) in &rows {
-        visibility.mark_delivered(id, delivered);
-    }
-    for (id, body) in rows {
-        let index = transcript.len();
-        transcript.push(DeskMessage {
-            author: id.to_string(),
-            body,
-        });
-        visibility.mark_own(id, index);
-    }
+struct TurnContext<'a> {
+    transcript: &'a [DeskMessage],
+    visibility: &'a Visibility,
+    snapshots: &'a mut TurnSnapshots,
+    outbox: &'a Path,
+    assignment: &'a str,
+    task: &'a str,
+    prior_failure: &'a str,
+    problem: &'a str,
 }
 
-async fn run_and_append(
-    agents: &AgentRegistry<Agent>,
-    id: &str,
-    transcript: &mut Vec<DeskMessage>,
-    visibility: &mut Visibility,
-    snapshots: &mut TurnSnapshots,
-    assignment: &str,
-) -> anyhow::Result<()> {
-    let agent = agents
-        .get(id)
-        .ok_or_else(|| anyhow::anyhow!("missing {id}"))?;
-    let body = seat_turn(agent, id, transcript, visibility, snapshots, assignment).await?;
-    visibility.mark_delivered(id, transcript.len());
-    let index = transcript.len();
-    transcript.push(DeskMessage {
-        author: id.to_string(),
-        body,
-    });
-    visibility.mark_own(id, index);
-    Ok(())
-}
-
-fn hive_plan() -> RoutingPlan {
-    let p = |parts| Probability::new(parts).expect("fixture probability is bounded");
-    RoutingPlan::Hive {
-        primary_id: "lead".into(),
-        invited_ids: vec![
-            "theory".into(),
-            "solver".into(),
-            "checker".into(),
-            "researcher".into(),
-        ],
-        evaluation: RoutingEvaluation {
-            primary_responder: "lead".into(),
-            primary_probabilities: vec![
-                CandidateProbability {
-                    candidate_id: "lead".into(),
-                    probability: p(600_000),
-                },
-                CandidateProbability {
-                    candidate_id: "theory".into(),
-                    probability: p(100_000),
-                },
-                CandidateProbability {
-                    candidate_id: "solver".into(),
-                    probability: p(100_000),
-                },
-                CandidateProbability {
-                    candidate_id: "checker".into(),
-                    probability: p(100_000),
-                },
-                CandidateProbability {
-                    candidate_id: "researcher".into(),
-                    probability: p(100_000),
-                },
-                CandidateProbability {
-                    candidate_id: "none".into(),
-                    probability: Probability::ZERO,
-                },
-            ],
-            confidence: p(900_000),
-            needs_collaboration: p(950_000),
-            needs_clarification: Probability::ZERO,
-            contributions: ["lead", "theory", "solver", "checker", "researcher"]
-                .into_iter()
-                .map(|id| ContributionProbability {
-                    candidate_id: id.into(),
-                    probability: p(900_000),
-                })
-                .collect(),
-            high_impact: p(500_000),
-            model_identity: "sealed-fixture".into(),
-            question_schema_version: 1,
-            roster_version: 1,
-            disposition: EvaluationDisposition::Accepted,
-        },
-    }
+struct SeatTurn {
+    reply: String,
+    utterances: Vec<tinyhivemind::speech::Utterance>,
 }
 
 async fn inherited_config() -> anyhow::Result<RuntimeConfig> {
@@ -533,6 +530,9 @@ fn memory_services() -> ServiceSet {
 async fn stage_research_sources(scratch: &Path) -> anyhow::Result<()> {
     let directory = scratch.join("research_sources");
     std::fs::create_dir_all(&directory)?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()?;
     let sources = [
         (
             "rauzy.md",
@@ -572,13 +572,30 @@ async fn stage_research_sources(scratch: &Path) -> anyhow::Result<()> {
         ),
     ];
     for (name, url) in sources {
-        let body = reqwest::get(url).await?.error_for_status()?.text().await?;
+        let target = directory.join(name);
+        if target.is_file() {
+            println!("using cached public research source: {name}");
+            continue;
+        }
+        let body = match client
+            .get(url)
+            .send()
+            .await
+            .and_then(|reply| reply.error_for_status())
+        {
+            Ok(reply) => reply.text().await?,
+            Err(error) if name != "eulersolve_solution.py" => {
+                println!("optional research source unavailable: {name} ({error})");
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
         let source = if name.ends_with(".py") {
             format!("# Source: {url}\n\n{body}")
         } else {
             format!("Source: {url}\n\n{body}")
         };
-        std::fs::write(directory.join(name), source)?;
+        std::fs::write(target, source)?;
     }
     stage_authenticated_github_source(
         &directory,
@@ -601,6 +618,11 @@ fn stage_authenticated_github_source(
     endpoint: &str,
     source_url: &str,
 ) -> anyhow::Result<()> {
+    let target = directory.join(name);
+    if target.is_file() {
+        println!("using cached authenticated research source: {name}");
+        return Ok(());
+    }
     let output = std::process::Command::new("gh")
         .args([
             "api",
@@ -614,6 +636,6 @@ fn stage_authenticated_github_source(
     }
     let mut body = format!("Source: {source_url}\n\n").into_bytes();
     body.extend(output.stdout);
-    std::fs::write(directory.join(name), body)?;
+    std::fs::write(target, body)?;
     Ok(())
 }

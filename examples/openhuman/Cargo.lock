@@ -2898,6 +2898,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-hive"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "thiserror 2.0.20",
+ "tinyhivemind",
+ "tinyhivemind-core",
+]
+
+[[package]]
 name = "tinyhivemind-openhuman-example"
 version = "0.0.0"
 dependencies = [
@@ -2907,6 +2917,7 @@ dependencies = [
  "serde_json",
  "tinyhivemind",
  "tinyhivemind-embed",
+ "tinyhivemind-hive",
  "tinyhivemind-typesafe",
  "tokio",
  "wiremock",
