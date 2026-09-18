@@ -525,18 +525,29 @@ fn recover_tool_call(text: &str) -> Option<tinyhivemind::speech::Utterance> {
     let start = text.find('{')?;
     let end = text.rfind('}')?;
     let value: serde_json::Value = serde_json::from_str(&text[start..=end]).ok()?;
-    if value.get("tool")?.as_str()? != "mcp_call_tool" {
-        return None;
-    }
-    let outer = value.get("arguments")?;
-    if outer.get("server")?.as_str()? != "tinyhive" {
-        return None;
-    }
-    let name = outer
-        .get("tool")
-        .or_else(|| outer.get("method"))?
-        .as_str()?;
-    let arguments = outer.get("arguments").or_else(|| outer.get("args"))?;
+    let tool = value.get("tool")?.as_str()?;
+    let (name, arguments) = if tool == "mcp_call_tool" {
+        let outer = value.get("arguments")?;
+        if outer.get("server")?.as_str()? != "tinyhive" {
+            return None;
+        }
+        (
+            outer
+                .get("tool")
+                .or_else(|| outer.get("method"))?
+                .as_str()?,
+            outer.get("arguments").or_else(|| outer.get("args"))?,
+        )
+    } else {
+        if !matches!(tool, "broadcast" | "complete_episode")
+            || value
+                .get("server")
+                .is_some_and(|server| server.as_str() != Some("tinyhive"))
+        {
+            return None;
+        }
+        (tool, value.get("arguments")?)
+    };
     let message = arguments.get("message")?.as_str()?;
     let call = tinyhivemind::speech::interpret(
         name,
