@@ -2847,6 +2847,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
+ "openhuman",
  "openhuman-embed",
  "reqwest",
  "serde",

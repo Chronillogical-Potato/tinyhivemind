@@ -10,6 +10,9 @@ use openhuman_embed::{
     Access, Agent, AgentDefinitionSpec, AgentSpec, CoreError, McpServer, Provider, Runtime,
     RuntimeConfig, ToolScopeSpec, Workspace,
 };
+use openhuman_core::agent::registry::types::{
+    AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
+};
 use serde::{Deserialize, Serialize};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
@@ -508,26 +511,42 @@ fn instantiate(
     .allow_tools(["broadcast", "complete_episode"])
     .description("Local TinyHiveMind completion tools");
     let tools = vec!["mcp_list_tools".into(), "mcp_call_tool".into()];
+    let definition_prompt = format!(
+        "You are the {id} seat in a hermetic DeepSWE hive. Use mcp_list_tools \
+         to discover the deepswe and tinyhive servers, then use mcp_call_tool \
+         to invoke their tools. End by actually invoking mcp_call_tool exactly \
+         once with server tinyhive, tool broadcast or complete_episode, and a \
+         concrete evidence message. Do not print the call as JSON or prose. \
+         Your turn is invalid until its tool result says accepted from @{id}; \
+         after acceptance, make no more tool calls."
+    );
+    let registry_entry = AgentRegistryEntry {
+        id: format!("deepswe-{id}"),
+        name: format!("DeepSWE {id}"),
+        description: "Hermetic DeepSWE hive seat".into(),
+        source: AgentRegistrySource::Custom,
+        enabled: true,
+        model: None,
+        system_prompt: Some(definition_prompt.clone()),
+        tool_allowlist: tools.clone(),
+        tool_denylist: Vec::new(),
+        subagents: AgentSubagentPolicy::default(),
+        tags: Vec::new(),
+        metadata: serde_json::Value::Null,
+    };
     runtime
         .agent(
             AgentSpec::new(format!("deepswe-{id}"))
                 .definition(
                     AgentDefinitionSpec::new()
-                        .system_prompt(format!(
-                            "You are the {id} seat in a hermetic DeepSWE hive. Use mcp_list_tools \
-                             to discover the deepswe and tinyhive servers, then use mcp_call_tool \
-                             to invoke their tools. End by actually invoking mcp_call_tool exactly \
-                             once with server tinyhive, tool broadcast or complete_episode, and a \
-                             concrete evidence message. Do not print the call as JSON or prose. \
-                             Your turn is invalid until its tool result says accepted from @{id}; \
-                             after acceptance, make no more tool calls."
-                        ))
+                        .system_prompt(definition_prompt)
                         .tools(ToolScopeSpec::Named(tools.clone()))
                         .max_iterations(16)
                         .temperature(0.0),
                 )
                 .mcp(workspace)
                 .mcp(hive)
+                .config(move |config| config.agent_registry.entries.push(registry_entry))
                 .action_dir(sandbox.repo_path()),
         )
         .map(|agent| AgentBinding::new(id, agent))
