@@ -1,6 +1,6 @@
 # 13. A vendored crate may back an example and never a library crate
 
-- **Status:** Accepted — implemented
+- **Status:** Accepted — implemented; amended by [ADR 0020](0020-openhuman-embed-is-a-git-dependency-patched-locally.md)
 - **Date:** 2026-09-09
 
 ## Context
