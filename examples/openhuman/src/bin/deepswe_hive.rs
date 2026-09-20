@@ -344,7 +344,6 @@ async fn run_seat(
     outbox: PathBuf,
     turn_timeout: Duration,
 ) -> anyhow::Result<(String, String, tinyhivemind::speech::Utterance)> {
-    let session = format!("deepswe-{}:{id}", task.instance_id);
     let mut retry_reason = None;
     mcp::clear(&outbox)?;
     for attempt in 1..=MAX_SEAT_ATTEMPTS {
@@ -354,11 +353,7 @@ async fn run_seat(
             )
         });
         let prompt = seat_prompt(&task, &id, &delta, retry_instruction.as_deref());
-        let send = tokio::time::timeout(
-            turn_timeout,
-            agent.turn(prompt).session(session.clone()).send(),
-        )
-        .await;
+        let send = tokio::time::timeout(turn_timeout, agent.turn(prompt).send()).await;
         let utterances = mcp::drain(&outbox)?;
         if utterances.len() > 1 {
             anyhow::bail!(

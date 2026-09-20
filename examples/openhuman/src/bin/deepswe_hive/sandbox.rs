@@ -429,7 +429,9 @@ pub(super) fn mount(source: &Path, destination: &str, writable: bool) -> anyhow:
         anyhow::bail!("Docker bind mount paths must not contain commas")
     }
     let readonly = if writable { "" } else { ",readonly" };
-    Ok(format!("type=bind,src={source},dst={destination}{readonly}"))
+    Ok(format!(
+        "type=bind,src={source},dst={destination}{readonly}"
+    ))
 }
 
 fn run_container_output(

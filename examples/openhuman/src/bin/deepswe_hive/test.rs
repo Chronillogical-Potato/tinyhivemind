@@ -379,7 +379,10 @@ fn refuses_to_schedule_a_round_past_the_exact_turn_cap() {
 
 #[test]
 fn docker_mounts_reject_delimiter_paths_before_argument_rendering() {
-    for (source, destination) in [("/tmp/source,comma", "/workspace"), ("/tmp/source", "/workspace,comma")] {
+    for (source, destination) in [
+        ("/tmp/source,comma", "/workspace"),
+        ("/tmp/source", "/workspace,comma"),
+    ] {
         let error = super::sandbox::mount(std::path::Path::new(source), destination, false)
             .expect_err("comma cannot enter Docker mount syntax");
         assert!(error.to_string().contains("commas"));
@@ -414,7 +417,11 @@ fn hive_mcp_writes_only_native_tool_calls_and_separates_protocol_errors() {
         serde_json::json!({"method": "tools/call", "params": {"name": "broadcast", "arguments": {}}}),
     ] {
         let response = super::mcp::response(&server, &request, serde_json::json!(2));
-        let expected = if request["method"] == "unknown" { -32601 } else { -32602 };
+        let expected = if request["method"] == "unknown" {
+            -32601
+        } else {
+            -32602
+        };
         assert_eq!(response["error"]["code"], expected);
     }
     std::fs::remove_file(&outbox).expect("remove prepared outbox");
@@ -428,10 +435,12 @@ fn hive_mcp_writes_only_native_tool_calls_and_separates_protocol_errors() {
     );
     assert_eq!(response["result"]["isError"], true);
     std::fs::write(&outbox, vec![b'x'; 64 * 1024 + 1]).expect("oversized outbox");
-    assert!(super::mcp::drain(&outbox)
-        .expect_err("oversized outbox is rejected")
-        .to_string()
-        .contains("exceeds"));
+    assert!(
+        super::mcp::drain(&outbox)
+            .expect_err("oversized outbox is rejected")
+            .to_string()
+            .contains("exceeds")
+    );
 }
 
 #[test]

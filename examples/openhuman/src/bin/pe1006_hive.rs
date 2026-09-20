@@ -314,7 +314,10 @@ async fn run() -> anyhow::Result<()> {
             .agents()
             .iter()
             .map(|pending_agent| {
-                (pending_agent.hive_agent_id.to_owned(), pending_agent.agent.clone())
+                (
+                    pending_agent.hive_agent_id.to_owned(),
+                    pending_agent.agent.clone(),
+                )
             })
             .collect();
         let mut remaining: Vec<_> = round_agents.keys().cloned().collect();
@@ -388,7 +391,10 @@ async fn run() -> anyhow::Result<()> {
                 .remove(id)
                 .ok_or_else(|| anyhow::anyhow!("round did not retain {id}'s action"))?;
             sequence = sequence.saturating_add(1);
-            if matches!(&utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
+            if matches!(
+                &utterance,
+                tinyhivemind::speech::Utterance::Broadcast { .. }
+            ) {
                 roster_version = roster_version.saturating_add(1);
             }
             match &utterance {
@@ -413,7 +419,10 @@ async fn run() -> anyhow::Result<()> {
                     anyhow::bail!("MCP completion surface emitted an unsupported utterance")
                 }
             }
-            if !matches!(&utterance, tinyhivemind::speech::Utterance::Broadcast { .. }) {
+            if !matches!(
+                &utterance,
+                tinyhivemind::speech::Utterance::Broadcast { .. }
+            ) {
                 println!("[complete_episode] @{id}");
             }
             committed.push(CommittedUtterance {

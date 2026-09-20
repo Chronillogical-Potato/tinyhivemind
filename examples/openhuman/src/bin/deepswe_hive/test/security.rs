@@ -130,10 +130,13 @@ fn outbox_initialization_truncates_regular_files_and_rejects_hostile_children() 
     let child = directory.path().join("lead.jsonl");
     std::fs::write(&child, "stale action\n").expect("regular child");
     super::super::mcp::clear(&child).expect("regular child truncates");
-    assert!(std::fs::read_to_string(&child).expect("read child").is_empty());
+    assert!(
+        std::fs::read_to_string(&child)
+            .expect("read child")
+            .is_empty()
+    );
     std::fs::remove_file(&child).expect("remove child");
-    std::os::unix::fs::symlink(directory.path().join("missing"), &child)
-        .expect("outbox symlink");
+    std::os::unix::fs::symlink(directory.path().join("missing"), &child).expect("outbox symlink");
     let error = super::super::mcp::clear(&child).expect_err("hostile child rejected");
     assert!(error.to_string().contains("regular file"), "{error:#}");
 }

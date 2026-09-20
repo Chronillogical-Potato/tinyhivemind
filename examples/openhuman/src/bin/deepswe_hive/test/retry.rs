@@ -22,7 +22,8 @@ use crate::sandbox::{DockerSandbox, SandboxConfig};
 mod response;
 
 use response::{
-    completion_response, empty_completion_response, provider_error_response, tool_call_response,
+    completion_response, empty_completion_response, hive_action_response, provider_error_response,
+    tool_call_response,
 };
 
 const PRINTED_JSON: &str =
@@ -41,6 +42,8 @@ struct ScriptedHive {
     lead_misses: u32,
     lead_failure: LeadFailure,
     lead_continuation_failure: Option<ContinuationFailure>,
+    broadcast_first_turn: bool,
+    refuse_after_stale_acceptance: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -89,6 +92,15 @@ impl Respond for ScriptedHive {
         }
 
         assert_eq!(last_role, "user", "unexpected provider turn boundary");
+        if self.refuse_after_stale_acceptance
+            && messages
+                .iter()
+                .filter(|message| message["role"] == "user")
+                .count()
+                > 1
+        {
+            return completion_response("stale action already accepted");
+        }
         let attempt = {
             let entry = state.turn_starts.entry(seat.clone()).or_default();
             *entry = entry.saturating_add(1);
@@ -102,6 +114,9 @@ impl Respond for ScriptedHive {
                 LeadFailure::Http(status) => provider_error_response(status),
                 LeadFailure::Delay(duration) => completion_response("too late").set_delay(duration),
             };
+        }
+        if self.broadcast_first_turn && attempt == 1 {
+            return hive_action_response(&seat, state.calls, "broadcast");
         }
         tool_call_response(&seat, state.calls)
     }
@@ -146,11 +161,14 @@ while IFS= read -r line; do
   id=$(printf '%s' "$line" | sed -E 's/.*"id"[ ]*:[ ]*([^,}]+).*/\1/')
   case "$line" in
     *initialize*) result='{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"fixture","version":"1"}}' ;;
-    *tools/list*) result='{"tools":[{"name":"complete_episode","description":"complete","inputSchema":{"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}}]}' ;;
+    *tools/list*) result='{"tools":[{"name":"broadcast","description":"broadcast","inputSchema":{"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}},{"name":"complete_episode","description":"complete","inputSchema":{"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}}]}' ;;
     *tools/call*)
+      kind=complete_episode
+      message=complete
+      case "$line" in *'"name":"broadcast"'*) kind=broadcast; message=broadcast ;; esac
       count=0
       while test "$count" -lt ACTION_COPIES; do
-        printf '{"kind":"complete_episode","message":"%s complete"}\n' "$agent" >> "$outbox"
+        printf '{"kind":"%s","message":"%s %s"}\n' "$kind" "$agent" "$message" >> "$outbox"
         count=$((count + 1))
       done
       result=$(printf '{"content":[{"type":"text","text":"accepted from @%s"}]}' "$agent")
@@ -193,10 +211,90 @@ async fn provider_with_continuation(
             lead_misses,
             lead_failure,
             lead_continuation_failure,
+            broadcast_first_turn: false,
+            refuse_after_stale_acceptance: false,
         })
         .mount(&provider)
         .await;
     (provider, state)
+}
+
+async fn two_round_provider() -> (MockServer, Arc<Mutex<ScriptState>>) {
+    let provider = MockServer::start().await;
+    let state = Arc::new(Mutex::new(ScriptState::default()));
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(ScriptedHive {
+            state: Arc::clone(&state),
+            lead_misses: 0,
+            lead_failure: LeadFailure::Protocol,
+            lead_continuation_failure: None,
+            broadcast_first_turn: true,
+            refuse_after_stale_acceptance: true,
+        })
+        .mount(&provider)
+        .await;
+    (provider, state)
+}
+
+#[test]
+fn a_new_hive_turn_does_not_inherit_a_prior_action_acceptance() {
+    let _guard = retry_test_guard();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(16 * 1024 * 1024)
+        .build()
+        .expect("test runtime");
+    runtime.block_on(async {
+        let (directory, task) = fixture();
+        let sandbox = fake_sandbox(&directory, &task);
+        let mcp = fake_mcp(&directory, 1);
+        let (provider, state) = two_round_provider().await;
+        let output_directory = TempDir::new().expect("output directory");
+        let output = output_directory.path().join("output.json");
+        let cli = Cli {
+            task: directory.path().join("unused.json"),
+            api_base: format!("{}/v1", provider.uri()),
+            model: DEFAULT_MODEL.into(),
+            output: output.clone(),
+        };
+
+        let error = tokio::spawn(async move {
+            run_with_mcp_executable(cli, task, sandbox, "loopback-only".into(), &mcp).await
+        })
+        .await
+        .expect("adapter task")
+        .expect_err("empty patch makes the completed episode fail");
+        assert!(
+            error.to_string().contains("episode result is failed"),
+            "a stale acceptance poisoned the next hive turn: {error:#}"
+        );
+        let result: Value = serde_json::from_slice(&std::fs::read(&output).expect("result file"))
+            .expect("result JSON");
+        assert_eq!(result["turns"], 8, "two four-seat rounds commit");
+
+        let state = state.lock().expect("script state");
+        for seat in SEATS {
+            assert_eq!(state.turn_starts.get(seat), Some(&2), "@{seat} turn count");
+        }
+        let second_lead = state
+            .start_requests
+            .iter()
+            .filter(|(seat, _)| seat == "lead")
+            .nth(1)
+            .map(|(_, request)| request)
+            .expect("second lead turn");
+        assert!(
+            second_lead["messages"]
+                .as_array()
+                .expect("messages")
+                .iter()
+                .filter(|message| message["role"] == "user")
+                .count()
+                == 1,
+            "the next hive turn retained an old prompt: {second_lead:#}"
+        );
+    });
 }
 
 #[test]
@@ -356,7 +454,7 @@ fn retry_test_guard() -> std::sync::MutexGuard<'static, ()> {
 }
 
 #[test]
-fn one_missing_seat_retries_in_session_and_round_commits_once() {
+fn one_missing_seat_retries_in_a_fresh_session_and_round_commits_once() {
     let _guard = retry_test_guard();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -416,7 +514,8 @@ fn one_missing_seat_retries_in_session_and_round_commits_once() {
         assert!(
             messages
                 .iter()
-                .any(|message| message["content"] == PRINTED_JSON)
+                .all(|message| message["content"] != PRINTED_JSON),
+            "the retry retained the invalid provider response"
         );
         let retry_prompt = messages
             .last()
@@ -555,7 +654,11 @@ fn empty_provider_response_retries_only_that_seat_and_commits_once() {
         assert_eq!(result["turns"], 4, "provider failure is not committed");
 
         let state = state.lock().expect("script state");
-        assert_eq!(state.turn_starts.get("lead"), Some(&2));
+        assert_eq!(
+            state.turn_starts.get("lead"),
+            Some(&3),
+            "one OpenHuman empty-response fallback and one fresh hive retry"
+        );
         for seat in ["implementer", "tester", "reviewer"] {
             assert_eq!(state.turn_starts.get(seat), Some(&1), "@{seat} reran");
         }

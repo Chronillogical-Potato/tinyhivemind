@@ -53,10 +53,18 @@ pub(super) fn completion_response(content: &str) -> ResponseTemplate {
 }
 
 pub(super) fn tool_call_response(seat: &str, serial: u32) -> ResponseTemplate {
+    hive_action_response(seat, serial, "complete_episode")
+}
+
+pub(super) fn hive_action_response(seat: &str, serial: u32, tool: &str) -> ResponseTemplate {
+    let message = match tool {
+        "complete_episode" => format!("{seat} complete"),
+        _ => format!("{seat} {tool}"),
+    };
     let arguments = json!({
         "server":"tinyhive",
-        "tool":"complete_episode",
-        "arguments":{"message":format!("{seat} complete")}
+        "tool":tool,
+        "arguments":{"message":message}
     })
     .to_string();
     ResponseTemplate::new(200).set_body_json(json!({
