@@ -51,10 +51,23 @@ deny = []
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-# Examples take OpenHuman, tinyinference, tinytools, and tinyjevclient as
-# revision-pinned git dependencies rather than published versions. Nothing under
-# crates/* depends on their transports; `.github/scripts/assert-pure.sh` checks
-# the normal/build graph. See AGENTS.md's supply-chain boundary.
+# Examples take tinyinference, tinytools, and tinyjevclient as revision-pinned
+# git dependencies rather than published versions; nothing under crates/*
+# depends on their transports, and `.github/scripts/assert-pure.sh` checks the
+# normal/build graph for the pure crates. See AGENTS.md's supply-chain
+# boundary.
+#
+# OpenHuman is the one exception: `openhuman-embed` is also a revision-pinned
+# git dependency of `tinyhivemind-openhuman`, a library crate, per
+# `docs/adr/0020-openhuman-embed-is-a-git-dependency-patched-locally.md`.
+# `[patch]` in the root `Cargo.toml` redirects that source onto the
+# `vendor/openhuman` submodule this repository already vendors and tests
+# against, so every build here still compiles the vendored tree, not a fresh
+# git fetch. `.github/scripts/assert-openhuman-pin.sh`, run in the `rust` CI
+# job, reads the `rev` pinned in `Cargo.toml` and the `vendor/openhuman`
+# submodule's commit and fails the build if they disagree — the supply-chain
+# guarantee this exemption relies on is that check, not an absence of library
+# dependents.
 allow-git = [
     "https://github.com/tinyhumansai/openhuman",
     "https://github.com/tinyhumansai/tinyinference",
