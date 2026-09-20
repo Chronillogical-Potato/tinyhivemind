@@ -87,3 +87,16 @@ contributor.
 
 **If either crate is ever needed by a library crate, this decision is wrong
 rather than bent.** The answer then is a port, as it has been every other time.
+
+## Addendum: the OpenHuman facade is a git dependency, patched locally
+
+`tinyhivemind-openhuman` is a library crate that must name
+`openhuman_embed::Agent`, and a host that vendors this repository as a
+submodule already carries its own OpenHuman checkout. Cargo can redirect a
+git or registry source with `[patch]` but never a path source, so a path
+dependency here would force that host to link two copies of OpenHuman — two
+`Agent` types, two process-wide runtimes. `openhuman-embed` is therefore a
+git dependency pinned by rev, and this workspace's own `[patch]` table points
+that source at `vendor/openhuman` so it builds against the tree it records.
+`.github/scripts/assert-openhuman-pin.sh` fails CI when the rev and the
+submodule pointer disagree.
