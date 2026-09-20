@@ -44,6 +44,15 @@ wildcards = "deny"
 # manifest sets `publish = false`. A wildcard on anything from a registry is
 # still denied, which is what this check exists for.
 allow-wildcard-paths = true
+# `openhuman` is a revision-pinned git dependency patched to the recorded
+# submodule. Its public manifest uses `workspace = true` for its internal
+# crates, which cargo-deny classifies as wildcard dependencies even though the
+# resolved graph is fixed by Cargo.lock and assert-openhuman-pin.sh. Skip only
+# this exact package's manifest-level wildcard finding; its dependency tree
+# remains subject to every ban check.
+skip = [
+    { name = "openhuman", version = "0.63.29" },
+]
 # Crates that must never enter the dependency graph.
 deny = []
 
