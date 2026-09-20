@@ -8,7 +8,7 @@ members = ["crates/*"]
 # `worktrees/` holds `git worktree` checkouts of this same repository; each
 # contains a full copy of this manifest and every crate under it, so without
 # this entry cargo walks into them and reports duplicate packages.
-exclude = ["worktrees"]
+exclude = ["vendor", "worktrees"]
 
 # Shared package metadata. A member inherits a field with `field.workspace =
 # true`, so the version is written in exactly one place and every crate moves
@@ -47,7 +47,7 @@ tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
 # Canonical OpenHuman agent handles for the first-class embedding adapter. The
 # adapter keeps default features off because it only binds already-built agents;
 # the consuming host chooses the runtime capabilities it enables.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "b8eeec0b8d1254a516a9f06477823b74ee7ed62c", default-features = false }
+openhuman-embed = { path = "vendor/openhuman/crates/openhuman-embed", default-features = false }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.
@@ -74,13 +74,13 @@ tokio = { version = "1", features = ["macros", "rt", "sync"] }
 # `tokio` and `futures`, so no library crate may take it — see
 # docs/adr/0013-a-vendored-crate-is-an-example-dependency.md. A consumer builds
 # `crates/*` and never the examples, so it never resolves this.
-tinyinference = { git = "https://github.com/tinyhumansai/tinyinference", rev = "cc8aca484bb995fbab3b7358f0d72ab5056b587c" }
+tinyinference-llm = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-llm" }
 # EXAMPLE-ONLY, same terms. The tool vocabulary — `Tool`, `ToolResult`, and the
 # classifications a host enforces around a call — which the `desk` example
 # renders `speech::tool_specs()` into, so a host running an agent loop
 # in-process serves the same surface the MCP server does. It pulls `anyhow`,
 # which this repository forbids in every crate.
-tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "7dbd5407a5bd6e819acb60154e501ff946f86d3a" }
+tinytools = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
 # Needed to implement `tinytools::Tool`, which is async. Example-only, for the
 # same reason `tinytools` is.
 async-trait = "0.1"
@@ -91,7 +91,8 @@ async-trait = "0.1"
 anyhow = "1"
 # EXAMPLE-ONLY. The benchmark's Jev arm uses the native System One client;
 # library crates keep only provider-neutral fixed-point decision snapshots.
-tinyjevclient = { git = "https://github.com/tinyhumansai/tinyjevclient", rev = "8d116fc2ac9bceecdad9df7a0c72e0f14ee3fea5", default-features = false }
+tinyjevclient = { path = "vendor/tinyjevclient/crates/tinyjevclient", default-features = false }
+
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything

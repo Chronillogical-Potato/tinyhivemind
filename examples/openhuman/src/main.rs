@@ -4,6 +4,9 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use openhuman_embed::{Access, Agent, AgentSpec, Provider, Runtime, RuntimeConfig, Workspace};
+use openhuman_core::agent::registry::types::{
+    AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
+};
 use serde_json::json;
 use tinyhivemind::{
     desk::{Desk, ResponderMode},
@@ -190,13 +193,26 @@ async fn run() -> anyhow::Result<()> {
                 "engineering",
                 runtime.agent(
                     AgentSpec::new("engineering")
-                        .system_prompt("You are the engineering specialist."),
+                        .system_prompt("You are the engineering specialist.")
+                        .config(|config| {
+                            config.agent_registry.entries.push(registry_entry(
+                                "engineering",
+                                "You are the engineering specialist.",
+                            ));
+                        }),
                 )?,
             ),
             AgentBinding::new(
                 "legal",
                 runtime.agent(
-                    AgentSpec::new("legal").system_prompt("You are the legal specialist."),
+                    AgentSpec::new("legal")
+                        .system_prompt("You are the legal specialist.")
+                        .config(|config| {
+                            config.agent_registry.entries.push(registry_entry(
+                                "legal",
+                                "You are the legal specialist.",
+                            ));
+                        }),
                 )?,
             ),
         ],
@@ -294,6 +310,23 @@ async fn run() -> anyhow::Result<()> {
     );
     println!("reply: {}", second.reply);
     Ok(())
+}
+
+fn registry_entry(id: &str, system_prompt: &str) -> AgentRegistryEntry {
+    AgentRegistryEntry {
+        id: id.into(),
+        name: id.into(),
+        description: format!("Embedded {id} proof agent"),
+        source: AgentRegistrySource::Custom,
+        enabled: true,
+        model: None,
+        system_prompt: Some(system_prompt.into()),
+        tool_allowlist: Vec::new(),
+        tool_denylist: Vec::new(),
+        subagents: AgentSubagentPolicy::default(),
+        tags: Vec::new(),
+        metadata: serde_json::Value::Null,
+    }
 }
 
 /// OpenHuman's per-agent transcript key; TinyHiveMind stores no session state.

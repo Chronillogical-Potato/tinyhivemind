@@ -10,6 +10,9 @@ use openhuman_embed::{
     Access, Agent, AgentDefinitionSpec, AgentSpec, CoreError, McpServer, Provider, Runtime,
     RuntimeConfig, ToolScopeSpec, Workspace,
 };
+use openhuman_core::agent::registry::types::{
+    AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
+};
 use serde::{Deserialize, Serialize};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
@@ -508,8 +511,7 @@ fn instantiate(
     .allow_tools(["broadcast", "complete_episode"])
     .description("Local TinyHiveMind completion tools");
     let tools = vec!["mcp_list_tools".into(), "mcp_call_tool".into()];
-    let agent_id = format!("deepswe-{id}");
-    let system_prompt = format!(
+    let definition_prompt = format!(
         "You are the {id} seat in a hermetic DeepSWE hive. Use mcp_list_tools \
          to discover the deepswe and tinyhive servers, then use mcp_call_tool \
          to invoke their tools. End by actually invoking mcp_call_tool exactly \
@@ -518,36 +520,33 @@ fn instantiate(
          Your turn is invalid until its tool result says accepted from @{id}; \
          after acceptance, make no more tool calls."
     );
-    let registry_id = agent_id.clone();
-    let registry_prompt = system_prompt.clone();
-    let registry_tools = tools.clone();
+    let registry_entry = AgentRegistryEntry {
+        id: format!("deepswe-{id}"),
+        name: format!("DeepSWE {id}"),
+        description: "Hermetic DeepSWE hive seat".into(),
+        source: AgentRegistrySource::Custom,
+        enabled: true,
+        model: None,
+        system_prompt: Some(definition_prompt.clone()),
+        tool_allowlist: tools.clone(),
+        tool_denylist: Vec::new(),
+        subagents: AgentSubagentPolicy::default(),
+        tags: Vec::new(),
+        metadata: serde_json::Value::Null,
+    };
     runtime
         .agent(
-            AgentSpec::new(agent_id)
+            AgentSpec::new(format!("deepswe-{id}"))
                 .definition(
                     AgentDefinitionSpec::new()
-                        .system_prompt(system_prompt)
+                        .system_prompt(definition_prompt)
                         .tools(ToolScopeSpec::Named(tools.clone()))
                         .max_iterations(16)
                         .temperature(0.0),
                 )
-                // OpenHuman's hosted turn preparation resolves the already-supplied
-                // explicit definition through its config-backed catalogue once more.
-                .config(move |config| {
-                    let entry = serde_json::from_value(serde_json::json!({
-                        "id": registry_id.clone(),
-                        "name": registry_id,
-                        "description": "Hermetic DeepSWE hive seat",
-                        "source": "custom",
-                        "enabled": true,
-                        "system_prompt": registry_prompt,
-                        "tool_allowlist": registry_tools,
-                    }))
-                    .expect("static DeepSWE registry entry should deserialize");
-                    config.agent_registry.entries.push(entry);
-                })
                 .mcp(workspace)
                 .mcp(hive)
+                .config(move |config| config.agent_registry.entries.push(registry_entry))
                 .action_dir(sandbox.repo_path()),
         )
         .map(|agent| AgentBinding::new(id, agent))
