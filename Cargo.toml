@@ -47,7 +47,15 @@ tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
 # Canonical OpenHuman agent handles for the first-class embedding adapter. The
 # adapter keeps default features off because it only binds already-built agents;
 # the consuming host chooses the runtime capabilities it enables.
-openhuman-embed = { path = "vendor/openhuman/crates/openhuman-embed", default-features = false }
+# A git dependency on purpose, not the vendored path. A host that vendors this
+# repository as a submodule (OpenCompany) carries its own `vendor/openhuman`
+# and must link ONE copy of OpenHuman: `openhuman_embed::Agent` in a binding
+# here has to be the same type the host built, and OpenHuman's process-wide
+# state must exist once. Cargo `[patch]` can redirect a git or registry source
+# onto a path but cannot redirect a path source, so a path here would leave a
+# host no way to unify the two trees. The `[patch]` table below points this
+# same source at the vendored checkout for this repository's own build.
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "1ecf1b0bc4bc4d80b0f56f1e01e47d2c0f981c5b", default-features = false }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.
@@ -130,3 +138,11 @@ private_intra_doc_links = "warn"
 lto = "thin"
 codegen-units = 1
 strip = "debuginfo"
+
+# Resolve the git `openhuman-embed` above onto the vendored submodule so this
+# workspace builds against exactly the tree it records (and CI, which checks
+# out submodules recursively, needs no network for it). The `rev` above and
+# the submodule pointer must agree; `.github/scripts/assert-openhuman-pin.sh`
+# fails the build when they drift.
+[patch."https://github.com/tinyhumansai/openhuman"]
+openhuman-embed = { path = "vendor/openhuman/crates/openhuman-embed" }
