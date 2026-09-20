@@ -82,6 +82,13 @@ jobs:
       - name: Assert the pure crates stay pure
         run: .github/scripts/assert-pure.sh
 
+      # `openhuman-embed` is a git dependency pinned by rev, redirected by
+      # `[patch]` onto `vendor/openhuman` for this workspace. A host without
+      # that patch builds the rev; this build builds the submodule. They must
+      # be the same commit or the two are silently different trees.
+      - name: Assert the openhuman-embed rev matches the vendored submodule
+        run: .github/scripts/assert-openhuman-pin.sh
+
       - name: Require 90% line coverage in every source file
         run: .github/scripts/check-file-coverage.sh 90 coverage.json
 
