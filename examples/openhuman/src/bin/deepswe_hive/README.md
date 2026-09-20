@@ -54,8 +54,11 @@ accepted action and that continuation error, and that seat is not rerun. More
 than one action always fails immediately.
 
 A zero-action protocol miss or retryable provider failure may retry within the
-same budget, OpenHuman session, and frozen pre-round view. The outbox is cleared
-before the first attempt and again only after such a proven zero-action outcome.
+same budget and frozen pre-round view. Every attempt uses a fresh OpenHuman
+conversation; the TinyHiveMind desk is the only cross-turn transcript, so an
+earlier native-action acceptance cannot satisfy a later attempt or hive round.
+The outbox is cleared before the first attempt and again only after such a
+proven zero-action outcome.
 A timeout is ambiguous because a cancelled turn may still write late, so it
 fails closed without retry even when no action was observed. Provider
 retryability uses OpenHuman's structured `retryable` field when present, then a

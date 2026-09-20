@@ -102,18 +102,18 @@ pub(super) fn response(server: &Server, request: &Value, id: Value) -> Value {
         "tools/call" => match call(server, request) {
             Ok(text) => success(id, json!({"content": [{"type": "text", "text": text}]})),
             Err(CallError::InvalidParams(error)) => json!({
-                    "jsonrpc":"2.0", "id":id,
-                    "error":{"code":-32602,"message":error}
-                }),
+                "jsonrpc":"2.0", "id":id,
+                "error":{"code":-32602,"message":error}
+            }),
             Err(CallError::Execution(error)) => json!({
-                    "jsonrpc":"2.0", "id":id,
-                    "result":{"content":[{"type":"text","text":error}],"isError":true}
-                }),
+                "jsonrpc":"2.0", "id":id,
+                "result":{"content":[{"type":"text","text":error}],"isError":true}
+            }),
         },
         other => json!({
-                "jsonrpc":"2.0", "id":id,
-                "error":{"code":-32601,"message":format!("unknown method {other}")}
-            }),
+            "jsonrpc":"2.0", "id":id,
+            "error":{"code":-32601,"message":format!("unknown method {other}")}
+        }),
     }
 }
 
@@ -146,7 +146,11 @@ fn call(server: &Server, request: &Value) -> Result<String, CallError> {
     let required = match server {
         Server::Hive { .. } => match name {
             "broadcast" | "complete_episode" => ["message"].as_slice(),
-            _ => return Err(CallError::InvalidParams(format!("unknown hive tool {name}"))),
+            _ => {
+                return Err(CallError::InvalidParams(format!(
+                    "unknown hive tool {name}"
+                )));
+            }
         },
         Server::Workspace { .. } => match name {
             "file_read" => ["path"].as_slice(),
@@ -317,7 +321,9 @@ fn take(
 }
 
 pub(super) fn clear(path: &Path) -> anyhow::Result<()> {
-    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty())
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     let parent_metadata = std::fs::symlink_metadata(parent)?;
     if !parent_metadata.is_dir() || parent_metadata.file_type().is_symlink() {

@@ -150,7 +150,10 @@ impl Task {
             .args(args)
             .current_dir(&self.repo_path)
             .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin:/usr/local/bin".into()))
+            .env(
+                "PATH",
+                std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin:/usr/local/bin".into()),
+            )
             .output()?;
         if !output.status.success() {
             anyhow::bail!(
@@ -250,7 +253,10 @@ fn git<const N: usize>(repo_path: &Path, args: [&str; N], action: &str) -> anyho
         .args(args)
         .current_dir(repo_path)
         .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin:/usr/local/bin".into()))
+        .env(
+            "PATH",
+            std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin:/usr/local/bin".into()),
+        )
         .output()?;
     if !output.status.success() {
         anyhow::bail!(
