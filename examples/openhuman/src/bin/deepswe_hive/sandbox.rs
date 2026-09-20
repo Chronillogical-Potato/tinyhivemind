@@ -25,7 +25,10 @@ pub(super) use preflight::preflight_with_limits;
 pub(super) use test_support::shell_with_limits_at;
 
 const DEFAULT_IMAGE: &str = "tinyhivemind-deepswe:local";
-const COMMAND_TIMEOUT_SECONDS: &str = "600";
+// Keep both Docker deadlines inside the 600-second model-turn deadline so the
+// MCP server retains time to remove a timed-out container before it is stopped.
+const COMMAND_TIMEOUT_SECONDS: &str = "540";
+const ACTION_TIMEOUT: Duration = Duration::from_secs(570);
 pub(super) const INSPECTOR_TIMEOUT: Duration = Duration::from_secs(600);
 pub(super) const MAX_PATCH_BYTES: u64 = 32 * 1024 * 1024;
 pub(super) const MAX_ACTION_OUTPUT_BYTES: u64 = 1024 * 1024;
@@ -125,6 +128,7 @@ pub(super) struct DockerSandbox {
     config: SandboxConfig,
     mask: Arc<tempfile::TempDir>,
     git: GitLayout,
+    user: String,
 }
 
 #[derive(Debug)]
@@ -145,7 +149,13 @@ impl DockerSandbox {
     pub(super) fn file_read(&self, path: &str) -> anyhow::Result<String> {
         validate_relative(path)?;
         let output = self.action(
-            ["sh", "-c", "cat -- \"/workspace/$1\"", "deepswe-read", path],
+            [
+                "sh",
+                "-c",
+                "target=/workspace/$1; resolved=$(realpath -m -- \"$target\") || exit; case \"$resolved\" in /workspace/*) cat -- \"$target\" ;; *) exit 1 ;; esac",
+                "deepswe-read",
+                path,
+            ],
             &[],
         )?;
         require_success(output, "read file").map(|output| output.stdout)
@@ -157,7 +167,7 @@ impl DockerSandbox {
             [
                 "sh",
                 "-c",
-                "target=/workspace/$1; mkdir -p -- \"$(dirname -- \"$target\")\" && cat > \"$target\"",
+                "target=/workspace/$1; resolved=$(realpath -m -- \"$target\") || exit; case \"$resolved\" in /workspace/*) mkdir -p -- \"$(dirname -- \"$target\")\" && cat > \"$target\" ;; *) exit 1 ;; esac",
                 "deepswe-write",
                 path,
             ],
@@ -254,7 +264,7 @@ exit "${statuses[0]}"
     }
 
     fn action<const N: usize>(&self, args: [&str; N], input: &[u8]) -> anyhow::Result<ShellOutput> {
-        self.action_with_limits(args, input, INSPECTOR_TIMEOUT, MAX_ACTION_OUTPUT_BYTES)
+        self.action_with_limits(args, input, ACTION_TIMEOUT, MAX_ACTION_OUTPUT_BYTES)
     }
 
     fn action_with_limits<const N: usize>(
@@ -328,6 +338,7 @@ fn mask_source(sandbox: &DockerSandbox) -> PathBuf {
 fn action_args(sandbox: &DockerSandbox, create: bool) -> anyhow::Result<Vec<String>> {
     Ok(container_args(
         &sandbox.config,
+        &sandbox.user,
         false,
         [
             mount(&sandbox.config.repo_path, "/workspace", true)?,
@@ -361,11 +372,18 @@ fn inspector_args(sandbox: &DockerSandbox) -> anyhow::Result<Vec<String>> {
             false,
         )?);
     }
-    Ok(container_args(&sandbox.config, false, mounts, false))
+    Ok(container_args(
+        &sandbox.config,
+        &sandbox.user,
+        false,
+        mounts,
+        false,
+    ))
 }
 
 fn container_args(
     config: &SandboxConfig,
+    user: &str,
     remove: bool,
     mounts: impl IntoIterator<Item = String>,
     create: bool,
@@ -387,6 +405,8 @@ fn container_args(
         "ALL".into(),
         "--security-opt".into(),
         "no-new-privileges".into(),
+        "--user".into(),
+        user.into(),
     ]);
     for value in mounts {
         args.extend(["--mount".into(), value]);

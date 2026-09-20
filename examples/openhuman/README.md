@@ -109,10 +109,12 @@ cannot resume stale state and no preexisting outbox child can be reused.
 
 Every agent file read/write/edit and shell/test call uses a fresh container
 with `--network none`, 1 GiB memory, 2 CPUs, 256 PIDs, dropped capabilities,
-no-new-privileges, an `env -i` process environment, and the checkout at
-`/workspace`. A read-only empty mount covers `/workspace/.git`, including when
-the checkout's `.git` is a worktree pointer, so agent commands cannot reach or
-mutate the source history. Model-supplied file content is limited to exactly
+no-new-privileges, the host process's numeric UID/GID, an `env -i` process
+environment, and the checkout at `/workspace`. A read-only empty mount covers
+`/workspace/.git`, including when the checkout's `.git` is a worktree pointer,
+so agent commands cannot reach or mutate the source history. The file tools
+also reject targets whose resolved path leaves `/workspace`, including through
+a symlink. Model-supplied file content is limited to exactly
 1 MiB (1,048,576 bytes), staged before Docker starts in a host-owned temporary
 file outside the checkout, and mounted read-only at `/tmp/deepswe-input`; the
 fixed container wrapper consumes that path, so Docker receives no agent-chosen

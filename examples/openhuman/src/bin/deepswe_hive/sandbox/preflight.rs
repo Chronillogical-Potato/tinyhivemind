@@ -1,6 +1,7 @@
 //! Bounded Docker daemon and sandbox readiness checks.
 
 use std::io::Read;
+use std::os::unix::fs::MetadataExt;
 use std::process::{ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -91,7 +92,13 @@ fn preflight(
 
     let mask = Arc::new(tempfile::tempdir()?);
     prepare_mask(&mask, git.dot_git_is_file)?;
-    let sandbox = DockerSandbox { config, mask, git };
+    let owner = std::fs::metadata(mask.path())?;
+    let sandbox = DockerSandbox {
+        config,
+        mask,
+        git,
+        user: format!("{}:{}", owner.uid(), owner.gid()),
+    };
     let control = tempfile::tempdir()?;
     let cidfile = control.path().join("preflight.cid");
     let nonce = std::time::SystemTime::now()

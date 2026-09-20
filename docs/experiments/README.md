@@ -38,6 +38,7 @@ does.
 | [2026-09-09](2026-09-09-desk-lessons.md) | What should be built next after PE 1006? | Working notes and measurements from runs 21–27 |
 | [2026-09-08](2026-09-08-pe1006-tool-room.md) | Does a tool-call room with a standing account beat a fenced one? | PE 1006 solved; re-reading fell to 3% of calls, but no fold ever fired |
 | [2026-09-17](2026-09-17-jev-decision-evaluation.md) | What does Jev buy and cost against GPT-5-mini strict JSON on typed hive decisions? | 43–55× lower tail latency and 99.2% lower estimated cost, with an 11.45-point accuracy tradeoff concentrated in evidence scoring |
+| [2026-09-18](2026-09-18-deepswe-openhuman-smoke.md) | Can the offline OpenHuman hive solve a real three-task DeepSWE smoke? | No: 0/3; every run exhausted the bounded round budget with an empty patch |
 
 ## Reading order
 

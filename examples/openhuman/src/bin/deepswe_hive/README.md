@@ -10,9 +10,11 @@
 | `test.rs` | Exercises parsing, refusal paths, confinement arguments, patch capture, and output shape. |
 
 The model provider remains in the host process. Agent file and shell tools run
-only inside the configured Docker image, with the disposable checkout mounted
-at `/workspace`, its real `.git` hidden by a read-only empty mount, and no
-provider credential copied into the cleared action environment. The runner
+only inside the configured Docker image as the host process's numeric UID/GID,
+with the disposable checkout mounted at `/workspace`, its real `.git` hidden by
+a read-only empty mount, and no provider credential copied into the cleared
+action environment. File read, write, and edit targets are resolved inside the
+container and rejected when a symlink would leave `/workspace`. The runner
 does not perform destructive Git operations, but an agent can modify or delete
 files inside the disposable workspace it was explicitly given.
 
