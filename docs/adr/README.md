@@ -44,6 +44,7 @@ link any earlier ADR it amends.
 | [0017](0017-validate-semantic-routing-at-the-port.md) | Validate semantic routing at the port | Accepted |
 | [0018](0018-require-host-supplied-conversation-kinds.md) | Require host-supplied conversation kinds | Accepted |
 | [0019](0019-complete-episodes-with-explicit-agent-events.md) | Complete episodes with explicit agent events | Accepted |
+| [0020](0020-openhuman-embed-is-a-git-dependency-patched-locally.md) | `openhuman-embed` is a git dependency, patched locally | Accepted — amends 0013 |
 
 ## Reading order
 
