@@ -232,7 +232,10 @@ fn accepted_action_survives_post_tool_provider_failure_without_retry() {
         .await
         .expect("adapter task")
         .expect_err("empty patch makes the completed episode fail");
-        assert!(error.to_string().contains("episode result is failed"));
+        assert!(
+            error.to_string().contains("episode result is failed"),
+            "unexpected runner error: {error:#}"
+        );
 
         let result: Value = serde_json::from_slice(&std::fs::read(&output).expect("result file"))
             .expect("result JSON");
@@ -248,7 +251,11 @@ fn accepted_action_survives_post_tool_provider_failure_without_retry() {
         }
         assert!(transcript.contains("COMPLETE: lead complete"));
         assert!(transcript.contains("Provider continuation failed after the accepted action"));
-        assert!(transcript.contains("429"));
+        assert!(transcript.contains("hosted agent invocation failed at the model provider"));
+        assert!(
+            !transcript.contains("429"),
+            "hosted errors redact provider details"
+        );
         let accepted =
             std::fs::read_to_string(output_directory.path().join("outboxes").join("lead.jsonl"))
                 .expect("accepted lead action remains in the outbox");
@@ -523,7 +530,7 @@ fn multiple_native_actions_fail_immediately_without_retry_or_commit() {
 }
 
 #[test]
-fn empty_provider_response_retries_only_that_seat_and_commits_once() {
+fn upstream_empty_response_retry_commits_each_seat_once() {
     let _guard = retry_test_guard();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -556,7 +563,7 @@ fn empty_provider_response_retries_only_that_seat_and_commits_once() {
         assert_eq!(result["turns"], 4, "provider failure is not committed");
 
         let state = state.lock().expect("script state");
-        assert_eq!(state.turn_starts.get("lead"), Some(&2));
+        assert_eq!(state.turn_starts.get("lead"), Some(&3));
         for seat in ["implementer", "tester", "reviewer"] {
             assert_eq!(state.turn_starts.get(seat), Some(&1), "@{seat} reran");
         }
@@ -593,7 +600,11 @@ fn non_retryable_provider_auth_failure_is_immediate() {
         .expect_err("authentication failure must abort");
         let message = error.to_string();
         assert!(message.starts_with("@lead provider failure on attempt 1/3:"));
-        assert!(message.contains("401"), "missing source: {message}");
+        assert!(message.contains("hosted agent invocation failed at the model provider"));
+        assert!(
+            !message.contains("401"),
+            "hosted errors redact provider details"
+        );
         assert!(!output.exists());
 
         let state = state.lock().expect("script state");
@@ -602,7 +613,7 @@ fn non_retryable_provider_auth_failure_is_immediate() {
 }
 
 #[test]
-fn retryable_provider_exhaustion_is_bounded_without_a_commit() {
+fn sanitized_provider_failure_fails_closed_without_a_commit() {
     let _guard = retry_test_guard();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -628,13 +639,17 @@ fn retryable_provider_exhaustion_is_bounded_without_a_commit() {
         })
         .await
         .expect("adapter task")
-        .expect_err("retryable provider failure must exhaust");
+        .expect_err("a provider failure with no retry classification must abort");
         let message = error.to_string();
         assert!(
-            message.starts_with("@lead provider failure on attempt 3/3:"),
+            message.starts_with("@lead provider failure on attempt 1/3:"),
             "unexpected error: {message}"
         );
-        assert!(message.contains("429"), "missing source: {message}");
+        assert!(message.contains("hosted agent invocation failed at the model provider"));
+        assert!(
+            !message.contains("429"),
+            "hosted errors redact provider details"
+        );
         assert!(!output.exists());
 
         let state = state.lock().expect("script state");
@@ -644,7 +659,7 @@ fn retryable_provider_exhaustion_is_bounded_without_a_commit() {
             .filter(|(seat, _)| seat == "lead")
             .filter_map(|(_, request)| request["messages"].as_array()?.last()?["content"].as_str())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(lead_prompts.len(), MAX_SEAT_ATTEMPTS as usize);
+        assert_eq!(lead_prompts.len(), 1);
         for seat in ["implementer", "tester", "reviewer"] {
             assert_eq!(state.turn_starts.get(seat), Some(&1), "@{seat} reran");
         }

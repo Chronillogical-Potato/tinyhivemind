@@ -331,12 +331,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
-name = "core_detect"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -509,16 +503,7 @@ version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16f5094c54661b38d03bd7e50df373292118db60b585c08a411c6d840017fe7d"
 dependencies = [
- "dirs-sys 0.5.0",
-]
-
-[[package]]
-name = "dirs"
-version = "5.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
-dependencies = [
- "dirs-sys 0.4.1",
+ "dirs-sys",
 ]
 
 [[package]]
@@ -527,19 +512,7 @@ version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
 dependencies = [
- "dirs-sys 0.5.0",
-]
-
-[[package]]
-name = "dirs-sys"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
-dependencies = [
- "libc",
- "option-ext",
- "redox_users 0.4.6",
- "windows-sys 0.48.0",
+ "dirs-sys",
 ]
 
 [[package]]
@@ -550,7 +523,7 @@ checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
 dependencies = [
  "libc",
  "option-ext",
- "redox_users 0.5.3",
+ "redox_users",
  "windows-sys 0.61.2",
 ]
 
@@ -600,21 +573,6 @@ dependencies = [
  "sha2 0.10.9",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "encoding_rs"
-version = "0.8.41"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b5ef0006ac9ab233c38522f5ae99cae3625151de8f706cacee1cba4b8e2832a"
-dependencies = [
- "cfg-if",
- "core_detect",
- "multiversion",
- "multiversion_no_op",
- "rustversion",
- "scopeguard",
- "simdutf8",
 ]
 
 [[package]]
@@ -1096,11 +1054,9 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "socket2",
- "system-configuration",
  "tokio",
  "tower-service",
  "tracing",
- "windows-registry",
 ]
 
 [[package]]
@@ -1422,49 +1378,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "motosan-ai-oauth"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "244943168db97b6874d3a88f5fff7029ab002d84c9c572e3bfe6e8cd92af0bae"
-dependencies = [
- "base64 0.22.1",
- "percent-encoding",
- "rand 0.9.5",
- "reqwest",
- "serde",
- "sha2 0.10.9",
- "thiserror 2.0.20",
- "tokio",
-]
-
-[[package]]
-name = "multiversion"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ca4bea16ffc3f443cf7d866912118196bfef4c6a1556ca00f9f9b00bb43f7c"
-dependencies = [
- "multiversion-macros",
-]
-
-[[package]]
-name = "multiversion-macros"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d416831a7317ef4b08bee00b69cbbb9c8763da7959a7026244d6266869f9c83"
-dependencies = [
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 3.0.6",
-]
-
-[[package]]
-name = "multiversion_no_op"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
-
-[[package]]
 name = "native-tls"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1502,16 +1415,6 @@ dependencies = [
 
 [[package]]
 name = "nu-ansi-term"
-version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
-dependencies = [
- "overload",
- "winapi",
-]
-
-[[package]]
-name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
@@ -1539,6 +1442,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-core-foundation"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
+name = "objc2-io-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
+dependencies = [
+ "libc",
+ "objc2-core-foundation",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1553,7 +1475,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 [[package]]
 name = "openhuman"
 version = "0.63.29"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "aes-gcm",
  "aho-corasick",
@@ -1568,7 +1490,7 @@ dependencies = [
  "chrono-tz",
  "cron",
  "directories",
- "dirs 5.0.1",
+ "dirs",
  "dotenvy",
  "ed25519-dalek",
  "flate2",
@@ -1578,14 +1500,12 @@ dependencies = [
  "glob",
  "hex",
  "hkdf",
- "hmac",
  "hostname",
  "iana-time-zone",
  "keyring",
  "libc",
  "log",
- "motosan-ai-oauth",
- "nu-ansi-term 0.46.0",
+ "nu-ansi-term",
  "once_cell",
  "openhuman-rpc",
  "parking_lot",
@@ -1600,20 +1520,26 @@ dependencies = [
  "serde_repr",
  "serde_yaml",
  "sha2 0.10.9",
- "sysinfo",
+ "sysinfo 0.33.1",
  "tar",
  "tempfile",
- "thiserror 2.0.20",
+ "thiserror",
+ "tinyagents-definition",
  "tinyagents-graph",
  "tinyagents-harness",
- "tinyagents-language",
+ "tinyagents-orchestration",
  "tinyagents-registry",
+ "tinyagents-runtime",
  "tinyagents-session",
  "tinybus",
  "tinychannels-bus",
  "tinyconnectors-bus",
- "tinyhumans-sdk",
- "tinyinference",
+ "tinyinference-core",
+ "tinyinference-embeddings",
+ "tinyinference-llm",
+ "tinyinference-local",
+ "tinyinference-providers",
+ "tinyinference-voice",
  "tinyjuice-bus",
  "tinymcp",
  "tinymcp-bus",
@@ -1621,7 +1547,9 @@ dependencies = [
  "tinymemory-bus",
  "tinymemory-sources",
  "tinyruntime-bus",
- "tinytools",
+ "tinyskills",
+ "tinytools 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
+ "tinytools-agent 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
@@ -1632,18 +1560,17 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
- "wait-timeout",
  "walkdir",
  "windows-sys 0.61.2",
  "x25519-dalek",
  "zeroize",
- "zip",
+ "zip 2.4.2",
 ]
 
 [[package]]
 name = "openhuman-embed"
 version = "0.63.29"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "anyhow",
  "log",
@@ -1651,7 +1578,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror 2.0.20",
+ "thiserror",
  "tokio",
  "url",
  "uuid",
@@ -1660,7 +1587,7 @@ dependencies = [
 [[package]]
 name = "openhuman-rpc"
 version = "0.63.29"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "serde",
  "serde_json",
@@ -1714,12 +1641,6 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
-
-[[package]]
-name = "overload"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "parking_lot"
@@ -1865,7 +1786,7 @@ dependencies = [
  "rustc-hash",
  "rustls",
  "socket2",
- "thiserror 2.0.20",
+ "thiserror",
  "tokio",
  "tracing",
  "web-time",
@@ -1887,7 +1808,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.20",
+ "thiserror",
  "tinyvec",
  "tracing",
  "web-time",
@@ -2003,23 +1924,12 @@ dependencies = [
 
 [[package]]
 name = "redox_users"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
-dependencies = [
- "getrandom 0.2.17",
- "libredox",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "redox_users"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60dc65c0ff1a7ae1294b0c67b9f14baf70b644404010370171787bfac1038fc0"
 dependencies = [
  "libredox",
- "thiserror 2.0.20",
+ "thiserror",
 ]
 
 [[package]]
@@ -2079,7 +1989,6 @@ checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64 0.22.1",
  "bytes",
- "encoding_rs",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -2093,7 +2002,6 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
- "mime",
  "mime_guess",
  "native-tls",
  "percent-encoding",
@@ -2141,7 +2049,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c51c9ae4df8a7fba42103df5c621fa3c37eccf3a3c650879e90fc48b11cc192c"
 dependencies = [
  "hashbrown 0.16.1",
- "thiserror 2.0.20",
+ "thiserror",
 ]
 
 [[package]]
@@ -2508,12 +2416,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
-name = "simdutf8"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
-
-[[package]]
 name = "siphasher"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2627,28 +2529,21 @@ dependencies = [
  "libc",
  "memchr",
  "ntapi",
- "windows",
+ "windows 0.57.0",
 ]
 
 [[package]]
-name = "system-configuration"
-version = "0.7.0"
+name = "sysinfo"
+version = "0.38.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a13f3d0daba03132c0aa9767f98351b3488edc2c100cda2d2ec2b04f3d8d3c8b"
+checksum = "92ab6a2f8bfe508deb3c6406578252e491d299cbbf3bc0529ecc3313aee4a52f"
 dependencies = [
- "bitflags",
- "core-foundation 0.9.4",
- "system-configuration-sys",
-]
-
-[[package]]
-name = "system-configuration-sys"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e1d1b10ced5ca923a1fcb8d03e96b8d3268065d724548c0211415ff6ac6bac4"
-dependencies = [
- "core-foundation-sys",
  "libc",
+ "memchr",
+ "ntapi",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -2677,31 +2572,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
-dependencies = [
- "thiserror-impl 1.0.69",
-]
-
-[[package]]
-name = "thiserror"
 version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
 dependencies = [
- "thiserror-impl 2.0.20",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
+ "thiserror-impl",
 ]
 
 [[package]]
@@ -2725,34 +2600,42 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyagents-graph"
+name = "tinyagents-definition"
 version = "2.1.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "async-trait",
- "chrono",
+ "serde",
+]
+
+[[package]]
+name = "tinyagents-graph"
+version = "2.1.2"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "anyhow",
+ "async-trait",
  "futures",
- "reqwest",
  "rusqlite",
  "serde",
  "serde_json",
- "sha2 0.11.0",
  "tinyagents-harness",
- "tinyagents-language",
- "tinyagents-tracing",
- "tinyinference",
+ "tinyinference-llm",
+ "tinytools 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "tinyagents-harness"
 version = "2.1.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
+ "anyhow",
  "async-trait",
  "base64 0.22.1",
- "bytes",
  "chrono",
+ "dirs",
  "flate2",
  "futures",
  "regex",
@@ -2761,58 +2644,90 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "thiserror 2.0.20",
- "tinyagents-tracing",
- "tinyinference",
- "tinytools",
+ "tempfile",
+ "thiserror",
+ "tinyagents-definition",
+ "tinyinference-embeddings",
+ "tinyinference-llm",
+ "tinytools 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
+ "tinytools-agent 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
  "tokio",
+ "tracing",
+ "uuid",
+ "wait-timeout",
 ]
 
 [[package]]
-name = "tinyagents-language"
+name = "tinyagents-orchestration"
 version = "2.1.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "parking_lot",
  "serde",
  "serde_json",
+ "thiserror",
+ "tinyagents-graph",
  "tinyagents-harness",
+ "tinyagents-runtime",
+ "tinyagents-session",
+ "tinyinference-llm",
+ "tinytools 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
 name = "tinyagents-registry"
 version = "2.1.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
+ "anyhow",
+ "chrono",
  "serde",
  "serde_json",
- "tinyagents-graph",
+ "tinyagents-definition",
  "tinyagents-harness",
- "tinyagents-language",
- "tinyinference",
+ "tinyinference-llm",
+ "tinytools 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
+]
+
+[[package]]
+name = "tinyagents-runtime"
+version = "2.1.2"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "thiserror",
+ "tinyagents-harness",
+ "tinyagents-session",
+ "tinyinference-llm",
+ "tinytools 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
+ "tokio",
 ]
 
 [[package]]
 name = "tinyagents-session"
 version = "2.1.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "chrono",
  "rusqlite",
  "serde",
  "serde_json",
  "tinyagents-harness",
- "tinyagents-tracing",
+ "tracing",
 ]
-
-[[package]]
-name = "tinyagents-tracing"
-version = "2.1.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
 
 [[package]]
 name = "tinybus"
 version = "0.1.1"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "async-trait",
  "flate2",
@@ -2820,19 +2735,19 @@ dependencies = [
  "serde_json",
  "tar",
  "tempfile",
- "thiserror 2.0.20",
+ "thiserror",
  "tinybus-macros",
  "tokio",
  "toml 0.8.23",
  "tracing",
  "ureq",
- "zip",
+ "zip 2.4.2",
 ]
 
 [[package]]
 name = "tinybus-macros"
 version = "0.1.1"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2842,7 +2757,7 @@ dependencies = [
 [[package]]
 name = "tinychannels-bus"
 version = "0.1.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2856,7 +2771,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "thiserror 2.0.20",
+ "thiserror",
  "tokio",
  "tracing",
  "uuid",
@@ -2865,7 +2780,7 @@ dependencies = [
 [[package]]
 name = "tinyconnectors-bus"
 version = "0.10.0"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "serde",
  "serde_json",
@@ -2876,7 +2791,7 @@ name = "tinyhivemind"
 version = "0.2.1"
 dependencies = [
  "serde",
- "thiserror 2.0.20",
+ "thiserror",
  "tinyhivemind-core",
 ]
 
@@ -2885,7 +2800,7 @@ name = "tinyhivemind-core"
 version = "0.2.1"
 dependencies = [
  "serde",
- "thiserror 2.0.20",
+ "thiserror",
 ]
 
 [[package]]
@@ -2893,7 +2808,7 @@ name = "tinyhivemind-embed"
 version = "0.2.1"
 dependencies = [
  "serde",
- "thiserror 2.0.20",
+ "thiserror",
  "tinyhivemind",
 ]
 
@@ -2902,7 +2817,7 @@ name = "tinyhivemind-hive"
 version = "0.2.1"
 dependencies = [
  "serde",
- "thiserror 2.0.20",
+ "thiserror",
  "tinyhivemind",
  "tinyhivemind-core",
 ]
@@ -2913,7 +2828,7 @@ version = "0.2.1"
 dependencies = [
  "openhuman-embed",
  "serde",
- "thiserror 2.0.20",
+ "thiserror",
  "tinyhivemind",
  "tinyhivemind-core",
  "tinyhivemind-embed",
@@ -2947,48 +2862,122 @@ version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror",
  "tinyhivemind",
  "tinyhivemind-embed",
 ]
 
 [[package]]
-name = "tinyhumans-sdk"
-version = "0.1.0"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+name = "tinyinference-core"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
- "base64 0.22.1",
- "futures",
- "percent-encoding",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
+ "anyhow",
+ "httpdate",
  "url",
 ]
 
 [[package]]
-name = "tinyinference"
-version = "0.2.1"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+name = "tinyinference-embeddings"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "async-trait",
+ "once_cell",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tinyinference-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "tinyinference-llm"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "async-trait",
  "bytes",
  "futures",
- "httpdate",
  "reqwest",
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "thiserror 2.0.20",
+ "thiserror",
+ "tinyinference-core",
+ "tinytools-agent 0.3.0 (git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71)",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "tinyinference-local"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "base64 0.23.1",
+ "bytes",
+ "flate2",
+ "futures",
+ "futures-util",
+ "hex",
+ "log",
+ "once_cell",
+ "parking_lot",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "sysinfo 0.38.4",
+ "tar",
+ "thiserror",
+ "tinyinference-core",
+ "tinyinference-embeddings",
+ "tinyinference-llm",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid",
+ "zip 8.6.0",
+]
+
+[[package]]
+name = "tinyinference-providers"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "base64 0.23.1",
+ "rand 0.10.2",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "url",
+]
+
+[[package]]
+name = "tinyinference-voice"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "base64 0.23.1",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tinyinference-core",
+ "tinyinference-local",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
 name = "tinyjuice-bus"
 version = "0.2.5"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "serde",
 ]
@@ -2996,11 +2985,11 @@ dependencies = [
 [[package]]
 name = "tinymcp"
 version = "0.3.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
- "dirs 6.0.0",
+ "dirs",
  "futures-util",
  "parking_lot",
  "reqwest",
@@ -3008,7 +2997,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "thiserror 2.0.20",
+ "thiserror",
  "tinymcp-bus",
  "tokio",
  "tracing",
@@ -3018,7 +3007,7 @@ dependencies = [
 [[package]]
 name = "tinymcp-bus"
 version = "0.3.2"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "schemars",
  "serde",
@@ -3028,7 +3017,7 @@ dependencies = [
 [[package]]
 name = "tinymemory-api"
 version = "0.1.1"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3042,21 +3031,21 @@ dependencies = [
 [[package]]
 name = "tinymemory-bus"
 version = "0.1.0"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "anyhow",
  "chrono",
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "thiserror 2.0.20",
+ "thiserror",
  "uuid",
 ]
 
 [[package]]
 name = "tinymemory-sources"
 version = "0.1.0"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3078,10 +3067,25 @@ dependencies = [
 [[package]]
 name = "tinyruntime-bus"
 version = "0.2.4"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "tinyskills"
+version = "0.2.1"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -3096,13 +3100,46 @@ dependencies = [
 
 [[package]]
 name = "tinytools"
-version = "0.1.0"
-source = "git+https://github.com/tinyhumansai/openhuman?rev=93e9938f388f3989b7c0acff3f72007a31bb3128#93e9938f388f3989b7c0acff3f72007a31bb3128"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71#a5d04a7f3af0abc1dd748f87f94871b36ae9fe71"
 dependencies = [
  "anyhow",
  "async-trait",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "tinytools"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "tinytools-agent"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71#a5d04a7f3af0abc1dd748f87f94871b36ae9fe71"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "tinytools 0.3.0 (git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71)",
+]
+
+[[package]]
+name = "tinytools-agent"
+version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c#b8eeec0b8d1254a516a9f06477823b74ee7ed62c"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "tinytools 0.3.0 (git+https://github.com/tinyhumansai/openhuman?rev=b8eeec0b8d1254a516a9f06477823b74ee7ed62c)",
 ]
 
 [[package]]
@@ -3367,7 +3404,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319"
 dependencies = [
  "matchers",
- "nu-ansi-term 0.50.3",
+ "nu-ansi-term",
  "once_cell",
  "regex-automata",
  "sharded-slab",
@@ -3398,8 +3435,14 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "sha1",
- "thiserror 2.0.20",
+ "thiserror",
 ]
+
+[[package]]
+name = "typed-path"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
 
 [[package]]
 name = "typenum"
@@ -3714,6 +3757,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "windows"
+version = "0.62.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "527fadee13e0c05939a6a05d5bd6eec6cd2e3dbd648b9f8e447c6518133d8580"
+dependencies = [
+ "windows-collections",
+ "windows-core 0.62.2",
+ "windows-future",
+ "windows-numerics",
+]
+
+[[package]]
+name = "windows-collections"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b2d95af1a8a14a3c7367e1ed4fc9c20e0a26e79551b1454d72583c97cc6610"
+dependencies = [
+ "windows-core 0.62.2",
+]
+
+[[package]]
 name = "windows-core"
 version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3736,6 +3800,17 @@ dependencies = [
  "windows-link",
  "windows-result 0.4.1",
  "windows-strings",
+]
+
+[[package]]
+name = "windows-future"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1d6f90251fe18a279739e78025bd6ddc52a7e22f921070ccdc67dde84c605cb"
+dependencies = [
+ "windows-core 0.62.2",
+ "windows-link",
+ "windows-threading",
 ]
 
 [[package]]
@@ -3789,14 +3864,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
 
 [[package]]
-name = "windows-registry"
-version = "0.6.1"
+name = "windows-numerics"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
+checksum = "6e2e40844ac143cdb44aead537bbf727de9b044e107a0f1220392177d15b0f26"
 dependencies = [
+ "windows-core 0.62.2",
  "windows-link",
- "windows-result 0.4.1",
- "windows-strings",
 ]
 
 [[package]]
@@ -3828,15 +3902,6 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
-version = "0.48.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677d2418bec65e3338edb076e806bc1ec15693c5d0104683f2efe857f61056a9"
-dependencies = [
- "windows-targets 0.48.5",
-]
-
-[[package]]
-name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
@@ -3860,21 +3925,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
  "windows-link",
-]
-
-[[package]]
-name = "windows-targets"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a2fa6e2155d7247be68c096456083145c183cbbbc2764150dda45a87197940c"
-dependencies = [
- "windows_aarch64_gnullvm 0.48.5",
- "windows_aarch64_msvc 0.48.5",
- "windows_i686_gnu 0.48.5",
- "windows_i686_msvc 0.48.5",
- "windows_x86_64_gnu 0.48.5",
- "windows_x86_64_gnullvm 0.48.5",
- "windows_x86_64_msvc 0.48.5",
 ]
 
 [[package]]
@@ -3911,10 +3961,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows_aarch64_gnullvm"
-version = "0.48.5"
+name = "windows-threading"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b38e32f0abccf9987a4e3079dfb67dcd799fb61361e53e2882c3cbaf0d905d8"
+checksum = "3949bd5b99cafdf1c7ca86b43ca564028dfe27d66958f2470940f73d86d75b37"
+dependencies = [
+ "windows-link",
+]
 
 [[package]]
 name = "windows_aarch64_gnullvm"
@@ -3930,12 +3983,6 @@ checksum = "a9d8416fa8b42f5c947f8482c43e7d89e73a173cead56d044f6a56104a6d1b53"
 
 [[package]]
 name = "windows_aarch64_msvc"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc35310971f3b2dbbf3f0690a219f40e2d9afcf64f9ab7cc1be722937c26b4bc"
-
-[[package]]
-name = "windows_aarch64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
@@ -3945,12 +3992,6 @@ name = "windows_aarch64_msvc"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9d782e804c2f632e395708e99a94275910eb9100b2114651e04744e9b125006"
-
-[[package]]
-name = "windows_i686_gnu"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a75915e7def60c94dcef72200b9a8e58e5091744960da64ec734a6c6e9b3743e"
 
 [[package]]
 name = "windows_i686_gnu"
@@ -3978,12 +4019,6 @@ checksum = "fa7359d10048f68ab8b09fa71c3daccfb0e9b559aed648a8f95469c27057180c"
 
 [[package]]
 name = "windows_i686_msvc"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f55c233f70c4b27f66c523580f78f1004e8b5a8b659e05a4eb49d4166cca406"
-
-[[package]]
-name = "windows_i686_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
@@ -3993,12 +4028,6 @@ name = "windows_i686_msvc"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e7ac75179f18232fe9c285163565a57ef8d3c89254a30685b57d83a38d326c2"
-
-[[package]]
-name = "windows_x86_64_gnu"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53d40abd2583d23e4718fddf1ebec84dbff8381c07cae67ff7768bbf19c6718e"
 
 [[package]]
 name = "windows_x86_64_gnu"
@@ -4014,12 +4043,6 @@ checksum = "9c3842cdd74a865a8066ab39c8a7a473c0778a3f29370b5fd6b4b9aa7df4a499"
 
 [[package]]
 name = "windows_x86_64_gnullvm"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b7b52767868a23d5bab768e390dc5f5c55825b6d30b86c844ff2dc7414044cc"
-
-[[package]]
-name = "windows_x86_64_gnullvm"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
@@ -4029,12 +4052,6 @@ name = "windows_x86_64_gnullvm"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ffa179e2d07eee8ad8f57493436566c7cc30ac536a3379fdf008f47f6bb7ae1"
-
-[[package]]
-name = "windows_x86_64_msvc"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
 
 [[package]]
 name = "windows_x86_64_msvc"
@@ -4250,7 +4267,21 @@ dependencies = [
  "flate2",
  "indexmap",
  "memchr",
- "thiserror 2.0.20",
+ "thiserror",
+ "zopfli",
+]
+
+[[package]]
+name = "zip"
+version = "8.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "indexmap",
+ "memchr",
+ "typed-path",
  "zopfli",
 ]
 

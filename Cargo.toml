@@ -47,7 +47,7 @@ tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
 # Canonical OpenHuman agent handles for the first-class embedding adapter. The
 # adapter keeps default features off because it only binds already-built agents;
 # the consuming host chooses the runtime capabilities it enables.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false }
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "b8eeec0b8d1254a516a9f06477823b74ee7ed62c", default-features = false }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.

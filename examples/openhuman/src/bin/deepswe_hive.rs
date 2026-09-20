@@ -508,24 +508,44 @@ fn instantiate(
     .allow_tools(["broadcast", "complete_episode"])
     .description("Local TinyHiveMind completion tools");
     let tools = vec!["mcp_list_tools".into(), "mcp_call_tool".into()];
+    let agent_id = format!("deepswe-{id}");
+    let system_prompt = format!(
+        "You are the {id} seat in a hermetic DeepSWE hive. Use mcp_list_tools \
+         to discover the deepswe and tinyhive servers, then use mcp_call_tool \
+         to invoke their tools. End by actually invoking mcp_call_tool exactly \
+         once with server tinyhive, tool broadcast or complete_episode, and a \
+         concrete evidence message. Do not print the call as JSON or prose. \
+         Your turn is invalid until its tool result says accepted from @{id}; \
+         after acceptance, make no more tool calls."
+    );
+    let registry_id = agent_id.clone();
+    let registry_prompt = system_prompt.clone();
+    let registry_tools = tools.clone();
     runtime
         .agent(
-            AgentSpec::new(format!("deepswe-{id}"))
+            AgentSpec::new(agent_id)
                 .definition(
                     AgentDefinitionSpec::new()
-                        .system_prompt(format!(
-                            "You are the {id} seat in a hermetic DeepSWE hive. Use mcp_list_tools \
-                             to discover the deepswe and tinyhive servers, then use mcp_call_tool \
-                             to invoke their tools. End by actually invoking mcp_call_tool exactly \
-                             once with server tinyhive, tool broadcast or complete_episode, and a \
-                             concrete evidence message. Do not print the call as JSON or prose. \
-                             Your turn is invalid until its tool result says accepted from @{id}; \
-                             after acceptance, make no more tool calls."
-                        ))
+                        .system_prompt(system_prompt)
                         .tools(ToolScopeSpec::Named(tools.clone()))
                         .max_iterations(16)
                         .temperature(0.0),
                 )
+                // OpenHuman's hosted turn preparation resolves the already-supplied
+                // explicit definition through its config-backed catalogue once more.
+                .config(move |config| {
+                    let entry = serde_json::from_value(serde_json::json!({
+                        "id": registry_id.clone(),
+                        "name": registry_id,
+                        "description": "Hermetic DeepSWE hive seat",
+                        "source": "custom",
+                        "enabled": true,
+                        "system_prompt": registry_prompt,
+                        "tool_allowlist": registry_tools,
+                    }))
+                    .expect("static DeepSWE registry entry should deserialize");
+                    config.agent_registry.entries.push(entry);
+                })
                 .mcp(workspace)
                 .mcp(hive)
                 .action_dir(sandbox.repo_path()),
