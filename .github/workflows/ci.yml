@@ -26,6 +26,10 @@ jobs:
           # This job executes repository code (cargo build/test); don't persist
           # the token in git config.
           persist-credentials: false
+          # OpenHuman's public embedding facade shares TinyInference and
+          # TinyTools through its recorded nested submodules. Cargo path
+          # dependencies must see that complete recorded tree.
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -96,6 +100,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -113,6 +118,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          submodules: recursive
 
       # `rust-version` is inherited from `[workspace.package]`, so every member
       # reports the same value. Read it off the package the module ships as
@@ -145,6 +151,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          submodules: recursive
 
       - name: Check advisories, licenses, bans, and sources
         uses: EmbarkStudios/cargo-deny-action@v2

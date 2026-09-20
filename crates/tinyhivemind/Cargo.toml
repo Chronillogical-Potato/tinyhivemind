@@ -32,7 +32,7 @@ tokio = { workspace = true }
 # ../../docs/adr/0013-a-vendored-crate-is-an-example-dependency.md.
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-tinyinference = { workspace = true }
+tinyinference-llm = { workspace = true }
 tinytools = { workspace = true }
 
 # `cargo test` does not test an example unless the example says so, and the

@@ -17,7 +17,7 @@
 
 use std::time::Duration;
 
-use tinyinference::{
+use tinyinference_llm::{
     failure::{ProviderFailureClass, classify_provider_error},
     message::Message,
     model::{ChatModel, ModelRequest},
@@ -145,9 +145,9 @@ impl Chat {
 /// An error that is not a provider failure — a request this host built wrong,
 /// a response it could not decode — is never worth retrying, so it classifies
 /// as non-retryable rather than being guessed at.
-fn failure_class(error: &tinyinference::Error) -> ProviderFailureClass {
+fn failure_class(error: &tinyinference_llm::Error) -> ProviderFailureClass {
     match error {
-        tinyinference::Error::Provider(provider) => classify_provider_error(provider),
+        tinyinference_llm::Error::Provider(provider) => classify_provider_error(provider),
         _ => ProviderFailureClass::NonRetryable,
     }
 }

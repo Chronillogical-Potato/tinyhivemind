@@ -3,7 +3,7 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 use super::*;
-use tinyinference::{
+use tinyinference_llm::{
     model::{ModelRequest as Request, ModelResponse},
     providers::MockModel,
 };
@@ -13,7 +13,7 @@ struct NeverAnswers;
 
 #[async_trait::async_trait]
 impl ChatModel<()> for NeverAnswers {
-    async fn invoke(&self, (): &(), _: Request) -> tinyinference::Result<ModelResponse> {
+    async fn invoke(&self, (): &(), _: Request) -> tinyinference_llm::Result<ModelResponse> {
         std::future::pending().await
     }
 }
@@ -94,7 +94,7 @@ fn only_a_failure_the_provider_called_transient_is_retried() {
 #[test]
 fn an_error_this_host_caused_is_never_worth_retrying() {
     assert_eq!(
-        failure_class(&tinyinference::Error::Validation("no messages".into())),
+        failure_class(&tinyinference_llm::Error::Validation("no messages".into())),
         ProviderFailureClass::NonRetryable,
         "a request built wrong is built wrong the second time too",
     );
