@@ -31,3 +31,15 @@ tempfile = "3"
 # The inspector must terminate a hung Docker CLI from the host side.
 wait-timeout = "0.2"
 wiremock = "0.6"
+
+# `tinyhivemind-openhuman` above is a member of the root workspace and inherits
+# `openhuman-embed.workspace = true` from there, which now names the git source
+# (see the root `Cargo.toml` comment). `field.workspace = true` only copies the
+# dependency *spec* across the workspace boundary; it does not carry the root
+# workspace's own `[patch]` table with it. Without a patch here too, this
+# standalone workspace would fetch `openhuman-embed` fresh from git instead of
+# reusing the vendored submodule the `openhuman`/`openhuman-embed` path
+# dependencies above already point at — two copies of OpenHuman's
+# process-wide state in one binary. Keep this in sync with the root `[patch]`.
+[patch."https://github.com/tinyhumansai/openhuman"]
+openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed" }
