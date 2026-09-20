@@ -51,14 +51,16 @@ file, and the hidden suite did not build; the other two runs produced no patch.
 
 Provider-reported usage was:
 
-| task | usage records | input tokens | cached input subset | cache hit rate | output tokens | cost |
+| task | charged requests | input tokens | cached input subset | cache hit rate | output tokens | cost |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `abs-module-cache-flags` | 318 | 3,059,862 | 1,814,784 | 59.31% | 66,524 | $2.638765 |
-| `abs-stepped-slices` | 188 | 2,147,908 | 882,176 | 41.07% | 31,752 | $2.269064 |
-| `actionlint-action-pinning-lint` | 280 | 3,269,594 | 1,596,672 | 48.83% | 52,342 | $3.141449 |
-| **total** | **786** | **8,477,364** | **4,293,632** | **50.65%** | **150,618** | **$8.049278** |
+| `abs-module-cache-flags` | 159 | 1,529,931 | 907,392 | 59.31% | 33,262 | $2.638765 |
+| `abs-stepped-slices` | 94 | 1,073,954 | 441,088 | 41.07% | 15,876 | $2.269064 |
+| `actionlint-action-pinning-lint` | 140 | 1,634,797 | 798,336 | 48.83% | 26,171 | $3.141449 |
+| **total** | **393** | **4,238,682** | **2,146,816** | **50.65%** | **75,309** | **$8.049278** |
 
-Every usage-record id was unique. Cache hit rate is
+OpenHuman also wrote one zero-cost `estimated` mirror for every charged record;
+the table counts only `provider_charged` records so calls and tokens are not
+double-counted. Cache hit rate is
 `cached_input_tokens / input_tokens`; cached input is a subset of input, not
 additional usage. The aggregate rate was 50.6482%, about 0.42 percentage points
 higher than the original smoke's 50.23%.
