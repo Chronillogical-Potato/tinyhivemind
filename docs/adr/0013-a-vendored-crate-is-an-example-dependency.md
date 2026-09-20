@@ -87,9 +87,3 @@ contributor.
 
 **If either crate is ever needed by a library crate, this decision is wrong
 rather than bent.** The answer then is a port, as it has been every other time.
-
-**Status update:** [ADR 0020](0020-openhuman-embed-is-a-git-dependency-patched-locally.md)
-carves out the one exception this decision names above: `openhuman-embed` is a
-library dependency of `tinyhivemind-openhuman`, taken as a git dependency
-rather than a path, for a reason this record's "wrong rather than bent" clause
-anticipates but does not itself resolve.
