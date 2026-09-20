@@ -1,3 +1,15 @@
 [submodule "wiki"]
 	path = wiki
 	url = https://github.com/tinyhumansai/tinyhivemind.wiki.git
+[submodule "vendor/openhuman"]
+	path = vendor/openhuman
+	url = https://github.com/tinyhumansai/openhuman.git
+[submodule "vendor/tinyinference"]
+	path = vendor/tinyinference
+	url = https://github.com/tinyhumansai/tinyinference.git
+[submodule "vendor/tinytools"]
+	path = vendor/tinytools
+	url = https://github.com/tinyhumansai/tinytools.git
+[submodule "vendor/tinyjevclient"]
+	path = vendor/tinyjevclient
+	url = https://github.com/tinyhumansai/tinyjevclient.git

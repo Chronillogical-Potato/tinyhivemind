@@ -13,7 +13,10 @@ publish = false
 anyhow = "1"
 futures = "0.3"
 # The live hive uses OpenHuman's native runtime, agents, sessions, and TinyCortex module.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "93e9938f388f3989b7c0acff3f72007a31bb3128", default-features = false, features = ["mcp", "modules"] }
+openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed", default-features = false, features = ["mcp", "modules"] }
+# The DeepSWE adapter registers its per-seat definitions with OpenHuman's
+# runtime registry so the current hosted harness can resolve them at turn time.
+openhuman = { path = "../../vendor/openhuman/crates/openhuman-core", default-features = false }
 # Public research sources are mirrored into the isolated run workspace before turns start.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
