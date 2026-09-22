@@ -81,6 +81,10 @@ impl CompletionDriver<'_> {
             }
         }
         if recipients.is_empty() {
+            // Nobody on the desk fits. The work stays with its author, who is
+            // owed another turn to decide what to do with it rather than left
+            // believing it was handed off.
+            next.seen.ran_for.remove(author);
             return Ok(Vec::new());
         }
         self.place(next, event, message, &recipients)?;

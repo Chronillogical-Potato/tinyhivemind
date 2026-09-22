@@ -17,8 +17,8 @@ use std::sync::{Mutex, OnceLock};
 use openhuman_embed::{Agent, AgentSpec, Runtime, Workspace};
 use tinyhivemind::{Conversation, Sequence, desk::Desk, responder::Probability, speech::Utterance};
 use tinyhivemind_embed::{
-    CandidateProbability, EvaluationDisposition, RouteCandidate, Router, RouterFuture,
-    RoutingEvaluation, RoutingPolicy, RoutingRequest,
+    CandidateProbability, ContributionProbability, EvaluationDisposition, RouteCandidate, Router,
+    RouterFuture, RoutingEvaluation, RoutingPolicy, RoutingRequest,
 };
 use tinyhivemind_hive::CompletionEpisodeState;
 use tinyhivemind_openhuman::{
@@ -93,20 +93,43 @@ struct CyclingRouter {
 
 impl Router for CyclingRouter {
     fn evaluate<'a>(&'a self, request: &'a RoutingRequest) -> RouterFuture<'a> {
-        let pick = self.calls.fetch_add(1, Ordering::SeqCst) % request.candidates.len().max(1);
-        let id = request.candidates[pick].id.clone();
+        let eligible: Vec<String> = request
+            .candidates
+            .iter()
+            .filter(|candidate| candidate.available)
+            .map(|candidate| candidate.id.clone())
+            .collect();
+        let pick = self.calls.fetch_add(1, Ordering::SeqCst) % eligible.len().max(1);
         let roster_version = request.roster_version;
         Box::pin(async move {
+            // A valid domain: every eligible candidate plus `none`, summing
+            // to the scale, one contribution each, the pick on top.
+            let others = u32::try_from(eligible.len().saturating_sub(1)).expect("small");
+            let mut primary_probabilities: Vec<CandidateProbability> = eligible
+                .iter()
+                .enumerate()
+                .map(|(index, id)| CandidateProbability {
+                    candidate_id: id.clone(),
+                    probability: probability(if index == pick { 600_000 } else { 100_000 }),
+                })
+                .collect();
+            primary_probabilities.push(CandidateProbability {
+                candidate_id: "none".into(),
+                probability: probability(400_000 - 100_000 * others),
+            });
             Ok(RoutingEvaluation {
-                primary_responder: id.clone(),
-                primary_probabilities: vec![CandidateProbability {
-                    candidate_id: id,
-                    probability: probability(900_000),
-                }],
+                primary_responder: eligible[pick].clone(),
+                primary_probabilities,
                 confidence: probability(900_000),
                 needs_collaboration: probability(0),
                 needs_clarification: probability(0),
-                contributions: Vec::new(),
+                contributions: eligible
+                    .iter()
+                    .map(|id| ContributionProbability {
+                        candidate_id: id.clone(),
+                        probability: probability(500_000),
+                    })
+                    .collect(),
                 high_impact: probability(0),
                 model_identity: "cycling".into(),
                 question_schema_version: 1,

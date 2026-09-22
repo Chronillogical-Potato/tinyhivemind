@@ -4,8 +4,8 @@
 
 use tinyhivemind::{Sequence, responder::Probability, speech::Utterance};
 use tinyhivemind_embed::{
-    CandidateProbability, EvaluationDisposition, Router, RouterFuture, RoutingEvaluation,
-    RoutingRequest,
+    CandidateProbability, ContributionProbability, EvaluationDisposition, Router, RouterFuture,
+    RoutingEvaluation, RoutingRequest,
 };
 
 use super::{committed, episode, hive, policy};
@@ -19,6 +19,54 @@ fn run<F: Future>(future: F) -> F::Output {
         .block_on(future)
 }
 
+/// A well-formed evaluation that picks the first eligible candidate.
+///
+/// `valid_domain` requires the Choice to name every eligible candidate plus
+/// `none`, sum to the scale, carry one contribution per candidate, and put
+/// the responder on top; anything less is rejected to the fallback route,
+/// which in a two-seat episode happens to be the other seat.
+fn evaluation(request: &RoutingRequest, needs_clarification: u32) -> RoutingEvaluation {
+    let eligible: Vec<String> = request
+        .candidates
+        .iter()
+        .filter(|candidate| candidate.available)
+        .map(|candidate| candidate.id.clone())
+        .collect();
+    let others = u32::try_from(eligible.len().saturating_sub(1)).expect("small");
+    let mut primary_probabilities: Vec<CandidateProbability> = eligible
+        .iter()
+        .enumerate()
+        .map(|(index, id)| CandidateProbability {
+            candidate_id: id.clone(),
+            probability: Probability::new(if index == 0 { 600_000 } else { 100_000 })
+                .expect("bounded"),
+        })
+        .collect();
+    primary_probabilities.push(CandidateProbability {
+        candidate_id: "none".into(),
+        probability: Probability::new(400_000 - 100_000 * others).expect("bounded"),
+    });
+    RoutingEvaluation {
+        primary_responder: eligible[0].clone(),
+        primary_probabilities,
+        confidence: Probability::new(900_000).expect("bounded"),
+        needs_collaboration: Probability::new(0).expect("bounded"),
+        needs_clarification: Probability::new(needs_clarification).expect("bounded"),
+        contributions: eligible
+            .iter()
+            .map(|id| ContributionProbability {
+                candidate_id: id.clone(),
+                probability: Probability::new(500_000).expect("bounded"),
+            })
+            .collect(),
+        high_impact: Probability::new(0).expect("bounded"),
+        model_identity: "fixture".into(),
+        question_schema_version: 1,
+        roster_version: request.roster_version,
+        disposition: EvaluationDisposition::Unchecked,
+    }
+}
+
 /// Routes every broadcast to the first candidate, alone.
 #[derive(Debug, Default)]
 struct FirstRouter {
@@ -28,26 +76,7 @@ struct FirstRouter {
 impl Router for FirstRouter {
     fn evaluate<'a>(&'a self, request: &'a RoutingRequest) -> RouterFuture<'a> {
         self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let first = request.candidates[0].id.clone();
-        let roster_version = request.roster_version;
-        Box::pin(async move {
-            Ok(RoutingEvaluation {
-                primary_responder: first.clone(),
-                primary_probabilities: vec![CandidateProbability {
-                    candidate_id: first,
-                    probability: Probability::new(900_000).expect("bounded"),
-                }],
-                confidence: Probability::new(900_000).expect("bounded"),
-                needs_collaboration: Probability::new(0).expect("bounded"),
-                needs_clarification: Probability::new(0).expect("bounded"),
-                contributions: Vec::new(),
-                high_impact: Probability::new(0).expect("bounded"),
-                model_identity: "first".into(),
-                question_schema_version: 1,
-                roster_version,
-                disposition: EvaluationDisposition::Unchecked,
-            })
-        })
+        Box::pin(async move { Ok(evaluation(request, 0)) })
     }
 }
 
@@ -263,6 +292,51 @@ fn a_full_queue_returns_the_work_to_its_author() {
             .with_queue_depth(0),
         Err(Error::ZeroQueueDepth)
     ));
+}
+
+/// Routes nothing: every broadcast comes back asking for clarification.
+#[derive(Debug, Default)]
+struct ClarifyRouter;
+
+impl Router for ClarifyRouter {
+    fn evaluate<'a>(&'a self, request: &'a RoutingRequest) -> RouterFuture<'a> {
+        Box::pin(async move { Ok(evaluation(request, 950_000)) })
+    }
+}
+
+#[test]
+fn an_unplaceable_broadcast_leaves_the_work_with_an_author_owed_a_turn() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let route_policy = policy(4);
+    let router = ClarifyRouter;
+    // A clarify-shaped evaluation escalates on the first pass; only the
+    // reasoning pass may return a `Clarify` plan. Without a reasoning router
+    // the escalation fails over to a fallback responder, which is a route.
+    let routing = BroadcastRouting {
+        primary: Some(&router),
+        reasoning: Some(&router),
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let transition = run(driver.apply_committed(
+        &state,
+        committed("one", 1, broadcast("who takes this?")),
+        Some(routing),
+    ))
+    .expect("an unplaceable broadcast is not an error");
+    assert!(transition.actions.is_empty(), "nothing to run");
+    assert_eq!(
+        transition.state.seen().ran_for.get("one"),
+        None,
+        "the author is owed another turn for the work it still holds",
+    );
+    assert!(
+        transition.state.ledger().is_drained(),
+        "nothing was queued either"
+    );
 }
 
 #[test]

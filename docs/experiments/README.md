@@ -25,6 +25,7 @@ does.
 
 | date | question | answer |
 | --- | --- | --- |
+| [2026-09-22](2026-09-22-the-driver-under-the-benchmark.md) | Does the real completion driver cost what the prototype loop cost? | Within two percent on every column; the one wrong prediction was a host delivering after the turn instead of before |
 | [2026-09-01](2026-09-01-live-hidden-profile.md) | Does a live room beat a poll on a problem that has an answer? | The synthetic brief was not enough; a real problem was needed to tell them apart |
 | [2026-09-01](2026-09-01-refutation-and-grounds.md) | Do refutation and evidential grounds earn their place? | The arm was able to lose, and it lost |
 | [2026-09-02](2026-09-02-federated-hidden-profile.md) | Can several channels pool what only one of them knows? | Yes, across one referral hop at a time |
