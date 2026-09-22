@@ -10,7 +10,7 @@ use tinyhivemind_driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Eve
 use super::super::{Report, run_episode};
 use super::support::{ScriptRunner, TestJournal, ask, complete, door, hive, policy, post, run};
 use crate::Error;
-use crate::runner::Lane;
+use crate::runner::{Lane, TurnResult};
 
 #[test]
 fn an_episode_runs_from_its_door_to_quiescence_over_the_journal() {
@@ -120,7 +120,7 @@ fn the_journal_saw_each_turn(journal: &TestJournal, runner: &ScriptRunner) {
     assert!(
         turns
             .iter()
-            .all(|(_, _, outcome, _, _)| matches!(outcome, Some(Ok(_))))
+            .all(|(_, _, outcome, _, _)| matches!(outcome, TurnResult::Replied(_)))
     );
     // `post` is in the vocabulary and not served: two's post in the thread
     // was refused inside its turn, and the journal was told so.
@@ -176,11 +176,10 @@ fn a_seat_that_says_nothing_is_nudged_and_then_the_episode_stalls() {
             .any(|row| row.author == "desk" && row.only_for.as_deref() == Some("one"))
     );
     let turns = journal.turns.lock().unwrap();
-    assert!(
-        turns
-            .iter()
-            .any(|(_, _, outcome, _, recorded)| matches!(outcome, Some(Err(_))) && *recorded == 0)
-    );
+    assert!(turns.iter().any(|(_, _, outcome, _, recorded)| matches!(
+        outcome,
+        TurnResult::Failed(_)
+    ) && *recorded == 0));
     assert!(
         journal
             .events()

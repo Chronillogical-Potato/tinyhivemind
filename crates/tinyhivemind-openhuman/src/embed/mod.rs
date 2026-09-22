@@ -27,8 +27,8 @@ use openhuman_embed::{
 use tinyhivemind_driver::{AgentBinding, BoundAgent};
 use tinyhivemind_mcp::{EpisodeTools, Server, serve};
 
-use crate::Result;
-use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob, unseated};
+use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult, unseated};
+use crate::{Error, Result};
 use tinyhivemind::Sequence;
 
 /// An `openhuman-embed` agent as the handle the driver binds.
@@ -132,9 +132,9 @@ impl SeatRunner for EmbedRunner {
             )
             .await
             {
-                Ok(Ok(outcome)) => Some(Ok(outcome.reply)),
-                Ok(Err(error)) => Some(Err(error.to_string())),
-                Err(_) => None,
+                Ok(Ok(outcome)) => TurnResult::Replied(outcome.reply),
+                Ok(Err(error)) => TurnResult::Failed(error.to_string()),
+                Err(_) => TurnResult::Failed(Error::TimedOut { seat: seat.clone() }.to_string()),
             };
             (seat, lane, result)
         })

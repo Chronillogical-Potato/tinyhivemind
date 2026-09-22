@@ -124,9 +124,9 @@ pub mod raw;
 pub mod runner;
 
 pub use embed::{EmbedRunner, EmbedSeat};
-pub use episode::{Journal, Report, run_episode};
+pub use episode::{Journal, Released, Report, run_episode};
 pub use error::{Error, Result};
-pub use hosted::{EpisodeBelt, EpisodeHost, HostedRunner, HostedSeat, HostedTurn};
+pub use hosted::{Disposition, EpisodeBelt, EpisodeHost, HostedRunner, HostedSeat, HostedTurn};
 pub use journal::MemoryLog;
 pub use raw::{LibraryHost, RawRunner, RawSeat, Route, register_seats};
 pub use runner::{Lane, RunnerKind, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult};

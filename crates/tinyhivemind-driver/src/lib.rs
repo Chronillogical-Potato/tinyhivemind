@@ -82,8 +82,8 @@ pub use conduct::{
 };
 pub use driver::{
     AssignmentSpend, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,
-    ConversationView, DriverState, EpisodeBrief, Handoff, HostAction, Ledger, PendingAgent,
-    PendingRound, Seen, Transition, standing_contract,
+    ConversationView, DriverState, ElsewhereView, EpisodeBrief, Handoff, HostAction, Ledger,
+    PendingAgent, PendingRound, Seen, Transition, standing_contract,
 };
 pub use error::{Error, Result};
 pub use graph::{AgentBinding, BoundAgent, BoundHive, HiveGraph};

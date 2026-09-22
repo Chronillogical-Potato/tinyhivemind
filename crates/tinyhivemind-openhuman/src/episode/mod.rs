@@ -20,14 +20,16 @@
 #[cfg(test)]
 mod test;
 
+use std::pin::Pin;
+
 use tinyhivemind::aside::Viewer;
 use tinyhivemind::{
-    Conversation, SESSION_WINDOW, Sequence, SessionAuthor, SessionLog, SessionMessage,
-    SessionQuery, project_session,
+    Conversation, ElsewhereQuery, SESSION_WINDOW, Sequence, SessionAuthor, SessionLog,
+    SessionMessage, SessionQuery, gather_elsewhere, project_session,
 };
 use tinyhivemind_driver::{
     BoundAgent, BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Conductor, Door,
-    EpisodeBrief, Event, Note, Step,
+    ElsewhereView, EpisodeBrief, Event, Note, Step, Turn,
 };
 use tinyhivemind_tools::{Dispatch, Refusal};
 
@@ -65,6 +67,36 @@ pub trait Journal: Send + Sync {
         let _ = event;
     }
 
+    /// Every conversation `seat` is in that this episode does not run: its
+    /// other desks, and any thread of them. The newest rows of each are
+    /// read as the seat and carried in its brief as context. The default is
+    /// none, and an episode is then the only thing a seat is shown.
+    ///
+    /// This desk may be named here too: the turn's own conversation is
+    /// skipped, so a thread turn is shown the desk it hangs off and a desk
+    /// turn is not shown itself.
+    fn channels(&self, seat: &str) -> Vec<Conversation> {
+        let _ = seat;
+        Vec::new()
+    }
+
+    /// Nothing is due and these seats are parked: the seats the host has
+    /// settled, waiting until it has one.
+    ///
+    /// The episode cannot go on until one comes back, so a host that parks
+    /// blocks here on its own queue -- an approval being answered -- and
+    /// returns the seats it released. Returning none ends the episode with
+    /// [`driver::Error::Parked`](tinyhivemind_driver::Error::Parked), which
+    /// is the default, because a host that never parks is never asked.
+    ///
+    /// # Errors
+    ///
+    /// Whatever stops the host waiting.
+    fn released<'a>(&'a self, parked: &'a [String]) -> Released<'a> {
+        let _ = parked;
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
     /// The message a turn is sent. The default is the brief as the episode
     /// words it; a host prepends what it owns.
     fn compose(&self, seat: &str, brief: &EpisodeBrief) -> String {
@@ -85,6 +117,9 @@ pub trait Journal: Send + Sync {
         let _ = (seat, lane, outcome, refused, recorded);
     }
 }
+
+/// The seats a host released, once it has any.
+pub type Released<'a> = Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>>;
 
 /// What one episode came to.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -134,7 +169,10 @@ where
         for step in conductor.begin_wave() {
             settle(journal, &mut conductor, step).await?;
         }
-        let turns = conductor.turns()?;
+        let mut turns = conductor.turns()?;
+        if turns.is_empty() {
+            turns = wait_for_release(journal, &mut conductor).await?;
+        }
         // One watermark for the wave, and every read bounded by it: the
         // host's log may grow while the turns are prepared, and a row above
         // the watermark shown now would be shown again next turn, since a
@@ -142,44 +180,7 @@ where
         let latest = latest(journal.log()).await?;
         let mut jobs: Vec<TurnJob> = Vec::with_capacity(turns.len());
         for turn in &turns {
-            let channel = Conversation {
-                thread_root: turn.thread(),
-                ..desk.clone()
-            };
-            let rows = rows_above(journal.log(), &channel, &turn.seat, turn.since, latest).await?;
-            let window = match turn.thread() {
-                None => rows.clone(),
-                Some(_) => rows_above(journal.log(), &channel, &turn.seat, None, latest).await?,
-            };
-            runner.open(
-                &turn.seat,
-                window,
-                Dispatch {
-                    chat: desk.desk_id.clone(),
-                    parent: turn.thread().map(|root| root.0.to_string()),
-                },
-            );
-            // Only a desk turn is shown its conversations, so only a desk
-            // turn reads them.
-            let mut transcripts = std::collections::BTreeMap::new();
-            let shown = match turn.thread() {
-                None => conductor.shown_conversations(&turn.seat),
-                Some(_) => Vec::new(),
-            };
-            for root in shown {
-                let thread = Conversation {
-                    thread_root: Some(root),
-                    ..desk.clone()
-                };
-                let whole = rows_above(journal.log(), &thread, &turn.seat, None, latest).await?;
-                transcripts.insert(root, whole);
-            }
-            let brief = conductor.open_turn(turn, latest, rows, |root| {
-                transcripts.get(&root).cloned().unwrap_or_default()
-            });
-            let prompt = journal.compose(&turn.seat, &brief);
-            let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
-            jobs.push(runner.turn(turn.seat.clone(), lane, turn.since, prompt));
+            jobs.push(open_turn(journal, runner, &mut conductor, &desk, turn, latest).await?);
         }
         let named: Vec<(String, Lane)> = turns
             .iter()
@@ -197,7 +198,12 @@ where
             let refused = runner.tools().drain_refusals(&seat);
             journal.turn_done(&seat, lane, &outcome, &refused, events.len());
             if let Some(turn) = turns.iter().find(|turn| turn.seat == seat) {
-                conductor.record(turn, events.into_iter().map(|event| event.call));
+                let calls = events.into_iter().map(|event| event.call);
+                if outcome.parked() {
+                    conductor.record_parked(turn, calls);
+                } else {
+                    conductor.record(turn, calls);
+                }
             }
         }
         while let Some(step) = conductor.step()? {
@@ -254,12 +260,126 @@ async fn join_turns(
                 done.push((
                     seat,
                     lane,
-                    Some(Err(format!("the turn's task failed: {error}"))),
+                    TurnResult::Failed(format!("the turn's task failed: {error}")),
                 ));
             }
         }
     }
     done
+}
+
+/// Nothing is due: if seats are held on the host, wait for it to release
+/// one and ask again; otherwise the wave is simply empty.
+async fn wait_for_release<A: BoundAgent, J: Journal>(
+    journal: &J,
+    conductor: &mut Conductor<'_, A>,
+) -> Result<Vec<Turn>> {
+    let parked = conductor.parked();
+    if parked.is_empty() {
+        return Ok(Vec::new());
+    }
+    let released = journal.released(&parked).await?;
+    if released.is_empty() {
+        return Err(tinyhivemind_driver::Error::Parked { seats: parked }.into());
+    }
+    for seat in &released {
+        conductor.resume_seat(seat);
+    }
+    Ok(conductor.turns()?)
+}
+
+/// One turn opened: the rows it has not seen, the record, the brief, the
+/// prompt, and the job started on the runner.
+async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
+    journal: &J,
+    runner: &R,
+    conductor: &mut Conductor<'_, A>,
+    desk: &Conversation,
+    turn: &Turn,
+    latest: Option<Sequence>,
+) -> Result<TurnJob> {
+    let channel = Conversation {
+        thread_root: turn.thread(),
+        ..desk.clone()
+    };
+    let log = journal.log();
+    let rows = rows_above(log, &channel, &turn.seat, turn.since, latest).await?;
+    let window = match turn.thread() {
+        None => rows.clone(),
+        Some(_) => rows_above(log, &channel, &turn.seat, None, latest).await?,
+    };
+    runner.open(
+        &turn.seat,
+        window,
+        Dispatch {
+            chat: desk.desk_id.clone(),
+            parent: turn.thread().map(|root| root.0.to_string()),
+        },
+    );
+    // Only a desk turn is shown its conversations, so only a desk turn
+    // reads them.
+    let mut transcripts = std::collections::BTreeMap::new();
+    let shown = match turn.thread() {
+        None => conductor.shown_conversations(&turn.seat),
+        Some(_) => Vec::new(),
+    };
+    for root in shown {
+        let thread = Conversation {
+            thread_root: Some(root),
+            ..desk.clone()
+        };
+        transcripts.insert(
+            root,
+            rows_above(log, &thread, &turn.seat, None, latest).await?,
+        );
+    }
+    let mut brief = conductor.open_turn(turn, latest, rows, |root| {
+        transcripts.get(&root).cloned().unwrap_or_default()
+    });
+    brief.elsewhere = elsewhere(journal, &turn.seat, &channel, latest).await?;
+    let prompt = journal.compose(&turn.seat, &brief);
+    let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
+    Ok(runner.turn(turn.seat.clone(), lane, turn.since, prompt))
+}
+
+/// What the seat's other conversations hold, as the brief carries them:
+/// every channel the host names but the turn's own, read as the seat,
+/// through the wave's watermark.
+async fn elsewhere<J: Journal>(
+    journal: &J,
+    seat: &str,
+    current: &Conversation,
+    latest: Option<Sequence>,
+) -> Result<Vec<ElsewhereView>> {
+    let channels = journal.channels(seat);
+    if channels.is_empty() {
+        return Ok(Vec::new());
+    }
+    let Some(latest) = latest else {
+        return Ok(Vec::new());
+    };
+    let gathered = gather_elsewhere(
+        journal.log(),
+        &ElsewhereQuery {
+            seat,
+            conversations: &channels,
+            current: Some(current),
+            // Exclusive, so one above the watermark, as every other read
+            // of this wave is bounded.
+            before: latest.0.checked_add(1).map(Sequence),
+            window: SESSION_WINDOW,
+        },
+    )
+    .await?;
+    Ok(gathered
+        .into_iter()
+        .map(|found| ElsewhereView {
+            chat: found.conversation.desk_id,
+            name: found.conversation.desk_name,
+            thread_root: found.conversation.thread_root,
+            rows: found.rows.iter().filter_map(render).collect(),
+        })
+        .collect())
 }
 
 /// The newest sequence in the log, or `None` for a log with no rows.

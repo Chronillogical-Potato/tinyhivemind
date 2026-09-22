@@ -55,7 +55,7 @@ use tinyhivemind::Sequence;
 use tinyhivemind_driver::AgentBinding;
 use tinyhivemind_tools::EpisodeTools;
 
-use crate::runner::{Lane, SeatRunner, TurnJob, unseated};
+use crate::runner::{Lane, SeatRunner, TurnJob, TurnResult, unseated};
 use crate::{Error, Result};
 pub use library::LibraryHost;
 pub use seat::RawSeat;
@@ -261,14 +261,14 @@ impl SeatRunner for RawRunner {
         let contexts = Arc::clone(&self.contexts);
         Box::pin(async move {
             let result = match Box::pin(raw_seat.turn(history, &prompt, belt)).await {
-                Ok(reply) => Some(Ok(reply)),
-                Err(error) => Some(Err(error.to_string())),
+                Ok(reply) => TurnResult::Replied(reply),
+                Err(error) => TurnResult::Failed(error.to_string()),
             };
-            if let Some(Ok(reply)) = &result {
+            if let Some(reply) = result.reply() {
                 let mut contexts = contexts.lock().unwrap_or_else(PoisonError::into_inner);
                 let context = contexts.entry(seat.clone()).or_default();
                 context.push(("user".to_owned(), prompt));
-                context.push(("assistant".to_owned(), reply.clone()));
+                context.push(("assistant".to_owned(), reply.to_owned()));
             }
             (seat, lane, result)
         })

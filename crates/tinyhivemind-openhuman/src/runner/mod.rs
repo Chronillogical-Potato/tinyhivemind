@@ -32,8 +32,37 @@ pub enum Lane {
     Thread(Sequence),
 }
 
-/// A turn's reply, once it is back: `None` timed out.
-pub type TurnResult = Option<std::result::Result<String, String>>;
+/// What became of a turn.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TurnResult {
+    /// It came back, with what the seat said. What it *called* is in the
+    /// record, not here.
+    Replied(String),
+    /// It did not come back: the model failed, it timed out, or the host
+    /// stopped it. The string is what a host prints.
+    Failed(String),
+    /// It stopped on something only the host can settle -- an approval,
+    /// typically. Whatever it called first still counts; the seat is held
+    /// until the host releases it.
+    Parked,
+}
+
+impl TurnResult {
+    /// The reply, or nothing for a turn that failed or parked.
+    #[must_use]
+    pub fn reply(&self) -> Option<&str> {
+        match self {
+            Self::Replied(reply) => Some(reply),
+            Self::Failed(_) | Self::Parked => None,
+        }
+    }
+
+    /// Whether the seat is held on the host.
+    #[must_use]
+    pub const fn parked(&self) -> bool {
+        matches!(self, Self::Parked)
+    }
+}
 
 /// The turn a runner returns for a seat it never seated: failed, at once.
 /// A runner indexes its seats by what the driver proposed, and the driver
@@ -43,7 +72,7 @@ pub type TurnResult = Option<std::result::Result<String, String>>;
 pub fn unseated(seat: String, lane: Lane) -> TurnJob {
     Box::pin(async move {
         let failed = format!("`{seat}` is not a seat of this runner");
-        (seat, lane, Some(Err(failed)))
+        (seat, lane, TurnResult::Failed(failed))
     })
 }
 

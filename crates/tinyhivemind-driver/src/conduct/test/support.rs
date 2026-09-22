@@ -212,6 +212,18 @@ pub(super) fn wave(
     journal: &Journal,
     calls: &[(&str, Vec<Utterance>)],
 ) -> Result<Wave, Error> {
+    wave_parking(conductor, journal, calls, &[])
+}
+
+/// A wave in which the seats in `parked` stop on the host instead of
+/// recording anything.
+pub(super) fn wave_parking(
+    conductor: &mut Conductor<'_, Seat>,
+    journal: &Journal,
+    calls: &[(&str, Vec<Utterance>)],
+    parked: &[&str],
+) -> Result<Wave, Error> {
+    // A parked seat's calls, if it made any, are recorded before it is held.
     let mut seen = Wave::default();
     for step in conductor.begin_wave() {
         take(step, journal, &mut seen);
@@ -227,7 +239,12 @@ pub(super) fn wave(
             .find(|(seat, _)| *seat == turn.seat)
             .map(|(_, calls)| calls.clone())
             .unwrap_or_default();
-        conductor.record(turn, script.into_iter().map(ToolCall::Speak));
+        let said = script.into_iter().map(ToolCall::Speak);
+        if parked.contains(&turn.seat.as_str()) {
+            conductor.record_parked(turn, said);
+        } else {
+            conductor.record(turn, said);
+        }
     }
     seen.turns = turns;
     while let Some(step) = conductor.step()? {

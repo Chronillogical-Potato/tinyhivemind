@@ -248,6 +248,13 @@ pub enum Error {
         /// The seats holding it.
         seats: Vec<String>,
     },
+    /// Nothing is due anywhere and every seat that could move is parked on
+    /// the host, which released none of them.
+    #[error("episode parked on {seats:?} and the host released none")]
+    Parked {
+        /// The seats parked.
+        seats: Vec<String>,
+    },
     /// The episode ran past its turn wall.
     #[error("turn wall of {wall} reached")]
     TurnWall {

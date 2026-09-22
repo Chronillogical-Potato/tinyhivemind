@@ -9,9 +9,22 @@ conductor's.
 
 `Journal` is what a host implements: its `SessionLog`, `commit` and `note`
 to append the conductor's rows and return the sequence a commit was given,
-and three optional hooks -- `event` to show what the episode did, `compose`
+and five optional hooks -- `event` to show what the episode did, `compose`
 to put its own context in front of the brief, `turn_done` to see a turn's
-reply, refusals and recorded calls. `Report` is what an episode came to.
+reply, refusals and recorded calls, `channels` to name the seat's other
+conversations, and `released` to say which parked seats the host has
+settled. `Report` is what an episode came to.
+
+A turn that comes back `TurnResult::Parked` is recorded with whatever it
+called and then held: the conductor stops proposing that seat. When a wave
+has nothing to run and seats are parked, the loop asks `released`, which is
+where a host blocks on its own approval queue; a host that releases nobody
+ends the episode with `Error::Parked` rather than spinning.
+
+`channels` names every conversation the seat is in that this episode does
+not run. Their newest rows are read through `gather_elsewhere`, bounded by
+the same wave watermark as every other read, and carried in
+`EpisodeBrief::elsewhere` under a heading that says they are context.
 
 Rows for a turn are read from the log through `project_session`, as the
 seat, so a row it was not addressed on is withheld the same way it is when
@@ -27,5 +40,5 @@ its first row zero.
 
 | file | holds |
 | --- | --- |
-| `mod.rs` | `Journal`, `Report`, `run_episode`, reading and rendering rows |
-| `test/` | the loop over a scripted runner and no model: `flow.rs` (an episode with a conversation, a stalled one, what the journal saw of each), `watermark.rs` (a log numbered from zero, a log that grows under the loop), `journals.rs` (a journal keeping every default), `support.rs` (the runner and the journals) |
+| `mod.rs` | `Journal`, `Report`, `Released`, `run_episode`, reading and rendering rows |
+| `test/` | the loop over a scripted runner and no model: `flow.rs` (an episode with a conversation, a stalled one, what the journal saw of each), `watermark.rs` (a log numbered from zero, a log that grows under the loop), `parking.rs` (a seat held on the host, and its other conversations in its brief), `journals.rs` (a journal keeping every default), `support.rs` (the runner and the journals) |

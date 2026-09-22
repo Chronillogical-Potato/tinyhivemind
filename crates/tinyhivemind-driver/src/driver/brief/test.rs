@@ -5,7 +5,7 @@
 use tinyhivemind::Sequence;
 use tinyhivemind::speech::{Utterance, tool_specs};
 
-use super::{Channel, ConversationView, EpisodeBrief, standing_contract};
+use super::{Channel, ConversationView, ElsewhereView, EpisodeBrief, standing_contract};
 use crate::driver::test::{committed, episode, hive};
 use crate::driver::{CompletionDriver, DriverState};
 
@@ -190,4 +190,62 @@ fn the_standing_contract_is_the_specs_own_words_with_the_hosts_one_sentence() {
         "descriptions travel verbatim"
     );
     assert!(text.contains("arguments {\"to\": ..., \"message\": ...}"));
+}
+
+#[test]
+fn elsewhere_is_rendered_as_context_on_the_desk_and_in_a_thread_and_absent_when_empty() {
+    let (_hive, state) = state_with_an_ask();
+    let mut desk = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "one",
+        Channel::Desk,
+        vec!["@operator: the task".into()],
+        Vec::new(),
+    );
+    assert!(desk.elsewhere.is_empty(), "the episode fills nothing in");
+    assert!(!desk.render().contains("Elsewhere"));
+    desk.elsewhere = vec![
+        ElsewhereView {
+            chat: "marketing".into(),
+            name: "Marketing".into(),
+            thread_root: None,
+            rows: vec!["@three: launch is friday".into()],
+        },
+        ElsewhereView {
+            chat: "marketing".into(),
+            name: "Marketing".into(),
+            thread_root: Some(Sequence(9)),
+            rows: Vec::new(),
+        },
+    ];
+    let text = desk.render();
+    let rows_at = text.find("@operator: the task").expect("new rows");
+    let elsewhere_at = text.find("## Elsewhere, for context").expect("section");
+    assert!(rows_at < elsewhere_at, "the turn's own rows come first");
+    assert!(text.contains("### Marketing (marketing)\n@three: launch is friday"));
+    assert!(text.contains("### Marketing (marketing, thread 9)\n(nothing new)"));
+    assert!(text.contains("Nothing here is addressed to you on this desk"));
+
+    let mut thread = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "two",
+        Channel::Thread {
+            root: Sequence(1),
+            other: "one".into(),
+            opened_it: false,
+        },
+        vec!["@one: ?".into()],
+        Vec::new(),
+    );
+    thread.elsewhere = vec![ElsewhereView {
+        chat: "legal".into(),
+        name: "Legal".into(),
+        thread_root: None,
+        rows: vec!["@four: cleared".into()],
+    }];
+    let text = thread.render();
+    assert!(text.find("@one: ?").expect("rows") < text.find("### Legal (legal)").expect("section"));
+    assert!(text.contains("A peer asked you this"));
 }

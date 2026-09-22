@@ -12,11 +12,11 @@ use tinyhivemind::{
     desk::{Desk, ResponderMode},
     responder::Probability,
 };
+use tinyhivemind_driver::{AgentBinding, BoundHive, HiveGraph};
 use tinyhivemind_embed::{
     ConversationKind, ConversationRef, MessageRoute, RouteCandidate, RoutingPolicy, RoutingRequest,
 };
 use tinyhivemind_openhuman::EmbedSeat;
-use tinyhivemind_driver::{AgentBinding, HiveGraph, BoundHive};
 use tinyhivemind_typesafe::{
     ChoiceAnswer, JevRouter, NoulAnswer, SystemOneAnswer, SystemOneRequest, SystemOneResponse,
     SystemOneTransport, SystemOneTransportFuture, TokenUsage,
@@ -192,29 +192,33 @@ async fn run() -> anyhow::Result<()> {
         vec![
             AgentBinding::new(
                 "engineering",
-                EmbedSeat(runtime.agent(
-                    AgentSpec::new("engineering")
-                        .system_prompt("You are the engineering specialist.")
-                        .config(|config| {
-                            config.agent_registry.entries.push(registry_entry(
-                                "engineering",
-                                "You are the engineering specialist.",
-                            ));
-                        }),
-                )?),
+                EmbedSeat(
+                    runtime.agent(
+                        AgentSpec::new("engineering")
+                            .system_prompt("You are the engineering specialist.")
+                            .config(|config| {
+                                config.agent_registry.entries.push(registry_entry(
+                                    "engineering",
+                                    "You are the engineering specialist.",
+                                ));
+                            }),
+                    )?,
+                ),
             ),
             AgentBinding::new(
                 "legal",
-                EmbedSeat(runtime.agent(
-                    AgentSpec::new("legal")
-                        .system_prompt("You are the legal specialist.")
-                        .config(|config| {
-                            config
-                                .agent_registry
-                                .entries
-                                .push(registry_entry("legal", "You are the legal specialist."));
-                        }),
-                )?),
+                EmbedSeat(
+                    runtime.agent(
+                        AgentSpec::new("legal")
+                            .system_prompt("You are the legal specialist.")
+                            .config(|config| {
+                                config
+                                    .agent_registry
+                                    .entries
+                                    .push(registry_entry("legal", "You are the legal specialist."));
+                            }),
+                    )?,
+                ),
             ),
         ],
     )?;

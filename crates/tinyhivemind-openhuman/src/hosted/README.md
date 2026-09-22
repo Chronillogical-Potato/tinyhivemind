@@ -24,7 +24,11 @@ the hosted turn's allowlist comes from there (`register_seats`).
 A host is a `Journal` first: `log()` borrows a `SessionLog` the host holds
 over its own journal, and the runner never keeps rows of its own.
 
-`after_turn` runs once a turn has run, with the usage the session reported.
+`after_turn` runs once a turn has run, with the usage the session
+reported, and says what became of it: `Disposition::Done` for a turn that
+stands, or `Disposition::Parked` for one that stopped on something only the
+host can settle -- an approval it has queued. A parked turn keeps whatever
+it called, and the seat is held until the host releases it.
 It is where a host parks what the turn left waiting on approval, meters the
 spend, and halts the episode: an error from it is the turn's error, seen by
 the host loop as any failed turn is, with the calls the turn made before it

@@ -124,6 +124,9 @@ pub struct Conductor<'a, A: BoundAgent> {
     shown: BTreeMap<String, usize>,
     /// The assignment each seat was last nudged for on the desk.
     desk_nudged: BTreeMap<String, Sequence>,
+    /// Seats held on the host, by the thread they parked in (`None` for the
+    /// desk): not nudged, not stalled, not proposed, until released.
+    parked: BTreeMap<String, Option<Sequence>>,
     turns: u64,
     waves: u64,
     discharged: u64,
@@ -200,6 +203,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             concluded: Vec::new(),
             shown: BTreeMap::new(),
             desk_nudged: BTreeMap::new(),
+            parked: BTreeMap::new(),
             turns: 0,
             waves: 0,
             discharged: 0,
@@ -255,6 +259,10 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         self.waves += 1;
         let mut steps = Vec::new();
         for seat in self.state.stalled() {
+            // A parked seat is waiting on the host, not on the desk.
+            if self.parked.contains_key(&seat) {
+                continue;
+            }
             let assigned_at = self
                 .state
                 .episode()
@@ -304,7 +312,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         let mut turns = Vec::new();
         for child in self.children.values() {
             for seat in self.pending(&child.state)? {
-                if !taken.insert(seat.clone()) {
+                if self.parked.contains_key(&seat) || !taken.insert(seat.clone()) {
                     continue;
                 }
                 // The ask row is the first thing a seat is shown in the
@@ -329,7 +337,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             }
         }
         for seat in self.pending(&self.state)? {
-            if !taken.insert(seat.clone()) {
+            if self.parked.contains_key(&seat) || !taken.insert(seat.clone()) {
                 continue;
             }
             let since = self.state.seen().delivered_through.get(&seat).copied();
@@ -339,13 +347,59 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 since,
             });
         }
-        if turns.is_empty() && self.children.is_empty() {
+        if turns.is_empty() && self.children.is_empty() && self.parked.is_empty() {
             return Err(Error::Stalled {
                 seats: self.state.stalled(),
             });
         }
-        self.wave.begin(turns.is_empty());
+        // Nothing due with a seat parked is a wait, not an end: no
+        // conversation concludes for it.
+        self.wave.begin(turns.is_empty() && self.parked.is_empty());
         Ok(turns)
+    }
+
+    /// The seats held on the host, in seat order. An empty wave with any of
+    /// these is the host's to end: it releases one with
+    /// [`resume_seat`](Self::resume_seat), or gives up.
+    #[must_use]
+    pub fn parked(&self) -> Vec<String> {
+        self.parked.keys().cloned().collect()
+    }
+
+    /// A turn stopped on something only the host can settle -- an approval,
+    /// typically. What it called before it stopped is recorded as any turn's
+    /// calls are; the seat is then held where it parked: not nudged for
+    /// silence, not counted toward a stall, and not proposed again until the
+    /// host releases it. A parked askee's conversation waits with it.
+    pub fn record_parked(&mut self, turn: &Turn, calls: impl IntoIterator<Item = ToolCall>) {
+        self.record(turn, calls);
+        let thread = turn.thread();
+        if let Some(child) = thread.and_then(|root| self.children.get_mut(&root)) {
+            // Not a silence: the askee is coming back to this conversation,
+            // so it is not nudged for having said nothing in it.
+            child.turned = false;
+        }
+        self.parked.insert(turn.seat.clone(), thread);
+        self.wave.event(Event::Parked {
+            seat: turn.seat.clone(),
+            thread,
+        });
+    }
+
+    /// The host settled what a seat parked on: it is owed a turn where it
+    /// parked, in the next wave. A seat that is not parked is left as it is.
+    pub fn resume_seat(&mut self, seat: &str) {
+        let Some(thread) = self.parked.remove(seat) else {
+            return;
+        };
+        match thread.and_then(|root| self.children.get_mut(&root)) {
+            Some(child) => child.state.owe_turn(seat),
+            None => self.state.owe_turn(seat),
+        }
+        self.wave.event(Event::Resumed {
+            seat: seat.to_owned(),
+            thread,
+        });
     }
 
     fn pending(&self, state: &DriverState) -> Result<Vec<String>> {
