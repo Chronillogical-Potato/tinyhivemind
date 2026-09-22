@@ -71,10 +71,43 @@ bears on your work, end the turn without calling anything.
 cleared `lead`'s question and woke it. A question or a handoff from the asked
 seat is now not its answer; a post, a private message, or its completion is.
 
+## The second run
+
+Same desk, the brief in every turn's prompt. `7` turns, `3` waves, `3` routes.
+
+**The facts came out.** `theory` stated that 0.9 replaced the hashing library
+(row 5). `researcher` stated the different prefix and the unreadable old
+hashes, and drew the mechanism: every verify call fails on every stored
+credential (row 9). `checker` used its age split to design exactly the right
+test -- a versioned-credential test with a pre-0.9 fixture, because a test that
+creates a user and logs in at once "would never catch this" (row 7). `solver`
+stated the migration and gave the real fix, rehash-on-verify (row 16).
+
+**`lead` pooled three of the four and diagnosed correctly** (row 11), then
+**broadcast twice and both were placed**: the fix to `solver`, the test to
+`checker`. The right seat each time. It is the first live episode in which a
+broadcast fired and landed. `lead` concluded one piece early -- it never asked
+`solver`, and got the migration only after it had completed -- which the task's
+"ask before you conclude" was meant to prevent and did not.
+
+**Then the host aborted, one wave short.** `solver`, woken in wave three to
+answer `checker`, was assigned the fix by `lead`'s broadcast *in the same
+wave*, while its turn was already running. Its completion landed on work it
+had never been shown; the delivery guard refused it, correctly; and the host
+treated the refusal as fatal. Had it continued, `solver` and `checker` each
+held one assignment and would have run once more. Two changes: the host now
+tells the seat it was handed work while speaking and carries on, and a row
+from a seat that has not been shown its assignment no longer counts as having
+run for it, so it stays owed the turn.
+
+One row of noise: `solver` posted the single word "test" (row 15) -- a model
+trying the tool. Cheap, and worth nothing.
+
 ## What this changes
 
 The loop, the crate, the driver and the ledger held under a real model and a
-real router; the two defects were in what the host owed the seats, not in
-what the seats owed the episode. The content failure is a prompt failure with
-a known cause. The next run is the one that tests whether the seats, told who
-they are on every turn, pool what they hold.
+real router in both runs; every defect was in what the host owed the seats,
+not in what the seats owed the episode. The brief in the turn prompt turned a
+desk that hunted for a diff into one that pooled four private facts, diagnosed
+correctly, and routed the fix and the test to the seats that own them. The
+next run is the one that should reach quiescence.

@@ -477,7 +477,16 @@ impl<'a> CompletionDriver<'a> {
         // A row is proof its author ran for what it held, and it answers
         // whoever was waiting on that author. Both before the row's own
         // effect, which may change what the author holds.
-        if let Some(assigned_at) = open_assignment(&state.episode, author) {
+        // -- unless the host says the seat has not yet been shown that
+        // assignment: a peer's broadcast can assign a seat mid-turn, and the
+        // rows it commits then belong to the turn it was already in.
+        if let Some(assigned_at) = open_assignment(&state.episode, author)
+            && next
+                .seen
+                .delivered_through
+                .get(author)
+                .is_none_or(|through| *through >= assigned_at)
+        {
             next.seen.ran(author, assigned_at);
         }
         // A question or a handoff from the asked seat is not its answer;

@@ -536,6 +536,26 @@ async fn run() -> anyhow::Result<()> {
                             Some(&seat_id),
                         );
                     }
+                    // A peer's broadcast handed this seat work while it was
+                    // speaking; what it just said belongs to the turn it was
+                    // in, and the work waits for its next one. A refusal, not
+                    // a failure: the second live run ended here one wave short.
+                    Err(Error::UndeliveredAssignment { assigned_at, .. }) => {
+                        eprintln!(
+                            "[refused] @{seat_id} completed before seeing its assignment at {}",
+                            assigned_at.0
+                        );
+                        journal.append(
+                            "desk",
+                            &format!(
+                                "you were handed new work at sequence {} while you were \
+                                 speaking; it is in your next messages. Your completion \
+                                 applied to nothing.",
+                                assigned_at.0
+                            ),
+                            Some(&seat_id),
+                        );
+                    }
                     Err(Error::BudgetSpent { .. }) => {
                         eprintln!(
                             "[refused] @{seat_id} has spent its broadcast budget; it keeps the work"

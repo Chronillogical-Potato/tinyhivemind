@@ -532,3 +532,41 @@ fn a_question_or_handoff_from_the_asked_seat_is_not_its_answer() {
         "saying something to the desk is the answer",
     );
 }
+
+#[test]
+fn a_row_from_a_seat_not_yet_shown_its_assignment_does_not_count_as_running_for_it() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let router = FirstRouter::default();
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    // `two` settles, is shown everything, and is then assigned by a broadcast
+    // it has not been shown -- the mid-wave case.
+    let mut settled = apply(&driver, &state, "two", 1, complete(), &router)
+        .expect("two")
+        .state;
+    settled.delivered("two", Sequence(1));
+    let assigned = apply(&driver, &settled, "one", 2, broadcast("take this"), &router)
+        .expect("broadcast")
+        .state;
+    assert_eq!(open_at(&assigned, "two"), Some(Sequence(2)));
+    // A row `two` commits now came from the turn it was already in.
+    let posted = apply(&driver, &assigned, "two", 3, post(), &router)
+        .expect("post")
+        .state;
+    assert_ne!(
+        posted.seen().ran_for.get("two"),
+        Some(&Sequence(2)),
+        "it has not run for the assignment at 2, whatever it said",
+    );
+    let mut shown = posted;
+    shown.delivered("two", Sequence(3));
+    assert!(
+        round_ids(&driver, &shown).contains(&"two".to_owned()),
+        "shown everything, it is still owed a turn for the work it never saw",
+    );
+    let refused = apply(&driver, &assigned, "two", 3, complete(), &router);
+    assert!(
+        matches!(refused, Err(Error::UndeliveredAssignment { .. })),
+        "and its completion cannot close work it has not been shown",
+    );
+}
