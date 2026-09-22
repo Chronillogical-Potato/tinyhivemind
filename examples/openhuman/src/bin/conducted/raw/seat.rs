@@ -1,11 +1,13 @@
 //! One seat, run as a fresh raw session on every turn.
 
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use openhuman_core::agent::prompts::SystemPromptBuilder;
 use openhuman_core::agent::{OpenHumanSessionHost, TurnOverrides};
 use openhuman_core::config::{AgentConfig, Config};
+use openhuman_core::core::runtime::CoreContext;
 use tinyhivemind_openhuman::BoundAgent;
 use tinytools::Tool;
 use tinytools_agent::dialect::NativeDialect;
@@ -21,13 +23,16 @@ const MAX_TOOL_ITERATIONS: usize = 6;
 /// Cloned per turn into the job that runs it, and bound into the hive as the
 /// seat's own handle: the driver hands it back with a pending round and never
 /// runs it, which is why nothing here is an agent.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RawSeat {
     id: String,
     /// The standing prompt: the brief and the contract, whole.
     system_prompt: String,
     /// The resolved config every session is built from, carrying the route.
     config: Arc<Config>,
+    /// The core context every session runs under: a library host, so the
+    /// route in `config` is the credential and no sign-in is waited on.
+    context: Arc<CoreContext>,
     /// The model id the config resolves `chat` to.
     model_name: String,
     /// The workspace a session is rooted in. Nothing is written there --
@@ -41,11 +46,22 @@ impl BoundAgent for RawSeat {
     }
 }
 
+impl fmt::Debug for RawSeat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RawSeat")
+            .field("id", &self.id)
+            .field("model_name", &self.model_name)
+            .field("workspace", &self.workspace)
+            .finish_non_exhaustive()
+    }
+}
+
 impl RawSeat {
     pub fn new(
         id: impl Into<String>,
         system_prompt: impl Into<String>,
         config: Arc<Config>,
+        context: Arc<CoreContext>,
         model_name: impl Into<String>,
         workspace: PathBuf,
     ) -> Self {
@@ -53,6 +69,7 @@ impl RawSeat {
             id: id.into(),
             system_prompt: system_prompt.into(),
             config,
+            context,
             model_name: model_name.into(),
             workspace,
         }
@@ -104,14 +121,19 @@ impl RawSeat {
         message: &str,
         tools: Vec<Box<dyn Tool>>,
     ) -> anyhow::Result<String> {
-        let mut host = self.session(tools)?;
-        host.seed_resume_from_messages(history, message)?;
-        host.set_next_turn_overrides(TurnOverrides {
-            suppress_transcript_autoload: true,
-            ..TurnOverrides::default()
-        });
-        tokio::time::timeout(TURN_TIMEOUT, host.turn(message))
-            .await
-            .map_err(|_| anyhow::anyhow!("@{} timed out", self.id))?
+        // The whole turn under the library context: the session is built,
+        // and its model resolved, inside it.
+        CoreContext::scope(Arc::clone(&self.context), async {
+            let mut host = self.session(tools)?;
+            host.seed_resume_from_messages(history, message)?;
+            host.set_next_turn_overrides(TurnOverrides {
+                suppress_transcript_autoload: true,
+                ..TurnOverrides::default()
+            });
+            tokio::time::timeout(TURN_TIMEOUT, host.turn(message))
+                .await
+                .map_err(|_| anyhow::anyhow!("@{} timed out", self.id))?
+        })
+        .await
     }
 }

@@ -443,7 +443,7 @@ async fn run() -> anyhow::Result<()> {
                 }
                 RunnerKind::Raw => {
                     host.prepare_raw()?;
-                    let runner = host.raw(0)?;
+                    let runner = host.raw(0).await?;
                     episode(runner, host.setup(kind, false)).await?
                 }
             };
@@ -547,7 +547,7 @@ impl Host {
         RawRunner::prepare(&self.workspace, &seats)
     }
 
-    fn raw(&self, _episode: u32) -> anyhow::Result<RawRunner> {
+    async fn raw(&self, _episode: u32) -> anyhow::Result<RawRunner> {
         RawRunner::seat(
             Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
             &self.briefs,
@@ -557,6 +557,7 @@ impl Host {
             &self.route,
             &self.workspace,
         )
+        .await
     }
 }
 
@@ -599,7 +600,7 @@ async fn bench_runners(
                 RunnerKind::Embed => {
                     episode(host.embed(runtime, index).await?, host.setup(kind, true)).await
                 }
-                RunnerKind::Raw => episode(host.raw(index)?, host.setup(kind, true)).await,
+                RunnerKind::Raw => episode(host.raw(index).await?, host.setup(kind, true)).await,
             }
         };
         // One episode nobody counts: the first turn through either harness
