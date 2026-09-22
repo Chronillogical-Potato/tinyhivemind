@@ -35,16 +35,15 @@ use conducted::jev::LiveJev;
 use openhuman_embed::{Access, Provider, Runtime, RuntimeConfig, Workspace};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
-use tinyhivemind::speech::{ToolCall, Utterance};
-use tinyhivemind::{Conversation, Sequence};
+use tinyhivemind::speech::Utterance;
+use tinyhivemind::Sequence;
 use tinyhivemind_embed::{
     ConversationKind, ConversationRef, RouteCandidate, Router, RouterFuture, RoutingPlan,
     RoutingPolicy, RoutingRequest, RoutingSource, route_message,
 };
-use tinyhivemind_hive::{CompletionEpisodeState, apply_completion};
 use tinyhivemind_driver::{
-    BoundAgent, BoundHive, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,
-    ConversationView, DriverState, EpisodeBrief, Error, HiveGraph, HostAction, standing_contract,
+    BoundHive, BroadcastRouting, CompletionDriver, ConductPolicy, Conductor, Door, Event,
+    HiveGraph, Refusal, Step, standing_contract,
 };
 use tinyhivemind_openhuman::{
     EmbedRunner, Lane, RawRunner, Route, RunnerKind, SeatRunner, TurnJob, offline,
@@ -196,10 +195,6 @@ const REPLY_SHOWN: usize = 600;
 const JEV_MODEL: &str = "jev-1.13.0";
 const OPENROUTER: &str = "https://openrouter.ai/api/v1";
 const WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
-/// Hard wall on turns: a chain that will not end is a finding, not a hang.
-const TURN_WALL: u64 = 60;
-/// Turns one conversation may take before it is concluded without an answer.
-const CHILD_TURN_WALL: u64 = 6;
 
 fn main() -> anyhow::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
@@ -291,24 +286,6 @@ impl Journal {
 
 fn render(row: &Row) -> String {
     format!("@{}: {}", row.author, row.body)
-}
-
-/// One open conversation: a thread of the desk, run as its own episode whose
-/// participant is the seat asked, with the asker recorded here (ADR 0023). One
-/// question, one answer: the seat asked concludes with `complete_episode`, and
-/// its message is the answer; a follow-up is a further ask.
-struct Child {
-    root: Sequence,
-    asker: String,
-    askee: String,
-    state: DriverState,
-    turns: u64,
-    /// The last thing the seat asked said in it: the conclusion, cross-posted.
-    last_by_askee: Option<String>,
-    /// Whether the seat asked has been told once that it has not answered.
-    nudged: bool,
-    /// Whether the seat asked took a turn in this wave.
-    turned: bool,
 }
 
 /// A router that counts its calls: the provider bill, one line.
@@ -686,7 +663,10 @@ struct Report {
 /// One episode over `runner`, stepped to quiescence.
 ///
 /// Generic rather than boxed so each runner's bound seat type flows into the
-/// hive and the driver as itself: the loop never names it.
+/// hive and the driver as itself: the loop never names it. What is here is
+/// only what a host owns: the journal, the prompt, running a turn, and the
+/// log. The rules -- conversations, nudges, what a wave said and where it
+/// goes, refusals, walls -- are the conductor's.
 async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Report> {
     let Setup {
         scenario,
@@ -734,11 +714,9 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
     };
     let primary: Option<&(dyn Router + '_)> = router.as_ref().map(|r| r as &(dyn Router + '_));
     let journal = Journal::default();
-    journal.append("operator", scenario.task, None, None);
+    let opened_at = journal.append("operator", scenario.task, None, None);
 
-    // The door route: who starts. Everyone is seated so a handoff can reach
-    // any seat; the ones the route passed over are completed at once -- idle,
-    // and reopened by any broadcast that finds them.
+    // The door route: who starts.
     let door = RoutingRequest {
         message: scenario.task.to_owned(),
         source: RoutingSource::DeskMessage,
@@ -754,38 +732,11 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
         policy: policy(4),
     };
     let plan = route_message(primary, None, &door, None, fallback).await;
-    let starters = match &plan {
-        RoutingPlan::One { responder_id, .. } | RoutingPlan::Fallback { responder_id, .. } => {
-            vec![responder_id.clone()]
-        }
-        RoutingPlan::Hive {
-            primary_id,
-            invited_ids,
-            ..
-        } => std::iter::once(primary_id.clone())
-            .chain(invited_ids.iter().cloned())
-            .collect(),
-        RoutingPlan::Clarify { .. } => {
-            eprintln!("[door] routing asked for clarification; lead owns it");
-            vec![fallback.to_owned()]
-        }
-    };
-    println!("[door] starts: {}", starters.join(", "));
-
-    let mut episode = CompletionEpisodeState::opened(
-        Conversation {
-            desk_id: desk_id.into(),
-            desk_name: scenario.name.into(),
-            thread_root: None,
-        },
-        Sequence(0),
-        ids.iter().map(String::as_str),
-    )?;
-    for id in &ids {
-        if !starters.contains(id) {
-            episode = apply_completion(&episode, id, Sequence(1))?;
-        }
+    if matches!(plan, RoutingPlan::Clarify { .. }) {
+        eprintln!("[door] routing asked for clarification; {fallback} owns it");
     }
+    let starters = tinyhivemind_driver::starters(&plan, fallback);
+    println!("[door] starts: {}", starters.join(", "));
 
     // Round width four: the door can start up to four seats and they run
     // together. The broadcast policy is width one -- a handoff belongs to one
@@ -801,218 +752,61 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
         roster_version: 1,
         thread_context: &[],
     };
+    let mut conductor = Conductor::open(
+        &driver,
+        routing,
+        ConductPolicy::default(),
+        Door {
+            chat: desk_id.into(),
+            desk_name: scenario.name.into(),
+            members: ids.clone(),
+            starters,
+            opened_at,
+        },
+    )?;
 
-    let mut state = driver.start(episode)?;
-    let mut children: BTreeMap<Sequence, Child> = BTreeMap::new();
-    // Concluded conversations, kept whole for the context of the seats that
-    // had them: `(root, asker, askee, transcript)`, and how many each seat has
-    // already been shown.
-    let mut concluded: Vec<(Sequence, String, String, Vec<String>)> = Vec::new();
-    let mut shown: BTreeMap<String, usize> = BTreeMap::new();
-    let mut desk_nudged: BTreeMap<String, Sequence> = BTreeMap::new();
-    let mut turns = 0_u64;
-    let mut waves = 0_u64;
-    let mut discharged = 0_u64;
-    let settled = 'episode: loop {
-        if state.quiescent() && children.is_empty() {
+    let settled: anyhow::Result<()> = 'episode: loop {
+        if conductor.finished() {
             break Ok(());
         }
-        waves += 1;
-
-        // A seat that holds open desk work, ran for it, and has been shown
-        // everything is stalled: nothing will wake it. Once per assignment it
-        // is told, and owed one more turn.
-        for seat_id in state.stalled() {
-            let assigned_at = state
-                .episode()
-                .participants
-                .iter()
-                .find(|participant| participant.agent_id == seat_id)
-                .and_then(|participant| participant.open())
-                .map(|record| record.assigned_at);
-            if desk_nudged.get(&seat_id) == assigned_at.as_ref() {
-                continue;
-            }
-            if let Some(at) = assigned_at {
-                desk_nudged.insert(seat_id.clone(), at);
-            }
-            eprintln!("[nudged] @{seat_id} on the desk: stalled with open work");
-            journal.append(
-                "desk",
-                "you hold open work and nothing new has arrived. Call `complete_episode` \
-                 with what you have, or `broadcast` the part that is another seat's. A reply \
-                 without a tool call records nothing.",
-                None,
-                Some(&seat_id),
-            );
-            state.owe_turn(&seat_id);
+        for step in conductor.begin_wave() {
+            take(&journal, step);
         }
-        for child in children.values_mut() {
-            child.turned = false;
-        }
-
-        // One turn per seat per wave, and conversations first: a conversation
-        // is what unblocks a desk turn, so it goes ahead of it.
-        let mut taken: BTreeSet<String> = BTreeSet::new();
+        let turns = match conductor.turns() {
+            Ok(turns) => turns,
+            Err(error) => break Err(error.into()),
+        };
         let mut jobs: Vec<TurnJob> = Vec::new();
-        for child in children.values_mut() {
-            // Collected first: the round borrows the state it was proposed
-            // from, and preparing a turn reports delivery into that state.
-            let seats: Vec<String> = driver
-                .pending_round(&child.state)?
-                .agents()
-                .iter()
-                .map(|pending| pending.hive_agent_id.to_owned())
-                .collect();
-            for seat_id in seats {
-                if !taken.insert(seat_id.clone()) {
-                    continue;
-                }
-                let through = child
-                    .state
-                    .seen()
-                    .delivered_through
-                    .get(&seat_id)
-                    .copied()
-                    .unwrap_or(child.root);
-                let rows = journal.thread_since(child.root, through);
-                runner.open(
-                    &seat_id,
-                    journal.thread(child.root),
-                    Dispatch {
-                        chat: desk_id.into(),
-                        parent: Some(child.root.0.to_string()),
-                    },
-                );
-                child.state.delivered(&seat_id, journal.latest());
-                child.state.turn_started(&seat_id);
-                child.turns += 1;
-                child.turned = true;
-                let other = if seat_id == child.asker {
-                    child.askee.clone()
-                } else {
-                    child.asker.clone()
-                };
-                let brief = EpisodeBrief::for_turn(
-                    &child.state,
-                    desk_id,
-                    &seat_id,
-                    Channel::Thread {
-                        root: child.root,
-                        other: other.clone(),
-                        opened_it: seat_id == child.asker,
-                    },
-                    rows,
-                    Vec::new(),
-                );
-                let prompt = format!(
-                    "## The desk\n{DESK_PREAMBLE}\n\n## Who you are\n{}\n\n{}",
-                    briefs[&seat_id],
-                    brief.render()
-                );
-                jobs.push(runner.turn(seat_id, Lane::Thread(child.root), prompt));
-            }
-        }
-        let seats: Vec<String> = driver
-            .pending_round(&state)?
-            .agents()
-            .iter()
-            .map(|pending| pending.hive_agent_id.to_owned())
-            .collect();
-        for seat_id in seats {
-            if !taken.insert(seat_id.clone()) {
-                continue;
-            }
-            let through = state
-                .seen()
-                .delivered_through
-                .get(&seat_id)
-                .copied()
-                .unwrap_or(Sequence(0));
-            let rows = journal.desk_since(&seat_id, through);
+        for turn in &turns {
+            let rows = match turn.thread() {
+                None => journal.desk_since(&turn.seat, turn.since),
+                Some(root) => journal.thread_since(root, turn.since),
+            };
             runner.open(
-                &seat_id,
-                rows.clone(),
+                &turn.seat,
+                match turn.thread() {
+                    None => rows.clone(),
+                    Some(root) => journal.thread(root),
+                },
                 Dispatch {
                     chat: desk_id.into(),
-                    parent: None,
+                    parent: turn.thread().map(|root| root.0.to_string()),
                 },
             );
-            state.delivered(&seat_id, journal.latest());
-            state.turn_started(&seat_id);
-            // The conversations this seat had: concluded since it last spoke,
-            // shown whole once, and any still in progress -- its shared
-            // context across every channel it is in.
-            let cursor = shown.entry(seat_id.clone()).or_insert(0);
-            let mut views: Vec<ConversationView> = concluded[*cursor..]
-                .iter()
-                .filter(|(_, asker, askee, _)| *asker == seat_id || *askee == seat_id)
-                .map(|(root, asker, askee, transcript)| ConversationView {
-                    root: *root,
-                    other: if *asker == seat_id {
-                        askee.clone()
-                    } else {
-                        asker.clone()
-                    },
-                    opened_it: *asker == seat_id,
-                    transcript: transcript.clone(),
-                    concluded: true,
-                })
-                .collect();
-            *cursor = concluded.len();
-            views.extend(
-                children
-                    .values()
-                    .filter(|child| child.asker == seat_id || child.askee == seat_id)
-                    .map(|child| ConversationView {
-                        root: child.root,
-                        other: if child.asker == seat_id {
-                            child.askee.clone()
-                        } else {
-                            child.asker.clone()
-                        },
-                        opened_it: child.asker == seat_id,
-                        transcript: journal.thread(child.root),
-                        concluded: false,
-                    }),
-            );
-            let brief =
-                EpisodeBrief::for_turn(&state, desk_id, &seat_id, Channel::Desk, rows, views);
+            let brief = conductor.open_turn(turn, journal.latest(), rows, |root| {
+                journal.thread(root)
+            });
             // What the host owns first; what the episode knows after.
             let prompt = format!(
                 "## The desk\n{DESK_PREAMBLE}\n\n## Who you are\n{}\n\n{}",
-                briefs[&seat_id],
+                briefs[&turn.seat],
                 brief.render()
             );
-            jobs.push(runner.turn(seat_id, Lane::Desk, prompt));
-        }
-        if jobs.is_empty() {
-            // Nothing is due anywhere. A conversation nobody will continue is
-            // concluded without an answer; a desk with open work and nobody
-            // owed a turn is stalled.
-            let stuck: Vec<Sequence> = children.keys().copied().collect();
-            if stuck.is_empty() {
-                break Err(anyhow::anyhow!(
-                    "episode stalled with {:?} holding open work",
-                    state.stalled()
-                ));
-            }
-            for root in stuck {
-                let child = children.remove(&root).expect("listed");
-                state = conclude(&driver, &journal, &state, child, true, &mut concluded).await?;
-            }
-            continue;
+            let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
+            jobs.push(runner.turn(turn.seat.clone(), lane, prompt));
         }
         let outcomes = futures::future::join_all(jobs).await;
-
-        // Everything the wave said, sorted into the channel it belongs to.
-        // A broadcast made inside a conversation is desk work: the seat found
-        // something for someone else while talking, and refusing it there
-        // cost a live run both of its deliverables.
-        let mut desk_events: Vec<(String, Utterance)> = Vec::new();
-        let mut thread_events: Vec<(Sequence, String, Utterance)> = Vec::new();
         for (seat_id, lane, outcome) in outcomes {
-            turns += 1;
             let where_ = match lane {
                 Lane::Desk => String::new(),
                 Lane::Thread(root) => format!(" in thread {}", root.0),
@@ -1048,240 +842,42 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
                     eprintln!("    {}{cut}", shown.replace('\n', "\n    "));
                 }
             }
-            for event in events {
-                let ToolCall::Speak(utterance) = event.call else {
-                    continue;
-                };
-                match (lane, &utterance) {
-                    (Lane::Desk, _)
-                    | (Lane::Thread(_), Utterance::Broadcast { .. } | Utterance::Ask { .. }) => {
-                        desk_events.push((seat_id.clone(), utterance));
-                    }
-                    (Lane::Thread(root), _) => {
-                        thread_events.push((root, seat_id.clone(), utterance))
-                    }
-                }
-            }
+            let turn = turns
+                .iter()
+                .find(|turn| turn.seat == seat_id)
+                .expect("every outcome is a turn that was proposed");
+            conductor.record(turn, events.into_iter().map(|event| event.call));
         }
-
-        for (root, seat_id, utterance) in thread_events {
-            let Some(child) = children.get_mut(&root) else {
-                continue;
-            };
-            if !matches!(
-                utterance,
-                Utterance::Post { .. } | Utterance::CompleteEpisode { .. }
-            ) {
-                // Only `dm` can reach here, and it is not served.
-                continue;
-            }
-            let sequence = journal.append(&seat_id, &describe(&utterance), Some(root), None);
-            if seat_id == child.askee {
-                child.last_by_askee = Some(utterance.message().to_owned());
-            }
-            let committed = CommittedUtterance {
-                author_id: seat_id.clone(),
-                sequence,
-                utterance,
-            };
-            match driver.apply_committed(&child.state, committed, None).await {
-                Ok(transition) => child.state = transition.state,
-                Err(Error::UndeliveredAssignment { .. }) => {
-                    eprintln!("[refused] @{seat_id} in thread {}: not yet shown", root.0);
+        loop {
+            match conductor.step() {
+                Ok(None) => break,
+                Ok(Some(Step::Commit(commit))) => {
+                    let sequence = journal.append(
+                        &commit.author,
+                        &describe(&commit.utterance),
+                        commit.thread,
+                        commit.only_for.as_deref(),
+                    );
+                    if let Err(error) = conductor.committed(sequence).await {
+                        break 'episode Err(error.into());
+                    }
                 }
+                Ok(Some(step)) => take(&journal, step),
                 Err(error) => break 'episode Err(error.into()),
             }
-        }
-
-        // The seat asked took its turn and the conversation is not over: it
-        // did not answer, whatever it did instead. Once, it is told so and
-        // owed one more turn; a second silence stands.
-        for child in children.values_mut() {
-            if child.turned && !child.state.quiescent() && !child.nudged {
-                child.nudged = true;
-                journal.append(
-                    "desk",
-                    "the seat that asked you is waiting: answer with `complete_episode`, and its \
-                     message is your answer. If you need another seat first, say so in that answer.",
-                    Some(child.root),
-                    None,
-                );
-                child.state.owe_turn(&child.askee);
-                eprintln!("[nudged] @{} in thread {}", child.askee, child.root.0);
-            }
-        }
-
-        for (seat_id, utterance) in desk_events {
-            // An ask is private to the seat it asks and roots a conversation;
-            // everything else is the desk's.
-            let asked = utterance.asks().map(str::to_owned);
-            let sequence = journal.append(&seat_id, &describe(&utterance), None, asked.as_deref());
-            let is_broadcast = utterance.broadcasting();
-            let held = holds(&state, &seat_id);
-            let committed = CommittedUtterance {
-                author_id: seat_id.clone(),
-                sequence,
-                utterance,
-            };
-            match driver
-                .apply_committed(&state, committed, Some(routing))
-                .await
-            {
-                Ok(transition) => {
-                    let mut routed = false;
-                    for action in &transition.actions {
-                        match action {
-                            HostAction::RunAgents { agent_ids, .. } => {
-                                routed = true;
-                                println!("[broadcast] @{seat_id} -> {}", agent_ids.join(", "));
-                            }
-                            // For an ask, this is the signal to open the
-                            // conversation: a thread of the desk rooted at the
-                            // ask row, with the two as its seats.
-                            HostAction::DeliverDm { .. } => {
-                                if let Some(askee) = &asked {
-                                    let child_state =
-                                        driver.start(CompletionEpisodeState::opened(
-                                            Conversation {
-                                                desk_id: desk_id.into(),
-                                                desk_name: scenario.name.into(),
-                                                thread_root: Some(sequence),
-                                            },
-                                            sequence,
-                                            [askee.as_str()],
-                                        )?)?;
-                                    println!(
-                                        "[ask] @{seat_id} opened a conversation with @{askee} (thread {})",
-                                        sequence.0
-                                    );
-                                    children.insert(
-                                        sequence,
-                                        Child {
-                                            root: sequence,
-                                            asker: seat_id.clone(),
-                                            askee: askee.clone(),
-                                            state: child_state,
-                                            turns: 0,
-                                            last_by_askee: None,
-                                            nudged: false,
-                                            turned: false,
-                                        },
-                                    );
-                                }
-                            }
-                            HostAction::DeliverHandoff { agent_id, handoff } => {
-                                println!(
-                                    "[handoff] -> @{agent_id} (queued from @{})",
-                                    handoff.from
-                                );
-                                journal.append(
-                                    "desk",
-                                    &format!("handoff from @{}: {}", handoff.from, handoff.body),
-                                    None,
-                                    Some(agent_id),
-                                );
-                            }
-                        }
-                    }
-                    if is_broadcast && held && !holds(&transition.state, &seat_id) {
-                        eprintln!("[completed] @{seat_id} by its broadcast");
-                    }
-                    if is_broadcast && !routed {
-                        println!(
-                            "[unplaced] @{seat_id}'s broadcast fits no seat; it keeps the work"
-                        );
-                        journal.append(
-                            "desk",
-                            "nobody on this desk can take that; the work stays with you. Do what \
-                             you can with what the desk holds, or complete with what you have.",
-                            None,
-                            Some(&seat_id),
-                        );
-                    }
-                    state = transition.state;
-                }
-                Err(Error::AwaitingReply { waiting_on, .. }) => {
-                    eprintln!(
-                        "[refused] @{seat_id} may not complete: in conversation with {waiting_on:?}"
-                    );
-                    journal.append(
-                        "desk",
-                        &format!(
-                            "your completion was refused: your conversation with {} has not \
-                             concluded. Its outcome reaches you on a later turn; complete after it \
-                             does.",
-                            waiting_on.join(", ")
-                        ),
-                        None,
-                        Some(&seat_id),
-                    );
-                }
-                Err(Error::UndeliveredAssignment { assigned_at, .. }) => {
-                    eprintln!(
-                        "[refused] @{seat_id} completed before seeing its assignment at {}",
-                        assigned_at.0
-                    );
-                    journal.append(
-                        "desk",
-                        &format!(
-                            "you were handed new work at sequence {} while you were speaking; it \
-                             is in your next messages. Your completion applied to nothing.",
-                            assigned_at.0
-                        ),
-                        None,
-                        Some(&seat_id),
-                    );
-                }
-                Err(Error::BudgetSpent { .. }) => {
-                    eprintln!(
-                        "[refused] @{seat_id} has spent its broadcast budget; it keeps the work"
-                    );
-                    discharged += 1;
-                    let sequence =
-                        journal.append(&seat_id, "budget spent; keeping the work", None, None);
-                    let transition = driver
-                        .apply_committed(
-                            &state,
-                            CommittedUtterance {
-                                author_id: seat_id.clone(),
-                                sequence,
-                                utterance: Utterance::CompleteEpisode {
-                                    message: "budget spent; keeping the work".into(),
-                                },
-                            },
-                            None,
-                        )
-                        .await?;
-                    state = transition.state;
-                }
-                Err(error) => break 'episode Err(error.into()),
-            }
-        }
-
-        // Conversations that ended this wave, or ran past their wall, conclude:
-        // their outcome is cross-posted to the asker, which releases its hold.
-        let over: Vec<Sequence> = children
-            .iter()
-            .filter(|(_, child)| child.state.quiescent() || child.turns >= CHILD_TURN_WALL)
-            .map(|(root, _)| *root)
-            .collect();
-        for root in over {
-            let child = children.remove(&root).expect("listed");
-            let forced = !child.state.quiescent();
-            state = conclude(&driver, &journal, &state, child, forced, &mut concluded).await?;
-        }
-        if turns >= TURN_WALL {
-            break Err(anyhow::anyhow!("turn wall of {TURN_WALL} reached"));
         }
     };
 
     println!(
-        "turns {turns} | routes {} | waves {waves} | discharged {discharged} | settled {} | conversations {}",
+        "turns {} | routes {} | waves {} | discharged {} | settled {} | conversations {}",
+        conductor.turns_run(),
         router
             .as_ref()
             .map_or(0, |r| r.calls.load(Ordering::SeqCst)),
-        state.episode().settled(),
-        concluded.len()
+        conductor.waves(),
+        conductor.discharged(),
+        conductor.state().episode().settled(),
+        conductor.conversations()
     );
     for row in journal.all().iter().filter(|_| !quiet) {
         let scope = match (row.thread, row.only_for.as_deref()) {
@@ -1314,73 +910,79 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
             );
         }
     }
-    drop(runner);
-    Ok(Report {
-        turns,
-        waves,
+    let report = Report {
+        turns: conductor.turns_run(),
+        waves: conductor.waves(),
         wall: started.elapsed(),
-    })
+    };
+    drop(conductor);
+    drop(runner);
+    Ok(report)
 }
 
-/// A config that touches nothing on this machine: no local runtime, no
-/// python, no embedding endpoint. The same neutralisation `main.rs` uses.
-/// Conclude one conversation: cross-post its outcome to the asker as a
-/// private message from the seat asked. That row is what releases the
-/// asker's hold and wakes it; the whole conversation reaches it in its next
-/// prompt. `forced` is a conversation that ran out of turns.
-async fn conclude<A: BoundAgent>(
-    driver: &CompletionDriver<'_, A>,
-    journal: &Journal,
-    state: &DriverState,
-    child: Child,
-    forced: bool,
-    concluded: &mut Vec<(Sequence, String, String, Vec<String>)>,
-) -> anyhow::Result<DriverState> {
-    let transcript = journal.thread(child.root);
-    let outcome = if forced {
-        "the conversation did not conclude in time; take what was said and proceed".to_owned()
-    } else {
-        child
-            .last_by_askee
-            .clone()
-            .unwrap_or_else(|| "concluded".to_owned())
-    };
-    println!(
-        "[concluded] thread {} between @{} and @{}{}",
-        child.root.0,
-        child.asker,
-        child.askee,
-        if forced {
-            " (nothing due, or out of turns)"
-        } else {
-            ""
+/// A note the desk says, appended; an event, logged.
+fn take(journal: &Journal, step: Step) {
+    match step {
+        Step::Note(note) => {
+            journal.append("desk", &note.body, note.thread, note.only_for.as_deref());
         }
-    );
-    let sequence = journal.append(
-        &child.askee,
-        &format!(
-            "concluded our conversation (thread {}): {outcome}",
-            child.root.0
+        Step::Event(event) => log(&event),
+        Step::Commit(_) => unreachable!("a commit is appended and reported, not taken"),
+    }
+}
+
+/// The log line for what the episode did.
+fn log(event: &Event) {
+    match event {
+        Event::Nudged { seat, thread: None } => {
+            eprintln!("[nudged] @{seat} on the desk: stalled with open work");
+        }
+        Event::Nudged {
+            seat,
+            thread: Some(root),
+        } => eprintln!("[nudged] @{seat} in thread {}", root.0),
+        Event::Broadcast { seat, to } => println!("[broadcast] @{seat} -> {}", to.join(", ")),
+        Event::Unplaced { seat } => {
+            println!("[unplaced] @{seat}'s broadcast fits no seat; it keeps the work");
+        }
+        Event::CompletedByBroadcast { seat } => eprintln!("[completed] @{seat} by its broadcast"),
+        Event::Asked { seat, askee, root } => println!(
+            "[ask] @{seat} opened a conversation with @{askee} (thread {})",
+            root.0
         ),
-        None,
-        Some(&child.asker),
-    );
-    let transition = driver
-        .apply_committed(
-            state,
-            CommittedUtterance {
-                author_id: child.askee.clone(),
-                sequence,
-                utterance: Utterance::Dm {
-                    to: vec![child.asker.clone()],
-                    message: outcome,
-                },
-            },
-            None,
-        )
-        .await?;
-    concluded.push((child.root, child.asker, child.askee, transcript));
-    Ok(transition.state)
+        Event::Handoff { to, from } => println!("[handoff] -> @{to} (queued from @{from})"),
+        Event::Refused { seat, thread, why } => {
+            let where_ = thread.map_or(String::new(), |root| format!(" in thread {}", root.0));
+            let reason = match why {
+                Refusal::AwaitingReply { waiting_on } => {
+                    format!("may not complete: in conversation with {waiting_on:?}")
+                }
+                Refusal::Undelivered { assigned_at } => format!(
+                    "completed before seeing its assignment at {}",
+                    assigned_at.0
+                ),
+                Refusal::NotYetShown => "not yet shown".to_owned(),
+            };
+            eprintln!("[refused] @{seat}{where_}: {reason}");
+        }
+        Event::Discharged { seat } => {
+            eprintln!("[refused] @{seat} has spent its broadcast budget; it keeps the work");
+        }
+        Event::Concluded {
+            root,
+            asker,
+            askee,
+            forced,
+        } => println!(
+            "[concluded] thread {} between @{asker} and @{askee}{}",
+            root.0,
+            if *forced {
+                " (nothing due, or out of turns)"
+            } else {
+                ""
+            }
+        ),
+    }
 }
 
 /// How a row reads on the desk.
@@ -1397,15 +999,6 @@ fn describe(utterance: &Utterance) -> String {
 /// Nothing running but the one subsystem the episode's tools arrive through.
 fn required(name: &str) -> anyhow::Result<String> {
     std::env::var(name).map_err(|_| anyhow::anyhow!("{name} must be set for a live run"))
-}
-
-/// Whether `seat` holds an open assignment on the desk.
-fn holds(state: &DriverState, seat: &str) -> bool {
-    state
-        .episode()
-        .participants
-        .iter()
-        .any(|participant| participant.agent_id == seat && participant.open().is_some())
 }
 
 fn candidate(id: &str, role: &str) -> RouteCandidate {

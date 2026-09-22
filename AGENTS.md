@@ -75,7 +75,8 @@ crates/
 ├── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
 │                       # one transport port; no HTTP client or async runtime
 ├── tinyhivemind-driver/   # the completion driver over a handle the host binds:
-│                       # who runs next, and what a committed row means. Pure.
+│                       # who runs next, what a committed row means, and the
+│                       # conducted episode: conversations and nudges. Pure.
 ├── tinyhivemind-openhuman/ # the OpenHuman adapter: both runners behind one seam;
 │                       # the one crate that links a harness, by ADR 0025
 ├── tinyhivemind-tools/    # the episode's tools as a record a host drains:

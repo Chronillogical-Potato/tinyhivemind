@@ -241,6 +241,26 @@ pub enum Error {
     /// The underlying completion fold rejected the event.
     #[error(transparent)]
     Completion(#[from] tinyhivemind_hive::Error),
+    /// Nothing is due anywhere, no conversation is open, and the desk holds
+    /// open work: nobody is owed a turn, so nothing will move.
+    #[error("episode stalled with {seats:?} holding open work")]
+    Stalled {
+        /// The seats holding it.
+        seats: Vec<String>,
+    },
+    /// The episode ran past its turn wall.
+    #[error("turn wall of {wall} reached")]
+    TurnWall {
+        /// The wall.
+        wall: u64,
+    },
+    /// The host asked for the next step while holding a commit it has not
+    /// reported the sequence of.
+    #[error("a commit is outstanding; report its sequence first")]
+    CommitOutstanding,
+    /// The host reported a sequence for a commit it was never handed.
+    #[error("no commit is outstanding")]
+    NoCommitOutstanding,
 }
 
 /// The crate-wide result alias.

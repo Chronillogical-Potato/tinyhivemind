@@ -69,6 +69,7 @@
 //! # }
 //! ```
 
+pub mod conduct;
 pub mod driver;
 pub mod error;
 pub mod graph;
@@ -76,6 +77,9 @@ pub mod graph;
 #[cfg(test)]
 mod test_support;
 
+pub use conduct::{
+    Commit, ConductPolicy, Conductor, Door, Event, Note, Refusal, Step, Turn, starters,
+};
 pub use driver::{
     AssignmentSpend, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,
     ConversationView, DriverState, EpisodeBrief, Handoff, HostAction, Ledger, PendingAgent,
