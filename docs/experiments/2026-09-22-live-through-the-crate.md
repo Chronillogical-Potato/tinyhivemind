@@ -261,6 +261,43 @@ the host closed it empty (row 20). The host now records which thread an ask
 was made from, re-owes that thread when the sub-answer concludes, and shows
 the answer in that turn.
 
+## The seventh run: a broadcast completes its author
+
+Same desk, under [ADR 0024](../adr/0024-a-broadcast-completes-its-author.md):
+a placed broadcast completes the seat that made it; `ask` is refused inside a
+conversation, at the server; a silent askee and a stalled desk seat are each
+told once. `14` turns, `9` waves, `3` routes, `3` conversations, and no
+quiescence: the host gave up with `solver` and `checker` holding open work.
+
+**The desk half worked.** `lead` asked `theory` and `researcher` in one turn
+(rows 2-3), as `ask` now tells it to, and both answered on their first turn
+in the thread. `theory` needed the one nudge (row 5) and then answered.
+`lead` asked `researcher` again for a diff that does not exist (row 9), got
+the same answer, and then did in one turn what took two in every earlier
+run: broadcast the fix, broadcast the test, and complete (rows 12-14). Both
+broadcasts placed; the rule that a broadcast completes its author was never
+exercised because `lead` completed in the same turn.
+
+**The handoff half did not.** `solver` and `checker` each received a
+broadcast on the desk, each wrote a long reply -- `1321` and `4162`
+characters -- and neither called a tool. The desk nudge (rows 15-16) drew a
+short reply from each, again with no tool call, and the host stalled. Their
+deliverables were typed rather than recorded, and the log kept only their
+length.
+
+**Why.** The thread render tells an askee exactly what to do: answer with
+`complete_episode`. The desk render told a seat holding a handoff only that
+its assignment was made at a sequence, and the nudge said "say what you are
+waiting on" -- an invitation to prose. The standing contract's "prose alone
+changes nothing" was in the system prompt, and system-prompt-only
+instructions have lost twice in this series already. Three changes: the desk
+render, when the seat holds an assignment, now says to record the part with
+`complete_episode`, hand the rest on with `broadcast`, and that a reply
+without a tool call records nothing; the nudge names the same two tools; and
+the host prints the reply of any turn that recorded nothing, because a
+refusal the seat read and a deliverable it typed look identical in the log
+otherwise.
+
 ## What this changes
 
 Across three runs every defect was in what the host owed the seats, not in

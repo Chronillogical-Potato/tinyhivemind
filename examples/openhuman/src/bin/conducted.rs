@@ -108,6 +108,9 @@ takes it, routing decides. No seat holds enough to diagnose alone either, so \
 ask before you conclude.";
 
 const DESK_ID: &str = "engineering";
+
+/// How much of a reply that recorded nothing is shown in the log.
+const REPLY_SHOWN: usize = 600;
 const JEV_MODEL: &str = "jev-1.13.0";
 const OPENROUTER: &str = "https://openrouter.ai/api/v1";
 const WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
@@ -492,8 +495,9 @@ async fn run() -> anyhow::Result<()> {
             eprintln!("[nudged] @{seat_id} on the desk: stalled with open work");
             journal.append(
                 "desk",
-                "you hold open work and nothing new has arrived: complete with what you \
-                 have, or say what you are waiting on.",
+                "you hold open work and nothing new has arrived. Call `complete_episode` \
+                 with what you have, or `broadcast` the part that is another seat's. A reply \
+                 without a tool call records nothing.",
                 None,
                 Some(&seat_id),
             );
@@ -693,6 +697,17 @@ async fn run() -> anyhow::Result<()> {
             let events = tools.drain(&seat_id);
             if events.is_empty() {
                 eprintln!("[no tool call] @{seat_id}{where_}");
+                // What the seat wrote instead: the only trace of a refusal
+                // it read, or of a deliverable it typed rather than recorded.
+                if let Some(Ok(reply)) = &outcome {
+                    let shown: String = reply.chars().take(REPLY_SHOWN).collect();
+                    let cut = if reply.chars().count() > REPLY_SHOWN {
+                        " [...]"
+                    } else {
+                        ""
+                    };
+                    eprintln!("    {}{cut}", shown.replace('\n', "\n    "));
+                }
             }
             for event in events {
                 let ToolCall::Speak(utterance) = event.call else {

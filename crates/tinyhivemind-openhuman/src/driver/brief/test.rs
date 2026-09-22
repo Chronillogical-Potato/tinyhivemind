@@ -55,6 +55,8 @@ fn a_desk_brief_carries_assignment_waiting_and_the_parent_it_must_name() {
     let text = brief.render();
     assert!(text.contains("## New desk messages\n@two: hello"));
     assert!(text.contains("Your assignment was made at sequence 0."));
+    assert!(text.contains("Record your part with `complete_episode`"));
+    assert!(text.contains("A reply that calls no tool records nothing."));
     assert!(text.contains("cannot complete until your conversation with @two concludes"));
     assert!(text.contains("\"chat\": \"engineering\" and \"parent\": null"));
     assert!(!text.contains("Conversations"), "none were given");

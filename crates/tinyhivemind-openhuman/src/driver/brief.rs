@@ -151,7 +151,12 @@ impl EpisodeBrief {
             Some(at) => {
                 let _ = std::fmt::Write::write_fmt(
                     &mut out,
-                    format_args!("Your assignment was made at sequence {}.", at.0),
+                    format_args!(
+                        "Your assignment was made at sequence {}. Record your part with \
+                         `complete_episode`: its message is your finding. Hand what is another \
+                         seat's on with `broadcast`. A reply that calls no tool records nothing.",
+                        at.0
+                    ),
                 );
             }
             None => out.push_str(
