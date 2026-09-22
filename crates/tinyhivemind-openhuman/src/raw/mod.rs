@@ -38,11 +38,12 @@
 //!   signing in. So the seats are booted under a library-host context once,
 //!   at seating ([`RawRunner::seat`]), and every turn runs inside it.
 
+mod library;
 mod policy;
 mod seat;
 #[cfg(test)]
 mod test;
-mod tools;
+pub(crate) mod tools;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -50,15 +51,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use openhuman_core::agent::harness::AgentDefinitionRegistry;
 use openhuman_core::config::Config;
-use openhuman_core::config::schema::ephemeral_route::{self, EphemeralRoute};
-use openhuman_core::core::runtime::{CoreContext, DomainSet, TokenSource};
-use openhuman_core::core::types::HostKind;
-use openhuman_core::tools::toolpacks::ToolGroups;
+use tinyhivemind::Sequence;
 use tinyhivemind_driver::AgentBinding;
 use tinyhivemind_tools::EpisodeTools;
 
 use crate::runner::{Lane, SeatRunner, TurnJob};
 use crate::{Error, Result};
+pub use library::LibraryHost;
 pub use seat::RawSeat;
 
 /// What each seat has been shown and said, keyed by seat.
@@ -146,53 +145,14 @@ impl RawRunner {
         route: &Route,
         workspace: &Path,
     ) -> Result<Self> {
-        let mut config = base.clone();
-        config.workspace_dir = workspace.to_path_buf();
-        config.action_dir = workspace.to_path_buf();
-        config.api_url = Some(backend_url.to_owned());
-        config.default_model = Some(route.model.clone());
-        let ephemeral =
-            EphemeralRoute::from_params(Some(route.endpoint.clone()), Some(route.api_key.clone()))
-                .ok_or(Error::IncompleteRoute)?;
-        ephemeral_route::apply(&mut config, ephemeral);
-        let config = Arc::new(config);
-        // A raw session runs inside the core the way a library embedder's
-        // does. The core reads its ambient context to decide whose product
-        // policy applies; with none it is the desktop's, and inference waits
-        // on the operator signing in. `HostKind::Library` says the caller
-        // owns the provider and its credential -- this config's route -- and
-        // is what the embed runtime says of itself when it boots. Nothing
-        // else is asked of the core: no domain, no service, no store.
-        let (context, _, _) = Box::pin(CoreContext::init_with_config(
-            HostKind::Library,
-            &TokenSource::Fixed(Arc::new(format!("tinyhivemind-raw-{}", std::process::id()))),
-            DomainSet::none(),
-            ToolGroups::default(),
-            Some((*config).clone()),
-            None,
-        ))
-        .await?;
-        // Resolve the `chat` role once, at seating: a route the factory
-        // cannot resolve fails here rather than at the first turn.
-        let (_, model) = CoreContext::scope(Arc::clone(&context), async {
-            openhuman_core::inference::provider::create_chat_model_with_model_id(
-                "chat", &config, 0.0,
-            )
-        })
-        .await?;
+        let library = LibraryHost::boot(base, backend_url, route, workspace).await?;
+        let model = library.model().to_owned();
         let seats = briefs
             .iter()
             .map(|(id, brief)| {
                 (
                     id.clone(),
-                    RawSeat::new(
-                        id,
-                        format!("{brief}\n\n{contract}"),
-                        Arc::clone(&config),
-                        Arc::clone(&context),
-                        model.clone(),
-                        workspace.to_path_buf(),
-                    ),
+                    RawSeat::new(id, format!("{brief}\n\n{contract}"), library.clone()),
                 )
             })
             .collect();
@@ -237,7 +197,7 @@ impl SeatRunner for RawRunner {
     /// A fresh session, seeded with what this seat has been shown and said
     /// so far, run once and dropped. Its belt is built for this seat and this
     /// turn, and every call it makes lands in the shared record.
-    fn turn(&self, seat: String, lane: Lane, prompt: String) -> TurnJob {
+    fn turn(&self, seat: String, lane: Lane, _since: Sequence, prompt: String) -> TurnJob {
         let history = self
             .contexts
             .lock()

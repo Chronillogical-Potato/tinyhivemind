@@ -2,17 +2,28 @@
 
 The OpenHuman adapter. `tinyhivemind-driver` says who runs next and what a
 committed row means, over a handle the host binds, and never runs a turn.
-This crate is the host's side of that seam for OpenHuman, both ways:
+This crate is the host's side of that seam for OpenHuman, three ways:
 
 | Runner | Seat | Tools | Context between turns |
 | --- | --- | --- | --- |
+| `HostedRunner` | the host's own agent, built by the host through `EpisodeHost` with the episode's tools added | the four tools in-process, admitted over the host's own gate | seeded every turn from the host's log, as the seat, up to its watermark |
 | `EmbedRunner` | an `openhuman-embed` `AgentSpec` agent on a runtime the host booted | the three MCP dispatchers, dialling `tinyhivemind-mcp`'s server | OpenHuman's own session, stable for the episode |
 | `RawRunner` | an `OpenHumanSessionHost` built one level down, per turn | the same tools in-process, each calling `EpisodeTools::call` | a per-seat log this crate seeds the next session with |
 
-Both implement `SeatRunner`, the seam: open a turn, run it, close it and take
-what was called. Open and close are the same for both, because every call
-lands in the same `EpisodeTools`, so the driver drains identical events and a
-seat is refused and acknowledged in the same words either way. `RunnerKind`
+All three implement `SeatRunner`, the seam: open a turn, run it, close it and
+take what was called. Open and close are the same for every runner, because
+every call lands in the same `EpisodeTools`, so the driver drains identical
+events and a seat is refused and acknowledged in the same words whichever
+runs it.
+
+The hosted runner is the one for a host that already has agents. It asks the
+host, through `EpisodeHost`, for three things: its log, a seat built with the
+episode's belt, and a wrapper around each turn. `OpenHuman` fixes a session's
+belt when it is built, so the host builds each seat once per episode, and the
+runner reuses it: each turn it clears the session, seeds it from the host's
+log up to the seat's watermark, runs the brief, and keeps the turn's usage.
+Nothing about the host's agent -- model, tools, gate, memory, prompt -- is
+re-expressed here. `RunnerKind`
 names one, from `TINYHIVEMIND_RUNNER` or directly.
 
 The raw runner also carries the two things the current OpenHuman asks of a

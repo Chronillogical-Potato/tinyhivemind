@@ -16,7 +16,7 @@ use tinytools::{PermissionLevel, Tool, ToolResult};
 
 /// The served tools, bound to one seat.
 #[must_use]
-pub(super) fn belt(seat: &str, tools: &Arc<EpisodeTools>) -> Vec<Box<dyn Tool>> {
+pub(crate) fn belt(seat: &str, tools: &Arc<EpisodeTools>) -> Vec<Box<dyn Tool>> {
     tool_definitions(&tools.seats())
         .into_iter()
         .map(|definition| {

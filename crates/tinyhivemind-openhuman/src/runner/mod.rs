@@ -48,6 +48,8 @@ pub enum RunnerKind {
     Embed,
     /// Raw `OpenHumanSessionHost` sessions, tools in-process.
     Raw,
+    /// The host's own agents, tools in-process, seeded from the host's log.
+    Hosted,
 }
 
 impl RunnerKind {
@@ -70,6 +72,7 @@ impl RunnerKind {
         match value {
             None | Some("" | "embed") => Ok(Self::Embed),
             Some("raw") => Ok(Self::Raw),
+            Some("hosted") => Ok(Self::Hosted),
             Some(other) => Err(other.to_owned()),
         }
     }
@@ -80,6 +83,7 @@ impl RunnerKind {
         match self {
             Self::Embed => "embed",
             Self::Raw => "raw",
+            Self::Hosted => "hosted",
         }
     }
 
@@ -92,7 +96,7 @@ impl RunnerKind {
                 "Use `mcp_call_tool` with `server: \"episode\"`; its `arguments` is a JSON \
                  object, never a string."
             }
-            Self::Raw => "Each tool below is yours to call directly, by its name.",
+            Self::Raw | Self::Hosted => "Each tool below is yours to call directly, by its name.",
         }
     }
 }
@@ -117,9 +121,11 @@ pub trait SeatRunner: Send + Sync {
     /// One binding per seat, canonical id to handle.
     fn bindings(&self) -> Vec<AgentBinding<Self::Bound>>;
 
-    /// Run one turn. The prompt is everything the seat is shown this turn;
-    /// how the seat holds context between turns is the runner's business.
-    fn turn(&self, seat: String, lane: Lane, prompt: String) -> TurnJob;
+    /// Run one turn. The prompt is what the seat is shown this turn; `since`
+    /// is the newest row it was shown before it, which a runner that seeds
+    /// from the host's log reads up to. How a seat holds context between
+    /// turns is the runner's business.
+    fn turn(&self, seat: String, lane: Lane, since: Sequence, prompt: String) -> TurnJob;
 
     /// Open a turn: what the seat may `read`, and the chat and parent every
     /// call it makes must name.

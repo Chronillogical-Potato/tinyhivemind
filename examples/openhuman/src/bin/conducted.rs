@@ -9,44 +9,51 @@
 //! a journal, sessions, and the prompt a turn is shown.
 //!
 //! How a seat's turn *runs* is behind one seam, `tinyhivemind_openhuman::SeatRunner`,
-//! with two implementations: `openhuman-embed` agents reaching the tools over
-//! MCP (`EmbedRunner`, the default), and raw `OpenHumanSessionHost`
-//! sessions handed the same tools natively (`RawRunner`). The loop
-//! cannot tell them apart; `TINYHIVEMIND_RUNNER=raw` picks the second.
+//! with three implementations: `openhuman-embed` agents reaching the tools
+//! over MCP (`EmbedRunner`, the default), raw `OpenHumanSessionHost` sessions
+//! handed the same tools natively (`RawRunner`), and the host's own seats
+//! seeded from its journal (`HostedRunner`, over `conducted::hosted`). The
+//! loop cannot tell them apart; `TINYHIVEMIND_RUNNER=raw` or `=hosted` picks
+//! one.
 //!
 //! ```sh
 //! set -a; . ~/.config/tinyhivemind/live.env; set +a
 //! TINYHIVEMIND_LIVE_OPENROUTER=1 cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
 //! # Offline, either runner runs against a scripted model as a proof of its mechanics:
 //! TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
-//! # And both, N episodes each, as one table of what the harness costs:
+//! TINYHIVEMIND_RUNNER=hosted cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
+//! # And all three, N episodes each, as one table of what the harness costs:
 //! CONDUCTED_BENCH=5 cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin conducted
 //! ```
 
 mod conducted {
+    pub mod hosted;
     pub mod jev;
 }
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
 
+use conducted::hosted::DeskHost;
 use conducted::jev::LiveJev;
 use openhuman_embed::{Access, Provider, Runtime, RuntimeConfig, Workspace};
+use tinyhivemind::SESSION_WINDOW;
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
 use tinyhivemind::speech::Utterance;
-use tinyhivemind::Sequence;
-use tinyhivemind_embed::{
-    ConversationKind, ConversationRef, RouteCandidate, Router, RouterFuture, RoutingPlan,
-    RoutingPolicy, RoutingRequest, RoutingSource, route_message,
-};
 use tinyhivemind_driver::{
     BoundHive, BroadcastRouting, CompletionDriver, ConductPolicy, Conductor, Door, Event,
     HiveGraph, Refusal, Step, standing_contract,
 };
+use tinyhivemind_embed::{
+    ConversationKind, ConversationRef, RouteCandidate, Router, RouterFuture, RoutingPlan,
+    RoutingPolicy, RoutingRequest, RoutingSource, route_message,
+};
+use tinyhivemind_openhuman::offline::MemoryLog;
 use tinyhivemind_openhuman::{
-    EmbedRunner, Lane, RawRunner, Route, RunnerKind, SeatRunner, TurnJob, offline,
+    EmbedRunner, HostedRunner, Lane, LibraryHost, RawRunner, Route, RunnerKind, SeatRunner,
+    TurnJob, offline,
 };
 use tinyhivemind_tools::{Dispatch, EpisodeTools};
 use tinyhivemind_typesafe::JevRouter;
@@ -204,90 +211,6 @@ fn main() -> anyhow::Result<()> {
         .block_on(run())
 }
 
-/// One desk row. The host owns the journal; this one is in memory.
-#[derive(Clone, Debug)]
-struct Row {
-    sequence: Sequence,
-    author: String,
-    body: String,
-    /// `None` is the open desk; `Some(root)` is the conversation rooted at
-    /// that ask, which only its two seats read.
-    thread: Option<Sequence>,
-    /// On the open desk, a private row reaches one seat.
-    only_for: Option<String>,
-}
-
-#[derive(Default)]
-struct Journal {
-    rows: Mutex<Vec<Row>>,
-}
-
-impl Journal {
-    fn append(
-        &self,
-        author: &str,
-        body: &str,
-        thread: Option<Sequence>,
-        only_for: Option<&str>,
-    ) -> Sequence {
-        let mut rows = self.rows.lock().expect("journal is not poisoned");
-        let sequence = Sequence(rows.last().map_or(0, |row| row.sequence.0) + 1);
-        rows.push(Row {
-            sequence,
-            author: author.to_owned(),
-            body: body.to_owned(),
-            thread,
-            only_for: only_for.map(str::to_owned),
-        });
-        sequence
-    }
-
-    fn latest(&self) -> Sequence {
-        self.rows
-            .lock()
-            .expect("journal is not poisoned")
-            .last()
-            .map_or(Sequence(0), |row| row.sequence)
-    }
-
-    /// What `seat` may read on the open desk above `after`: desk rows, and
-    /// private rows addressed to it.
-    fn desk_since(&self, seat: &str, after: Sequence) -> Vec<String> {
-        self.rows
-            .lock()
-            .expect("journal is not poisoned")
-            .iter()
-            .filter(|row| row.sequence > after && row.thread.is_none())
-            .filter(|row| row.only_for.as_deref().is_none_or(|only| only == seat))
-            .map(render)
-            .collect()
-    }
-
-    /// One conversation, whole: the ask that rooted it and every row in it.
-    fn thread(&self, root: Sequence) -> Vec<String> {
-        self.thread_since(root, Sequence(0))
-    }
-
-    fn thread_since(&self, root: Sequence, after: Sequence) -> Vec<String> {
-        self.rows
-            .lock()
-            .expect("journal is not poisoned")
-            .iter()
-            .filter(|row| row.sequence > after)
-            .filter(|row| row.sequence == root || row.thread == Some(root))
-            .map(render)
-            .collect()
-    }
-
-    fn all(&self) -> Vec<Row> {
-        self.rows.lock().expect("journal is not poisoned").clone()
-    }
-}
-
-fn render(row: &Row) -> String {
-    format!("@{}: {}", row.author, row.body)
-}
-
 /// A router that counts its calls: the provider bill, one line.
 struct Counted<R> {
     inner: R,
@@ -398,16 +321,22 @@ async fn run() -> anyhow::Result<()> {
         Some(episodes) => bench_runners(&host, kind, episodes, &metrics).await,
         None => {
             println!("[runner] {}", kind.name());
+            let journal = Arc::new(MemoryLog::new(desk_id));
             let report = match kind {
                 RunnerKind::Embed => {
                     let runtime = host.runtime().await?;
                     let runner = host.embed(&runtime, 0).await?;
-                    episode(runner, host.setup(kind, false)).await?
+                    episode(runner, host.setup(kind, false), journal).await?
                 }
                 RunnerKind::Raw => {
                     host.prepare_raw()?;
                     let runner = host.raw(0).await?;
-                    episode(runner, host.setup(kind, false)).await?
+                    episode(runner, host.setup(kind, false), journal).await?
+                }
+                RunnerKind::Hosted => {
+                    host.prepare_raw()?;
+                    let runner = host.hosted(&journal).await?;
+                    episode(runner, host.setup(kind, false), journal).await?
                 }
             };
             let _ = report;
@@ -521,9 +450,37 @@ impl Host {
         eprintln!("[route] chat resolves to model={}", runner.model());
         Ok(runner)
     }
+
+    /// Seat the hosted runner over `journal`, which is also the log the
+    /// episode appends to. Its seats are registered by `prepare_raw`, the
+    /// same definitions the raw seats resolve.
+    async fn hosted(&self, journal: &Arc<MemoryLog>) -> anyhow::Result<HostedRunner<DeskHost>> {
+        let library = LibraryHost::boot(
+            &self.config,
+            &self.backend_url,
+            &self.route,
+            &self.workspace,
+        )
+        .await?;
+        let contract = self.contract(RunnerKind::Hosted);
+        let prompts = self
+            .briefs
+            .iter()
+            .map(|(id, brief)| (id.clone(), format!("{brief}\n\n{contract}")))
+            .collect();
+        let host = Arc::new(DeskHost::new(Arc::clone(journal), library, prompts));
+        Ok(HostedRunner::seat(
+            host,
+            Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
+            &self.ids,
+            self.scenario.id,
+            self.scenario.name,
+            SESSION_WINDOW,
+        )?)
+    }
 }
 
-/// Both runners, `episodes` times each, offline, and one table.
+/// Every runner, `episodes` times each, offline, and one table.
 ///
 /// The model is scripted, so nothing here is about answers: every seat
 /// completes on its first turn. What differs between the arms is the host --
@@ -531,8 +488,8 @@ impl Host {
 /// sent to the model -- and that is what the columns are.
 ///
 /// `first` runs first. The arms share one process, so each begins with an
-/// episode that is run and not counted; `TINYHIVEMIND_RUNNER=raw` puts the
-/// raw arm first, and a difference that survives both orders is the
+/// episode that is run and not counted; `TINYHIVEMIND_RUNNER` names the arm
+/// that goes first, and a difference that survives every order is the
 /// harness's.
 async fn bench_runners(
     host: &Host,
@@ -550,19 +507,31 @@ async fn bench_runners(
     // boots, and a definition written after that is never seen.
     host.prepare_raw()?;
     let runtime = host.runtime().await?;
-    let order = match first {
-        RunnerKind::Embed => [RunnerKind::Embed, RunnerKind::Raw],
-        RunnerKind::Raw => [RunnerKind::Raw, RunnerKind::Embed],
-    };
+    let order: Vec<RunnerKind> = std::iter::once(first)
+        .chain(
+            [RunnerKind::Embed, RunnerKind::Raw, RunnerKind::Hosted]
+                .into_iter()
+                .filter(|kind| *kind != first),
+        )
+        .collect();
     for kind in order {
         println!("[bench] {} x{episodes}", kind.name());
         let runtime = &runtime;
         let run = move |index: u32| async move {
+            let journal = Arc::new(MemoryLog::new(host.scenario.id));
             match kind {
                 RunnerKind::Embed => {
-                    episode(host.embed(runtime, index).await?, host.setup(kind, true)).await
+                    let runner = host.embed(runtime, index).await?;
+                    episode(runner, host.setup(kind, true), journal).await
                 }
-                RunnerKind::Raw => episode(host.raw(index).await?, host.setup(kind, true)).await,
+                RunnerKind::Raw => {
+                    let runner = host.raw(index).await?;
+                    episode(runner, host.setup(kind, true), journal).await
+                }
+                RunnerKind::Hosted => {
+                    let runner = host.hosted(&journal).await?;
+                    episode(runner, host.setup(kind, true), journal).await
+                }
             }
         };
         // One episode nobody counts: the first turn through either harness
@@ -667,7 +636,11 @@ struct Report {
 /// only what a host owns: the journal, the prompt, running a turn, and the
 /// log. The rules -- conversations, nudges, what a wave said and where it
 /// goes, refusals, walls -- are the conductor's.
-async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Report> {
+async fn episode<R: SeatRunner>(
+    runner: R,
+    setup: Setup,
+    journal: Arc<MemoryLog>,
+) -> anyhow::Result<Report> {
     let Setup {
         scenario,
         kind,
@@ -713,7 +686,6 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
         None
     };
     let primary: Option<&(dyn Router + '_)> = router.as_ref().map(|r| r as &(dyn Router + '_));
-    let journal = Journal::default();
     let opened_at = journal.append("operator", scenario.task, None, None);
 
     // The door route: who starts.
@@ -793,9 +765,8 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
                     parent: turn.thread().map(|root| root.0.to_string()),
                 },
             );
-            let brief = conductor.open_turn(turn, journal.latest(), rows, |root| {
-                journal.thread(root)
-            });
+            let brief =
+                conductor.open_turn(turn, journal.latest(), rows, |root| journal.thread(root));
             // What the host owns first; what the episode knows after.
             let prompt = format!(
                 "## The desk\n{DESK_PREAMBLE}\n\n## Who you are\n{}\n\n{}",
@@ -803,7 +774,7 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
                 brief.render()
             );
             let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
-            jobs.push(runner.turn(turn.seat.clone(), lane, prompt));
+            jobs.push(runner.turn(turn.seat.clone(), lane, turn.since, prompt));
         }
         let outcomes = futures::future::join_all(jobs).await;
         for (seat_id, lane, outcome) in outcomes {
@@ -906,6 +877,7 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
                 match kind {
                     RunnerKind::Embed => "`mcp_call_tool`",
                     RunnerKind::Raw => "native",
+                    RunnerKind::Hosted => "hosted native",
                 }
             );
         }
@@ -921,7 +893,7 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
 }
 
 /// A note the desk says, appended; an event, logged.
-fn take(journal: &Journal, step: Step) {
+fn take(journal: &MemoryLog, step: Step) {
     match step {
         Step::Note(note) => {
             journal.append("desk", &note.body, note.thread, note.only_for.as_deref());
@@ -945,7 +917,9 @@ fn log(event: &Event) {
         Event::Unplaced { seat, .. } => {
             println!("[unplaced] @{seat}'s broadcast fits no seat; it keeps the work");
         }
-        Event::CompletedByBroadcast { seat, .. } => eprintln!("[completed] @{seat} by its broadcast"),
+        Event::CompletedByBroadcast { seat, .. } => {
+            eprintln!("[completed] @{seat} by its broadcast")
+        }
         Event::Asked { seat, askee, root } => println!(
             "[ask] @{seat} opened a conversation with @{askee} (thread {})",
             root.0

@@ -47,11 +47,8 @@ corpus and paid campaign described in
 | `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
 | `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS completion-driven hive with stable OpenHuman sessions and live TypeSafe routing. |
 | `src/bin/deepswe_hive.rs` | Hermetic four-seat software-engineering hive over a caller-prepared disposable Git checkout. |
-| `src/bin/conducted.rs` | A live completion-driven episode: the room's tools served by `tinyhivemind-mcp`, the loop stepped through `CompletionDriver`, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline with the raw runner. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal. |
-| `src/bin/conducted/runner.rs` | The seam: `SeatRunner`, the one trait a way of running seats implements, and `RunnerKind` from `TINYHIVEMIND_RUNNER`. |
-| `src/bin/conducted/embed.rs` | The embed runner: `openhuman-embed` agents, one session each, tools over MCP. The default. |
-| `src/bin/conducted/raw.rs` | The raw runner: `OpenHumanSessionHost` sessions built per turn, the same tools in-process. |
-| `src/bin/conducted/raw/` | The raw seat, its native belt over the shared record, its policy gate and null memory, and the scripted offline model. |
+| `src/bin/conducted.rs` | A live completion-driven episode: the loop stepped through the `Conductor`, any of the adapter's three runners, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline against the adapter's scripted model. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal. |
+| `src/bin/conducted/hosted.rs` | This example as an `EpisodeHost`: its journal is the log, a seat is a library session with the episode's belt, and the wrapper is the core context. The runners themselves live in `tinyhivemind-openhuman`. |
 | `src/bin/conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`, bridged through the wire form. |
 | `deepswe-sandbox/` | Reproducible local Docker image used for agent shell and test execution. |
 
@@ -63,17 +60,18 @@ called, then append the notes and commits it hands back until the wave
 settles. The journal, the prompt and the log are the host's; the
 conversations, nudges, sorting, refusals and walls are the conductor's, in
 `tinyhivemind-driver`.
-How a seat's turn *runs* is behind one seam, `SeatRunner`, with two
+How a seat's turn *runs* is behind one seam, `SeatRunner`, with three
 implementations the loop cannot tell apart:
 
 | `TINYHIVEMIND_RUNNER` | Seat | Tools | Context between turns |
 | --- | --- | --- | --- |
 | `embed` (default) | an `openhuman-embed` `AgentSpec` agent | the three MCP dispatchers, dialling `tinyhivemind-mcp`'s server | OpenHuman's own session, stable for the episode |
-| `raw` | an `OpenHumanSessionHost` built one level down, per turn | the same four tools, in-process, each calling `EpisodeTools::call` | a per-seat log the host seeds the next session with |
+| `raw` | an `OpenHumanSessionHost` built one level down, per turn | the same four tools, in-process, each calling `EpisodeTools::call` | a per-seat log the runner keeps |
+| `hosted` | the host's own seat, built once per episode through `EpisodeHost` | the same four tools, in-process, admitted over the host's gate | seeded every turn from the host's journal, up to the seat's watermark |
 
-Both runners land every call in the same `EpisodeTools`, so the driver drains
+All three land every call in the same `EpisodeTools`, so the driver drains
 identical events and a seat is refused and acknowledged in the same words
-either way. The bound handle differs -- an `Agent` for embed, the raw seat
+whichever runs it. The bound handle differs -- an `Agent` for embed, the raw seat
 itself for raw -- which is what `tinyhivemind-driver`'s `BoundAgent` is
 for: the driver stores a handle and hands it back, and never runs one.
 
@@ -104,18 +102,19 @@ row.
 ```sh
 cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
 TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
+TINYHIVEMIND_RUNNER=hosted cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
 ```
 
-### Benchmarking the two runners
+### Benchmarking the runners
 
-`CONDUCTED_BENCH=N` runs both runners offline, `N` episodes each on the
+`CONDUCTED_BENCH=N` runs every runner offline, `N` episodes each on the
 selected desk, and prints one table. The model is scripted, so nothing in it
 is about answers: every seat completes on its first turn, and what differs
 between the arms is the host. The arms share one process, so each begins
 with one episode that is run and not counted, for page faults and a cold
 allocator; `TINYHIVEMIND_RUNNER` names the arm that goes first (`embed` by
-default, `raw` for the `AgentBuilder` sessions), and a difference that
-survives both orders is the harness's.
+default, `raw` or `hosted` for the native ones), and a difference that
+survives every order is the harness's.
 
 | Column | What it is |
 | --- | --- |
@@ -137,6 +136,12 @@ the raw arm saves is the bytes a turn sends and the session it does not keep.
 Before the warm-up episode, whichever arm ran first reported twice the round
 trip and wall of the other, and the earlier numbers in #65 read that as the
 harness's.
+
+Five episodes per arm with hosted added: hosted sends the same 24.4 KiB per
+turn as raw, since both hand the tools over natively, with wall about 35 ms
+against raw's 33 and embed's 43. Each offline episode is one turn, so hosted
+seeding has nothing to read yet; what it costs on a longer episode is the
+history it seeds, which the scripted model does not exercise.
 
 The driver's own benchmark, `cargo run --release -p tinyhivemind-driver
 --example bench`, measures the completion driver's policy with no agent at

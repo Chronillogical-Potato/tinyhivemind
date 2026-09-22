@@ -4,14 +4,47 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use openhuman_core::agent::OpenHumanSessionHost;
 use openhuman_embed::{Access, Provider, Runtime, Workspace};
 use tinyhivemind::speech::{ToolCall, Utterance};
+use tinyhivemind::{SESSION_WINDOW, Sequence, SessionLog};
 use tinyhivemind_driver::standing_contract;
 use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent, served_specs};
 
 use super::{Lane, RunnerKind, SeatRunner};
-use crate::{EmbedRunner, RawRunner, Route, offline};
+use crate::offline::MemoryLog;
+use crate::{
+    EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, LibraryHost, RawRunner, Route,
+    offline,
+};
+
+/// A host with no agents of its own: its seats are library sessions, its
+/// log is in memory, and its wrapper is the core context a library session
+/// needs -- which is exactly what a real host installs there.
+struct TestHost {
+    log: MemoryLog,
+    library: LibraryHost,
+    prompt: String,
+    wrapped: AtomicUsize,
+}
+
+impl EpisodeHost for TestHost {
+    fn log(&self) -> &dyn SessionLog {
+        &self.log
+    }
+
+    fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> crate::Result<OpenHumanSessionHost> {
+        let policy = belt.admit(None);
+        self.library.session(seat, &self.prompt, belt.tools, policy)
+    }
+
+    fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
+        self.wrapped.fetch_add(1, Ordering::SeqCst);
+        Box::pin(self.library.scope(turn))
+    }
+}
 
 #[test]
 fn the_runner_is_named_by_the_environment_and_defaults_to_embed() {
@@ -21,6 +54,7 @@ fn the_runner_is_named_by_the_environment_and_defaults_to_embed() {
     assert_eq!(RunnerKind::parse(Some("")), Ok(RunnerKind::Embed));
     assert_eq!(RunnerKind::parse(Some("embed")), Ok(RunnerKind::Embed));
     assert_eq!(RunnerKind::parse(Some("raw")), Ok(RunnerKind::Raw));
+    assert_eq!(RunnerKind::parse(Some("hosted")), Ok(RunnerKind::Hosted));
     assert!(
         RunnerKind::parse(Some("rae")).is_err(),
         "a typo must not run the default"
@@ -42,10 +76,15 @@ fn each_runner_states_its_own_mechanics_and_nothing_else() {
     assert!(!RunnerKind::Raw.how_to_call().contains("mcp"));
     assert_eq!(RunnerKind::Embed.name(), "embed");
     assert_eq!(RunnerKind::Raw.name(), "raw");
+    assert_eq!(RunnerKind::Hosted.name(), "hosted");
+    assert_eq!(
+        RunnerKind::Hosted.how_to_call(),
+        RunnerKind::Raw.how_to_call()
+    );
 }
 
 /// One turn through the seam: open, run, close.
-async fn one_turn<R: SeatRunner>(runner: &R) -> (String, Vec<SeatEvent>) {
+async fn one_turn<R: SeatRunner>(runner: &R, since: Sequence) -> (String, Vec<SeatEvent>) {
     let bindings = runner.bindings();
     assert_eq!(bindings.len(), 1);
     assert_eq!(bindings[0].hive_agent_id, "lead");
@@ -59,7 +98,7 @@ async fn one_turn<R: SeatRunner>(runner: &R) -> (String, Vec<SeatEvent>) {
         },
     );
     let (seat, lane, reply) = runner
-        .turn("lead".into(), Lane::Desk, "Your turn.".into())
+        .turn("lead".into(), Lane::Desk, since, "Your turn.".into())
         .await;
     assert_eq!(seat, "lead");
     assert_eq!(lane, Lane::Desk);
@@ -69,7 +108,48 @@ async fn one_turn<R: SeatRunner>(runner: &R) -> (String, Vec<SeatEvent>) {
     (reply, runner.close("lead"))
 }
 
-/// Both runners, offline, against one scripted model: the same call lands in
+/// A hosted runner over a test host whose log already holds the task.
+fn hosted(library: LibraryHost, contract: &str) -> (Arc<TestHost>, HostedRunner<TestHost>) {
+    assert!(format!("{library:?}").contains(offline::MODEL));
+    let log = MemoryLog::new("engineering");
+    log.append("operator", "state the root cause", None, None);
+    let host = Arc::new(TestHost {
+        log,
+        library,
+        prompt: format!("You lead the desk.\n\n{contract}"),
+        wrapped: AtomicUsize::new(0),
+    });
+    let runner = HostedRunner::seat(
+        Arc::clone(&host),
+        Arc::new(EpisodeTools::new(["lead"])),
+        &["lead".to_owned()],
+        "engineering",
+        "Engineering",
+        SESSION_WINDOW,
+    )
+    .expect("hosted seats");
+    assert!(format!("{runner:?}").contains("lead"));
+    assert!(format!("{:?}", runner.bindings()[0].agent).contains("lead"));
+    (host, runner)
+}
+
+/// The scripted model's one call, recorded once, as any runner records it.
+fn one_completion(name: &str, events: &[SeatEvent]) {
+    assert_eq!(events.len(), 1, "{name}: one call recorded");
+    assert_eq!(events[0].seat, "lead");
+    assert_eq!(events[0].dispatch.chat, "engineering");
+    assert!(
+        matches!(
+            &events[0].call,
+            ToolCall::Speak(Utterance::CompleteEpisode { message, .. })
+                if message == offline::COMPLETION
+        ),
+        "{name}: {:?}",
+        events[0].call
+    );
+}
+
+/// Every runner, offline, against one scripted model: the same call lands in
 /// the record the same way, whichever road it took. One test rather than
 /// two because the runtime and the definition registry are process-wide, and
 /// the raw seats must be registered before the runtime boots.
@@ -162,34 +242,46 @@ async fn both_runners() {
     assert!(format!("{raw:?}").contains("lead"));
     assert!(format!("{embed:?}").contains("lead"));
 
-    let (embed_reply, embed_events) = one_turn(&embed).await;
-    let (raw_reply, raw_events) = one_turn(&raw).await;
-    for (name, events) in [("embed", &embed_events), ("raw", &raw_events)] {
-        assert_eq!(events.len(), 1, "{name}: one call recorded");
-        assert_eq!(events[0].seat, "lead");
-        assert_eq!(events[0].dispatch.chat, "engineering");
-        assert!(
-            matches!(
-                &events[0].call,
-                ToolCall::Speak(Utterance::CompleteEpisode { message, .. })
-                    if message == offline::COMPLETION
-            ),
-            "{name}: {:?}",
-            events[0].call
-        );
+    let library = LibraryHost::boot(&config, &backend.uri(), &route, workspace.path())
+        .await
+        .expect("the library boots");
+    let (host, hosted) = hosted(library, &contract(RunnerKind::Hosted));
+
+    let (embed_reply, embed_events) = one_turn(&embed, Sequence(0)).await;
+    let (raw_reply, raw_events) = one_turn(&raw, Sequence(0)).await;
+    // Seeded from the host's log: the operator's row is history, not brief.
+    let (hosted_reply, hosted_events) = one_turn(&hosted, host.log.latest()).await;
+    assert_eq!(
+        host.wrapped.load(Ordering::SeqCst),
+        1,
+        "the host wrapped the turn"
+    );
+    assert!(hosted.usage("lead").is_some(), "the turn's usage is kept");
+    assert_eq!(hosted_reply, raw_reply);
+    for (name, events) in [
+        ("embed", &embed_events),
+        ("raw", &raw_events),
+        ("hosted", &hosted_events),
+    ] {
+        one_completion(name, events);
     }
     assert_eq!(
         embed_reply, raw_reply,
         "the closing sentence is the model's"
     );
     let seen = metrics.snapshot();
-    assert_eq!(seen.round_trips.len(), 2, "one receipted call per runner");
-    assert!(seen.requests >= 4, "each turn is a call and a receipt");
+    assert_eq!(seen.round_trips.len(), 3, "one receipted call per runner");
+    assert!(seen.requests >= 6, "each turn is a call and a receipt");
 
     // A second raw turn is seeded with the first: what the seat said is what
     // it is shown, and the record starts empty again.
-    let (_, again) = one_turn(&raw).await;
+    let (_, again) = one_turn(&raw, Sequence(0)).await;
     assert_eq!(again.len(), 1);
+    // A second hosted turn reuses the seat's session: cleared, reseeded, run.
+    host.log.append("lead", "COMPLETE: done", None, None);
+    let (_, again) = one_turn(&hosted, host.log.latest()).await;
+    assert_eq!(again.len(), 1, "the reused session ran and called again");
+    assert_eq!(host.wrapped.load(Ordering::SeqCst), 2);
     metrics.reset();
     assert_eq!(metrics.snapshot().requests, 0);
 }

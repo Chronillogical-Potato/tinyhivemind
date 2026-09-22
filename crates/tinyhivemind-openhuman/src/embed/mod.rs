@@ -29,6 +29,7 @@ use tinyhivemind_mcp::{EpisodeTools, Server, serve};
 
 use crate::Result;
 use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob};
+use tinyhivemind::Sequence;
 
 /// An `openhuman-embed` agent as the handle the driver binds.
 ///
@@ -119,7 +120,7 @@ impl SeatRunner for EmbedRunner {
 
     /// One session per seat for the whole episode, so `OpenHuman` appends to the
     /// context the agent already holds rather than rebuilding one.
-    fn turn(&self, seat: String, lane: Lane, prompt: String) -> TurnJob {
+    fn turn(&self, seat: String, lane: Lane, _since: Sequence, prompt: String) -> TurnJob {
         let agent = self.agents[&seat].clone();
         let session = format!("episode-{}:{seat}", self.run_id);
         Box::pin(async move {

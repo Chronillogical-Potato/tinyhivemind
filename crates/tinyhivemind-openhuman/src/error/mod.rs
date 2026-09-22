@@ -33,6 +33,10 @@ pub enum Error {
     /// An `openhuman-embed` agent could not be instantiated.
     #[error(transparent)]
     Agent(#[from] openhuman_embed::AgentError),
+    /// The host's log failed to read, or broke the port's contract, while a
+    /// turn was being seeded.
+    #[error(transparent)]
+    Session(#[from] tinyhivemind::Error),
     /// `OpenHuman` refused: booting as a library host, resolving the route,
     /// building or seeding a session, or running the turn.
     #[error(transparent)]

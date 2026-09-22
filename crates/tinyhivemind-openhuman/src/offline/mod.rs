@@ -19,6 +19,7 @@
 //! trip as the model experiences it, whichever road the call took. That is
 //! what the example's bench compares between the runners.
 
+mod log;
 #[cfg(test)]
 mod test;
 
@@ -26,6 +27,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+pub use log::{MemoryLog, Row};
 use openhuman_embed::RuntimeConfig;
 use serde_json::{Value, json};
 use wiremock::matchers::{any, method, path};
