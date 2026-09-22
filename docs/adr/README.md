@@ -45,6 +45,7 @@ link any earlier ADR it amends.
 | [0018](0018-require-host-supplied-conversation-kinds.md) | Require host-supplied conversation kinds | Accepted |
 | [0019](0019-complete-episodes-with-explicit-agent-events.md) | Complete episodes with explicit agent events | Accepted |
 | [0020](0020-openhuman-embed-is-a-git-dependency-patched-locally.md) | `openhuman-embed` is a git dependency, patched locally | Accepted — amends 0013 |
+| [0021](0021-an-assignment-is-appended-rather-than-overwritten.md) | An assignment is appended rather than overwritten, and a participant holds at most one open | Proposed — amends 0019 |
 
 ## Reading order
 

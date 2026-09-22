@@ -41,7 +41,7 @@ pub(super) fn pending_ids_in_order(state: &DriverState, complete: bool) -> Vec<&
         .episode
         .participants
         .iter()
-        .filter(|participant| participant.completed_at.is_none())
+        .filter(|participant| participant.is_pending())
         .map(|participant| participant.agent_id.as_str())
         .collect();
     let mut scheduled = BTreeSet::new();
@@ -75,7 +75,7 @@ pub(super) fn prune_pending_order(state: &mut DriverState) {
         .episode
         .participants
         .iter()
-        .filter(|participant| participant.completed_at.is_none())
+        .filter(|participant| participant.is_pending())
         .map(|participant| participant.agent_id.as_str())
         .collect();
     let mut retained = BTreeSet::new();

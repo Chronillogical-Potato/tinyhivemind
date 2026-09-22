@@ -207,8 +207,8 @@ pub use attention::{
     allocate_chars, bids, floor_holder, floor_round,
 };
 pub use completion::{
-    CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
-    apply_completion, status as completion_status,
+    AssignmentRecord, CompletionEpisodeState, CompletionStep, ParticipantCompletion,
+    apply_assignment, apply_completion, status as completion_status,
 };
 pub use directory::{Directory, DirectoryEntry, DirectoryPolicy, WEIGHT_CEILING, directory};
 pub use division::{Assignment, Division, DivisionPolicy, OwnerReason, divide};

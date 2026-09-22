@@ -290,8 +290,8 @@ fn payload_wire_forms_are_exact_and_all_fields_are_required() {
                 },
                 "watermark": 0,
                 "participants": [
-                    {"agent_id": "one", "assigned_at": 0, "completed_at": null},
-                    {"agent_id": "two", "assigned_at": 0, "completed_at": null}
+                    {"agent_id": "one", "assignments": [{"assigned_at": 0, "completed_at": null}]},
+                    {"agent_id": "two", "assignments": [{"assigned_at": 0, "completed_at": null}]}
                 ]
             },
             "receipts": {

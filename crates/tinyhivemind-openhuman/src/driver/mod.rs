@@ -398,11 +398,22 @@ impl<'a> CompletionDriver<'a> {
                     }
                 }
                 if !recipients.is_empty() {
-                    episode = apply_assignment(
-                        &episode,
-                        recipients.iter().map(String::as_str),
-                        event.sequence,
-                    )?;
+                    // A participant holds at most one open assignment, so a
+                    // recipient that is still working cannot be given a second
+                    // one -- see ADR 0021. It keeps its turn through
+                    // `pending_order` and is assigned when it is next free.
+                    //
+                    // Dropping the handoff's message is the cost of not having
+                    // a queue here; `tinyhivemind-host` carries one that keeps
+                    // the body with the deferred recipient.
+                    let idle: Vec<&str> = recipients
+                        .iter()
+                        .filter(|id| !is_pending(&episode, id))
+                        .map(String::as_str)
+                        .collect();
+                    if !idle.is_empty() {
+                        episode = apply_assignment(&episode, idle, event.sequence)?;
+                    }
                     extend_pending_order(&mut pending_order, &recipients);
                 }
                 if recipients.is_empty() {
@@ -672,14 +683,28 @@ impl<'a> CompletionDriver<'a> {
     }
 }
 
+/// Whether this participant still owes work on the assignment it holds.
+fn is_pending(episode: &CompletionEpisodeState, agent_id: &str) -> bool {
+    episode
+        .participants
+        .iter()
+        .find(|participant| participant.agent_id == agent_id)
+        .is_some_and(tinyhivemind_hive::ParticipantCompletion::is_pending)
+}
+
 fn episode_freshness_floor(episode: &CompletionEpisodeState) -> Sequence {
     episode
         .participants
         .iter()
         .fold(episode.watermark, |floor, participant| {
-            floor
-                .max(participant.assigned_at)
-                .max(participant.completed_at.unwrap_or(episode.watermark))
+            // Across the whole history rather than one slot: a participant now
+            // keeps every assignment it has held, and the floor is still the
+            // highest sequence any of that work has touched.
+            participant.assignments.iter().fold(floor, |floor, record| {
+                floor
+                    .max(record.assigned_at)
+                    .max(record.completed_at.unwrap_or(episode.watermark))
+            })
         })
 }
 

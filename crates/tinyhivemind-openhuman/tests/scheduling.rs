@@ -10,7 +10,7 @@ use tinyhivemind_embed::{
     CandidateProbability, ContributionProbability, EvaluationDisposition, RouteCandidate, Router,
     RouterFuture, RoutingEvaluation, RoutingPolicy, RoutingRequest,
 };
-use tinyhivemind_hive::{CompletionEpisodeState, ParticipantCompletion};
+use tinyhivemind_hive::{AssignmentRecord, CompletionEpisodeState, ParticipantCompletion};
 use tinyhivemind_openhuman::{
     AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, OpenHumanHive,
 };
@@ -197,8 +197,10 @@ fn accepted_assignments_merge_in_order_without_duplicates() {
             .into_iter()
             .map(|(agent_id, completed_at)| ParticipantCompletion {
                 agent_id: agent_id.into(),
-                assigned_at: Sequence(0),
-                completed_at,
+                assignments: vec![AssignmentRecord {
+                    assigned_at: Sequence(0),
+                    completed_at,
+                }],
             })
             .collect(),
         })
