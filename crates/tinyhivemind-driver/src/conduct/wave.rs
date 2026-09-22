@@ -47,8 +47,9 @@ pub(super) struct Wave {
     force_conclusions: bool,
     /// What thread turns said: `(root, seat, utterance)`.
     pub(super) thread: Vec<(Sequence, String, Utterance)>,
-    /// What desk turns said, and what thread turns said to the desk.
-    pub(super) desk: Vec<(String, Utterance)>,
+    /// What desk turns said, and what thread turns said to the desk:
+    /// `(seat, utterance, the conversation it was lifted out of)`.
+    pub(super) desk: Vec<(String, Utterance, Option<Sequence>)>,
     /// Steps ready for the host, notes and events.
     steps: VecDeque<Step>,
     /// Commits waiting for the host, in order.
@@ -112,13 +113,14 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     self.wave.phase = Phase::Desk;
                 }
                 Phase::Desk => {
-                    for (seat, utterance) in std::mem::take(&mut self.wave.desk) {
+                    for (seat, utterance, conversation) in std::mem::take(&mut self.wave.desk) {
                         let only_for = utterance.asks().map(str::to_owned);
                         self.wave.commits.push_back(Commit {
                             author: seat,
                             utterance,
                             thread: None,
                             only_for,
+                            conversation,
                             kind: Kind::Desk,
                         });
                     }
@@ -156,7 +158,8 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             utterance,
             thread: Some(root),
             only_for: None,
-            kind: Kind::Thread(root),
+            conversation: Some(root),
+            kind: Kind::Thread { root },
         });
     }
 
@@ -215,6 +218,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 },
                 thread: None,
                 only_for: Some(child.asker.clone()),
+                conversation: Some(root),
                 kind: Kind::Conclusion { root, forced },
             });
         }
@@ -238,7 +242,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             utterance: commit.utterance.clone(),
         };
         match commit.kind {
-            Kind::Thread(root) => self.commit_thread(root, committed).await,
+            Kind::Thread { root } => self.commit_thread(root, committed).await,
             Kind::Desk => self.commit_desk(committed).await,
             Kind::Conclusion { root, forced } => {
                 self.commit_conclusion(root, forced, committed).await
@@ -259,6 +263,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             return Ok(());
         };
         let seat = committed.author_id.clone();
+        let at = committed.sequence;
         let said = committed.utterance.message().to_owned();
         match self
             .driver
@@ -276,6 +281,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 seat,
                 thread: Some(root),
                 why: Refusal::NotYetShown,
+                at,
             }),
             Err(error) => return Err(error),
         }
@@ -323,6 +329,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     seat,
                     thread: None,
                     why: Refusal::AwaitingReply { waiting_on },
+                    at: sequence,
                 });
             }
             Err(Error::UndeliveredAssignment { assigned_at, .. }) => {
@@ -339,11 +346,15 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     seat,
                     thread: None,
                     why: Refusal::Undelivered { assigned_at },
+                    at: sequence,
                 });
             }
             Err(Error::BudgetSpent { .. }) => {
                 self.discharged += 1;
-                self.wave.event(Event::Discharged { seat: seat.clone() });
+                self.wave.event(Event::Discharged {
+                    seat: seat.clone(),
+                    at: sequence,
+                });
                 // Before whatever else the wave said: the seat keeps the work
                 // now, so a later row from it applies to that.
                 self.wave.commits.push_front(Commit {
@@ -353,6 +364,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     },
                     thread: None,
                     only_for: None,
+                    conversation: None,
                     kind: Kind::Discharge,
                 });
             }
@@ -372,6 +384,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     self.wave.event(Event::Broadcast {
                         seat: said.seat.clone(),
                         to: agent_ids,
+                        at: said.sequence,
                     });
                 }
                 // For an ask, this is the signal to open the conversation: a
@@ -386,6 +399,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     self.wave.event(Event::Handoff {
                         to: agent_id.clone(),
                         from: handoff.from.clone(),
+                        origin: handoff.origin,
                     });
                     self.wave.note(
                         format!("handoff from @{}: {}", handoff.from, handoff.body),
@@ -398,11 +412,13 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         if said.is_broadcast && said.held && !holds(&transition.state, &said.seat) {
             self.wave.event(Event::CompletedByBroadcast {
                 seat: said.seat.clone(),
+                at: said.sequence,
             });
         }
         if said.is_broadcast && !routed {
             self.wave.event(Event::Unplaced {
                 seat: said.seat.clone(),
+                at: said.sequence,
             });
             self.wave.note(
                 "nobody on this desk can take that; the work stays with you. Do what you can \
@@ -440,19 +456,26 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         forced: bool,
         committed: CommittedUtterance,
     ) -> Result<()> {
-        let Some(child) = self.children.remove(&root) else {
+        if !self.children.contains_key(&root) {
             return Ok(());
-        };
+        }
+        let at = committed.sequence;
+        // The fold first: a conclusion it refuses leaves the conversation
+        // open, to be concluded again on a later wave, rather than gone.
         let transition = self
             .driver
             .apply_committed(&self.state, committed, None)
             .await?;
         self.state = transition.state;
+        let Some(child) = self.children.remove(&root) else {
+            return Ok(());
+        };
         self.wave.event(Event::Concluded {
             root,
             asker: child.asker.clone(),
             askee: child.askee.clone(),
             forced,
+            at,
         });
         self.concluded.push(Concluded {
             root,

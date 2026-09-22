@@ -12,7 +12,7 @@ use tinyhivemind_embed::{
     RouterFuture, RoutingEvaluation, RoutingPolicy, RoutingRequest,
 };
 
-use crate::conduct::{ConductPolicy, Conductor, Door, Event, Step, Turn};
+use crate::conduct::{Commit, ConductPolicy, Conductor, Door, Event, Step, Turn};
 use crate::driver::BroadcastRouting;
 use crate::test_support::Seat;
 use crate::{AgentBinding, BoundHive, CompletionDriver, Error, HiveGraph};
@@ -188,6 +188,8 @@ impl Journal {
 pub(super) struct Wave {
     pub(super) turns: Vec<Turn>,
     pub(super) events: Vec<Event>,
+    /// Every commit the wave handed out, with the sequence it was given.
+    pub(super) commits: Vec<(Sequence, Commit)>,
 }
 
 /// One wave: nudges, turns, the scripted calls each seat makes, and every
@@ -224,6 +226,7 @@ pub(super) fn wave(
                 commit.only_for.clone(),
             );
             run(conductor.committed(sequence))?;
+            seen.commits.push((sequence, commit.clone()));
             continue;
         }
         take(step, journal, &mut seen);

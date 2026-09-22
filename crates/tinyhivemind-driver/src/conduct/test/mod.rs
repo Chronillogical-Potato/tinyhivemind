@@ -4,4 +4,6 @@
 mod conversations;
 mod desk;
 mod door;
+mod links;
 mod support;
+mod wire;

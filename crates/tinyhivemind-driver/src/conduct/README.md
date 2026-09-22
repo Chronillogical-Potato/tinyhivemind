@@ -9,8 +9,8 @@ that no single fold can hold.
 | `mod.rs` | `Conductor`, `ConductPolicy`, `Door`, `starters`; opening the desk, beginning a wave, proposing turns, opening a turn with its brief, recording what it called |
 | `wave.rs` | After a wave: the phase machine that hands the host one `Step` at a time -- commits in conversations, silent askees, commits on the desk with their consequences, conclusions, the turn wall |
 | `child.rs` | A conversation: its root, its two seats, its own driver state, its turns, its nudge; and one that concluded |
-| `steps.rs` | `Turn`, `Note`, `Commit`, `Event`, `Refusal`, `Step` |
-| `test.rs` | Every rule, driven by a host that is only a journal |
+| `steps.rs` | `Turn`, `Note`, `Commit`, `Event`, `Refusal`, `Step`: the wire forms a host journals and streams |
+| `test/` | Every rule, driven by a host that is only a journal; the exact wire forms; the links from a row to its conversation and from an event to its row |
 
 The rules, each with the decision it comes from:
 
@@ -33,3 +33,16 @@ The conductor appends nothing. It hands the host a `Note` to append, a
 `Commit` to append and report the sequence of, or an `Event` to log, and
 takes the sequence back through `committed`. The host owns the journal,
 the rendering of a row, the prompt, and running the turn.
+
+What a host reads back to draw the desk:
+
+- **A conversation, whole.** The ask row's sequence is the conversation's
+  root. Every other row of it carries that root as `Commit::conversation`:
+  what was said inside it, desk work a seat lifted out of it, and the row
+  that concluded it to the asker. `Event::Asked` and `Event::Concluded`
+  mark when it opened and closed.
+- **An event's row.** `Broadcast`, `Unplaced`, `CompletedByBroadcast`,
+  `Refused`, `Discharged` and `Concluded` carry `at`, the sequence the host
+  gave the row they are about; `Handoff` carries the broadcast row it came
+  from as `origin`. A refused row is already on the journal, and its event
+  is what marks it refused.

@@ -59,7 +59,7 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     ));
     assert!(matches!(
         answered.events.as_slice(),
-        [Event::Concluded { root: at, asker, askee, forced: false }]
+        [Event::Concluded { root: at, asker, askee, forced: false, .. }]
             if *at == root && asker == "one" && askee == "two"
     ));
     assert_eq!(conductor.conversations(), 1);
@@ -122,7 +122,7 @@ fn a_completion_while_a_conversation_is_open_is_refused_and_explained() {
     .expect("wave");
     assert!(seen.events.iter().any(|event| matches!(
         event,
-        Event::Refused { seat, thread: None, why: Refusal::AwaitingReply { waiting_on } }
+        Event::Refused { seat, thread: None, why: Refusal::AwaitingReply { waiting_on }, .. }
             if seat == "one" && waiting_on == &["two".to_owned()]
     )));
     assert!(
@@ -370,7 +370,7 @@ fn a_broadcast_or_ask_inside_a_conversation_is_desk_work_and_a_dm_is_dropped() {
     assert!(
         seen.events
             .iter()
-            .any(|event| matches!(event, Event::Broadcast { seat, to } if seat == "two" && !to.is_empty())),
+            .any(|event| matches!(event, Event::Broadcast { seat, to, .. } if seat == "two" && !to.is_empty())),
         "{:?}",
         seen.events
     );
@@ -420,6 +420,70 @@ fn nothing_due_concludes_every_open_conversation_without_an_answer() {
             .any(|event| matches!(event, Event::Concluded { forced: true, .. })),
         "{:?}",
         forced.events
+    );
+    assert_eq!(conductor.conversations(), 1);
+}
+
+#[test]
+fn a_conclusion_the_fold_refuses_leaves_the_conversation_to_conclude_later() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+    let asked = wave(&mut conductor, &journal, &[("one", vec![ask("two", "?")])]).expect("wave");
+    let root = asked.commits[0].0;
+
+    // The askee answers, and the host reports the conclusion's row at a
+    // sequence the episode already holds: the fold refuses it.
+    conductor.begin_wave();
+    let turns = conductor.turns().expect("turns");
+    for turn in &turns {
+        conductor.open_turn(turn, journal.latest(), Vec::new(), |root| {
+            journal.thread(root)
+        });
+        if turn.seat == "two" {
+            conductor.record(turn, vec![ToolCall::Speak(complete("port 8080"))]);
+        }
+    }
+    let mut refused = false;
+    while let Some(step) = conductor.step().expect("steps") {
+        if let Step::Commit(commit) = step {
+            let sequence = if matches!(commit.utterance, Utterance::Dm { .. }) {
+                root
+            } else {
+                journal.append(
+                    &commit.author,
+                    "row",
+                    commit.thread,
+                    commit.only_for.clone(),
+                )
+            };
+            if run(conductor.committed(sequence)).is_err() {
+                refused = true;
+            }
+        }
+    }
+    assert!(refused, "a reused sequence is refused by the fold");
+    assert_eq!(conductor.conversations(), 0, "nothing concluded");
+    assert!(!conductor.finished(), "the conversation is still open");
+
+    // The next wave concludes it, at a row the host gives properly.
+    let later = wave(&mut conductor, &journal, &[]).expect("wave");
+    assert!(
+        later
+            .events
+            .iter()
+            .any(|event| matches!(event, Event::Concluded { root: at, .. } if *at == root)),
+        "{:?}",
+        later.events
     );
     assert_eq!(conductor.conversations(), 1);
 }

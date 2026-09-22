@@ -65,7 +65,7 @@ fn an_unplaced_broadcast_leaves_the_work_with_the_author_and_says_so() {
     .expect("wave");
     assert!(matches!(
         seen.events.as_slice(),
-        [Event::Unplaced { seat }] if seat == "one"
+        [Event::Unplaced { seat, .. }] if seat == "one"
     ));
     assert!(journal.private_to("one")[0].contains("nobody on this desk can take that"));
     assert!(!conductor.finished(), "the author keeps the work");
@@ -104,7 +104,7 @@ fn a_placed_broadcast_completes_its_author_and_a_busy_recipient_gets_it_as_a_han
     assert!(
         seen.events.iter().any(|event| matches!(
             event,
-            Event::CompletedByBroadcast { seat } if seat == "one"
+            Event::CompletedByBroadcast { seat, .. } if seat == "one"
         )),
         "{:?}",
         seen.events
@@ -119,7 +119,7 @@ fn a_placed_broadcast_completes_its_author_and_a_busy_recipient_gets_it_as_a_han
     assert!(
         handed.events.iter().any(|event| matches!(
             event,
-            Event::Handoff { to, from } if to == "two" && from == "one"
+            Event::Handoff { to, from, .. } if to == "two" && from == "one"
         )),
         "{:?}",
         handed.events
@@ -174,7 +174,7 @@ fn a_spent_broadcast_budget_completes_the_seat_with_the_work() {
     assert!(
         seen.events
             .iter()
-            .any(|event| matches!(event, Event::Discharged { seat } if seat == "one")),
+            .any(|event| matches!(event, Event::Discharged { seat, .. } if seat == "one")),
         "{:?}",
         seen.events
     );
