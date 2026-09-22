@@ -14,7 +14,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, PoisonError};
 
-use tinyhivemind::speech::ToolCall;
+use serde_json::Value;
+use tinyhivemind::speech::{ToolCall, Utterance, UtteranceRejection, interpret};
+
+use crate::render::{parse_arguments, serves};
 
 /// The thread a registered turn is in, as the host told the seat.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -167,6 +170,106 @@ impl EpisodeTools {
             });
     }
 
+    /// One call from `seat`, however it arrived: check the caller, check the
+    /// turn, read the call, record it.
+    ///
+    /// This is the whole of what `tools/call` does; the server is HTTP and
+    /// JSON-RPC framing around it. A host whose harness takes native tools
+    /// calls this directly, so an in-process seat and an MCP seat are refused
+    /// and acknowledged in the same words.
+    ///
+    /// `arguments` is the call's argument object, carrying `chat` and
+    /// `parent` beside the tool's own parameters. `Ok` is the text the seat
+    /// reads back: an acknowledgement, or for `read` the rows. `Err` is a
+    /// refusal, in the sentence [`UtteranceRejection`] already wrote where
+    /// one exists; nothing is recorded on a refusal.
+    ///
+    /// # Errors
+    ///
+    /// The refusal text, for the seat to read inside its own turn.
+    pub fn call(
+        &self,
+        seat: &str,
+        name: &str,
+        arguments: &Value,
+    ) -> std::result::Result<String, String> {
+        self.admit(seat, name, arguments).inspect_err(|reason| {
+            // The seat reads the refusal in its tool result; the host drains a
+            // copy, so a turn that recorded nothing is not mistaken for a turn
+            // that was refused.
+            self.refuse(seat, name, reason);
+        })
+    }
+
+    /// The decision behind [`Self::call`], with the refusal not yet copied.
+    fn admit(
+        &self,
+        seat: &str,
+        name: &str,
+        arguments: &Value,
+    ) -> std::result::Result<String, String> {
+        let args = parse_arguments(arguments);
+        if !self.knows(seat) {
+            return Err(format!("no seat named `{seat}` is served here"));
+        }
+        let Some(dispatch) = self.open_turn(seat) else {
+            return Err("no turn is open for you, so nothing you call now can be recorded".into());
+        };
+        if args.chat.as_deref() != Some(dispatch.chat.as_str()) || args.parent != dispatch.parent {
+            let parent = dispatch
+                .parent
+                .as_deref()
+                .map_or_else(|| "null".to_owned(), |parent| format!("`{parent}`"));
+            return Err(format!(
+                "this turn is in chat `{}` with parent {parent}; name exactly those",
+                dispatch.chat
+            ));
+        }
+        if dispatch.parent.is_some() && name == "ask" {
+            return Err(
+                "inside a conversation you answer the seat that asked you: call `complete_episode`,                  and its message is your answer. If you need another seat first, say so in that                  answer, and the seat that asked you will ask them."
+                    .into(),
+            );
+        }
+        if !serves(name) {
+            return Err(unknown_tool(name));
+        }
+        let call = interpret(name, &args.call()).map_err(|rejection| rejection.to_string())?;
+        let acknowledgement = match &call {
+            ToolCall::Read { limit } => return Ok(self.recent(seat, *limit).join("\n")),
+            ToolCall::Speak(Utterance::Ask { to, .. }) => {
+                if to == seat {
+                    return Err(UtteranceRejection::SelfRecipient.to_string());
+                }
+                if !self.knows(to) {
+                    return Err(format!(
+                        "{}. The desk is: {}",
+                        UtteranceRejection::UnknownRecipient { id: to.clone() },
+                        self.seats().join(", ")
+                    ));
+                }
+                format!(
+                    "asked @{to}. The answer reaches you on a later turn; you cannot finish \
+                     until it does, so end your turn when you have asked everything."
+                )
+            }
+            ToolCall::Speak(Utterance::Post { .. }) => "posted to the desk".to_owned(),
+            ToolCall::Speak(Utterance::Broadcast { .. }) => {
+                "recorded: routing will place that with a seat".to_owned()
+            }
+            ToolCall::Speak(Utterance::CompleteEpisode { .. }) => {
+                "recorded: your assignment is complete".to_owned()
+            }
+            ToolCall::Speak(Utterance::Dm { .. }) => return Err(unknown_tool(name)),
+        };
+        self.record(SeatEvent {
+            seat: seat.to_owned(),
+            call,
+            dispatch,
+        });
+        Ok(acknowledgement)
+    }
+
     pub(crate) fn record(&self, event: SeatEvent) {
         self.inbox
             .lock()
@@ -175,6 +278,13 @@ impl EpisodeTools {
             .or_default()
             .push(event);
     }
+}
+
+fn unknown_tool(name: &str) -> String {
+    UtteranceRejection::UnknownTool {
+        name: name.to_owned(),
+    }
+    .to_string()
 }
 
 #[cfg(test)]

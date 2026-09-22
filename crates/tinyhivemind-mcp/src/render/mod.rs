@@ -42,7 +42,14 @@ pub(crate) fn serves(name: &str) -> bool {
 ///
 /// `seats` are the choices `ask`'s `to` offers: a seat that can read the
 /// alternatives does not guess eight ids and learn nothing from eight refusals.
-pub(crate) fn tool_definitions(seats: &[String]) -> Vec<Value> {
+/// The served tools as MCP tool definitions: name, description and an
+/// `inputSchema` that carries the vocabulary's parameters plus the `chat` and
+/// `parent` every call must name. `seats` fills `ask`'s recipient enumeration.
+///
+/// Public so an in-process host can render the same definitions into its own
+/// tool language instead of re-stating the schema.
+#[must_use]
+pub fn tool_definitions(seats: &[String]) -> Vec<Value> {
     served().map(|spec| definition(spec, seats)).collect()
 }
 
@@ -125,12 +132,24 @@ impl Arguments {
 /// identical from inside a refusal. Accepting all three is cheaper than being
 /// wrong about which. `to` is one string for `ask` and a list for anything
 /// that takes several; both are read.
+#[cfg(test)]
 pub(crate) fn arguments(params: &Value) -> Arguments {
-    let raw = match params.get("arguments") {
+    parse_arguments(&raw_arguments(params))
+}
+
+/// The `arguments` object of a `tools/call`, whether the client sent it as an
+/// object or as a JSON-encoded string; the params themselves when it sent
+/// neither.
+pub(crate) fn raw_arguments(params: &Value) -> Value {
+    match params.get("arguments") {
         Some(Value::Object(map)) => Value::Object(map.clone()),
         Some(Value::String(text)) => serde_json::from_str(text).unwrap_or_else(|_| params.clone()),
         _ => params.clone(),
-    };
+    }
+}
+
+/// One call's arguments read off its object.
+pub(crate) fn parse_arguments(raw: &Value) -> Arguments {
     let to = match raw.get("to") {
         Some(Value::String(one)) => vec![one.clone()],
         Some(Value::Array(many)) => many

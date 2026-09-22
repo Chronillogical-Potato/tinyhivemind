@@ -10,7 +10,10 @@
 //! It holds no episode state and runs no turn. A seat's accepted calls are
 //! recorded as [`SeatEvent`]s the host drains after the turn, and its refused
 //! ones as [`Refusal`]s beside them; the driver does the rest. It depends on
-//! no harness: any MCP-capable one is given the same four tools.
+//! no harness: any MCP-capable one is given the same four tools, and a harness
+//! that takes native tools reaches the same check-and-record path in-process
+//! through [`EpisodeTools::call`], rendered from [`tool_definitions`] -- so
+//! both kinds of seat are refused, acknowledged and recorded in the same words.
 //!
 //! **Identity is structural.** A seat dials `/seat/<id>/<capability>`, the
 //! capability minted when the server bound, so who is calling comes from the
@@ -51,6 +54,6 @@ pub mod server;
 pub mod tools;
 
 pub use error::{Error, Result};
-pub use render::served_specs;
+pub use render::{served_specs, tool_definitions};
 pub use server::{PROTOCOL_VERSION, Server, serve};
 pub use tools::{Dispatch, EpisodeTools, Refusal, SeatEvent};

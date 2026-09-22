@@ -37,6 +37,13 @@ this crate is the exception and what would end it. It is in neither list
 `.github/scripts/assert-pure.sh` guards, and it must stay out of every crate
 that is.
 
+A harness that takes native tools does not need the wire. `EpisodeTools::call`
+is the whole of what `tools/call` does -- caller, turn, thread, `interpret`,
+the record -- with the server as HTTP and JSON-RPC framing around it, and
+`tool_definitions` renders the served specs as the definitions the server
+lists. A host wraps those in its own tool type and calls in-process; an MCP
+seat and a native seat are then refused and acknowledged in the same words.
+
 `post` and `dm` are in the vocabulary and are not served. In a completion
 episode every call has a consequence -- a question opened, work handed off, a
 finding concluded -- and text with no consequence turned out, over five live

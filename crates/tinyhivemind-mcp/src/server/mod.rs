@@ -14,13 +14,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use tinyhivemind::speech::{ToolCall, Utterance, UtteranceRejection, interpret};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 
-use crate::render::{arguments, serves, tool_definitions};
-use crate::tools::{EpisodeTools, SeatEvent};
+use crate::render::{raw_arguments, tool_definitions};
+use crate::tools::EpisodeTools;
 use crate::{Error, Result};
 
 /// The MCP protocol version negotiated. Echoed exactly, or the client refuses.
@@ -209,101 +208,24 @@ async fn session(
     }
 }
 
-/// One `tools/call` from an authenticated seat: check the turn, read the call,
-/// record it.
+/// One `tools/call` from an authenticated seat: the framing, over
+/// [`EpisodeTools::call`].
+///
+/// The seat is the capability its endpoint carried; the name and the
+/// arguments are the request's. Everything that decides -- turn, thread,
+/// `interpret`, the record and the refusal copy -- is the in-process call, so
+/// a seat reached over this wire and a seat handed the tools natively are
+/// refused and acknowledged alike.
 fn call(tools: &EpisodeTools, seat: &str, request: &Value, id: &Value) -> Value {
     let params = request.get("params").cloned().unwrap_or(Value::Null);
     let name = params
         .get("name")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    let args = arguments(&params);
-    // The seat reads the refusal in its tool result; the host drains a copy,
-    // so a turn that recorded nothing is not mistaken for a turn that was
-    // refused.
-    let refuse = |text: &str| {
-        tools.refuse(seat, name, text);
-        refusal(id, text)
-    };
-
-    let Some(dispatch) = tools.open_turn(seat) else {
-        return refuse("no turn is open for you, so nothing you call now can be recorded");
-    };
-    // The seat says which turn it thinks it is in; the host said which turn
-    // it is running. A mismatch is a confused model, and it is told so
-    // rather than having its call land on the wrong episode.
-    if args.chat.as_deref() != Some(dispatch.chat.as_str()) || args.parent != dispatch.parent {
-        let parent = dispatch
-            .parent
-            .as_deref()
-            .map_or_else(|| "null".to_owned(), |parent| format!("`{parent}`"));
-        return refuse(&format!(
-            "this turn is in chat `{}` with parent {parent}; name exactly those",
-            dispatch.chat
-        ));
+    match tools.call(seat, name, &raw_arguments(&params)) {
+        Ok(text) => result(id, &text),
+        Err(text) => refusal(id, &text),
     }
-    // Inside a conversation the seat asked answers; it does not open another.
-    // Refused here, in the tool result, while the seat can still call again:
-    // a refusal that arrived later as a row bred a call the seat never made.
-    if dispatch.parent.is_some() && name == "ask" {
-        return refuse(
-            "inside a conversation you answer the seat that asked you: call `complete_episode`, \
-             and its message is your answer. If you need another seat first, say so in that \
-             answer, and the seat that asked you will ask them.",
-        );
-    }
-    if !serves(name) {
-        return refuse(&unknown_tool(name));
-    }
-    let call = match interpret(name, &args.call()) {
-        Ok(call) => call,
-        Err(rejection) => return refuse(&rejection.to_string()),
-    };
-    let acknowledgement = match &call {
-        ToolCall::Read { limit } => {
-            let rows = tools.recent(seat, *limit);
-            return result(id, &rows.join("\n"));
-        }
-        ToolCall::Speak(Utterance::Ask { to, .. }) => {
-            if to == seat {
-                return refuse(&UtteranceRejection::SelfRecipient.to_string());
-            }
-            if !tools.knows(to) {
-                return refuse(&format!(
-                    "{}. The desk is: {}",
-                    UtteranceRejection::UnknownRecipient { id: to.clone() },
-                    tools.seats().join(", ")
-                ));
-            }
-            format!(
-                "asked @{to}. The answer reaches you on a later turn; you cannot finish \
-                 until it does, so end your turn when you have asked everything."
-            )
-        }
-        ToolCall::Speak(Utterance::Post { .. }) => "posted to the desk".to_owned(),
-        ToolCall::Speak(Utterance::Broadcast { .. }) => {
-            "recorded: routing will place that with a seat".to_owned()
-        }
-        ToolCall::Speak(Utterance::CompleteEpisode { .. }) => {
-            "recorded: your assignment is complete".to_owned()
-        }
-        // Withheld, and refused above by name; kept exhaustive so a new
-        // variant is a compile error here rather than a silent acceptance.
-        ToolCall::Speak(Utterance::Dm { .. }) => return refuse(&unknown_tool(name)),
-    };
-    tools.record(SeatEvent {
-        seat: seat.to_owned(),
-        call,
-        dispatch,
-    });
-    result(id, &acknowledgement)
-}
-
-fn unknown_tool(name: &str) -> String {
-    UtteranceRejection::UnknownTool {
-        name: name.to_owned(),
-    }
-    .to_string()
 }
 
 fn result(id: &Value, text: &str) -> Value {
