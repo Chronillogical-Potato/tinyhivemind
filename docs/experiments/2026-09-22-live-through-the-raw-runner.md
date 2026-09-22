@@ -5,7 +5,7 @@
 **Code:** `TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted`
 over OpenRouter (`deepseek/deepseek-v4-flash`) with live Jev routing
 **Decisions:** [ADR 0022](../adr/0022-the-episode-mcp-server-is-the-one-socket.md),
-[ADR 0024](../adr/0024-a-placed-broadcast-completes-its-author.md)
+[ADR 0024](../adr/0024-a-broadcast-completes-its-author.md)
 
 The first live episode run with no MCP server and no `openhuman-embed`
 agent: every seat a fresh `OpenHumanSessionHost` built one level down on
