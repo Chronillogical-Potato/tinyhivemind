@@ -104,6 +104,29 @@ const SPECS: &[ToolSpec] = &[
         ],
     },
     ToolSpec {
+        name: "ask",
+        description: "Ask one named seat a question. It is answered on its own time, not while \
+                      you wait, and the answer reaches you on a later turn — so ask everything \
+                      you need, then end your turn. You will not be able to finish until every \
+                      answer has arrived, so nothing you asked for can be lost. It is a question, \
+                      not a handoff: the work stays yours, and the seat you ask keeps whatever it \
+                      was already doing.",
+        parameters: &[
+            ToolParameter {
+                name: "to",
+                description: Some("The seat to ask, by id, without the @."),
+                kind: ParameterKind::Text,
+                required: true,
+            },
+            ToolParameter {
+                name: "message",
+                description: Some("The question, self-contained: what you need and why."),
+                kind: ParameterKind::Text,
+                required: true,
+            },
+        ],
+    },
+    ToolSpec {
         name: "complete_episode",
         description: "Say one last thing and report that you have finished your assigned work in \
                       this episode. Call this instead of `post` only when you have no open step. \

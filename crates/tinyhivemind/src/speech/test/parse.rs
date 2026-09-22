@@ -100,7 +100,7 @@ fn a_dm_naming_the_same_seat_twice_names_it_once() {
 #[test]
 fn refuses_a_message_that_is_absent_or_only_whitespace() {
     for message in [None, Some(""), Some("   \n ")] {
-        for tool in ["post", "complete_episode", "broadcast", "dm"] {
+        for tool in ["post", "complete_episode", "broadcast", "dm", "ask"] {
             let to = ["checker".to_string()];
             assert_eq!(
                 interpret(
@@ -150,6 +150,101 @@ fn refuses_a_dm_that_names_nobody() {
 }
 
 #[test]
+fn an_ask_names_one_seat_and_keeps_its_question() {
+    let to = ["@checker".to_string()];
+    let utterance = said(
+        "ask",
+        &CallArguments {
+            message: Some("  is the depth bound tight?  "),
+            to: &to,
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        utterance,
+        Utterance::Ask {
+            to: "checker".into(),
+            message: "is the depth bound tight?".into(),
+        },
+    );
+    assert_eq!(utterance.asks(), Some("checker"));
+    assert!(!utterance.completes_episode(), "asking is not finishing");
+    assert!(!utterance.broadcasting());
+    assert_eq!(post("anything").asks(), None, "only an ask asks");
+}
+
+#[test]
+fn refuses_an_ask_that_names_nobody() {
+    let blanks = [" ".to_string(), "@".to_string()];
+    for to in [&[][..], &blanks[..]] {
+        assert_eq!(
+            interpret(
+                "ask",
+                &CallArguments {
+                    message: Some("anyone?"),
+                    to,
+                    ..Default::default()
+                }
+            ),
+            Err(UtteranceRejection::NoRecipients),
+            "{to:?}",
+        );
+    }
+}
+
+#[test]
+fn refuses_an_ask_that_names_more_than_one_seat() {
+    let to = ["checker".to_string(), "theory".to_string()];
+    assert_eq!(
+        interpret(
+            "ask",
+            &CallArguments {
+                message: Some("which of you?"),
+                to: &to,
+                ..Default::default()
+            }
+        ),
+        Err(UtteranceRejection::OneRecipient { count: 2 }),
+        "a question has one addressee; two is a dm, not an ask",
+    );
+}
+
+#[test]
+fn refuses_an_ask_to_a_seat_the_roster_does_not_hold() {
+    let members = members();
+    let roster = Roster::new(&members, &[], &[]);
+    let utterance = Utterance::Ask {
+        to: "johnny".into(),
+        message: "are you there?".into(),
+    };
+    assert_eq!(
+        check_recipients(&utterance, "solver", &roster),
+        Err(UtteranceRejection::UnknownRecipient {
+            id: "johnny".into()
+        }),
+    );
+}
+
+#[test]
+fn refuses_an_ask_a_seat_addressed_to_itself() {
+    let members = members();
+    let roster = Roster::new(&members, &[], &[]);
+    let alone = Utterance::Ask {
+        to: "solver".into(),
+        message: "what do I think?".into(),
+    };
+    assert_eq!(
+        check_recipients(&alone, "solver", &roster),
+        Err(UtteranceRejection::SelfRecipient),
+    );
+    let peer = Utterance::Ask {
+        to: "checker".into(),
+        message: "what do you think?".into(),
+    };
+    assert_eq!(check_recipients(&peer, "solver", &roster), Ok(()));
+}
+
+#[test]
 fn refuses_a_tool_the_room_does_not_serve() {
     assert_eq!(
         interpret("shout", &CallArguments::default()),
@@ -186,6 +281,10 @@ fn a_rejection_reads_as_a_sentence_the_seat_can_act_on() {
     assert_eq!(
         UtteranceRejection::SelfRecipient.to_string(),
         "`to` names you; a message to yourself reaches nobody else",
+    );
+    assert_eq!(
+        UtteranceRejection::OneRecipient { count: 3 }.to_string(),
+        "`to` must name exactly one seat to ask; 3 were named",
     );
 }
 
@@ -272,6 +371,13 @@ fn the_wire_form_is_what_a_host_writes_and_reads_back() {
                 message: "recheck".into(),
             },
             serde_json::json!({ "kind": "dm", "to": ["checker"], "message": "recheck" }),
+        ),
+        (
+            Utterance::Ask {
+                to: "checker".into(),
+                message: "is it tight?".into(),
+            },
+            serde_json::json!({ "kind": "ask", "to": "checker", "message": "is it tight?" }),
         ),
         (
             Utterance::CompleteEpisode {

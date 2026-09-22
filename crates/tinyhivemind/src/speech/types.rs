@@ -33,6 +33,17 @@ pub enum Utterance {
         /// The text to append.
         message: String,
     },
+    /// A question for exactly one peer, answered on a later turn.
+    ///
+    /// Unlike a [`Dm`](Self::Dm) it opens an obligation: the asker cannot
+    /// complete its assignment until the answer has arrived. The seat asked
+    /// keeps whatever it was doing — this is a question, not a handoff.
+    Ask {
+        /// The peer asked, without the `@`.
+        to: String,
+        /// The question.
+        message: String,
+    },
     /// A message that also reports the author's current assignment finished.
     ///
     /// The seat is reporting, not ending the desk: the host still appends the
@@ -52,6 +63,7 @@ impl Utterance {
             Self::Post { message }
             | Self::Broadcast { message }
             | Self::Dm { message, .. }
+            | Self::Ask { message, .. }
             | Self::CompleteEpisode { message } => message,
         }
     }
@@ -73,6 +85,17 @@ impl Utterance {
     #[must_use]
     pub const fn broadcasting(&self) -> bool {
         matches!(self, Self::Broadcast { .. })
+    }
+
+    /// The seat this utterance asks, when it is an [`Ask`](Self::Ask).
+    ///
+    /// A host holds the asker's completion open until that seat has answered.
+    #[must_use]
+    pub fn asks(&self) -> Option<&str> {
+        match self {
+            Self::Ask { to, .. } => Some(to),
+            _ => None,
+        }
     }
 }
 
@@ -120,6 +143,12 @@ pub enum UtteranceRejection {
     /// A private message named its own author.
     #[error("`to` names you; a message to yourself reaches nobody else")]
     SelfRecipient,
+    /// An `ask` named more than one seat.
+    #[error("`to` must name exactly one seat to ask; {count} were named")]
+    OneRecipient {
+        /// How many the seat wrote.
+        count: usize,
+    },
 }
 
 /// The arguments of one tool call, in the shapes the tools declare.
@@ -152,6 +181,10 @@ pub struct CommittedUtterance {
     pub completes_episode: bool,
     /// Whether the appended desk row must be routed semantically to teammates.
     pub broadcasting: bool,
+    /// The seat this row asks, when it is an `ask`.
+    ///
+    /// The host holds the author's completion open until that seat answers.
+    pub asks: Option<String>,
     /// Why a requested aside was declined, when one was.
     ///
     /// A refusal is not a failure: the row is appended to the whole desk,

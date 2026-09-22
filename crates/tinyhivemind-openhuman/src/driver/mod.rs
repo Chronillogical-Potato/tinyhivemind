@@ -352,12 +352,16 @@ impl<'a> CompletionDriver<'a> {
                 episode = apply_completion(&episode, &event.author_id, event.sequence)?;
                 Vec::new()
             }
-            Utterance::Dm { to, message } => vec![HostAction::DeliverDm {
-                route: self
-                    .hive
-                    .resolve_dm(&event.author_id, to, self.round_width)?,
-                message: message.clone(),
-            }],
+            Utterance::Dm { to, message } => {
+                self.deliver_privately(&event.author_id, to, message)?
+            }
+            // An `ask` reaches its one seat exactly as a `dm` does. That it
+            // also holds the asker's completion open until answered is state
+            // this driver does not carry yet; it lands with the outstanding
+            // asks the host must track.
+            Utterance::Ask { to, message } => {
+                self.deliver_privately(&event.author_id, std::slice::from_ref(to), message)?
+            }
             Utterance::Broadcast { message } => {
                 let Some(routing) = routing else {
                     return Err(Error::MissingBroadcastRouting);
@@ -612,6 +616,13 @@ impl<'a> CompletionDriver<'a> {
                     self.hive
                         .resolve_dm(&event.author_id, to, self.round_width)?;
                 }
+                Utterance::Ask { to, .. } => {
+                    self.hive.resolve_dm(
+                        &event.author_id,
+                        std::slice::from_ref(to),
+                        self.round_width,
+                    )?;
+                }
                 Utterance::Broadcast { .. } => {
                     if routing.is_none() {
                         return Err(Error::MissingBroadcastRouting);
@@ -626,6 +637,21 @@ impl<'a> CompletionDriver<'a> {
             }
         }
         Ok(broadcast_fallbacks)
+    }
+
+    /// One private delivery — a `dm` to its peers or an `ask` to its one seat
+    /// — as the action the host performs. Resolving the route here is what
+    /// checks the recipients against the hive before anything is sent.
+    fn deliver_privately(
+        &self,
+        author_id: &str,
+        to: &[String],
+        message: &str,
+    ) -> Result<Vec<HostAction>> {
+        Ok(vec![HostAction::DeliverDm {
+            route: self.hive.resolve_dm(author_id, to, self.round_width)?,
+            message: message.to_owned(),
+        }])
     }
 
     fn broadcast_fallback_for<'state>(

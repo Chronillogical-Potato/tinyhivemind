@@ -88,7 +88,8 @@ const ASIDE_MARKER: &str = "!aside";
 /// # Errors
 ///
 /// Returns the [`UtteranceRejection`] to hand back to the seat: an unknown
-/// tool, an empty message, or a `dm` that named nobody. Recipients are checked
+/// tool, an empty message, a `dm` that named nobody, or an `ask` that named
+/// more than one seat. Recipients are checked
 /// for shape here and against the roster in [`commit_utterance`], which is the
 /// first point that holds one.
 pub fn interpret(
@@ -112,6 +113,18 @@ pub fn interpret(
                 return Err(UtteranceRejection::NoRecipients);
             }
             Ok(ToolCall::Speak(Utterance::Dm { to, message }))
+        }
+        "ask" => {
+            let message = text(arguments, "message")?;
+            let mut to = recipients(arguments.to);
+            match to.len() {
+                0 => Err(UtteranceRejection::NoRecipients),
+                1 => Ok(ToolCall::Speak(Utterance::Ask {
+                    to: to.remove(0),
+                    message,
+                })),
+                count => Err(UtteranceRejection::OneRecipient { count }),
+            }
         }
         "read" => Ok(ToolCall::Read {
             limit: read_limit(arguments.limit),
@@ -217,6 +230,7 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
 
     let addressed = match request.utterance {
         Utterance::Dm { to, .. } => targets(to),
+        Utterance::Ask { to, .. } => targets(std::slice::from_ref(to)),
         _ => Vec::new(),
     };
     // A `dm` addresses its recipients whether or not its text also names them.
@@ -236,6 +250,7 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
             closing: request.utterance.closing(),
             completes_episode: request.utterance.completes_episode(),
             broadcasting: request.utterance.broadcasting(),
+            asks: request.utterance.asks().map(str::to_owned),
             refusal: None,
         });
     }
@@ -282,6 +297,7 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
         closing: request.utterance.closing(),
         completes_episode: request.utterance.completes_episode(),
         broadcasting: request.utterance.broadcasting(),
+        asks: request.utterance.asks().map(str::to_owned),
         refusal,
     })
 }
@@ -305,8 +321,10 @@ pub fn check_recipients(
     speaker_id: &str,
     roster: &Roster<'_>,
 ) -> std::result::Result<(), UtteranceRejection> {
-    let Utterance::Dm { to, .. } = utterance else {
-        return Ok(());
+    let to: &[String] = match utterance {
+        Utterance::Dm { to, .. } => to,
+        Utterance::Ask { to, .. } => std::slice::from_ref(to),
+        _ => return Ok(()),
     };
     for id in to {
         if roster.active_member(id).is_none() {
@@ -336,6 +354,7 @@ pub fn addressed_peers(
 ) -> Vec<String> {
     let mentions = match utterance {
         Utterance::Dm { to, .. } => targets(to),
+        Utterance::Ask { to, .. } => targets(std::slice::from_ref(to)),
         other => {
             let author = MentionAuthor::Agent {
                 id: speaker_id.to_string(),
