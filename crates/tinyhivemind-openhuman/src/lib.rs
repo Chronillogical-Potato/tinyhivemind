@@ -31,12 +31,14 @@
 //!
 //! # Example
 //!
-//! A raw seat, offline, against the scripted model the `offline` feature
-//! ships. The same steps seat a live one: the route is the credential.
+//! A raw seat, against any OpenAI-compatible endpoint: the route is the
+//! credential. The same steps seat one against the scripted model the
+//! `offline` feature ships, which is how the crate's own tests prove it.
 //!
 //! ```no_run
 //! use std::sync::Arc;
-//! use tinyhivemind_openhuman::{RawRunner, Route, SeatRunner, offline};
+//! use openhuman_embed::RuntimeConfig;
+//! use tinyhivemind_openhuman::{Lane, RawRunner, Route, SeatRunner};
 //! use tinyhivemind_tools::{Dispatch, EpisodeTools};
 //!
 //! # async fn run() -> tinyhivemind_openhuman::Result<()> {
@@ -48,14 +50,18 @@
 //!     Arc::new(EpisodeTools::new(["lead"])),
 //!     &[("lead".to_owned(), "You lead the desk.".to_owned())].into_iter().collect(),
 //!     "Call `complete_episode` when you are done.",
-//!     &offline::config(),
+//!     &RuntimeConfig::default(),
 //!     "http://127.0.0.1:1/backend",
-//!     &Route { endpoint: "http://127.0.0.1:1/v1".into(), api_key: "key".into(), model: offline::MODEL.into() },
+//!     &Route {
+//!         endpoint: "http://127.0.0.1:1/v1".into(),
+//!         api_key: "key".into(),
+//!         model: "a-model".into(),
+//!     },
 //!     &workspace,
 //! )
 //! .await?;
 //! runner.open("lead", Vec::new(), Dispatch { chat: "engineering".into(), parent: None });
-//! let (_, _, reply) = runner.turn("lead".into(), tinyhivemind_openhuman::Lane::Desk, "Go.".into()).await;
+//! let (_, _, reply) = runner.turn("lead".into(), Lane::Desk, "Go.".into()).await;
 //! let events = runner.close("lead");
 //! # let _ = (reply, events);
 //! # Ok(())
