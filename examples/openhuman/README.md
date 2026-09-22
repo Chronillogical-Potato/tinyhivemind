@@ -91,17 +91,40 @@ TINYHIVEMIND_LIVE_OPENROUTER=1 cargo run --manifest-path examples/openhuman/Carg
 TINYHIVEMIND_LIVE_OPENROUTER=1 TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
 ```
 
-Offline, the raw runner is a proof of its mechanics and needs no credential: a
-scripted model answers every seat with one native `complete_episode` call,
-routing is the deterministic fallback, and the run asserts that the call
-became a desk row.
+Offline, either runner is a proof of its mechanics and needs no credential.
+A scripted model answers every seat with one `complete_episode` call in
+whichever dialect the request offers -- native for a raw session, or
+`mcp_call_tool` against the `episode` server for an embed agent -- routing is
+the deterministic fallback, and the run asserts that the call became a desk
+row.
 
 ```sh
+cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
 TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
 ```
 
-The embed runner cannot run offline: its tools reach the agent through MCP,
-and a canned completion cannot exercise a transport.
+### Benchmarking the two runners
+
+`CONDUCTED_BENCH=N` runs both runners offline, `N` episodes each on the
+selected desk, and prints one table. The model is scripted, so nothing in it
+is about answers: every seat completes on its first turn, and what differs
+between the arms is the host.
+
+| Column | What it is |
+| --- | --- |
+| `turns/ep`, `waves/ep` | seat turns the loop ran, and rounds it took |
+| `requests/turn` | model calls per turn, including any discovery an embed agent spends on `mcp_list_servers` and `mcp_list_tools` |
+| `KiB/turn` | request bytes sent to the model per turn: the session's history plus the delta for embed, the seeded log plus the delta for raw |
+| `tool rtt ms` | from the model emitting a tool call to seeing its receipt: the whole harness in between, native or over the wire |
+| `wall ms/ep` | one episode end to end |
+
+```sh
+CONDUCTED_BENCH=5 cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin conducted
+```
+
+The driver's own benchmark, `cargo run --release -p tinyhivemind-openhuman
+--example bench`, measures the completion driver's policy with no agent at
+all and binds plain seats; it says nothing about either runner.
 
 ## Hermetic DeepSWE adapter
 

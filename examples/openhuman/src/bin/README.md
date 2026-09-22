@@ -10,7 +10,7 @@
 | `conducted/raw/seat.rs` | One raw seat: builds, seeds, runs and drops a session. |
 | `conducted/raw/tools.rs` | The served vocabulary as native tools over the shared record. |
 | `conducted/raw/policy.rs` | The gate that admits only the belt, and the memory that keeps nothing. |
-| `conducted/raw/offline.rs` | A scripted OpenAI-compatible model, for the offline proof. |
+| `conducted/raw/offline.rs` | A scripted OpenAI-compatible model that speaks both dialects, for the offline proofs, and the harness metrics the bench prints. |
 | `conducted/raw/test.rs` | The belt is the served vocabulary; a native call is recorded through the record; the gate denies the rest. |
 | `conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`. |
 | `deepswe_hive.rs` | Hermetic four-agent external software-engineering adapter with host-side OpenHuman and Docker-confined tools. |

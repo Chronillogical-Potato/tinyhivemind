@@ -16,8 +16,10 @@
 //! ```sh
 //! set -a; . ~/.config/tinyhivemind/live.env; set +a
 //! TINYHIVEMIND_LIVE_OPENROUTER=1 cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
-//! # The raw runner also runs offline, against a scripted model, as a proof of its mechanics:
+//! # Offline, either runner runs against a scripted model as a proof of its mechanics:
 //! TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
+//! # And both, N episodes each, as one table of what the harness costs:
+//! CONDUCTED_BENCH=5 cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin conducted
 //! ```
 
 mod conducted {
@@ -33,7 +35,8 @@ use std::sync::{Arc, Mutex};
 
 use conducted::embed::EmbedRunner;
 use conducted::jev::LiveJev;
-use conducted::raw::{self, RawRunner, Route};
+use conducted::raw::offline;
+use conducted::raw::{RawRunner, Route};
 use conducted::runner::{Lane, RunnerKind, SeatRunner, TurnJob};
 use openhuman_embed::{Access, Provider, Runtime, RuntimeConfig, ServiceSet, Workspace};
 use serde_json::json;
@@ -333,14 +336,21 @@ async fn run() -> anyhow::Result<()> {
     let _ = env_logger::builder().is_test(false).try_init();
     let kind = RunnerKind::from_env()?;
     let live = std::env::var_os("TINYHIVEMIND_LIVE_OPENROUTER").is_some();
-    if !live && kind == RunnerKind::Embed {
+    let bench = match std::env::var("CONDUCTED_BENCH") {
+        Ok(value) => Some(value.parse::<u32>().map_err(|_| {
+            anyhow::anyhow!("CONDUCTED_BENCH={value}: episodes per runner, a whole number")
+        })?),
+        Err(_) => None,
+    };
+    if live && bench.is_some() {
+        anyhow::bail!("CONDUCTED_BENCH runs offline; unset TINYHIVEMIND_LIVE_OPENROUTER");
+    }
+    if !live {
         eprintln!(
-            "conducted: set TINYHIVEMIND_LIVE_OPENROUTER=1, OPENROUTER_API_KEY,\n\
-             OPENROUTER_MODEL and TYPESAFE_API_KEY to run a live episode.\n\
-             It makes one model call per agent turn and one Jev call per route.\n\
-             TINYHIVEMIND_RUNNER=raw runs the raw runner offline, against a scripted model."
+            "conducted: offline, against a scripted model, as a proof of mechanics. Set\n\
+             TINYHIVEMIND_LIVE_OPENROUTER=1, OPENROUTER_API_KEY, OPENROUTER_MODEL and\n\
+             TYPESAFE_API_KEY for a live episode: one model call per turn, one Jev call per route."
         );
-        return Ok(());
     }
 
     // The core makes non-inference backend calls; signed out of the real one
@@ -360,12 +370,12 @@ async fn run() -> anyhow::Result<()> {
     std::fs::create_dir_all(&workspace)?;
 
     // Where inference comes from: OpenRouter, or -- with no credential -- the
-    // scripted model that proves the raw runner's mechanics offline.
+    // scripted model, which also keeps the harness metrics the bench prints.
+    let metrics = Arc::new(offline::Metrics::default());
     let scripted = if live {
         None
     } else {
-        eprintln!("conducted: offline, against a scripted model; no route is semantic");
-        Some(raw::offline::model(desk_id).await)
+        Some(offline::model(desk_id, Arc::clone(&metrics)).await)
     };
     let route = match &scripted {
         None => Route {
@@ -376,7 +386,7 @@ async fn run() -> anyhow::Result<()> {
         Some(server) => Route {
             endpoint: format!("{}/v1", server.uri()),
             api_key: "local-test-key".to_owned(),
-            model: raw::offline::MODEL.to_owned(),
+            model: offline::MODEL.to_owned(),
         },
     };
 
@@ -385,17 +395,6 @@ async fn run() -> anyhow::Result<()> {
         .iter()
         .map(|(id, _, _)| (*id).to_owned())
         .collect();
-    // A raw seat is resolved by the hosted turn against the process
-    // registry, which is read when a runtime boots: register first.
-    if kind == RunnerKind::Raw {
-        let seats: Vec<(&str, &str)> = scenario
-            .seats
-            .iter()
-            .map(|(id, role, _)| (*id, *role))
-            .collect();
-        RawRunner::prepare(&workspace, &seats)?;
-    }
-
     let mut config = if live {
         RuntimeConfig::load_or_init().await?
     } else {
@@ -403,10 +402,6 @@ async fn run() -> anyhow::Result<()> {
     };
     config.agent.max_tool_iterations = 6;
     config.default_temperature = 0.0;
-
-    // The room's tools: one record every call lands in, whichever road it
-    // took. The embed runner serves it over MCP; the raw runner calls it.
-    let tools = Arc::new(EpisodeTools::new(ids.iter().cloned()));
     let briefs: BTreeMap<String, String> = scenario
         .seats
         .iter()
@@ -417,95 +412,288 @@ async fn run() -> anyhow::Result<()> {
             )
         })
         .collect();
-    // The standing contract comes from the vocabulary, for exactly the tools
-    // the record serves; the runner adds its one sentence on the mechanics.
-    let contract = format!(
-        "{DESK_PREAMBLE}\n\n{}",
-        standing_contract(
-            tinyhivemind_mcp::served_specs(),
-            desk_id,
-            kind.how_to_call()
-        )
-    );
     let candidates: Vec<RouteCandidate> = scenario
         .seats
         .iter()
         .map(|(id, role, _)| candidate(id, role))
         .collect();
-    println!("[runner] {}", kind.name());
-    let setup = Setup {
+    let host = Host {
         scenario,
+        run_id,
+        workspace,
+        backend_url: backend.uri(),
+        route,
+        config,
         ids,
-        candidates,
         briefs,
+        candidates,
         live,
-        scripted,
     };
-    match kind {
-        RunnerKind::Embed => {
-            let runtime = Runtime::builder()
-                .config(config)
-                .workspace(Workspace::dir(workspace.clone()))
-                // `none()` leaves `mcp_boot` false, and without it the MCP
-                // subsystem never dials the episode's endpoint: the seats are
-                // never offered a tool at all, which reads exactly like a
-                // model declining to call one.
-                .services(episode_services())
-                .backend_url(backend.uri())
-                .provider(
-                    Provider::openai_compatible(route.endpoint.clone(), route.api_key.clone())
-                        .model(route.model.clone()),
+
+    let result = match bench {
+        Some(episodes) => bench_runners(&host, episodes, &metrics).await,
+        None => {
+            println!("[runner] {}", kind.name());
+            let report = match kind {
+                RunnerKind::Embed => {
+                    let runtime = host.runtime().await?;
+                    let runner = host.embed(&runtime, 0).await?;
+                    episode(runner, host.setup(kind, false)).await?
+                }
+                RunnerKind::Raw => {
+                    host.prepare_raw()?;
+                    let runner = host.raw(0)?;
+                    episode(runner, host.setup(kind, false)).await?
+                }
+            };
+            let _ = report;
+            Ok(())
+        }
+    };
+    drop(scripted);
+    result
+}
+
+/// Everything a run holds that both runners and every episode share.
+struct Host {
+    scenario: &'static Scenario,
+    run_id: String,
+    workspace: std::path::PathBuf,
+    backend_url: String,
+    route: Route,
+    config: RuntimeConfig,
+    ids: Vec<String>,
+    briefs: BTreeMap<String, String>,
+    candidates: Vec<RouteCandidate>,
+    live: bool,
+}
+
+impl Host {
+    /// The standing contract for `kind`: the vocabulary's words for exactly
+    /// the served tools, plus the runner's one sentence on the mechanics.
+    fn contract(&self, kind: RunnerKind) -> String {
+        format!(
+            "{DESK_PREAMBLE}\n\n{}",
+            standing_contract(
+                tinyhivemind_mcp::served_specs(),
+                self.scenario.id,
+                kind.how_to_call()
+            )
+        )
+    }
+
+    fn setup(&self, kind: RunnerKind, quiet: bool) -> Setup {
+        Setup {
+            scenario: self.scenario,
+            kind,
+            ids: self.ids.clone(),
+            candidates: self.candidates.clone(),
+            briefs: self.briefs.clone(),
+            live: self.live,
+            quiet,
+        }
+    }
+
+    /// The `openhuman-embed` runtime the embed runner seats on. One per
+    /// process: the runtime refuses a second, so a bench builds it once.
+    async fn runtime(&self) -> anyhow::Result<Runtime> {
+        Ok(Runtime::builder()
+            .config(self.config.clone())
+            .workspace(Workspace::dir(self.workspace.clone()))
+            // `none()` leaves `mcp_boot` false, and without it the MCP
+            // subsystem never dials the episode's endpoint: the seats are
+            // never offered a tool at all, which reads exactly like a model
+            // declining to call one.
+            .services(episode_services())
+            .backend_url(self.backend_url.clone())
+            .provider(
+                Provider::openai_compatible(
+                    self.route.endpoint.clone(),
+                    self.route.api_key.clone(),
                 )
-                // `mcp_call_tool` is a write as far as the gate is concerned,
-                // so a read-only tier blocks the episode's own tools. The
-                // blast radius is the allowlist, not the tier: three
-                // dispatchers and no shell.
-                .access(Access::full())
-                .build()
-                .await?;
-            let runner =
-                EmbedRunner::seat(&runtime, tools, &setup.briefs, &contract, &run_id).await?;
-            episode(runner, setup).await
-        }
-        RunnerKind::Raw => {
-            let runner = RawRunner::seat(
-                tools,
-                &setup.briefs,
-                &contract,
-                &config,
-                &backend.uri(),
-                &route,
-                &workspace,
-            )?;
-            episode(runner, setup).await
-        }
+                .model(self.route.model.clone()),
+            )
+            // `mcp_call_tool` is a write as far as the gate is concerned, so a
+            // read-only tier blocks the episode's own tools. The blast radius
+            // is the allowlist, not the tier: three dispatchers and no shell.
+            .access(Access::full())
+            .build()
+            .await?)
+    }
+
+    /// Seat the embed runner for one episode. `episode` keeps agent ids
+    /// unique across a bench's episodes on the one runtime.
+    async fn embed(&self, runtime: &Runtime, episode: u32) -> anyhow::Result<EmbedRunner> {
+        EmbedRunner::seat(
+            runtime,
+            Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
+            &self.briefs,
+            &self.contract(RunnerKind::Embed),
+            &format!("{}-{episode}", self.run_id),
+        )
+        .await
+    }
+
+    /// A raw seat is resolved by the hosted turn against the process
+    /// registry, so every seat is registered before a raw runner is seated.
+    fn prepare_raw(&self) -> anyhow::Result<()> {
+        let seats: Vec<(&str, &str)> = self
+            .scenario
+            .seats
+            .iter()
+            .map(|(id, role, _)| (*id, *role))
+            .collect();
+        RawRunner::prepare(&self.workspace, &seats)
+    }
+
+    fn raw(&self, _episode: u32) -> anyhow::Result<RawRunner> {
+        RawRunner::seat(
+            Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
+            &self.briefs,
+            &self.contract(RunnerKind::Raw),
+            &self.config,
+            &self.backend_url,
+            &self.route,
+            &self.workspace,
+        )
     }
 }
 
+/// Both runners, `episodes` times each, offline, and one table.
+///
+/// The model is scripted, so nothing here is about answers: every seat
+/// completes on its first turn. What differs between the arms is the host --
+/// the road a tool call takes, what a turn costs to set up, and how much is
+/// sent to the model -- and that is what the columns are.
+async fn bench_runners(
+    host: &Host,
+    episodes: u32,
+    metrics: &offline::Metrics,
+) -> anyhow::Result<()> {
+    struct Arm {
+        kind: RunnerKind,
+        reports: Vec<Report>,
+        seen: offline::Snapshot,
+    }
+    let mut arms: Vec<Arm> = Vec::new();
+    // The raw seats first: the runtime reads the process registry as it
+    // boots, and a definition written after that is never seen.
+    host.prepare_raw()?;
+    let runtime = host.runtime().await?;
+    for kind in [RunnerKind::Embed, RunnerKind::Raw] {
+        println!("[bench] {} x{episodes}", kind.name());
+        metrics.reset();
+        let mut reports = Vec::new();
+        for index in 0..episodes {
+            let report = match kind {
+                RunnerKind::Embed => {
+                    episode(host.embed(&runtime, index).await?, host.setup(kind, true)).await?
+                }
+                RunnerKind::Raw => episode(host.raw(index)?, host.setup(kind, true)).await?,
+            };
+            reports.push(report);
+        }
+        arms.push(Arm {
+            kind,
+            reports,
+            seen: metrics.snapshot(),
+        });
+    }
+    println!();
+    println!(
+        "{:<7} {:>8} {:>9} {:>9} {:>13} {:>10} {:>14} {:>10}",
+        "runner",
+        "episodes",
+        "turns/ep",
+        "waves/ep",
+        "requests/turn",
+        "KiB/turn",
+        "tool rtt ms",
+        "wall ms/ep"
+    );
+    for arm in &arms {
+        let turns: u64 = arm.reports.iter().map(|r| r.turns).sum();
+        let waves: u64 = arm.reports.iter().map(|r| r.waves).sum();
+        let n = arm.reports.len() as f64;
+        let per_turn = |value: f64| {
+            if turns == 0 {
+                0.0
+            } else {
+                value / turns as f64
+            }
+        };
+        let wall: f64 = arm
+            .reports
+            .iter()
+            .map(|r| r.wall.as_secs_f64() * 1000.0)
+            .sum::<f64>()
+            / n;
+        let rtt = if arm.seen.round_trips.is_empty() {
+            0.0
+        } else {
+            arm.seen
+                .round_trips
+                .iter()
+                .map(|d| d.as_secs_f64() * 1000.0)
+                .sum::<f64>()
+                / arm.seen.round_trips.len() as f64
+        };
+        println!(
+            "{:<7} {:>8} {:>9.1} {:>9.1} {:>13.2} {:>10.1} {:>14.1} {:>10.0}",
+            arm.kind.name(),
+            arm.reports.len(),
+            turns as f64 / n,
+            waves as f64 / n,
+            per_turn(arm.seen.requests as f64),
+            per_turn(arm.seen.bytes as f64 / 1024.0),
+            rtt,
+            wall
+        );
+    }
+    println!(
+        "\nturns/ep: seat turns the loop ran; waves/ep: rounds it took. requests/turn: model calls per turn, including any \
+         discovery. KiB/turn: request bytes to the model. tool rtt: from the model emitting a \
+         tool call to its receipt, the whole harness in between. wall: one episode, end to end."
+    );
+    Ok(())
+}
+
 /// What the episode needs from setup, whichever runner runs it.
+#[derive(Clone)]
 struct Setup {
     scenario: &'static Scenario,
+    kind: RunnerKind,
     ids: Vec<String>,
     candidates: Vec<RouteCandidate>,
     briefs: BTreeMap<String, String>,
     live: bool,
-    /// The scripted model, held for the run: dropping it stops the server.
-    scripted: Option<MockServer>,
+    /// Skip the journal dump at the end: a bench prints one table instead.
+    quiet: bool,
+}
+
+/// What one episode came to, for a bench to add up.
+#[derive(Clone, Copy, Debug)]
+struct Report {
+    turns: u64,
+    waves: u64,
+    wall: std::time::Duration,
 }
 
 /// One episode over `runner`, stepped to quiescence.
 ///
 /// Generic rather than boxed so each runner's bound seat type flows into the
 /// hive and the driver as itself: the loop never names it.
-async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<()> {
+async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Report> {
     let Setup {
         scenario,
+        kind,
         ids,
         candidates,
         briefs,
         live,
-        scripted,
+        quiet,
     } = setup;
+    let started = std::time::Instant::now();
     let desk_id = scenario.id;
     let bindings = runner.bindings();
     let seated: BTreeSet<&str> = bindings.iter().map(|b| b.hive_agent_id.as_str()).collect();
@@ -1091,7 +1279,7 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<()> {
         state.episode().settled(),
         concluded.len()
     );
-    for row in journal.all() {
+    for row in journal.all().iter().filter(|_| !quiet) {
         let scope = match (row.thread, row.only_for.as_deref()) {
             (Some(root), _) => format!(" (thread {})", root.0),
             (None, Some(only)) => format!(" (to @{only})"),
@@ -1103,20 +1291,31 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<()> {
         );
     }
     settled?;
-    // Offline, the run is a proof and says so: the scripted seat's native
-    // tool call must have become a desk row through the belt, the gate and
-    // the record, with no transport in between.
-    if scripted.is_some() {
-        let expected = format!("COMPLETE: {}", raw::offline::COMPLETION);
+    // Offline, the run is a proof and says so: the scripted seat's tool call
+    // must have become a desk row -- natively through the belt, or over the
+    // wire through the server -- and either way through the record.
+    if !live {
+        let expected = format!("COMPLETE: {}", offline::COMPLETION);
         anyhow::ensure!(
             journal.all().iter().any(|row| row.body == expected),
             "the scripted completion never reached the journal"
         );
-        println!("offline proof: a native tool call became a desk row");
+        if !quiet {
+            println!(
+                "offline proof: a {} tool call became a desk row",
+                match kind {
+                    RunnerKind::Embed => "`mcp_call_tool`",
+                    RunnerKind::Raw => "native",
+                }
+            );
+        }
     }
     drop(runner);
-    drop(scripted);
-    Ok(())
+    Ok(Report {
+        turns,
+        waves,
+        wall: started.elapsed(),
+    })
 }
 
 /// A config that touches nothing on this machine: no local runtime, no
