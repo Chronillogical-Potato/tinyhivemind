@@ -29,6 +29,10 @@
 //! words whichever runs it. The bound handle differs, which is what
 //! [`BoundAgent`](tinyhivemind_driver::BoundAgent) is for.
 //!
+//! Above the runners sits [`run_episode`]: one episode from its door to
+//! quiescence, over a [`Journal`] the host implements. A host builds its
+//! driver, its door and a runner, and calls it.
+//!
 //! This is the one crate in the workspace that links a harness. A host that
 //! seats agents some other way does not link it; it implements `BoundAgent`
 //! and `SeatRunner` itself.
@@ -42,22 +46,36 @@
 //! ```no_run
 //! use std::sync::Arc;
 //! use openhuman_core::agent::OpenHumanSessionHost;
-//! use tinyhivemind::{SESSION_WINDOW, SessionLog};
+//! use tinyhivemind::{SESSION_WINDOW, Sequence, SessionLog};
+//! use tinyhivemind_driver::{Commit, Note};
+//! use tinyhivemind_openhuman::MemoryLog;
 //! use tinyhivemind_openhuman::{
-//!     EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Lane, LibraryHost, SeatRunner,
+//!     EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Journal, Lane, LibraryHost, SeatRunner,
 //! };
 //! use tinyhivemind_tools::{Dispatch, EpisodeTools};
 //!
-//! struct Desk<L: SessionLog> {
-//!     log: L,
+//! struct Desk {
+//!     log: MemoryLog,
 //!     library: LibraryHost,
 //! }
 //!
-//! impl<L: SessionLog + 'static> EpisodeHost for Desk<L> {
+//! // The journal: a real host reads and appends its own; this one is in memory.
+//! impl Journal for Desk {
 //!     fn log(&self) -> &dyn SessionLog {
 //!         &self.log
 //!     }
 //!
+//!     fn commit(&self, commit: &Commit) -> tinyhivemind_openhuman::Result<Sequence> {
+//!         Ok(self.log.append(&commit.author, commit.utterance.message(), commit.thread, None))
+//!     }
+//!
+//!     fn note(&self, note: &Note) -> tinyhivemind_openhuman::Result<()> {
+//!         self.log.append("desk", &note.body, note.thread, note.only_for.as_deref());
+//!         Ok(())
+//!     }
+//! }
+//!
+//! impl EpisodeHost for Desk {
 //!     fn build_seat(
 //!         &self,
 //!         seat: &str,
@@ -74,7 +92,7 @@
 //!     }
 //! }
 //!
-//! # async fn run<L: SessionLog + 'static>(desk: Desk<L>) -> tinyhivemind_openhuman::Result<()> {
+//! # async fn run(desk: Desk) -> tinyhivemind_openhuman::Result<()> {
 //! let runner = HostedRunner::seat(
 //!     Arc::new(desk),
 //!     Arc::new(EpisodeTools::new(["lead"])),
@@ -95,15 +113,19 @@
 //! ```
 
 pub mod embed;
+pub mod episode;
 pub mod error;
 pub mod hosted;
+pub mod journal;
 #[cfg(any(test, feature = "offline"))]
 pub mod offline;
 pub mod raw;
 pub mod runner;
 
 pub use embed::{EmbedRunner, EmbedSeat};
+pub use episode::{Journal, Report, run_episode};
 pub use error::{Error, Result};
 pub use hosted::{EpisodeBelt, EpisodeHost, HostedRunner, HostedSeat, HostedTurn};
+pub use journal::MemoryLog;
 pub use raw::{LibraryHost, RawRunner, RawSeat, Route, register_seats};
 pub use runner::{Lane, RunnerKind, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult};

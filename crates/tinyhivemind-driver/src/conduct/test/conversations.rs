@@ -52,7 +52,11 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
         ("two", Some(root)),
         "the askee in the thread runs first; the asker, woken by its own ask row, after"
     );
-    assert_eq!(answered.turns[0].since, root);
+    assert_eq!(
+        answered.turns[0].since,
+        Sequence(root.0 - 1),
+        "the ask row itself is new to the seat asked"
+    );
     assert!(matches!(
         answered.turns[0].channel,
         Channel::Thread { root: at, ref other, opened_it: false } if at == root && other == "one"
@@ -72,6 +76,8 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
 
     // The asker is released: it runs on the desk, is shown the whole
     // conversation once, and completes.
+    assert_eq!(conductor.shown_conversations("one"), vec![root]);
+    assert!(conductor.shown_conversations("three").is_empty());
     let turns = conductor.turns().expect("turns");
     let brief = conductor.open_turn(&turns[0], journal.latest(), Vec::new(), |root| {
         journal.thread(root)

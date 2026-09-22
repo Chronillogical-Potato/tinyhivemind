@@ -16,7 +16,7 @@ use tinyhivemind_tools::{Dispatch, EpisodeTools, served_specs};
 
 use super::EpisodeBelt;
 use super::seed::history;
-use crate::offline::MemoryLog;
+use crate::MemoryLog;
 
 fn desk(thread_root: Option<Sequence>) -> Conversation {
     Conversation {

@@ -6,7 +6,7 @@
 //! re-expressed as configuration here. This runner asks the host for exactly
 //! three things, through [`EpisodeHost`]:
 //!
-//! - **Its log**, a [`SessionLog`] over the host's own journal, which is the
+//! - **Its log**, a [`SessionLog`](tinyhivemind::SessionLog) over the host's own journal, which is the
 //!   only history there is. Each turn is seeded from it as the seat.
 //! - **A seat**, built by the host with the episode's tools on its belt.
 //!   `OpenHuman` fixes a session's belt when it is built, so the host builds
@@ -40,11 +40,12 @@ use std::sync::{Arc, Mutex, PoisonError};
 use openhuman_core::agent::tinyagents::host::LastTurnUsage;
 use openhuman_core::agent::tool_policy::ToolPolicy;
 use openhuman_core::agent::{OpenHumanSessionHost, TurnOverrides};
-use tinyhivemind::{Conversation, Sequence, SessionLog};
+use tinyhivemind::{Conversation, Sequence};
 use tinyhivemind_driver::{AgentBinding, BoundAgent};
 use tinyhivemind_tools::EpisodeTools;
 use tinytools::Tool;
 
+use crate::episode::Journal;
 use crate::raw::tools::belt_with_prefix;
 use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob, unseated};
 use crate::{Error, Result};
@@ -53,11 +54,8 @@ use admission::Admission;
 /// One hosted turn, as the host wraps it.
 pub type HostedTurn<'a> = Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
 
-/// What a host gives the hosted runner.
-pub trait EpisodeHost: Send + Sync + 'static {
-    /// The host's journal, read as a seat to seed each turn.
-    fn log(&self) -> &dyn SessionLog;
-
+/// What a host gives the hosted runner, beside the [`Journal`] it is.
+pub trait EpisodeHost: Journal + 'static {
     /// Build the session `seat` runs on, with `belt` on it.
     ///
     /// The host builds the agent it would build anyway, adds `belt.tools` to

@@ -15,11 +15,12 @@ use tinyhivemind_driver::standing_contract;
 use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent, served_specs};
 
 use super::{Lane, RunnerKind, SeatRunner};
-use crate::offline::MemoryLog;
+use crate::MemoryLog;
 use crate::{
-    EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, LibraryHost, RawRunner, Route,
-    offline, register_seats,
+    EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Journal, LibraryHost,
+    RawRunner, Route, offline, register_seats,
 };
+use tinyhivemind_driver::{Commit, Note};
 
 /// A host with no agents of its own: its seats are library sessions, its
 /// log is in memory, and its wrapper is the core context a library session
@@ -36,11 +37,28 @@ struct TestHost {
     halt: AtomicBool,
 }
 
-impl EpisodeHost for TestHost {
+impl Journal for TestHost {
     fn log(&self) -> &dyn SessionLog {
         &self.log
     }
 
+    fn commit(&self, commit: &Commit) -> crate::Result<Sequence> {
+        Ok(self.log.append(
+            &commit.author,
+            commit.utterance.message(),
+            commit.thread,
+            commit.only_for.as_deref(),
+        ))
+    }
+
+    fn note(&self, note: &Note) -> crate::Result<()> {
+        self.log
+            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+        Ok(())
+    }
+}
+
+impl EpisodeHost for TestHost {
     fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> crate::Result<OpenHumanSessionHost> {
         let policy = belt.admit(None);
         self.library.session(seat, &self.prompt, belt.tools, policy)
@@ -140,11 +158,24 @@ struct PlainHost {
     library: LibraryHost,
 }
 
-impl EpisodeHost for PlainHost {
+impl Journal for PlainHost {
     fn log(&self) -> &dyn SessionLog {
         &self.log
     }
 
+    fn commit(&self, commit: &Commit) -> crate::Result<Sequence> {
+        Ok(self
+            .log
+            .append(&commit.author, commit.utterance.message(), commit.thread, None))
+    }
+
+    fn note(&self, note: &Note) -> crate::Result<()> {
+        self.log.append("desk", &note.body, note.thread, None);
+        Ok(())
+    }
+}
+
+impl EpisodeHost for PlainHost {
     fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> crate::Result<OpenHumanSessionHost> {
         let policy = belt.admit(None);
         self.library

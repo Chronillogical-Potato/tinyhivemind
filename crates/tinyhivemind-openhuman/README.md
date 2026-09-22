@@ -10,7 +10,10 @@ This crate is the host's side of that seam for OpenHuman, three ways:
 | `EmbedRunner` | an `openhuman-embed` `AgentSpec` agent on a runtime the host booted | the three MCP dispatchers, dialling `tinyhivemind-mcp`'s server | OpenHuman's own session, stable for the episode |
 | `RawRunner` | an `OpenHumanSessionHost` built one level down, per turn | the same tools in-process, each calling `EpisodeTools::call` | a per-seat log this crate seeds the next session with |
 
-All three implement `SeatRunner`, the seam: open a turn, run it, close it and
+`run_episode` runs one episode from its door to quiescence over any of them
+and a `Journal` the host implements -- its log, and how it appends the
+conductor's rows -- so a host builds a driver, a door and a runner and calls
+one function. All three implement `SeatRunner`, the seam: open a turn, run it, close it and
 take what was called. Open and close are the same for every runner, because
 every call lands in the same `EpisodeTools`, so the driver drains identical
 events and a seat is refused and acknowledged in the same words whichever

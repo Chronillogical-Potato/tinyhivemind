@@ -1,8 +1,10 @@
 //! An in-memory journal that is a real [`SessionLog`].
 //!
 //! The host owns the log; this is the smallest host log that obeys the
-//! port's contract, so an offline run and a test read it through exactly the
-//! projection a live host's journal is read through. Two rules decide who may
+//! port's contract, so an offline run, a test and a host with nothing better
+//! yet read it through exactly the projection a live host's journal is read
+//! through. It needs nothing the `offline` feature pulls, so it is always
+//! here. Two rules decide who may
 //! read a row, and they are the ones a host follows too:
 //!
 //! - A desk row with `only_for` reaches its author and that one seat.

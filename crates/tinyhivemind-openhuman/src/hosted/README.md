@@ -21,8 +21,8 @@ past its gate. The record is called by the served name either way. The
 definition a host registers for a seat must name the prefixed tools, since
 the hosted turn's allowlist comes from there (`register_seats`).
 
-The host owns the log: `log()` borrows a `SessionLog` the host holds, over
-its own journal, and the runner never keeps rows of its own.
+A host is a `Journal` first: `log()` borrows a `SessionLog` the host holds
+over its own journal, and the runner never keeps rows of its own.
 
 `after_turn` runs once a turn has run, with the usage the session reported.
 It is where a host parks what the turn left waiting on approval, meters the

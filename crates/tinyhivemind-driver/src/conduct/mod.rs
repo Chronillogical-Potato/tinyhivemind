@@ -301,13 +301,16 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 if !taken.insert(seat.clone()) {
                     continue;
                 }
+                // The ask row is the first thing a seat is shown in the
+                // conversation it roots: a first turn there starts just
+                // below it.
                 let since = child
                     .state
                     .seen()
                     .delivered_through
                     .get(&seat)
                     .copied()
-                    .unwrap_or(child.root);
+                    .unwrap_or(Sequence(child.root.0.saturating_sub(1)));
                 turns.push(Turn {
                     channel: Channel::Thread {
                         root: child.root,
@@ -406,6 +409,26 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 )
             }
         }
+    }
+
+    /// The conversations `seat` would be shown on its next desk turn, by
+    /// root: those concluded since it last spoke, and any still in progress.
+    /// A host that reads its log asynchronously fetches these transcripts
+    /// before [`open_turn`](Self::open_turn), which reads them by root.
+    #[must_use]
+    pub fn shown_conversations(&self, seat: &str) -> Vec<Sequence> {
+        let cursor = self.shown.get(seat).copied().unwrap_or(0);
+        self.concluded[cursor..]
+            .iter()
+            .filter(|done| done.involves(seat))
+            .map(|done| done.root)
+            .chain(
+                self.children
+                    .values()
+                    .filter(|child| child.involves(seat))
+                    .map(|child| child.root),
+            )
+            .collect()
     }
 
     /// The conversations a seat is shown on a desk turn: those concluded
