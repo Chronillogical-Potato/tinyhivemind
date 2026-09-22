@@ -123,3 +123,126 @@ fn pending_round_rejects_stale_and_mismatched_state_snapshots() {
         Err(Error::MismatchedRound { .. })
     ));
 }
+
+fn post(from: &str, at: u64) -> CommittedUtterance {
+    committed(
+        from,
+        at,
+        Utterance::Post {
+            message: format!("{from} at {at}"),
+        },
+    )
+}
+
+#[test]
+fn a_round_with_an_author_outside_it_is_refused_by_name() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 2).expect("driver");
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let round = driver.pending_round(&state).expect("round");
+    // Right count, wrong seat: `three` is on the desk but not in this round.
+    let result = fixture().block_on(driver.apply_committed_round(
+        &state,
+        &round,
+        vec![post("one", 1), post("three", 2)],
+        None,
+    ));
+    assert!(matches!(
+        result,
+        Err(Error::UnexpectedRoundAuthor { agent_id }) if agent_id == "three"
+    ));
+}
+
+#[test]
+fn a_round_with_a_repeated_author_is_partial_rather_than_unexpected() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 2).expect("driver");
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let round = driver.pending_round(&state).expect("round");
+    // Right count, but one seat spoke twice and the other not at all.
+    let result = fixture().block_on(driver.apply_committed_round(
+        &state,
+        &round,
+        vec![post("one", 1), post("one", 2)],
+        None,
+    ));
+    assert!(matches!(
+        result,
+        Err(Error::PartialRound {
+            expected: 2,
+            received: 1
+        })
+    ));
+}
+
+#[test]
+fn an_empty_round_is_partial_and_never_a_replay() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 2).expect("driver");
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let round = driver.pending_round(&state).expect("round");
+    let result = fixture().block_on(driver.apply_committed_round(&state, &round, vec![], None));
+    assert!(matches!(
+        result,
+        Err(Error::PartialRound {
+            expected: 2,
+            received: 0
+        })
+    ));
+}
+
+#[test]
+fn an_ask_inside_a_round_is_preflighted_and_holds_the_asker() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 2).expect("driver");
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let round = driver.pending_round(&state).expect("round");
+    let transition = fixture()
+        .block_on(driver.apply_committed_round(
+            &state,
+            &round,
+            vec![
+                committed(
+                    "one",
+                    1,
+                    Utterance::Ask {
+                        to: "two".into(),
+                        message: "which?".into(),
+                    },
+                ),
+                post("two", 2),
+            ],
+            None,
+        ))
+        .expect("an ask needs no router");
+    assert!(
+        transition
+            .actions
+            .iter()
+            .any(|action| matches!(action, HostAction::DeliverDm { .. })),
+        "the ask is delivered to the seat it names"
+    );
+    assert!(
+        transition.state.ledger().awaiting("one").is_some(),
+        "the asker cannot complete until it is answered"
+    );
+
+    // Asking a seat that is not on the desk is refused before anything folds.
+    let result = fixture().block_on(driver.apply_committed_round(
+        &state,
+        &round,
+        vec![
+            committed(
+                "one",
+                1,
+                Utterance::Ask {
+                    to: "nobody".into(),
+                    message: "?".into(),
+                },
+            ),
+            post("two", 2),
+        ],
+        None,
+    ));
+    assert!(result.is_err(), "an unknown askee is a preflight error");
+}

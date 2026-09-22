@@ -179,9 +179,15 @@ impl CompletionDriver<'_> {
                     )?;
                     broadcast_fallbacks.insert(event.sequence, fallback.to_owned());
                     // Mirrors the fold: a broadcast completes an author that is
-                    // not waiting, and a later fallback in the batch sees that.
-                    if open_assignment(&episode, &event.author_id).is_some()
+                    // not waiting and has been shown its assignment, and a
+                    // later fallback in the batch sees that.
+                    if let Some(assigned_at) = open_assignment(&episode, &event.author_id)
                         && state.ledger().awaiting(&event.author_id).is_none()
+                        && state
+                            .seen
+                            .delivered_through
+                            .get(&event.author_id)
+                            .is_none_or(|through| *through >= assigned_at)
                     {
                         episode = apply_completion(&episode, &event.author_id, event.sequence)?;
                     }
