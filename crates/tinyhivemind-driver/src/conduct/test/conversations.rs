@@ -59,7 +59,7 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     ));
     assert!(matches!(
         answered.events.as_slice(),
-        [Event::Concluded { root: at, asker, askee, forced: false }]
+        [Event::Concluded { root: at, asker, askee, forced: false, .. }]
             if *at == root && asker == "one" && askee == "two"
     ));
     assert_eq!(conductor.conversations(), 1);
@@ -122,7 +122,7 @@ fn a_completion_while_a_conversation_is_open_is_refused_and_explained() {
     .expect("wave");
     assert!(seen.events.iter().any(|event| matches!(
         event,
-        Event::Refused { seat, thread: None, why: Refusal::AwaitingReply { waiting_on } }
+        Event::Refused { seat, thread: None, why: Refusal::AwaitingReply { waiting_on }, .. }
             if seat == "one" && waiting_on == &["two".to_owned()]
     )));
     assert!(
@@ -370,7 +370,7 @@ fn a_broadcast_or_ask_inside_a_conversation_is_desk_work_and_a_dm_is_dropped() {
     assert!(
         seen.events
             .iter()
-            .any(|event| matches!(event, Event::Broadcast { seat, to } if seat == "two" && !to.is_empty())),
+            .any(|event| matches!(event, Event::Broadcast { seat, to, .. } if seat == "two" && !to.is_empty())),
         "{:?}",
         seen.events
     );

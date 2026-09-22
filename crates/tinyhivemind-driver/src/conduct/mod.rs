@@ -441,8 +441,11 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 continue;
             };
             match (turn.thread(), &utterance) {
-                (None, _) | (Some(_), Utterance::Broadcast { .. } | Utterance::Ask { .. }) => {
-                    self.wave.desk.push((turn.seat.clone(), utterance));
+                (None, _) => self.wave.desk.push((turn.seat.clone(), utterance, None)),
+                (Some(root), Utterance::Broadcast { .. } | Utterance::Ask { .. }) => {
+                    self.wave
+                        .desk
+                        .push((turn.seat.clone(), utterance, Some(root)));
                 }
                 (Some(root), _) => self.wave.thread.push((root, turn.seat.clone(), utterance)),
             }

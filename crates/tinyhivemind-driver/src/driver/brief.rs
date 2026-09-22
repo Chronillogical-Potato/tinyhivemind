@@ -11,6 +11,7 @@
 //! Nothing here reads storage. The host passes the rows a seat may see and
 //! the conversations it was part of; the brief adds only what the state holds.
 
+use serde::{Deserialize, Serialize};
 use tinyhivemind::Sequence;
 use tinyhivemind::speech::ToolSpec;
 
@@ -18,7 +19,11 @@ use super::DriverState;
 use super::ledger::open_assignment;
 
 /// Where a turn runs.
-#[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// On the wire, tagged by `kind`: `{"kind":"desk"}` or
+/// `{"kind":"thread","root":7,"other":"two","opened_it":false}`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Channel {
     /// The open desk.
     Desk,

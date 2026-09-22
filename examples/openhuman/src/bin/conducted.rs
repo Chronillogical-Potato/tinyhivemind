@@ -941,17 +941,19 @@ fn log(event: &Event) {
             seat,
             thread: Some(root),
         } => eprintln!("[nudged] @{seat} in thread {}", root.0),
-        Event::Broadcast { seat, to } => println!("[broadcast] @{seat} -> {}", to.join(", ")),
-        Event::Unplaced { seat } => {
+        Event::Broadcast { seat, to, .. } => println!("[broadcast] @{seat} -> {}", to.join(", ")),
+        Event::Unplaced { seat, .. } => {
             println!("[unplaced] @{seat}'s broadcast fits no seat; it keeps the work");
         }
-        Event::CompletedByBroadcast { seat } => eprintln!("[completed] @{seat} by its broadcast"),
+        Event::CompletedByBroadcast { seat, .. } => eprintln!("[completed] @{seat} by its broadcast"),
         Event::Asked { seat, askee, root } => println!(
             "[ask] @{seat} opened a conversation with @{askee} (thread {})",
             root.0
         ),
-        Event::Handoff { to, from } => println!("[handoff] -> @{to} (queued from @{from})"),
-        Event::Refused { seat, thread, why } => {
+        Event::Handoff { to, from, .. } => println!("[handoff] -> @{to} (queued from @{from})"),
+        Event::Refused {
+            seat, thread, why, ..
+        } => {
             let where_ = thread.map_or(String::new(), |root| format!(" in thread {}", root.0));
             let reason = match why {
                 Refusal::AwaitingReply { waiting_on } => {
@@ -965,7 +967,7 @@ fn log(event: &Event) {
             };
             eprintln!("[refused] @{seat}{where_}: {reason}");
         }
-        Event::Discharged { seat } => {
+        Event::Discharged { seat, .. } => {
             eprintln!("[refused] @{seat} has spent its broadcast budget; it keeps the work");
         }
         Event::Concluded {
@@ -973,6 +975,7 @@ fn log(event: &Event) {
             asker,
             askee,
             forced,
+            ..
         } => println!(
             "[concluded] thread {} between @{asker} and @{askee}{}",
             root.0,
