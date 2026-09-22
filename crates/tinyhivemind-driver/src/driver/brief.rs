@@ -74,6 +74,24 @@ pub struct EpisodeBrief {
     pub awaiting: Vec<String>,
     /// Handoffs held for this seat, delivered when it completes.
     pub queued: usize,
+    /// What the seat's other conversations hold, for a host that has them:
+    /// the newest rows of each, read as the seat, through the wave's
+    /// watermark. Context, not work: nothing in it is addressed here.
+    pub elsewhere: Vec<ElsewhereView>,
+}
+
+/// The newest rows of one conversation the seat is in that is not this
+/// turn's, rendered by the host.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ElsewhereView {
+    /// The conversation's chat id.
+    pub chat: String,
+    /// Its display name.
+    pub name: String,
+    /// Its thread root, or `None` for that desk's open channel.
+    pub thread_root: Option<Sequence>,
+    /// Its newest rows, oldest first.
+    pub rows: Vec<String>,
 }
 
 impl EpisodeBrief {
@@ -103,6 +121,7 @@ impl EpisodeBrief {
             channel,
             new_rows,
             conversations,
+            elsewhere: Vec::new(),
         }
     }
 
@@ -131,6 +150,7 @@ impl EpisodeBrief {
 
     fn render_desk(&self) -> String {
         let mut out = format!("## New desk messages\n{}", rows_or_nothing(&self.new_rows));
+        out.push_str(&self.render_elsewhere());
         let concluded: Vec<String> = self
             .conversations
             .iter()
@@ -207,15 +227,46 @@ impl EpisodeBrief {
              seat that asked you will ask them."
         };
         format!(
-            "## A private conversation with @{other} (thread {})\n{}\n\n{role} Only the two of \
+            "## A private conversation with @{other} (thread {})\n{}{}\n\n{role} Only the two of \
              you read this thread.\n\nEvery tool call must carry \"chat\": \"{}\" and \
              \"parent\": \"{}\". `ask` is not available inside a conversation. A `broadcast` made here \
              hands work off on the desk, exactly as it would there.",
             root.0,
             rows_or_nothing(&self.new_rows),
+            self.render_elsewhere(),
             self.chat,
             root.0
         )
+    }
+}
+
+impl EpisodeBrief {
+    /// The seat's other conversations as a section, or nothing when the
+    /// host gave none.
+    fn render_elsewhere(&self) -> String {
+        if self.elsewhere.is_empty() {
+            return String::new();
+        }
+        let mut out = String::from(
+            "\n\n## Elsewhere, for context\nWhat your other conversations hold. Nothing here is \
+             addressed to you on this desk.",
+        );
+        for view in &self.elsewhere {
+            let thread = view
+                .thread_root
+                .map(|root| format!(", thread {}", root.0))
+                .unwrap_or_default();
+            let _ = std::fmt::Write::write_fmt(
+                &mut out,
+                format_args!(
+                    "\n\n### {} ({}{thread})\n{}",
+                    view.name,
+                    view.chat,
+                    rows_or_nothing(&view.rows)
+                ),
+            );
+        }
+        out
     }
 }
 

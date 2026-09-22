@@ -23,6 +23,14 @@ The rules, each with the decision it comes from:
   has been shown everything is told once per assignment and owed a turn. A
   seat asked that took its turn without answering is told once and owed a
   turn; a second silence stands.
+- **Parking**: a turn that stopped on something only the host can settle
+  -- an approval, typically -- is recorded with `record_parked` instead of
+  its calls. The seat is held where it parked: not nudged for silence, not
+  counted toward a stall, not proposed again, and a parked askee's
+  conversation waits with it rather than concluding for want of a turn.
+  Nothing due with a seat parked is a wait, not a stall; `parked` says who,
+  and `resume_seat` puts the seat back in the next wave, owed a turn where
+  it parked. `Event::Parked` and `Event::Resumed` mark both.
 - **Sorting**: a broadcast or an ask made inside a conversation is desk
   work; only a post or a completion is a row of the conversation.
 - **Refusals**: a completion the ledger refuses is explained to the seat on

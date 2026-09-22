@@ -180,6 +180,14 @@ fn every_event_and_refusal_survives_the_wire() {
             seat: "one".into(),
             thread: Some(Sequence(4)),
         },
+        Event::Parked {
+            seat: "one".into(),
+            thread: None,
+        },
+        Event::Resumed {
+            seat: "one".into(),
+            thread: Some(Sequence(4)),
+        },
         Event::Broadcast {
             seat: "one".into(),
             to: vec!["two".into()],

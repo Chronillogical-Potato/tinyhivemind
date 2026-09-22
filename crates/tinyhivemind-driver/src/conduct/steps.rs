@@ -134,6 +134,22 @@ pub enum Event {
         /// The thread, or `None` on the desk.
         thread: Option<Sequence>,
     },
+    /// A seat's turn stopped on something only the host can settle, and the
+    /// seat is held: not nudged, not stalled, not proposed, until the host
+    /// releases it.
+    Parked {
+        /// The seat.
+        seat: String,
+        /// The thread, or `None` on the desk.
+        thread: Option<Sequence>,
+    },
+    /// The host released a parked seat: it is owed a turn where it parked.
+    Resumed {
+        /// The seat.
+        seat: String,
+        /// The thread, or `None` on the desk.
+        thread: Option<Sequence>,
+    },
     /// A broadcast was placed.
     Broadcast {
         /// The author.

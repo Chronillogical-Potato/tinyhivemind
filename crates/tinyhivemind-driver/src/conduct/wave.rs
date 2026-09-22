@@ -64,7 +64,7 @@ impl Wave {
         self.force_conclusions = nothing_due;
     }
 
-    fn event(&mut self, event: Event) {
+    pub(super) fn event(&mut self, event: Event) {
         self.steps.push_back(Step::Event(event));
     }
 
