@@ -108,7 +108,11 @@ TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml 
 `CONDUCTED_BENCH=N` runs both runners offline, `N` episodes each on the
 selected desk, and prints one table. The model is scripted, so nothing in it
 is about answers: every seat completes on its first turn, and what differs
-between the arms is the host.
+between the arms is the host. The arms share one process, so each begins
+with one episode that is run and not counted, for page faults and a cold
+allocator; `TINYHIVEMIND_RUNNER` names the arm that goes first (`embed` by
+default, `raw` for the `AgentBuilder` sessions), and a difference that
+survives both orders is the harness's.
 
 | Column | What it is |
 | --- | --- |
@@ -120,7 +124,16 @@ between the arms is the host.
 
 ```sh
 CONDUCTED_BENCH=5 cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin conducted
+TINYHIVEMIND_RUNNER=raw CONDUCTED_BENCH=5 cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin conducted
 ```
+
+Ten episodes per arm, either order, on one laptop: `KiB/turn` 56.7 embed
+against 24.4 raw, `wall ms/ep` about 41 against 31, and `tool rtt ms` the
+same 9 for both. Offline, the wire costs a seat nothing it can measure; what
+the raw arm saves is the bytes a turn sends and the session it does not keep.
+Before the warm-up episode, whichever arm ran first reported twice the round
+trip and wall of the other, and the earlier numbers in #65 read that as the
+harness's.
 
 The driver's own benchmark, `cargo run --release -p tinyhivemind-openhuman
 --example bench`, measures the completion driver's policy with no agent at
