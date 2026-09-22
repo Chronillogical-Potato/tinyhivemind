@@ -5,7 +5,7 @@
 //! seat and reaches the room's tools over MCP, this runner builds a session
 //! one level down, with `OpenHumanSessionHost::builder()`, on every turn. The
 //! builder takes what a spec cannot: a tool belt, a policy gate, a memory, a
-//! prompt. The belt is `tinyhivemind-mcp`'s own tool definitions rendered as
+//! prompt. The belt is `tinyhivemind-tools`'s own tool definitions rendered as
 //! native tools, each of which calls `EpisodeTools::call` directly, so a seat
 //! here is refused and acknowledged in exactly the words an MCP seat is.
 //!
@@ -45,8 +45,11 @@ use std::sync::{Arc, Mutex};
 use openhuman_core::agent::harness::AgentDefinitionRegistry;
 use openhuman_core::config::Config;
 use openhuman_core::config::schema::ephemeral_route::{self, EphemeralRoute};
-use tinyhivemind_mcp::EpisodeTools;
+use openhuman_core::core::runtime::{CoreContext, DomainSet, TokenSource};
+use openhuman_core::core::types::HostKind;
+use openhuman_core::tools::toolpacks::ToolGroups;
 use tinyhivemind_openhuman::AgentBinding;
+use tinyhivemind_tools::EpisodeTools;
 
 use super::runner::{Lane, SeatRunner, TurnJob};
 use seat::RawSeat;
@@ -88,7 +91,7 @@ impl RawRunner {
     pub fn prepare(workspace: &Path, seats: &[(&str, &str)]) -> anyhow::Result<()> {
         let agents = workspace.join("agents");
         std::fs::create_dir_all(&agents)?;
-        let belt: Vec<String> = tinyhivemind_mcp::served_specs()
+        let belt: Vec<String> = tinyhivemind_tools::served_specs()
             .map(|spec| format!("{:?}", spec.name))
             .collect();
         for (id, role) in seats {
@@ -116,8 +119,9 @@ impl RawRunner {
     ///
     /// # Errors
     ///
-    /// The route failing to resolve.
-    pub fn seat(
+    /// The core refusing to boot as a library host, or the route failing to
+    /// resolve.
+    pub async fn seat(
         tools: Arc<EpisodeTools>,
         briefs: &BTreeMap<String, String>,
         contract: &str,
@@ -136,11 +140,30 @@ impl RawRunner {
                 .ok_or_else(|| anyhow::anyhow!("a route needs both an endpoint and a key"))?;
         ephemeral_route::apply(&mut config, ephemeral);
         let config = Arc::new(config);
+        // A raw session runs inside the core the way a library embedder's
+        // does. The core reads its ambient context to decide whose product
+        // policy applies; with none it is the desktop's, and inference waits
+        // on the operator signing in. `HostKind::Library` says the caller
+        // owns the provider and its credential -- this config's route -- and
+        // is what the embed runtime says of itself when it boots. Nothing
+        // else is asked of the core: no domain, no service, no store.
+        let (context, _, _) = CoreContext::init_with_config(
+            HostKind::Library,
+            &TokenSource::Fixed(Arc::new(format!("conducted-raw-{}", std::process::id()))),
+            DomainSet::none(),
+            ToolGroups::default(),
+            Some((*config).clone()),
+            None,
+        )
+        .await?;
         // Resolve the `chat` role once, at seating: a route the factory
         // cannot resolve fails here rather than at the first turn.
-        let (_, model) = openhuman_core::inference::provider::create_chat_model_with_model_id(
-            "chat", &config, 0.0,
-        )?;
+        let (_, model) = CoreContext::scope(Arc::clone(&context), async {
+            openhuman_core::inference::provider::create_chat_model_with_model_id(
+                "chat", &config, 0.0,
+            )
+        })
+        .await?;
         eprintln!("[route] chat resolves to model={model}");
         let seats = briefs
             .iter()
@@ -151,6 +174,7 @@ impl RawRunner {
                         id,
                         format!("{brief}\n\n{contract}"),
                         Arc::clone(&config),
+                        Arc::clone(&context),
                         model.clone(),
                         workspace.to_path_buf(),
                     ),

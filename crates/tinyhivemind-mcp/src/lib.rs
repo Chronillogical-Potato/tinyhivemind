@@ -49,11 +49,13 @@
 //! ```
 
 pub mod error;
-pub mod render;
 pub mod server;
-pub mod tools;
 
 pub use error::{Error, Result};
-pub use render::{served_specs, tool_definitions};
 pub use server::{PROTOCOL_VERSION, Server, serve};
-pub use tools::{Dispatch, EpisodeTools, Refusal, SeatEvent};
+/// The record this server frames, re-exported so a host that seats only MCP
+/// agents names one crate. A host with native tools takes
+/// `tinyhivemind-tools` directly.
+pub use tinyhivemind_tools::{
+    Dispatch, EpisodeTools, Refusal, SeatEvent, served_specs, tool_definitions,
+};

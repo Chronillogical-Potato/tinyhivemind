@@ -38,6 +38,7 @@ async-trait = "0.1"
 # The room's tools, served over MCP, for the `conducted` binary: the one seam
 # OpenHuman offers a foreign component, and the one socket the repository
 # opens (ADR 0022).
+tinyhivemind-tools = { path = "../../crates/tinyhivemind-tools" }
 tinyhivemind-mcp = { path = "../../crates/tinyhivemind-mcp" }
 # The live Jev transport for `conducted`. Reads `TYPESAFE_API_KEY` and nothing
 # else. The vendored checkout rather than the git source, for the reason ADR

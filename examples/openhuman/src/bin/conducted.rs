@@ -1,7 +1,8 @@
 //! One completion-driven episode, conducted over real OpenHuman agents.
 //!
 //! The point of this binary is not the task. It is the shape of the host:
-//! the room's tools are served by `tinyhivemind-mcp`, the loop is
+//! the room's tools are `tinyhivemind-tools`' record, served over MCP by
+//! `tinyhivemind-mcp` where a seat needs the wire, the loop is
 //! `tinyhivemind-openhuman`'s driver stepped the way a host steps it --
 //! propose a round, run it, commit what it said, report delivery, repeat until
 //! quiescent -- and what is written here is only what a host owns: agents,
@@ -49,11 +50,11 @@ use tinyhivemind_embed::{
     RoutingPolicy, RoutingRequest, RoutingSource, route_message,
 };
 use tinyhivemind_hive::{CompletionEpisodeState, apply_completion};
-use tinyhivemind_mcp::{Dispatch, EpisodeTools};
 use tinyhivemind_openhuman::{
     BoundAgent, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver, ConversationView,
     DriverState, EpisodeBrief, Error, HiveGraph, HostAction, OpenHumanHive, standing_contract,
 };
+use tinyhivemind_tools::{Dispatch, EpisodeTools};
 use tinyhivemind_typesafe::JevRouter;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -431,7 +432,7 @@ async fn run() -> anyhow::Result<()> {
     };
 
     let result = match bench {
-        Some(episodes) => bench_runners(&host, episodes, &metrics).await,
+        Some(episodes) => bench_runners(&host, kind, episodes, &metrics).await,
         None => {
             println!("[runner] {}", kind.name());
             let report = match kind {
@@ -442,7 +443,7 @@ async fn run() -> anyhow::Result<()> {
                 }
                 RunnerKind::Raw => {
                     host.prepare_raw()?;
-                    let runner = host.raw(0)?;
+                    let runner = host.raw(0).await?;
                     episode(runner, host.setup(kind, false)).await?
                 }
             };
@@ -475,7 +476,7 @@ impl Host {
         format!(
             "{DESK_PREAMBLE}\n\n{}",
             standing_contract(
-                tinyhivemind_mcp::served_specs(),
+                tinyhivemind_tools::served_specs(),
                 self.scenario.id,
                 kind.how_to_call()
             )
@@ -546,7 +547,7 @@ impl Host {
         RawRunner::prepare(&self.workspace, &seats)
     }
 
-    fn raw(&self, _episode: u32) -> anyhow::Result<RawRunner> {
+    async fn raw(&self, _episode: u32) -> anyhow::Result<RawRunner> {
         RawRunner::seat(
             Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
             &self.briefs,
@@ -556,6 +557,7 @@ impl Host {
             &self.route,
             &self.workspace,
         )
+        .await
     }
 }
 
@@ -565,8 +567,14 @@ impl Host {
 /// completes on its first turn. What differs between the arms is the host --
 /// the road a tool call takes, what a turn costs to set up, and how much is
 /// sent to the model -- and that is what the columns are.
+///
+/// `first` runs first. The arms share one process, so each begins with an
+/// episode that is run and not counted; `TINYHIVEMIND_RUNNER=raw` puts the
+/// raw arm first, and a difference that survives both orders is the
+/// harness's.
 async fn bench_runners(
     host: &Host,
+    first: RunnerKind,
     episodes: u32,
     metrics: &offline::Metrics,
 ) -> anyhow::Result<()> {
@@ -580,18 +588,29 @@ async fn bench_runners(
     // boots, and a definition written after that is never seen.
     host.prepare_raw()?;
     let runtime = host.runtime().await?;
-    for kind in [RunnerKind::Embed, RunnerKind::Raw] {
+    let order = match first {
+        RunnerKind::Embed => [RunnerKind::Embed, RunnerKind::Raw],
+        RunnerKind::Raw => [RunnerKind::Raw, RunnerKind::Embed],
+    };
+    for kind in order {
         println!("[bench] {} x{episodes}", kind.name());
+        let runtime = &runtime;
+        let run = move |index: u32| async move {
+            match kind {
+                RunnerKind::Embed => {
+                    episode(host.embed(runtime, index).await?, host.setup(kind, true)).await
+                }
+                RunnerKind::Raw => episode(host.raw(index).await?, host.setup(kind, true)).await,
+            }
+        };
+        // One episode nobody counts: the first turn through either harness
+        // pays for page faults, lazy statics and a cold allocator, and which
+        // arm paid it used to be whichever went first.
+        run(0).await?;
         metrics.reset();
         let mut reports = Vec::new();
-        for index in 0..episodes {
-            let report = match kind {
-                RunnerKind::Embed => {
-                    episode(host.embed(&runtime, index).await?, host.setup(kind, true)).await?
-                }
-                RunnerKind::Raw => episode(host.raw(index)?, host.setup(kind, true)).await?,
-            };
-            reports.push(report);
+        for index in 1..=episodes {
+            reports.push(run(index).await?);
         }
         arms.push(Arm {
             kind,

@@ -1,6 +1,6 @@
 //! The room's tools as a raw session's own, over the shared record.
 //!
-//! `tinyhivemind-mcp` renders the vocabulary into MCP tool definitions and
+//! `tinyhivemind-tools` renders the vocabulary into tool definitions and
 //! checks a call in `EpisodeTools::call`. This module takes those definitions
 //! as they are -- name, description, the schema with `chat` and `parent` --
 //! and wraps each in a `tinytools::Tool` whose `execute` is that same call.
@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::Value;
-use tinyhivemind_mcp::{EpisodeTools, tool_definitions};
+use tinyhivemind_tools::{EpisodeTools, tool_definitions};
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
 /// The served tools, bound to one seat.

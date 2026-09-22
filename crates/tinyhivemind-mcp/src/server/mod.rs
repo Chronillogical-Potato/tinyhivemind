@@ -18,9 +18,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 
-use crate::render::{raw_arguments, tool_definitions};
-use crate::tools::EpisodeTools;
 use crate::{Error, Result};
+use tinyhivemind_tools::{EpisodeTools, raw_arguments, tool_definitions};
 
 /// The MCP protocol version negotiated. Echoed exactly, or the client refuses.
 pub const PROTOCOL_VERSION: &str = "2025-11-25";
