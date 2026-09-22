@@ -3,9 +3,9 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use super::support::{ClarifyRouter, Journal, complete, door, hive, policy, run, seats, wave};
-use crate::CompletionDriver;
 use crate::conduct::{ConductPolicy, Conductor, starters};
 use crate::driver::BroadcastRouting;
+use crate::{CompletionDriver, Error};
 use tinyhivemind_embed::{Router, RoutingFallback, RoutingPlan, RoutingRequest};
 
 #[test]
@@ -45,6 +45,38 @@ fn the_door_starts_the_routed_seats_and_completes_the_rest() {
     assert_eq!(conductor.conversations(), 0);
     assert_eq!(journal.bodies(), vec!["the task", "COMPLETE: done"]);
     assert!(conductor.state().quiescent());
+}
+
+#[test]
+fn the_door_refuses_a_starter_outside_the_desk_and_no_starter_at_all() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let outsider = Conductor::open(
+        &driver,
+        routing,
+        ConductPolicy::default(),
+        door(&["one", "two"], &["three"], &journal),
+    );
+    assert!(
+        matches!(outsider, Err(Error::UnknownStarter { ref seat }) if seat == "three"),
+        "{outsider:?}"
+    );
+    let nobody = Conductor::open(
+        &driver,
+        routing,
+        ConductPolicy::default(),
+        door(&["one", "two"], &[], &journal),
+    );
+    assert!(matches!(nobody, Err(Error::NoStarters)), "{nobody:?}");
 }
 
 #[test]

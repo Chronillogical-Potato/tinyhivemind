@@ -149,13 +149,25 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     ///
     /// # Errors
     ///
-    /// The episode refusing its members, or the driver its start.
+    /// [`Error::UnknownStarter`] for a starter that is not a member, and
+    /// [`Error::NoStarters`] for none at all; otherwise the episode refusing
+    /// its members, or the driver its start.
     pub fn open(
         driver: &'a CompletionDriver<'a, A>,
         routing: BroadcastRouting<'a>,
         policy: ConductPolicy,
         door: Door,
     ) -> Result<Self> {
+        if door.starters.is_empty() {
+            return Err(Error::NoStarters);
+        }
+        if let Some(seat) = door
+            .starters
+            .iter()
+            .find(|seat| !door.members.contains(seat))
+        {
+            return Err(Error::UnknownStarter { seat: seat.clone() });
+        }
         let mut episode = CompletionEpisodeState::opened(
             Conversation {
                 desk_id: door.chat.clone(),

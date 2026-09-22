@@ -82,6 +82,9 @@ impl Router for ClarifyRouter {
             .collect();
         let roster_version = request.roster_version;
         Box::pin(async move {
+            if eligible.is_empty() {
+                return Err("no candidates to route among".into());
+            }
             let share = 1_000_000 / (u32::try_from(eligible.len()).expect("small") + 1);
             let mut primary_probabilities: Vec<CandidateProbability> = eligible
                 .iter()

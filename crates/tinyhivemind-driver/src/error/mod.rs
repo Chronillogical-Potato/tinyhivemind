@@ -261,6 +261,15 @@ pub enum Error {
     /// The host reported a sequence for a commit it was never handed.
     #[error("no commit is outstanding")]
     NoCommitOutstanding,
+    /// The door named a starter that is not a member of the desk.
+    #[error("starter `{seat}` is not a member of the desk")]
+    UnknownStarter {
+        /// The seat.
+        seat: String,
+    },
+    /// The door named nobody to start.
+    #[error("the door names no starter")]
+    NoStarters,
 }
 
 /// The crate-wide result alias.

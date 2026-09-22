@@ -209,6 +209,127 @@ fn a_silent_askee_is_nudged_once_and_then_walled() {
 }
 
 #[test]
+fn a_conversation_at_its_wall_concludes_without_a_nudge() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(
+        &driver,
+        routing,
+        ConductPolicy {
+            child_turn_wall: 1,
+            turn_wall: 60,
+        },
+        &journal,
+    );
+    wave(&mut conductor, &journal, &[("one", vec![ask("two", "?")])]).expect("wave");
+    // The first thread turn is the last: the wall is one. It concludes, and
+    // the askee is not told to answer a conversation that is already over.
+    let walled = wave(&mut conductor, &journal, &[("two", vec![post("hm")])]).expect("wave");
+    assert!(
+        walled
+            .events
+            .iter()
+            .any(|event| matches!(event, Event::Concluded { forced: true, .. })),
+        "{:?}",
+        walled.events
+    );
+    assert!(
+        !walled.events.iter().any(|event| matches!(
+            event,
+            Event::Nudged {
+                thread: Some(_),
+                ..
+            }
+        )),
+        "{:?}",
+        walled.events
+    );
+    assert!(
+        !journal
+            .thread(Sequence(2))
+            .iter()
+            .any(|row| row.contains("is waiting")),
+        "{:?}",
+        journal.thread(Sequence(2))
+    );
+}
+
+#[test]
+fn a_refused_reply_in_a_conversation_is_not_its_answer() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+    wave(&mut conductor, &journal, &[("one", vec![ask("two", "?")])]).expect("wave");
+    // The askee completes in the thread before being shown its assignment:
+    // the host opened its turn at a watermark below the ask row, so the fold
+    // refuses the row.
+    conductor.begin_wave();
+    let turns = conductor.turns().expect("turns");
+    let thread_turn = turns
+        .iter()
+        .find(|turn| turn.seat == "two")
+        .expect("the askee is due");
+    conductor.open_turn(thread_turn, Sequence(1), Vec::new(), |_| Vec::new());
+    conductor.record(thread_turn, vec![ToolCall::Speak(complete("too early"))]);
+    let mut refused = false;
+    while let Some(step) = conductor.step().expect("steps") {
+        match step {
+            Step::Commit(commit) => {
+                let sequence = journal.append(&commit.author, "row", commit.thread, None);
+                run(conductor.committed(sequence)).expect("committed");
+            }
+            Step::Event(Event::Refused {
+                why: Refusal::NotYetShown,
+                ..
+            }) => refused = true,
+            Step::Event(_) | Step::Note(_) => {}
+        }
+    }
+    assert!(refused, "the early completion was refused");
+    // The conversation goes on to conclude without an answer: the refused
+    // message was never the conversation's.
+    let mut concluded = false;
+    for _ in 0..8 {
+        let seen = wave(&mut conductor, &journal, &[]).expect("wave");
+        if seen
+            .events
+            .iter()
+            .any(|event| matches!(event, Event::Concluded { .. }))
+        {
+            concluded = true;
+            break;
+        }
+    }
+    assert!(concluded, "the conversation concluded");
+    assert!(
+        journal
+            .private_to("one")
+            .iter()
+            .all(|body| !body.contains("too early")),
+        "{:?}",
+        journal.private_to("one")
+    );
+}
+
+#[test]
 fn a_broadcast_or_ask_inside_a_conversation_is_desk_work_and_a_dm_is_dropped() {
     let hive = hive(&["one", "two", "three"]);
     let driver = CompletionDriver::new(&hive, 4).expect("driver");

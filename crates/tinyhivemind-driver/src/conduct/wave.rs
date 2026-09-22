@@ -104,7 +104,11 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     self.wave.phase = Phase::SilentAskees;
                 }
                 Phase::SilentAskees => {
-                    self.nudge_silent_askees();
+                    // Nothing due means every conversation concludes now; a
+                    // nudge would owe a turn nobody will run.
+                    if !self.wave.force_conclusions {
+                        self.nudge_silent_askees();
+                    }
                     self.wave.phase = Phase::Desk;
                 }
                 Phase::Desk => {
@@ -158,10 +162,12 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
 
     /// The seat asked took its turn and the conversation is not over: it did
     /// not answer, whatever it did instead. Once, it is told so and owed one
-    /// more turn; a second silence stands.
+    /// more turn; a second silence stands. A conversation at its wall is
+    /// concluding this wave and is not nudged.
     fn nudge_silent_askees(&mut self) {
+        let wall = self.policy.child_turn_wall;
         for child in self.children.values_mut() {
-            if child.turned && !child.state.quiescent() && !child.nudged {
+            if child.turned && !child.is_over(wall) && !child.nudged {
                 child.nudged = true;
                 self.wave.steps.push_back(Step::Note(Note {
                     body: "the seat that asked you is waiting: answer with `complete_episode`, \
@@ -253,15 +259,19 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             return Ok(());
         };
         let seat = committed.author_id.clone();
-        if seat == child.askee {
-            child.last_by_askee = Some(committed.utterance.message().to_owned());
-        }
+        let said = committed.utterance.message().to_owned();
         match self
             .driver
             .apply_committed(&child.state, committed, None)
             .await
         {
-            Ok(transition) => child.state = transition.state,
+            Ok(transition) => {
+                child.state = transition.state;
+                // The answer is what the fold accepted, not what was tried.
+                if seat == child.askee {
+                    child.last_by_askee = Some(said);
+                }
+            }
             Err(Error::UndeliveredAssignment { .. }) => self.wave.event(Event::Refused {
                 seat,
                 thread: Some(root),
