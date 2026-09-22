@@ -19,8 +19,10 @@ pub enum Error {
         /// The id.
         seat: String,
     },
-    /// A seat's definition was written and the registry did not load it.
-    #[error("seat `{seat}` did not register")]
+    /// A seat's definition was written and the registry did not load it:
+    /// the process registry is read once, so a seat written after that
+    /// first read is never seen.
+    #[error("seat `{seat}` did not register: the process registry was read before it was written")]
     SeatNotRegistered {
         /// The seat.
         seat: String,

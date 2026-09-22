@@ -79,13 +79,20 @@ type Contexts = Arc<Mutex<BTreeMap<String, Vec<(String, String)>>>>;
 ///
 /// The loader wants `id`, `when_to_use` and a non-empty `system_prompt`; the
 /// prompt written here is the seat's role for a reader of the workspace, not
-/// the one a session runs under. The registry is process-wide, so a host
-/// seating more than one desk in one process names its seats apart.
+/// the one a session runs under.
+///
+/// The registry is process-wide and read **once**: the first call fixes it,
+/// and a later call writes its definitions where nothing will read them and
+/// fails on the first seat the fixed registry lacks. So a host registers
+/// every seat it will ever run, in one call, before any session is built,
+/// and a host seating more than one desk in one process names its seats
+/// apart and registers them together.
 ///
 /// # Errors
 ///
 /// A seat id that is not a plain path component, the directory or a file
-/// failing to write, or the registry refusing the definitions.
+/// failing to write, the registry refusing the definitions, or a seat the
+/// already-fixed registry does not hold.
 pub fn register_seats(workspace: &Path, seats: &[(&str, &str)], tools: &[String]) -> Result<()> {
     // A seat id names a file: one path component, and nothing a path can
     // be steered with.
@@ -112,6 +119,8 @@ pub fn register_seats(workspace: &Path, seats: &[(&str, &str)], tools: &[String]
         );
         std::fs::write(agents.join(format!("{id}.toml")), toml)?;
     }
+    // Set-once: a registry already read stays as it was, and the check
+    // below says which seat that leaves out.
     AgentDefinitionRegistry::init_global(workspace)?;
     let registry = AgentDefinitionRegistry::global().ok_or(Error::RegistryMissing)?;
     for (id, _) in seats {

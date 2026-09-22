@@ -189,7 +189,7 @@ impl EpisodeHost for PlainHost {
 /// A hosted seat on a host that keeps every default, run once on the desk
 /// and once in a thread it is not in: the defaults hold, the thread turn is
 /// seeded from the thread, and a call outside its thread is refused.
-async fn plain(library: LibraryHost, contract: &str) {
+async fn plain(library: LibraryHost) {
     let log = MemoryLog::new("engineering");
     log.append("operator", "state the root cause", None, None);
     let host = Arc::new(PlainHost { log, library });
@@ -202,7 +202,6 @@ async fn plain(library: LibraryHost, contract: &str) {
         SESSION_WINDOW,
     )
     .expect("hosted seats");
-    let _ = contract;
     let (reply, events) = one_turn(&runner, host.log.latest()).await;
     assert!(!reply.is_empty());
     assert_eq!(
@@ -522,7 +521,7 @@ async fn both_runners() {
 
     again(&raw, &host, &hosted).await;
     ghosts(&embed, &raw, &hosted).await;
-    plain(host.library.clone(), &contract(RunnerKind::Hosted)).await;
+    plain(host.library.clone()).await;
     halts(&host, &hosted).await;
     metrics.reset();
     assert_eq!(metrics.snapshot().requests, 0);

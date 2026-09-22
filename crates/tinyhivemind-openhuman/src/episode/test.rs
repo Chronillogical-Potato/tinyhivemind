@@ -458,13 +458,18 @@ fn a_seat_that_says_nothing_is_nudged_and_then_the_episode_stalls() {
             .iter()
             .any(|event| matches!(event, Event::Nudged { thread: None, .. }))
     );
-    // A private row to one is not in what two is shown.
+    // The nudge is one's alone: it woke nobody else, and what two would be
+    // shown of the desk does not hold it.
     let prompts = runner.prompts();
     assert!(
-        prompts
-            .iter()
-            .filter(|(seat, _, _)| seat == "two")
-            .all(|(_, _, prompt)| !prompt.contains("open work"))
+        prompts.iter().all(|(seat, _, _)| seat == "one"),
+        "{prompts:?}"
+    );
+    let shown_two = journal.log.desk_since("two", Sequence(0));
+    assert!(!shown_two.is_empty());
+    assert!(
+        shown_two.iter().all(|row| !row.contains("open work")),
+        "{shown_two:?}"
     );
 }
 

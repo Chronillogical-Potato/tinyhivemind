@@ -272,11 +272,16 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
             ..self.desk.clone()
         };
         let window = self.window;
+        // This turn's usage travels with this turn: the per-seat map is the
+        // host's `usage(seat)` view, and a turn that ran after this one on
+        // the same seat may have written it before this one reads back.
+        let this_turn: Arc<Mutex<Option<LastTurnUsage>>> = Arc::new(Mutex::new(None));
         Box::pin(async move {
             let run = {
                 let seat = seat.clone();
                 let host = Arc::clone(&host);
                 let usage = Arc::clone(&usage);
+                let this_turn = Arc::clone(&this_turn);
                 async move {
                     let history =
                         seed::history(host.log(), conversation, &seat, since, window).await?;
@@ -295,12 +300,14 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                         .map_err(Error::Harness)?;
                     // This turn's usage, or none: a turn the session reported
                     // nothing for must not be metered as the one before it.
+                    let last = session.last_turn_usage();
                     let mut metered = usage.lock().unwrap_or_else(PoisonError::into_inner);
-                    match session.last_turn_usage() {
-                        Some(last) => metered.insert(seat.clone(), last),
+                    match &last {
+                        Some(last) => metered.insert(seat.clone(), last.clone()),
                         None => metered.remove(&seat),
                     };
                     drop(metered);
+                    *this_turn.lock().unwrap_or_else(PoisonError::into_inner) = last;
                     Ok(reply)
                 }
             };
@@ -309,11 +316,10 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
             // reported, so a host parks what a failed turn left waiting
             // too. A turn that failed keeps its own error over the hook's.
             let outcome = host.wrap_turn(&seat, Box::pin(run)).await;
-            let last = usage
+            let last = this_turn
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
-                .get(&seat)
-                .cloned();
+                .take();
             let finalized = host.after_turn(&seat, last.as_ref());
             let result = match (outcome, finalized) {
                 (Ok(reply), Ok(())) => Ok(reply),
