@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use tinyhivemind::speech::{ToolCall, Utterance};
-use tinyhivemind_mcp::{Dispatch, EpisodeTools, PROTOCOL_VERSION, Server, serve};
+use tinyhivemind_mcp::{Dispatch, EpisodeTools, PROTOCOL_VERSION, Refusal, Server, serve};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -373,5 +373,32 @@ async fn an_ask_inside_a_conversation_is_refused_with_what_to_do_instead() {
     assert!(
         reply["result"].get("isError").is_none(),
         "a broadcast from a thread is served"
+    );
+}
+
+#[tokio::test]
+async fn a_refusal_is_drained_by_the_host_with_the_sentence_the_seat_read() {
+    let (tools, server) = stand_up().await;
+    tools.register("solver", dispatch());
+    let (_, reply) = post(
+        server.port(),
+        "/seat/solver",
+        call("ask", &in_thread(&json!({ "message": "?", "to": "lead" }))),
+    )
+    .await;
+    assert_eq!(reply["result"]["isError"], true);
+    let refused = tools.drain_refusals("solver");
+    assert_eq!(
+        refused,
+        vec![Refusal {
+            seat: "solver".into(),
+            tool: "ask".into(),
+            reason: text(&reply).to_owned(),
+        }]
+    );
+    assert!(tools.drain_refusals("solver").is_empty(), "drained once");
+    assert!(
+        tools.drain("solver").is_empty(),
+        "a refusal records no call"
     );
 }

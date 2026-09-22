@@ -143,15 +143,19 @@ fn call(tools: &EpisodeTools, seat: &str, request: &Value, id: &Value) -> Value 
         .and_then(Value::as_str)
         .unwrap_or_default();
     let args = arguments(&params);
+    // The seat reads the refusal in its tool result; the host drains a copy,
+    // so a turn that recorded nothing is not mistaken for a turn that was
+    // refused.
+    let refuse = |text: &str| {
+        tools.refuse(seat, name, text);
+        refusal(id, text)
+    };
 
     if !tools.knows(seat) {
-        return refusal(id, &format!("no seat named `{seat}` is served here"));
+        return refuse(&format!("no seat named `{seat}` is served here"));
     }
     let Some(dispatch) = tools.open_turn(seat) else {
-        return refusal(
-            id,
-            "no turn is open for you, so nothing you call now can be recorded",
-        );
+        return refuse("no turn is open for you, so nothing you call now can be recorded");
     };
     // The seat says which turn it thinks it is in; the host said which turn
     // it is running. A mismatch is a confused model, and it is told so
@@ -161,31 +165,27 @@ fn call(tools: &EpisodeTools, seat: &str, request: &Value, id: &Value) -> Value 
             .parent
             .as_deref()
             .map_or_else(|| "null".to_owned(), |parent| format!("`{parent}`"));
-        return refusal(
-            id,
-            &format!(
-                "this turn is in chat `{}` with parent {parent}; name exactly those",
-                dispatch.chat
-            ),
-        );
+        return refuse(&format!(
+            "this turn is in chat `{}` with parent {parent}; name exactly those",
+            dispatch.chat
+        ));
     }
     // Inside a conversation the seat asked answers; it does not open another.
     // Refused here, in the tool result, while the seat can still call again:
     // a refusal that arrived later as a row bred a call the seat never made.
     if dispatch.parent.is_some() && name == "ask" {
-        return refusal(
-            id,
+        return refuse(
             "inside a conversation you answer the seat that asked you: call `complete_episode`, \
              and its message is your answer. If you need another seat first, say so in that \
              answer, and the seat that asked you will ask them.",
         );
     }
     if !serves(name) {
-        return refusal(id, &unknown_tool(name));
+        return refuse(&unknown_tool(name));
     }
     let call = match interpret(name, &args.call()) {
         Ok(call) => call,
-        Err(rejection) => return refusal(id, &rejection.to_string()),
+        Err(rejection) => return refuse(&rejection.to_string()),
     };
     let acknowledgement = match &call {
         ToolCall::Read { limit } => {
@@ -194,17 +194,14 @@ fn call(tools: &EpisodeTools, seat: &str, request: &Value, id: &Value) -> Value 
         }
         ToolCall::Speak(Utterance::Ask { to, .. }) => {
             if to == seat {
-                return refusal(id, &UtteranceRejection::SelfRecipient.to_string());
+                return refuse(&UtteranceRejection::SelfRecipient.to_string());
             }
             if !tools.knows(to) {
-                return refusal(
-                    id,
-                    &format!(
-                        "{}. The desk is: {}",
-                        UtteranceRejection::UnknownRecipient { id: to.clone() },
-                        tools.seats().join(", ")
-                    ),
-                );
+                return refuse(&format!(
+                    "{}. The desk is: {}",
+                    UtteranceRejection::UnknownRecipient { id: to.clone() },
+                    tools.seats().join(", ")
+                ));
             }
             format!(
                 "asked @{to}. The answer reaches you on a later turn; you cannot finish \
@@ -220,7 +217,7 @@ fn call(tools: &EpisodeTools, seat: &str, request: &Value, id: &Value) -> Value 
         }
         // Withheld, and refused above by name; kept exhaustive so a new
         // variant is a compile error here rather than a silent acceptance.
-        ToolCall::Speak(Utterance::Dm { .. }) => return refusal(id, &unknown_tool(name)),
+        ToolCall::Speak(Utterance::Dm { .. }) => return refuse(&unknown_tool(name)),
     };
     tools.record(SeatEvent {
         seat: seat.to_owned(),

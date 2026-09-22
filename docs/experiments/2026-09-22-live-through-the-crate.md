@@ -329,6 +329,49 @@ hivemind. The host's one sentence on the mechanics now says `arguments` is a
 JSON object, never a string. Without the reply log this run would have
 recorded the same "no tool call" as run seven, for a different cause.
 
+## The ninth run: a desk built to fire the rest
+
+A second desk, `CONDUCTED_DESK=triage`: a dispatcher holding three tickets
+on a broadcast budget of two, told to hand each off and stop; four
+specialists whose facts chain -- the API's null dereference, the database's
+migration, ops' interrupted backfill, QA's post-deploy fixtures. `10` turns,
+`6` waves, `7` routes, `2` conversations, `1` discharged, and quiescence.
+
+**Two of the three rules fired.** The budget, for the first time anywhere
+live: `dispatcher`'s third handoff (row 4) was refused, the host kept the
+work on its behalf (row 5), and the ticket it carried -- the red test --
+was never handed to anyone. And a broadcast completing its author, twice on
+`ops`: it broadcast its root cause (row 16) with no `complete_episode`, and
+the handoff `api` had queued for it was delivered at once (row 17), which
+only happens when the broadcast completed it; then again at rows 18-19. The
+in-thread `ask` refusal did not fire, because nobody reached `db`: routing
+placed the two tickets with `api` and `ops`, and `api` -- whose brief said
+which users were unset was the database's knowledge -- broadcast its finding
+rather than asking. Its brief now says to ask `db` before concluding, and
+`db`'s says it must have `ops`' answer before answering anyone.
+
+**The desk got the incident right anyway.** `ops` asked `api` and `qa` in
+one turn (rows 10-11), both answered on their first thread turn, and `ops`'
+completion (row 20) named the interrupted job, the null guard, and the
+correct test. `dispatcher` -- completed by the budget path and then
+re-owed by two of `ops`' broadcasts -- summarised twice (rows 21, 23).
+
+**What it cost.** Seven routes for three tickets. Five of the seven were
+findings sent as work: `api`'s two (rows 7-8) queued behind `ops` and
+arrived after `ops` had already concluded the same thing; `ops`' two (rows
+16, 18) landed on a settled `dispatcher`, who could only restate them.
+Under ADR 0024 each of those completed its author, which is what the rule
+is for; the cost is the receiving turn each one buys. Recorded, not
+patched: `broadcast`'s description already says work, and a finding with
+nobody to act on it is `complete_episode`.
+
+**What the log could not show.** Whether any seat tried `ask` inside a
+thread and was refused. The server refused in the tool result, which only
+the seat read. The server now keeps a copy of every refusal for the host to
+drain beside the calls, and the host prints it; it also prints when a
+broadcast completed its author, rather than leaving that to be inferred
+from a handoff arriving.
+
 ## What this changes
 
 Across three runs every defect was in what the host owed the seats, not in

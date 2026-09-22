@@ -1,10 +1,11 @@
 //! What the server remembers between calls, and hands the host.
 //!
-//! Three things, all per seat: the turn the host has registered (which chat and
-//! thread it is in), the calls the seat has made during it, and the window of
-//! recent rows the host last refreshed for `read`. The host writes the first
-//! and third and drains the second; the server writes the second and reads the
-//! other two. Nothing here reaches back into the host.
+//! Four things, all per seat: the turn the host has registered (which chat and
+//! thread it is in), the calls the seat has made during it, the refusals it was
+//! given, and the window of recent rows the host last refreshed for `read`.
+//! The host writes the first and last and drains the middle two; the server
+//! writes the middle two and reads the others. Nothing here reaches back into
+//! the host.
 //!
 //! A poisoned lock is recovered rather than propagated: what it guards is a
 //! map a panicking writer can only have left one entry short, and losing one
@@ -35,12 +36,27 @@ pub struct SeatEvent {
     pub dispatch: Dispatch,
 }
 
+/// One refused call, as the host drains it.
+///
+/// The seat read the reason inside its turn; this is the host's copy, so a
+/// turn that recorded nothing can be told apart from a turn that was refused.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Refusal {
+    /// The seat that called.
+    pub seat: String,
+    /// The tool it named.
+    pub tool: String,
+    /// The sentence it was given.
+    pub reason: String,
+}
+
 /// The server's memory. Shared with the host through an `Arc`.
 #[derive(Debug)]
 pub struct EpisodeTools {
     seats: BTreeSet<String>,
     open: Mutex<BTreeMap<String, Dispatch>>,
     inbox: Mutex<BTreeMap<String, Vec<SeatEvent>>>,
+    refused: Mutex<BTreeMap<String, Vec<Refusal>>>,
     windows: Mutex<BTreeMap<String, Vec<String>>>,
 }
 
@@ -59,6 +75,7 @@ impl EpisodeTools {
             seats: seats.into_iter().map(Into::into).collect(),
             open: Mutex::new(BTreeMap::new()),
             inbox: Mutex::new(BTreeMap::new()),
+            refused: Mutex::new(BTreeMap::new()),
             windows: Mutex::new(BTreeMap::new()),
         }
     }
@@ -125,6 +142,29 @@ impl EpisodeTools {
             .unwrap_or_else(PoisonError::into_inner)
             .remove(seat)
             .unwrap_or_default()
+    }
+
+    /// Take every refusal `seat` was given during its turn, oldest first.
+    #[must_use]
+    pub fn drain_refusals(&self, seat: &str) -> Vec<Refusal> {
+        self.refused
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(seat)
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn refuse(&self, seat: &str, tool: &str, reason: &str) {
+        self.refused
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .entry(seat.to_owned())
+            .or_default()
+            .push(Refusal {
+                seat: seat.to_owned(),
+                tool: tool.to_owned(),
+                reason: reason.to_owned(),
+            });
     }
 
     pub(crate) fn record(&self, event: SeatEvent) {

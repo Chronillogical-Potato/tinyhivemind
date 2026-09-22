@@ -14,8 +14,8 @@ Three things it is not, and each is a decision:
 
 - **It holds no episode state.** Assignments, completions, queues, budgets and
   open questions live in the driver. The server records that a seat called a
-  tool and stops. The host drains those records; nothing here calls into the
-  host.
+  tool and stops, or was refused and why. The host drains both; nothing here
+  calls into the host.
 - **It runs no turn.** An `ask` becomes an event the driver schedules; the
   server never holds an agent handle.
 - **It depends on no harness.** `tinyhivemind`, `tokio`, `serde_json`. Any

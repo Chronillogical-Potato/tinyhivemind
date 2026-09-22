@@ -160,7 +160,7 @@ not diagnose and do not summarise.",
 in the handler, precisely enough that someone could make it.",
             "You alone know: the 500 is a null dereference reading a user's \
 `region`, which the handler assumes is set. Which users have it unset is \
-the database's knowledge, not yours.",
+the database seat's knowledge, not yours: ask `db` before you conclude.",
         ),
         (
             "db",
@@ -168,8 +168,8 @@ the database's knowledge, not yours.",
 and why.",
             "You alone know: migration 0042 added `users.region` and its \
 backfill is a separate job that fills rows in batches. Whether that job \
-finished is ops' knowledge; you cannot say how many rows are unset without \
-it. Your answer is incomplete until you have it.",
+finished is `ops`' knowledge; you cannot say how many rows are unset without \
+it, and you must have it before you answer anyone.",
         ),
         (
             "ops",
@@ -783,6 +783,12 @@ async fn run() -> anyhow::Result<()> {
                 Some(Err(error)) => eprintln!("[turn] @{seat_id}{where_} failed: {error}"),
                 None => eprintln!("[turn] @{seat_id}{where_} timed out"),
             }
+            for refused in tools.drain_refusals(&seat_id) {
+                eprintln!(
+                    "[refused at server] @{seat_id}{where_} `{}`: {}",
+                    refused.tool, refused.reason
+                );
+            }
             let events = tools.drain(&seat_id);
             if events.is_empty() {
                 eprintln!("[no tool call] @{seat_id}{where_}");
@@ -867,6 +873,7 @@ async fn run() -> anyhow::Result<()> {
             let asked = utterance.asks().map(str::to_owned);
             let sequence = journal.append(&seat_id, &describe(&utterance), None, asked.as_deref());
             let is_broadcast = utterance.broadcasting();
+            let held = holds(&state, &seat_id);
             let committed = CommittedUtterance {
                 author_id: seat_id.clone(),
                 sequence,
@@ -877,6 +884,9 @@ async fn run() -> anyhow::Result<()> {
                 .await
             {
                 Ok(transition) => {
+                    if is_broadcast && held && !holds(&transition.state, &seat_id) {
+                        eprintln!("[completed] @{seat_id} by its broadcast");
+                    }
                     let mut routed = false;
                     for action in &transition.actions {
                         match action {
@@ -1121,6 +1131,15 @@ fn episode_services() -> ServiceSet {
 
 fn required(name: &str) -> anyhow::Result<String> {
     std::env::var(name).map_err(|_| anyhow::anyhow!("{name} must be set for a live run"))
+}
+
+/// Whether `seat` holds an open assignment on the desk.
+fn holds(state: &DriverState, seat: &str) -> bool {
+    state
+        .episode()
+        .participants
+        .iter()
+        .any(|participant| participant.agent_id == seat && participant.open().is_some())
 }
 
 fn seat(

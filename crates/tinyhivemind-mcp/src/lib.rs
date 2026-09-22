@@ -8,8 +8,8 @@
 //! `UtteranceRejection` already wrote.
 //!
 //! It holds no episode state and runs no turn. A seat's accepted calls are
-//! recorded as [`SeatEvent`]s the host drains after the turn; the driver does
-//! the rest. It depends on no harness: any MCP-capable one is given the same
+//! recorded as [`SeatEvent`]s the host drains after the turn, and its refused
+//! ones as [`Refusal`]s beside them; the driver does the rest. It depends on no harness: any MCP-capable one is given the same
 //! five tools.
 //!
 //! **Identity is structural.** A seat dials `/seat/<id>`, so who is calling
@@ -37,6 +37,10 @@
 //!     // hand `event.call` to the completion driver
 //!     let _ = event;
 //! }
+//! for refused in tools.drain_refusals("lead") {
+//!     // what the seat was told, for the host's log
+//!     let _ = refused;
+//! }
 //! # Ok(()) }
 //! ```
 
@@ -48,4 +52,4 @@ pub mod tools;
 pub use error::{Error, Result};
 pub use render::served_specs;
 pub use server::{PROTOCOL_VERSION, Server, serve};
-pub use tools::{Dispatch, EpisodeTools, SeatEvent};
+pub use tools::{Dispatch, EpisodeTools, Refusal, SeatEvent};
