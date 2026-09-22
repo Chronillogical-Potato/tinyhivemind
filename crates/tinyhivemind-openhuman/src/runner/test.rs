@@ -168,12 +168,13 @@ impl Journal for PlainHost {
             &commit.author,
             commit.utterance.message(),
             commit.thread,
-            None,
+            commit.only_for.as_deref(),
         ))
     }
 
     fn note(&self, note: &Note) -> crate::Result<()> {
-        self.log.append("desk", &note.body, note.thread, None);
+        self.log
+            .append("desk", &note.body, note.thread, note.only_for.as_deref());
         Ok(())
     }
 }

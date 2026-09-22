@@ -135,13 +135,15 @@ where
             settle(journal, &mut conductor, step).await?;
         }
         let turns = conductor.turns()?;
+        // One watermark for the wave: nothing is appended while its turns
+        // are prepared, so every seat is shown through the same row.
+        let latest = latest(journal.log()).await?;
         let mut jobs: Vec<TurnJob> = Vec::with_capacity(turns.len());
         for turn in &turns {
             let channel = Conversation {
                 thread_root: turn.thread(),
                 ..desk.clone()
             };
-            let latest = latest(journal.log()).await?;
             let rows = rows_above(journal.log(), &channel, &turn.seat, turn.since).await?;
             let window = match turn.thread() {
                 None => rows.clone(),
@@ -155,8 +157,14 @@ where
                     parent: turn.thread().map(|root| root.0.to_string()),
                 },
             );
+            // Only a desk turn is shown its conversations, so only a desk
+            // turn reads them.
             let mut transcripts = std::collections::BTreeMap::new();
-            for root in conductor.shown_conversations(&turn.seat) {
+            let shown = match turn.thread() {
+                None => conductor.shown_conversations(&turn.seat),
+                Some(_) => Vec::new(),
+            };
+            for root in shown {
                 let thread = Conversation {
                     thread_root: Some(root),
                     ..desk.clone()

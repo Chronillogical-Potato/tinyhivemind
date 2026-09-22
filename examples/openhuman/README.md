@@ -52,7 +52,7 @@ corpus and paid campaign described in
 | `src/bin/conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`, bridged through the wire form. |
 | `deepswe-sandbox/` | Reproducible local Docker image used for agent shell and test execution. |
 
-## `conducted`: one loop, two runners
+## `conducted`: one loop, three runners
 
 `src/bin/conducted.rs` runs one completion-driven episode through
 `tinyhivemind_openhuman::run_episode`: it builds the hive, the driver, the

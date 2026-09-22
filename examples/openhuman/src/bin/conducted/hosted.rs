@@ -14,8 +14,7 @@ use tinyhivemind::speech::Utterance;
 use tinyhivemind::{Sequence, SessionLog};
 use tinyhivemind_driver::{Commit, EpisodeBrief, Event, Note, Refusal};
 use tinyhivemind_openhuman::{
-    MemoryLog,
-    EpisodeBelt, EpisodeHost, HostedTurn, Journal, Lane, LibraryHost, TurnResult,
+    EpisodeBelt, EpisodeHost, HostedTurn, Journal, Lane, LibraryHost, MemoryLog, TurnResult,
 };
 
 /// What the host says about the desk, before the episode's own contract.
@@ -173,9 +172,10 @@ impl Journal for DeskJournal {
             );
         }
         if recorded == 0 {
-            eprintln!("[no tool call] @{seat}{where_}");
-            // What the seat wrote instead: the only trace of a refusal it
-            // read, or of a deliverable it typed rather than recorded.
+            // What the seat wrote instead, marked as what it is: not a desk
+            // row, and the only trace of a refusal it read or of a
+            // deliverable it typed rather than recorded.
+            eprintln!("[no tool call] @{seat}{where_} -- reply discarded, not recorded:");
             if let Some(Ok(reply)) = outcome {
                 let shown: String = reply.chars().take(REPLY_SHOWN).collect();
                 let cut = if reply.chars().count() > REPLY_SHOWN {
@@ -198,7 +198,11 @@ pub struct DeskHost {
 }
 
 impl DeskHost {
-    pub fn new(journal: DeskJournal, library: LibraryHost, prompts: BTreeMap<String, String>) -> Self {
+    pub fn new(
+        journal: DeskJournal,
+        library: LibraryHost,
+        prompts: BTreeMap<String, String>,
+    ) -> Self {
         Self {
             journal,
             library,
@@ -236,7 +240,8 @@ impl Journal for DeskHost {
         refused: &[tinyhivemind_tools::Refusal],
         recorded: usize,
     ) {
-        self.journal.turn_done(seat, lane, outcome, refused, recorded);
+        self.journal
+            .turn_done(seat, lane, outcome, refused, recorded);
     }
 }
 
@@ -249,7 +254,8 @@ impl EpisodeHost for DeskHost {
         // No tools of its own, so no gate of its own: the episode's tools
         // are admitted and everything else is denied.
         let gate = belt.admit(None);
-        self.library.session(seat, &self.prompts[seat], belt.tools, gate)
+        self.library
+            .session(seat, &self.prompts[seat], belt.tools, gate)
     }
 
     fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
