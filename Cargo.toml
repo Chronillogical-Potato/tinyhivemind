@@ -50,19 +50,33 @@ tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
 # The episode's tools as a record a host drains, and their definitions. Opens
 # nothing; `tinyhivemind-mcp` is the wire over it.
 tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
+# The completion driver over a handle the host binds. Names no harness and
+# sits in the pure list; `tinyhivemind-openhuman` is its OpenHuman adapter.
+tinyhivemind-driver = { path = "crates/tinyhivemind-driver" }
 tinyhivemind-mcp = { path = "crates/tinyhivemind-mcp" }
-# Canonical OpenHuman agent handles for the first-class embedding adapter. The
-# adapter keeps default features off because it only binds already-built agents;
-# the consuming host chooses the runtime capabilities it enables.
-# A git dependency on purpose, not the vendored path. A host that vendors this
+# The harness, for `tinyhivemind-openhuman` and nothing else under `crates/*`.
+# `openhuman-embed` is the `AgentSpec` seat; `openhuman` (the core) is the raw
+# session one level down; `tinytools` and `tinytools-agent` are the `Tool` a
+# raw session's belt is made of and the dialect it speaks. Default features
+# off: the adapter names the one feature it needs, and the consuming host
+# chooses the rest.
+#
+# Git dependencies on purpose, not the vendored path. A host that vendors this
 # repository as a submodule (OpenCompany) carries its own `vendor/openhuman`
-# and must link ONE copy of OpenHuman: `openhuman_embed::Agent` in a binding
-# here has to be the same type the host built, and OpenHuman's process-wide
-# state must exist once. Cargo `[patch]` can redirect a git or registry source
-# onto a path but cannot redirect a path source, so a path here would leave a
-# host no way to unify the two trees. The `[patch]` table below points this
-# same source at the vendored checkout for this repository's own build.
+# and must link ONE copy of OpenHuman: the `Agent` in a binding here has to
+# be the same type the host built, the `Tool` a raw session takes has to be
+# the `Tool` this repository implements, and OpenHuman's process-wide state
+# must exist once. Cargo `[patch]` can redirect a git or registry source onto
+# a path but cannot redirect a path source, so a path here would leave a host
+# no way to unify the two trees. The `[patch]` tables below point these same
+# sources at the vendored checkout for this repository's own build, and a
+# host writes the same four lines against its own. `tinytools` is pinned at
+# the commit OpenHuman's own tree vendors, which is what makes the unification
+# exact; `.github/scripts/assert-openhuman-pin.sh` checks all three revs.
 openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "1ecf1b0bc4bc4d80b0f56f1e01e47d2c0f981c5b", default-features = false }
+openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "1ecf1b0bc4bc4d80b0f56f1e01e47d2c0f981c5b", default-features = false }
+tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "9ae1d44de00863bfff5e3549063d14d57db15c21" }
+tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "9ae1d44de00863bfff5e3549063d14d57db15c21" }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.
@@ -90,20 +104,21 @@ tokio = { version = "1", features = ["macros", "rt", "sync"] }
 # docs/adr/0013-a-vendored-crate-is-an-example-dependency.md. A consumer builds
 # `crates/*` and never the examples, so it never resolves this.
 tinyinference-llm = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-llm" }
-# EXAMPLE-ONLY, same terms. The tool vocabulary — `Tool`, `ToolResult`, and the
-# classifications a host enforces around a call — which the `desk` example
-# renders `speech::tool_specs()` into, so a host running an agent loop
-# in-process serves the same surface the MCP server does. It pulls `anyhow`,
-# which this repository forbids in every crate.
-tinytools = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
-# Needed to implement `tinytools::Tool`, which is async. Example-only, for the
-# same reason `tinytools` is.
+# `tinytools::Tool`, OpenHuman's `ToolPolicy` and its `Memory` are async
+# traits. The `desk` example and the OpenHuman adapter implement them; no
+# other crate may take this.
 async-trait = "0.1"
-# Example-only, and the one exception to the rule above it: `tinytools::Tool`
-# returns `anyhow::Result`, so implementing it means naming the type. It is
-# forbidden in every crate under `crates/*` and reaches nothing there — the
-# `desk` example is a dev-dependency edge, outside what `assert-pure.sh` guards.
+# `tinytools::Tool::execute` returns `anyhow::Result`, so implementing it
+# means naming the type, and every OpenHuman entry point returns it too. It
+# is forbidden in every crate `assert-pure.sh` guards and reaches only the
+# `desk` example (a dev-dependency edge) and `tinyhivemind-openhuman`, the
+# one crate that links the harness.
 anyhow = "1"
+# The adapter's scripted model and backend stub, behind its `offline`
+# feature, and its own tests.
+wiremock = "0.6"
+# A workspace to seat raw sessions in, for the adapter's tests.
+tempfile = "3"
 # EXAMPLE-ONLY. The benchmark's Jev arm uses the native System One client;
 # library crates keep only provider-neutral fixed-point decision snapshots.
 tinyjevclient = { path = "vendor/tinyjevclient/crates/tinyjevclient", default-features = false }
@@ -153,3 +168,11 @@ strip = "debuginfo"
 # fails the build when they drift.
 [patch."https://github.com/tinyhumansai/openhuman"]
 openhuman-embed = { path = "vendor/openhuman/crates/openhuman-embed" }
+openhuman = { path = "vendor/openhuman/crates/openhuman-core" }
+
+# The same, for the tool crates: onto the copy inside the vendored OpenHuman,
+# the one OpenHuman itself resolves them from, so a raw session's `Tool` is
+# this repository's `Tool`.
+[patch."https://github.com/tinyhumansai/tinytools"]
+tinytools = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
+tinytools-agent = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }

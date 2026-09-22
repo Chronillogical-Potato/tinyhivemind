@@ -16,9 +16,10 @@ use tinyhivemind_hive::{
     CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
     completion_status,
 };
-use tinyhivemind_openhuman::{
+use tinyhivemind_openhuman::EmbedSeat;
+use tinyhivemind_driver::{
     AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, HostAction,
-    OpenHumanHive,
+    BoundHive,
 };
 use tinyhivemind_typesafe::JevRouter;
 use wiremock::matchers::any;
@@ -223,7 +224,7 @@ async fn run() -> anyhow::Result<()> {
         )?,
     ];
     let team = ["theory", "solver", "checker", "lead", "researcher"];
-    let hive = OpenHumanHive::new(
+    let hive = BoundHive::new(
         HiveGraph::new(
             Desk {
                 id: format!("pe{problem}"),
@@ -318,7 +319,7 @@ async fn run() -> anyhow::Result<()> {
             .map(|pending_agent| {
                 (
                     pending_agent.hive_agent_id.to_owned(),
-                    pending_agent.agent.clone(),
+                    pending_agent.agent.0.clone(),
                 )
             })
             .collect();
@@ -515,7 +516,7 @@ fn instantiated(
     problem: &str,
     id: &'static str,
     role: String,
-) -> anyhow::Result<AgentBinding> {
+) -> anyhow::Result<AgentBinding<EmbedSeat>> {
     let runtime_id = format!("{id}-pe{problem}-{}", std::process::id());
     let tools = vec![
         "file_read".into(),
@@ -557,7 +558,7 @@ fn instantiated(
                 .mcp(mcp)
                 .action_dir(workspace),
         )
-        .map(|agent| AgentBinding::new(id, agent))
+        .map(|agent| AgentBinding::new(id, EmbedSeat(agent)))
         .map_err(Into::into)
 }
 

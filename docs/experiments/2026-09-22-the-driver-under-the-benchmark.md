@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-22
 **Status:** Recorded
-**Code:** `cargo run --release -p tinyhivemind-openhuman --example bench -- --episodes 2000`
+**Code:** `cargo run --release -p tinyhivemind-driver --example bench -- --episodes 2000`
 **Decisions:** [ADR 0021](../adr/0021-an-assignment-is-appended-rather-than-overwritten.md),
 [`../notes/completion-episode-review.md`](../notes/completion-episode-review.md)
 **Supersedes the code of:** [2026-09-21](2026-09-21-what-the-host-loop-costs.md),
@@ -10,7 +10,7 @@ whose findings stand
 
 The prototype loop that produced the 2026-09-21 numbers has been replaced by
 the queues, budgets, open asks and delivery watermarks now carried in
-`tinyhivemind-openhuman`'s `DriverState`, and by a host loop written the way a
+`tinyhivemind-driver`'s `DriverState` (then in `tinyhivemind-openhuman`), and by a host loop written the way a
 host writes one: propose a round, run it, commit what it said in the order it
 landed, report delivery, repeat until quiescent. This record asks whether the
 real driver reproduces what the prototype found, and what the port itself

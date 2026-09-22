@@ -1,6 +1,6 @@
 [package]
 name = "tinyhivemind-openhuman"
-description = "First-class OpenHuman agent bindings for TinyHiveMind"
+description = "The OpenHuman adapter: a seat as an `openhuman-embed` agent reaching the episode's tools over MCP, or as a raw session handed them natively, behind one seam the driver's host steps."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,19 +8,61 @@ license.workspace = true
 repository.workspace = true
 readme = "README.md"
 publish = false
+# This is the one crate in the workspace that links a harness, and it links
+# all of it: `openhuman-embed` for the `AgentSpec` seat, `openhuman` (the
+# core) for the raw session one level down, and `tinytools` because a raw
+# session's belt is `Vec<Box<dyn tinytools::Tool>>`. Every one of those is a
+# git dependency pinned by rev and patched onto `vendor/openhuman` in the
+# root manifest, so a host that vendors this repository links ONE OpenHuman
+# (ADR 0020). Nothing under `crates/*` other than this crate may depend on
+# it; the driver it serves, `tinyhivemind-driver`, names no harness.
+
+[features]
+# The scripted OpenAI-compatible model both runners are proven against, and
+# the metrics it keeps: what a turn sent, and how long a tool call took to
+# come back. For the example's offline proofs and its bench; off by default
+# because it pulls `wiremock`.
+offline = ["dep:wiremock"]
 
 [dependencies]
-openhuman-embed.workspace = true
-serde.workspace = true
+# The `AgentSpec` seat: an agent on a runtime, holding a session across the
+# episode, reaching the tools over MCP. `mcp` is the feature that makes
+# `AgentSpec::mcp` exist.
+openhuman-embed = { workspace = true, features = ["mcp"] }
+# The raw seat: `OpenHumanSessionHost::builder()`, one level below the spec,
+# which takes what a spec cannot -- a belt, a policy gate, a memory, a prompt.
+openhuman.workspace = true
+# The trait a native tool is: the raw seat's belt is the served definitions
+# wrapped in it, so the `Tool` a session takes is the `Tool` this crate
+# implements, and both resolve to the same vendored copy.
+tinytools.workspace = true
+# The native tool dialect a raw session speaks: function calls on the wire,
+# not XML in the reply.
+tinytools-agent.workspace = true
+# `tinytools::Tool`, `ToolPolicy` and `Memory` are `async_trait` traits.
+async-trait.workspace = true
+# `tinytools::Tool::execute` returns `anyhow::Result`, and every OpenHuman
+# entry point this crate calls does too. The crate error wraps it once.
+anyhow.workspace = true
+# Tool definitions and call arguments are JSON, whichever road they took.
+serde_json.workspace = true
 thiserror.workspace = true
+# A turn has a wall; `tokio::time::timeout` is it. Both harnesses run on
+# tokio already.
+tokio = { workspace = true, features = ["time"] }
 tinyhivemind.workspace = true
-tinyhivemind-core.workspace = true
-tinyhivemind-embed.workspace = true
-tinyhivemind-hive.workspace = true
+# The record every call lands in, and the served definitions.
+tinyhivemind-tools.workspace = true
+# The socket an embed seat dials: one endpoint per seat.
+tinyhivemind-mcp.workspace = true
+# `BoundAgent` and `AgentBinding`: what the driver wants of a seat.
+tinyhivemind-driver.workspace = true
+wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
-serde_json.workspace = true
-tokio.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+wiremock.workspace = true
 
 [lints]
 workspace = true

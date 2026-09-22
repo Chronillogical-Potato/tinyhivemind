@@ -66,15 +66,17 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # normal/build graph for the pure crates. See AGENTS.md's supply-chain
 # boundary.
 #
-# OpenHuman is the one exception: `openhuman-embed` is also a revision-pinned
-# git dependency of `tinyhivemind-openhuman`, a library crate, per
-# `docs/adr/0020-openhuman-embed-is-a-git-dependency-patched-locally.md`.
-# `[patch]` in the root `Cargo.toml` redirects that source onto the
-# `vendor/openhuman` submodule this repository already vendors and tests
-# against, so every build here still compiles the vendored tree, not a fresh
-# git fetch. `.github/scripts/assert-openhuman-pin.sh`, run in the `rust` CI
-# job, reads the `rev` pinned in `Cargo.toml` and the `vendor/openhuman`
-# submodule's commit and fails the build if they disagree — the supply-chain
+# OpenHuman is the one exception: `openhuman-embed`, `openhuman`, `tinytools`
+# and `tinytools-agent` are revision-pinned git dependencies of
+# `tinyhivemind-openhuman`, the one library crate that links the harness, per
+# `docs/adr/0020-openhuman-embed-is-a-git-dependency-patched-locally.md` and
+# `docs/adr/0025-the-driver-names-no-harness.md`. `[patch]` in the root
+# `Cargo.toml` redirects those sources onto the `vendor/openhuman` submodule
+# this repository already vendors and tests against (the tool crates onto the
+# copy nested inside it), so every build here still compiles the vendored
+# tree, not a fresh git fetch. `.github/scripts/assert-openhuman-pin.sh`, run
+# in the `rust` CI job, reads each `rev` pinned in `Cargo.toml` and the
+# submodule commits and fails the build if they disagree — the supply-chain
 # guarantee this exemption relies on is that check, not an absence of library
 # dependents.
 allow-git = [

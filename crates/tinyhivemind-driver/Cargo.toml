@@ -1,0 +1,25 @@
+[package]
+name = "tinyhivemind-driver"
+description = "The completion driver: who runs next in a completion episode, what a committed row means, and what a seat is told -- over a handle the host binds, for any harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+tinyhivemind.workspace = true
+tinyhivemind-core.workspace = true
+tinyhivemind-embed.workspace = true
+tinyhivemind-hive.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

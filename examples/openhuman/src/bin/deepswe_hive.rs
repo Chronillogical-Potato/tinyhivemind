@@ -17,8 +17,9 @@ use serde::{Deserialize, Serialize};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
 use tinyhivemind_hive::{CompletionEpisodeState, CompletionStep, completion_status};
-use tinyhivemind_openhuman::{
-    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, OpenHumanHive,
+use tinyhivemind_openhuman::EmbedSeat;
+use tinyhivemind_driver::{
+    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, BoundHive,
 };
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -183,7 +184,7 @@ async fn run_prepared_with_mcp_executable(
         .iter()
         .map(|id| instantiate(&runtime, &sandbox, &outbox, mcp_executable, id))
         .collect::<anyhow::Result<Vec<_>>>()?;
-    let hive = OpenHumanHive::new(
+    let hive = BoundHive::new(
         HiveGraph::new(
             Desk {
                 id: format!("deepswe-{}", task.instance_id),
@@ -227,7 +228,7 @@ async fn run_prepared_with_mcp_executable(
         let frozen = transcript.clone();
         let jobs = pending.agents().iter().map(|seat| {
             run_seat(
-                seat.agent.clone(),
+                seat.agent.0.clone(),
                 seat.hive_agent_id.to_owned(),
                 task.clone(),
                 frozen.clone(),
@@ -489,7 +490,7 @@ fn instantiate(
     outbox_dir: &Path,
     executable: &Path,
     id: &str,
-) -> anyhow::Result<AgentBinding> {
+) -> anyhow::Result<AgentBinding<EmbedSeat>> {
     let workspace = McpServer::stdio("deepswe", executable.to_string_lossy(), sandbox.mcp_args())
         .allow_tools(["file_read", "file_write", "file_edit", "shell", "test"])
         .description("Docker-confined local checkout tools");
@@ -545,7 +546,7 @@ fn instantiate(
                 .config(move |config| config.agent_registry.entries.push(registry_entry))
                 .action_dir(sandbox.repo_path()),
         )
-        .map(|agent| AgentBinding::new(id, agent))
+        .map(|agent| AgentBinding::new(id, EmbedSeat(agent)))
         .map_err(Into::into)
 }
 

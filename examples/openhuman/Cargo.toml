@@ -24,22 +24,15 @@ serde_json = "1"
 tinyhivemind = { path = "../../crates/tinyhivemind" }
 tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }
 tinyhivemind-hive = { path = "../../crates/tinyhivemind-hive" }
-tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman" }
+# The driver: who runs next, and what a committed row means. Names no harness.
+tinyhivemind-driver = { path = "../../crates/tinyhivemind-driver" }
+# The OpenHuman adapter: both runners behind the `SeatRunner` seam, and --
+# with `offline` -- the scripted model and backend stub the proofs and the
+# bench run against.
+tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman", features = ["offline"] }
 tinyhivemind-typesafe = { path = "../../crates/tinyhivemind-typesafe" }
-# The raw-session proof (`conducted_raw`) implements `tinytools::Tool` for the
-# episode tools it hands `OpenHumanSessionHost::builder()`, and names the
-# native tool dialect from `tinytools-agent`. Both are the vendored checkout's
-# own copies, at the same path OpenHuman itself resolves them from, so the
-# `Tool` a raw session takes is the `Tool` this example implements.
-tinytools = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
-tinytools-agent = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
-# `tinytools::Tool` and OpenHuman's `ToolPolicy` and `Memory` are async traits.
-async-trait = "0.1"
-# The room's tools, served over MCP, for the `conducted` binary: the one seam
-# OpenHuman offers a foreign component, and the one socket the repository
-# opens (ADR 0022).
+# The room's tools as a record, for the `conducted` binary's own bookkeeping.
 tinyhivemind-tools = { path = "../../crates/tinyhivemind-tools" }
-tinyhivemind-mcp = { path = "../../crates/tinyhivemind-mcp" }
 # The live Jev transport for `conducted`. Reads `TYPESAFE_API_KEY` and nothing
 # else. The vendored checkout rather than the git source, for the reason ADR
 # 0020 gives for `openhuman-embed`: a host that vendors this repository carries
@@ -55,13 +48,20 @@ wait-timeout = "0.2"
 wiremock = "0.6"
 
 # `tinyhivemind-openhuman` above is a member of the root workspace and inherits
-# `openhuman-embed.workspace = true` from there, which now names the git source
-# (see the root `Cargo.toml` comment). `field.workspace = true` only copies the
-# dependency *spec* across the workspace boundary; it does not carry the root
-# workspace's own `[patch]` table with it. Without a patch here too, this
-# standalone workspace would fetch `openhuman-embed` fresh from git instead of
+# its harness dependencies from there, which name git sources (see the root
+# `Cargo.toml` comment). `field.workspace = true` only copies the dependency
+# *spec* across the workspace boundary; it does not carry the root workspace's
+# own `[patch]` tables with it. Without the same patches here, this standalone
+# workspace would fetch OpenHuman and the tool crates fresh from git instead of
 # reusing the vendored submodule the `openhuman`/`openhuman-embed` path
 # dependencies above already point at — two copies of OpenHuman's
 # process-wide state in one binary. Keep this in sync with the root `[patch]`.
+# A host that vendors this repository writes these same lines against its own
+# tree.
 [patch."https://github.com/tinyhumansai/openhuman"]
 openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed" }
+openhuman = { path = "../../vendor/openhuman/crates/openhuman-core" }
+
+[patch."https://github.com/tinyhumansai/tinytools"]
+tinytools = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
+tinytools-agent = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
