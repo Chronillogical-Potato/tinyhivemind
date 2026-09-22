@@ -89,6 +89,12 @@ impl Journal for DeskJournal {
                 seat,
                 thread: Some(root),
             } => eprintln!("[nudged] @{seat} in thread {}", root.0),
+            Event::Parked { seat, thread } => {
+                eprintln!("[parked] @{seat}{} waits on the operator", place(*thread));
+            }
+            Event::Resumed { seat, thread } => {
+                eprintln!("[resumed] @{seat}{} was released", place(*thread));
+            }
             Event::Broadcast { seat, to, .. } => {
                 println!("[broadcast] @{seat} -> {}", to.join(", "));
             }
@@ -158,12 +164,14 @@ impl Journal for DeskJournal {
             Lane::Thread(root) => format!(" in thread {}", root.0),
         };
         match outcome {
-            Some(Ok(reply)) => eprintln!(
+            TurnResult::Replied(reply) => eprintln!(
                 "[turn] @{seat}{where_} replied ({} chars)",
                 reply.chars().count()
             ),
-            Some(Err(error)) => eprintln!("[turn] @{seat}{where_} failed: {error}"),
-            None => eprintln!("[turn] @{seat}{where_} timed out"),
+            TurnResult::Failed(error) => eprintln!("[turn] @{seat}{where_} failed: {error}"),
+            TurnResult::Parked => {
+                eprintln!("[turn] @{seat}{where_} parked: waiting on the desk's operator");
+            }
         }
         for refusal in refused {
             eprintln!(
@@ -171,12 +179,12 @@ impl Journal for DeskJournal {
                 refusal.tool, refusal.reason
             );
         }
-        if recorded == 0 {
+        if recorded == 0 && !outcome.parked() {
             // What the seat wrote instead, marked as what it is: not a desk
             // row, and the only trace of a refusal it read or of a
             // deliverable it typed rather than recorded.
             eprintln!("[no tool call] @{seat}{where_} -- reply discarded, not recorded:");
-            if let Some(Ok(reply)) = outcome {
+            if let Some(reply) = outcome.reply() {
                 let shown: String = reply.chars().take(REPLY_SHOWN).collect();
                 let cut = if reply.chars().count() > REPLY_SHOWN {
                     " [...]"
@@ -261,4 +269,9 @@ impl EpisodeHost for DeskHost {
     fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
         Box::pin(self.library.scope(turn))
     }
+}
+
+/// ` in thread N`, or nothing on the desk.
+fn place(thread: Option<Sequence>) -> String {
+    thread.map_or_else(String::new, |root| format!(" in thread {}", root.0))
 }

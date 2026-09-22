@@ -10,14 +10,14 @@ use std::sync::{Arc, Mutex, PoisonError};
 use serde_json::{Value, json};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
-use tinyhivemind::{Sequence, SessionFuture, SessionLog};
+use tinyhivemind::{Conversation, Sequence, SessionFuture, SessionLog};
 use tinyhivemind_driver::{
     AgentBinding, BoundAgent, BoundHive, Commit, Door, EpisodeBrief, Event, HiveGraph, Note,
 };
 use tinyhivemind_embed::{RouteCandidate, RoutingPolicy};
 use tinyhivemind_tools::{EpisodeTools, Refusal};
 
-use super::super::Journal;
+use super::super::{Journal, Released};
 use crate::MemoryLog;
 use crate::Result;
 use crate::runner::{Lane, SeatRunner, TurnJob, TurnResult};
@@ -111,8 +111,9 @@ impl SeatRunner for ScriptRunner {
         let tools = Arc::clone(&self.tools);
         Box::pin(async move {
             if calls.iter().any(|(name, _)| *name == "fail") {
-                return (seat, lane, Some(Err("the model went away".into())));
+                return (seat, lane, TurnResult::Failed("the model went away".into()));
             }
+            let parked = calls.iter().any(|(name, _)| *name == "park");
             assert!(
                 !calls.iter().any(|(name, _)| *name == "panic"),
                 "the model's task panicked"
@@ -120,7 +121,10 @@ impl SeatRunner for ScriptRunner {
             for (name, arguments) in &calls {
                 let _ = tools.call(&seat, name, arguments);
             }
-            (seat, lane, Some(Ok("said".into())))
+            if parked {
+                return (seat, lane, TurnResult::Parked);
+            }
+            (seat, lane, TurnResult::Replied("said".into()))
         })
     }
 }
@@ -136,6 +140,12 @@ pub(super) struct TestJournal {
     pub(super) turns: Mutex<Vec<Seen>>,
     /// Each desk brief's conversations, by seat, as composed.
     pub(super) shown: Mutex<Vec<(String, usize)>>,
+    /// The channels the host names for every seat.
+    pub(super) channels: Mutex<Vec<Conversation>>,
+    /// Seats the host releases the next time it is asked, then nothing.
+    pub(super) release: Mutex<VecDeque<Vec<String>>>,
+    /// Every set of parked seats the loop asked about.
+    pub(super) asked: Mutex<Vec<Vec<String>>>,
 }
 
 impl TestJournal {
@@ -149,6 +159,9 @@ impl TestJournal {
             events: Mutex::new(Vec::new()),
             turns: Mutex::new(Vec::new()),
             shown: Mutex::new(Vec::new()),
+            channels: Mutex::new(Vec::new()),
+            release: Mutex::new(VecDeque::new()),
+            asked: Mutex::new(Vec::new()),
         }
     }
 
@@ -163,6 +176,27 @@ impl TestJournal {
 impl Journal for TestJournal {
     fn log(&self) -> &dyn SessionLog {
         &self.log
+    }
+
+    fn channels(&self, _seat: &str) -> Vec<Conversation> {
+        self.channels
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    fn released<'a>(&'a self, parked: &'a [String]) -> Released<'a> {
+        self.asked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(parked.to_vec());
+        let released = self
+            .release
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pop_front()
+            .unwrap_or_default();
+        Box::pin(async move { Ok(released) })
     }
 
     fn commit(&self, commit: &Commit) -> Result<Sequence> {

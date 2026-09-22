@@ -29,6 +29,9 @@ pub struct Row {
     pub thread: Option<Sequence>,
     /// On the desk, the one seat it reaches.
     pub only_for: Option<String>,
+    /// The desk it is on, when that is not this journal's own: a host's log
+    /// spans its channels, and a seat reads its others as context.
+    pub desk: Option<String>,
 }
 
 /// An append-only journal for one desk, held in memory.
@@ -62,9 +65,34 @@ impl MemoryLog {
         self.rows.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Append a row and return the sequence it was given.
+    /// Append a row to this journal's own desk and return the sequence it
+    /// was given.
     pub fn append(
         &self,
+        author: &str,
+        body: &str,
+        thread: Option<Sequence>,
+        only_for: Option<&str>,
+    ) -> Sequence {
+        self.append_row(None, author, body, thread, only_for)
+    }
+
+    /// Append a row to another desk of the same host, sequenced with the
+    /// rest: one log holds every channel, as a host's does.
+    pub fn append_to(
+        &self,
+        desk: &str,
+        author: &str,
+        body: &str,
+        thread: Option<Sequence>,
+        only_for: Option<&str>,
+    ) -> Sequence {
+        self.append_row(Some(desk), author, body, thread, only_for)
+    }
+
+    fn append_row(
+        &self,
+        desk: Option<&str>,
         author: &str,
         body: &str,
         thread: Option<Sequence>,
@@ -78,6 +106,7 @@ impl MemoryLog {
             body: body.to_owned(),
             thread,
             only_for: only_for.map(str::to_owned),
+            desk: desk.map(str::to_owned),
         });
         sequence
     }
@@ -94,6 +123,7 @@ impl MemoryLog {
     pub fn desk_since(&self, seat: &str, after: Option<Sequence>) -> Vec<String> {
         self.rows()
             .iter()
+            .filter(|row| row.desk.is_none())
             .filter(|row| after.is_none_or(|after| row.sequence > after) && row.thread.is_none())
             .filter(|row| {
                 row.only_for
@@ -193,7 +223,7 @@ impl SessionLog for MemoryLog {
             .iter()
             .map(|row| LogMessage {
                 sequence: row.sequence,
-                chat_id: Some(self.desk.clone()),
+                chat_id: Some(row.desk.clone().unwrap_or_else(|| self.desk.clone())),
                 parent: row.thread,
                 author: Self::author(&row.author),
                 content: row.body.clone(),

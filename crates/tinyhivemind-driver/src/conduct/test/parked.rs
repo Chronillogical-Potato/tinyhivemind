@@ -3,7 +3,9 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-use super::support::{Journal, ask, complete, hive, policy, seats, two_seat, wave, wave_parking};
+use super::support::{
+    Journal, ask, broadcast, complete, hive, policy, seats, two_seat, wave, wave_parking,
+};
 use crate::conduct::{ConductPolicy, Conductor, Event};
 use crate::driver::BroadcastRouting;
 use crate::{CompletionDriver, Error};
@@ -158,4 +160,43 @@ fn releasing_a_seat_that_is_not_parked_changes_nothing_and_a_stall_is_still_a_st
     wave(&mut conductor, &journal, &[]).expect("nudged");
     let stalled = wave(&mut conductor, &journal, &[]);
     assert!(matches!(stalled, Err(Error::Stalled { seats }) if seats == ["one"]));
+}
+
+#[test]
+fn what_a_seat_said_before_it_parked_is_recorded() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+    // One hands work off and then stops on the host: the broadcast lands.
+    let parked = wave_parking(
+        &mut conductor,
+        &journal,
+        &[("one", vec![broadcast("someone take the migration")])],
+        &["one"],
+    )
+    .expect("wave");
+    assert!(
+        journal
+            .bodies()
+            .iter()
+            .any(|body| body.contains("take the migration")),
+        "{:?}",
+        journal.bodies()
+    );
+    assert!(
+        parked
+            .events
+            .iter()
+            .any(|event| matches!(event, Event::Parked { seat, .. } if seat == "one"))
+    );
+    assert_eq!(conductor.parked(), vec!["one".to_owned()]);
 }

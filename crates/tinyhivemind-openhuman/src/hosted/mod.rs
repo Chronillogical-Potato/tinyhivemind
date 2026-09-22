@@ -47,7 +47,7 @@ use tinytools::Tool;
 
 use crate::episode::Journal;
 use crate::raw::tools::belt_with_prefix;
-use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob, unseated};
+use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult, unseated};
 use crate::{Error, Result};
 use admission::Admission;
 
@@ -86,20 +86,33 @@ pub trait EpisodeHost: Journal + 'static {
     }
 
     /// After a turn ran, with its usage when the session reported any. The
-    /// default does nothing.
+    /// default meters nothing and lets the turn stand.
     ///
-    /// This is where a host parks what the turn left waiting on approval,
-    /// meters the spend, and decides whether the episode goes on: an error
-    /// here is the turn's error, and the host loop treats it as it treats
-    /// any failed turn.
+    /// This is where a host meters the spend and says what became of the
+    /// turn: [`Disposition::Done`] for a turn that is what it is, and
+    /// [`Disposition::Parked`] for one that stopped on something only the
+    /// host can settle -- an approval it has queued -- which holds the seat
+    /// until the host releases it. An error here is the turn's error, and
+    /// the loop treats it as any failed turn.
     ///
     /// # Errors
     ///
     /// Whatever stops the episode.
-    fn after_turn(&self, seat: &str, usage: Option<&LastTurnUsage>) -> Result<()> {
+    fn after_turn(&self, seat: &str, usage: Option<&LastTurnUsage>) -> Result<Disposition> {
         let _ = (seat, usage);
-        Ok(())
+        Ok(Disposition::Done)
     }
+}
+
+/// What the host made of a turn that came back.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Disposition {
+    /// Nothing is outstanding: the turn is what it is.
+    #[default]
+    Done,
+    /// The turn stopped on something only the host can settle, and the host
+    /// has taken it: the seat is held until it says otherwise.
+    Parked,
 }
 
 /// The episode's tools for one seat, and the gate that admits them.
@@ -322,11 +335,12 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                 .take();
             let finalized = host.after_turn(&seat, last.as_ref());
             let result = match (outcome, finalized) {
-                (Ok(reply), Ok(())) => Ok(reply),
-                (Ok(_), Err(halt)) => Err(halt),
-                (Err(error), _) => Err(error),
+                (Ok(_), Ok(Disposition::Parked)) => TurnResult::Parked,
+                (Ok(reply), Ok(Disposition::Done)) => TurnResult::Replied(reply),
+                (Ok(_), Err(halt)) => TurnResult::Failed(halt.to_string()),
+                (Err(error), _) => TurnResult::Failed(error.to_string()),
             };
-            (seat, lane, Some(result.map_err(|error| error.to_string())))
+            (seat, lane, result)
         })
     }
 }

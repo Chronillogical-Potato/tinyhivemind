@@ -16,11 +16,11 @@ use openhuman_embed::{
 use serde::{Deserialize, Serialize};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
+use tinyhivemind_driver::{
+    AgentBinding, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph,
+};
 use tinyhivemind_hive::{CompletionEpisodeState, CompletionStep, completion_status};
 use tinyhivemind_openhuman::EmbedSeat;
-use tinyhivemind_driver::{
-    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, BoundHive,
-};
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

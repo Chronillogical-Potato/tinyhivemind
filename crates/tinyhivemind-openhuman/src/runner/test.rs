@@ -17,8 +17,8 @@ use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent, served_specs};
 use super::{Lane, RunnerKind, SeatRunner};
 use crate::MemoryLog;
 use crate::{
-    EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Journal, LibraryHost,
-    RawRunner, Route, offline, register_seats,
+    Disposition, EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Journal,
+    LibraryHost, RawRunner, Route, TurnResult, offline, register_seats,
 };
 use tinyhivemind_driver::{Commit, Note};
 
@@ -35,6 +35,8 @@ struct TestHost {
     metered: AtomicBool,
     /// Whether the hook halts the episode on the next turn.
     halt: AtomicBool,
+    /// The next turn stops on the host instead of standing.
+    park: AtomicBool,
 }
 
 impl Journal for TestHost {
@@ -73,7 +75,7 @@ impl EpisodeHost for TestHost {
         "desk_".into()
     }
 
-    fn after_turn(&self, seat: &str, usage: Option<&LastTurnUsage>) -> crate::Result<()> {
+    fn after_turn(&self, seat: &str, usage: Option<&LastTurnUsage>) -> crate::Result<Disposition> {
         assert_eq!(seat, "lead");
         self.after.fetch_add(1, Ordering::SeqCst);
         if usage.is_some() {
@@ -84,7 +86,10 @@ impl EpisodeHost for TestHost {
                 "the desk's budget is spent"
             )));
         }
-        Ok(())
+        if self.park.swap(false, Ordering::SeqCst) {
+            return Ok(Disposition::Parked);
+        }
+        Ok(Disposition::Done)
     }
 }
 
@@ -144,9 +149,7 @@ async fn one_turn<R: SeatRunner>(runner: &R, since: Option<Sequence>) -> (String
         .await;
     assert_eq!(seat, "lead");
     assert_eq!(lane, Lane::Desk);
-    let reply = reply
-        .expect("the turn did not time out")
-        .expect("the turn ran");
+    let reply = reply.reply().map(str::to_owned).expect("the turn ran");
     (reply, runner.close("lead"))
 }
 
@@ -227,7 +230,7 @@ async fn plain(library: LibraryHost) {
         )
         .await;
     assert_eq!(lane, Lane::Thread(Sequence(1)));
-    assert!(matches!(outcome, Some(Ok(_))), "{outcome:?}");
+    assert!(matches!(outcome, TurnResult::Replied(_)), "{outcome:?}");
     assert!(
         runner.close("lead").is_empty(),
         "the scripted call names no thread, so the record refused it"
@@ -248,6 +251,7 @@ fn hosted(library: LibraryHost, contract: &str) -> (Arc<TestHost>, HostedRunner<
         after: AtomicUsize::new(0),
         metered: AtomicBool::new(false),
         halt: AtomicBool::new(false),
+        park: AtomicBool::new(false),
     });
     let runner = HostedRunner::seat(
         Arc::clone(&host),
@@ -306,7 +310,7 @@ async fn ghosts(embed: &EmbedRunner, raw: &RawRunner, hosted: &HostedRunner<Test
             .await,
     ] {
         assert!(
-            matches!(&outcome, (seat, Lane::Desk, Some(Err(why))) if seat == "ghost" && why.contains("not a seat")),
+            matches!(&outcome, (seat, Lane::Desk, TurnResult::Failed(why)) if seat == "ghost" && why.contains("not a seat")),
             "{outcome:?}"
         );
     }
@@ -339,7 +343,7 @@ async fn halts(host: &TestHost, hosted: &HostedRunner<TestHost>) {
         )
         .await;
     assert!(
-        matches!(&halted, Some(Err(error)) if error.contains("budget is spent")),
+        matches!(&halted, TurnResult::Failed(error) if error.contains("budget is spent")),
         "{halted:?}"
     );
     assert_eq!(
@@ -373,7 +377,7 @@ async fn halts(host: &TestHost, hosted: &HostedRunner<TestHost>) {
         before + 1,
         "the hook ran"
     );
-    assert!(matches!(&failed, Some(Err(_))), "{failed:?}");
+    assert!(matches!(&failed, TurnResult::Failed(_)), "{failed:?}");
     hosted.close("lead");
     host.halt.store(false, Ordering::SeqCst);
 }

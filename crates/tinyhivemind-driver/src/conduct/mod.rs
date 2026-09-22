@@ -367,15 +367,16 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     }
 
     /// A turn stopped on something only the host can settle -- an approval,
-    /// typically -- and recorded nothing. The seat is held where it parked:
-    /// it is not nudged for silence, does not stall the episode, and is not
-    /// proposed again until the host releases it. A parked askee's
-    /// conversation waits with it.
-    pub fn record_parked(&mut self, turn: &Turn) {
-        self.turns += 1;
+    /// typically. What it called before it stopped is recorded as any turn's
+    /// calls are; the seat is then held where it parked: not nudged for
+    /// silence, not counted toward a stall, and not proposed again until the
+    /// host releases it. A parked askee's conversation waits with it.
+    pub fn record_parked(&mut self, turn: &Turn, calls: impl IntoIterator<Item = ToolCall>) {
+        self.record(turn, calls);
         let thread = turn.thread();
         if let Some(child) = thread.and_then(|root| self.children.get_mut(&root)) {
-            // Not a silence: the askee did not take this turn, for nudging.
+            // Not a silence: the askee is coming back to this conversation,
+            // so it is not nudged for having said nothing in it.
             child.turned = false;
         }
         self.parked.insert(turn.seat.clone(), thread);

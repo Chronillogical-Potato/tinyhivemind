@@ -12,15 +12,15 @@ use openhuman_embed::{
 };
 use serde_json::json;
 use tinyhivemind::desk::{Desk, ResponderMode};
+use tinyhivemind_driver::{
+    AgentBinding, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph,
+    HostAction,
+};
 use tinyhivemind_hive::{
     CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
     completion_status,
 };
 use tinyhivemind_openhuman::EmbedSeat;
-use tinyhivemind_driver::{
-    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, HostAction,
-    BoundHive,
-};
 use tinyhivemind_typesafe::JevRouter;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
