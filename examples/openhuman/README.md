@@ -47,7 +47,7 @@ corpus and paid campaign described in
 | `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
 | `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS completion-driven hive with stable OpenHuman sessions and live TypeSafe routing. |
 | `src/bin/deepswe_hive.rs` | Hermetic four-seat software-engineering hive over a caller-prepared disposable Git checkout. |
-| `src/bin/conducted.rs` | A live completion-driven episode: the room's tools served by `tinyhivemind-mcp`, the loop stepped through `CompletionDriver`, a hidden-profile desk of five seats over OpenRouter with live Jev routing. |
+| `src/bin/conducted.rs` | A live completion-driven episode: the room's tools served by `tinyhivemind-mcp`, the loop stepped through `CompletionDriver`, a hidden-profile desk of five seats over OpenRouter with live Jev routing. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal. |
 | `src/bin/conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`, bridged through the wire form. |
 | `deepswe-sandbox/` | Reproducible local Docker image used for agent shell and test execution. |
 
