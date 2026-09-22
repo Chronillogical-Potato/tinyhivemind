@@ -164,9 +164,12 @@ impl Journal for PlainHost {
     }
 
     fn commit(&self, commit: &Commit) -> crate::Result<Sequence> {
-        Ok(self
-            .log
-            .append(&commit.author, commit.utterance.message(), commit.thread, None))
+        Ok(self.log.append(
+            &commit.author,
+            commit.utterance.message(),
+            commit.thread,
+            None,
+        ))
     }
 
     fn note(&self, note: &Note) -> crate::Result<()> {
