@@ -24,6 +24,12 @@ pub(crate) fn served() -> impl Iterator<Item = &'static ToolSpec> {
         .filter(|spec| !UNSERVED.contains(&spec.name))
 }
 
+/// The specs this server serves, for a host that renders the standing
+/// contract from the same list the seats are offered.
+pub fn served_specs() -> impl Iterator<Item = &'static ToolSpec> {
+    served()
+}
+
 /// Whether a tool of this name is served.
 pub(crate) fn serves(name: &str) -> bool {
     served().any(|spec| spec.name == name)

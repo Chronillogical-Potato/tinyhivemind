@@ -46,5 +46,6 @@ pub mod server;
 pub mod tools;
 
 pub use error::{Error, Result};
+pub use render::served_specs;
 pub use server::{PROTOCOL_VERSION, Server, serve};
 pub use tools::{Dispatch, EpisodeTools, SeatEvent};

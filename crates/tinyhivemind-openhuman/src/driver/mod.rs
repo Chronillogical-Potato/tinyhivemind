@@ -1,5 +1,6 @@
 //! Resumable, host-committed completion episodes.
 
+mod brief;
 mod broadcast;
 mod ledger;
 mod order;
@@ -18,6 +19,7 @@ use tinyhivemind_hive::{
 };
 
 use crate::{Error, OpenHumanHive, Result};
+pub use brief::{Channel, ConversationView, EpisodeBrief, standing_contract};
 #[cfg(test)]
 use broadcast::route_ids;
 pub use ledger::{AssignmentSpend, Handoff, Ledger, Seen};

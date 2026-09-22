@@ -42,50 +42,19 @@ use tinyhivemind_embed::{
 use tinyhivemind_hive::{CompletionEpisodeState, apply_completion};
 use tinyhivemind_mcp::{Dispatch, EpisodeTools, serve};
 use tinyhivemind_openhuman::{
-    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, Error,
-    HiveGraph, HostAction, OpenHumanHive,
+    AgentBinding, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,
+    ConversationView, DriverState, EpisodeBrief, Error, HiveGraph, HostAction, OpenHumanHive,
+    standing_contract,
 };
 use tinyhivemind_typesafe::JevRouter;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// The protocol, stated where an agent actually keeps it: the standing prompt.
-const PROTOCOL: &str = "\
+/// What the host says about the desk, before the episode's own contract.
+const DESK_PREAMBLE: &str = "\
 You are one seat on a desk. You have no codebase, shell or filesystem -- only
 the desk's messages and your own judgement. Never ask for permission and never
-wait to be told to continue; nobody will answer.
-
-Your work is recorded by calling a tool on the MCP server named `episode`.
-Prose alone changes nothing: if you end a turn without calling one, nothing you
-said is recorded and the desk does not move.
-
-Use `mcp_call_tool` with `server: \"episode\"`. Every call carries
-`\"chat\": \"engineering\"` and `\"parent\": null` -- exactly those -- beside its
-own arguments:
-
-  tool \"post\", arguments {\"message\": \"...\"}
-      -- say one thing to the whole desk: a finding, or your answer to a
-         question a peer asked you.
-
-  tool \"broadcast\", arguments {\"message\": \"<the work you found>\"}
-      -- hand work you found to whichever seat it belongs to. Routing chooses;
-         you do not name anyone, and it does not finish your own work.
-
-  tool \"ask\", arguments {\"to\": \"<seat id>\", \"message\": \"<what you need>\"}
-      -- ask one named seat something. It is answered on its own time, not
-         while you wait: ask everything you need, then end your turn, and the
-         answers reach you on a later one. You cannot finish until every
-         answer has arrived. It is a question, not a handoff: the work stays
-         yours. The tool's own schema lists the seats you may name.
-
-  tool \"complete_episode\", arguments {\"message\": \"<what you concluded>\"}
-      -- call once, when you have finished what was asked of you.
-
-Call broadcast and then complete_episode when the work you found is not yours
-at all. If you are waiting on answers and nothing new bears on your work, end
-your turn without calling any tool -- a post that says only that you are
-waiting tells the desk nothing. Keep your reply brief -- the tool message is
-what the desk reads.";
+wait to be told to continue; nobody will answer.";
 
 /// The desk, and what each seat privately knows: a hidden profile, so no seat
 /// can answer alone and the tools are necessary rather than available.
@@ -252,24 +221,18 @@ struct Child {
     last_by_askee: Option<String>,
 }
 
-/// Where a turn is running.
+/// Where a turn is running, for the host's own bookkeeping.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Channel {
+enum Lane {
     Desk,
     Thread(Sequence),
 }
 
 /// A turn's reply, once it is back: `None` timed out.
 type TurnResult = Option<Result<String, String>>;
-type TurnJob = std::pin::Pin<Box<dyn Future<Output = (String, Channel, TurnResult)> + Send>>;
+type TurnJob = std::pin::Pin<Box<dyn Future<Output = (String, Lane, TurnResult)> + Send>>;
 
-fn spawn_turn(
-    agent: Agent,
-    session: String,
-    seat: String,
-    channel: Channel,
-    prompt: String,
-) -> TurnJob {
+fn spawn_turn(agent: Agent, session: String, seat: String, lane: Lane, prompt: String) -> TurnJob {
     Box::pin(async move {
         let result =
             match tokio::time::timeout(TURN_TIMEOUT, agent.turn(prompt).session(&session).send())
@@ -279,7 +242,7 @@ fn spawn_turn(
                 Ok(Err(error)) => Some(Err(error.to_string())),
                 Err(_) => None,
             };
-        (seat, channel, result)
+        (seat, lane, result)
     })
 }
 
@@ -359,9 +322,26 @@ async fn run() -> anyhow::Result<()> {
             )
         })
         .collect();
+    // The standing contract comes from the vocabulary, for exactly the tools
+    // the server serves; the host adds its one sentence on the mechanics.
+    let contract = format!(
+        "{DESK_PREAMBLE}\n\n{}",
+        standing_contract(
+            tinyhivemind_mcp::served_specs(),
+            DESK_ID,
+            "Use `mcp_call_tool` with `server: \"episode\"`.",
+        )
+    );
     let mut agents: BTreeMap<String, Agent> = BTreeMap::new();
     for (id, _, _) in SEATS {
-        let agent = seat(&runtime, id, &briefs[id], &run_id, &server.endpoint(id))?;
+        let agent = seat(
+            &runtime,
+            id,
+            &briefs[id],
+            &contract,
+            &run_id,
+            &server.endpoint(id),
+        )?;
         eprintln!(
             "[seat] {id}: {} mcp server(s) registered",
             agent.config().mcp_client.servers.len()
@@ -474,7 +454,7 @@ async fn run() -> anyhow::Result<()> {
     // Concluded conversations, kept whole for the context of the seats that
     // had them: `(root, asker, askee, transcript)`, and how many each seat has
     // already been shown.
-    let mut concluded: Vec<(Sequence, String, String, String)> = Vec::new();
+    let mut concluded: Vec<(Sequence, String, String, Vec<String>)> = Vec::new();
     let mut shown: BTreeMap<String, usize> = BTreeMap::new();
     let mut turns = 0_u64;
     let mut waves = 0_u64;
@@ -531,18 +511,24 @@ async fn run() -> anyhow::Result<()> {
                 } else {
                     child.asker.clone()
                 };
-                let prompt = thread_prompt(
-                    &briefs[&seat_id],
-                    child.root,
-                    &other,
-                    seat_id == child.asker,
-                    &rows,
+                let brief = EpisodeBrief::for_turn(
+                    &child.state,
+                    DESK_ID,
+                    &seat_id,
+                    Channel::Thread {
+                        root: child.root,
+                        other: other.clone(),
+                        opened_it: seat_id == child.asker,
+                    },
+                    rows,
+                    Vec::new(),
                 );
+                let prompt = format!("## Who you are\n{}\n\n{}", briefs[&seat_id], brief.render());
                 jobs.push(spawn_turn(
                     agents[&seat_id].clone(),
                     format!("conducted-{run_id}:{seat_id}"),
                     seat_id,
-                    Channel::Thread(child.root),
+                    Lane::Thread(child.root),
                     prompt,
                 ));
             }
@@ -574,27 +560,51 @@ async fn run() -> anyhow::Result<()> {
             );
             state.delivered(&seat_id, journal.latest());
             state.turn_started(&seat_id);
-            // The conversations this seat had that it has not yet been shown
-            // whole: its shared context across every channel it was in.
+            // The conversations this seat had: concluded since it last spoke,
+            // shown whole once, and any still in progress -- its shared
+            // context across every channel it is in.
             let cursor = shown.entry(seat_id.clone()).or_insert(0);
-            let conversations: Vec<String> = concluded[*cursor..]
+            let mut views: Vec<ConversationView> = concluded[*cursor..]
                 .iter()
                 .filter(|(_, asker, askee, _)| *asker == seat_id || *askee == seat_id)
-                .map(|(root, asker, askee, transcript)| {
-                    format!(
-                        "### With @{} (thread {})\n{transcript}",
-                        if *asker == seat_id { askee } else { asker },
-                        root.0
-                    )
+                .map(|(root, asker, askee, transcript)| ConversationView {
+                    root: *root,
+                    other: if *asker == seat_id {
+                        askee.clone()
+                    } else {
+                        asker.clone()
+                    },
+                    opened_it: *asker == seat_id,
+                    transcript: transcript.clone(),
+                    concluded: true,
                 })
                 .collect();
             *cursor = concluded.len();
-            let prompt = turn_prompt(&state, &seat_id, &briefs[&seat_id], &rows, &conversations);
+            views.extend(
+                children
+                    .values()
+                    .filter(|child| child.asker == seat_id || child.askee == seat_id)
+                    .map(|child| ConversationView {
+                        root: child.root,
+                        other: if child.asker == seat_id {
+                            child.askee.clone()
+                        } else {
+                            child.asker.clone()
+                        },
+                        opened_it: child.asker == seat_id,
+                        transcript: journal.thread(child.root),
+                        concluded: false,
+                    }),
+            );
+            let brief =
+                EpisodeBrief::for_turn(&state, DESK_ID, &seat_id, Channel::Desk, rows, views);
+            // What the host owns first; what the episode knows after.
+            let prompt = format!("## Who you are\n{}\n\n{}", briefs[&seat_id], brief.render());
             jobs.push(spawn_turn(
                 agents[&seat_id].clone(),
                 format!("conducted-{run_id}:{seat_id}"),
                 seat_id,
-                Channel::Desk,
+                Lane::Desk,
                 prompt,
             ));
         }
@@ -617,12 +627,12 @@ async fn run() -> anyhow::Result<()> {
         }
         let outcomes = futures::future::join_all(jobs).await;
 
-        for (seat_id, channel, outcome) in outcomes {
+        for (seat_id, lane, outcome) in outcomes {
             tools.clear(&seat_id);
             turns += 1;
-            let where_ = match channel {
-                Channel::Desk => String::new(),
-                Channel::Thread(root) => format!(" in thread {}", root.0),
+            let where_ = match lane {
+                Lane::Desk => String::new(),
+                Lane::Thread(root) => format!(" in thread {}", root.0),
             };
             match &outcome {
                 Some(Ok(reply)) => eprintln!(
@@ -636,8 +646,8 @@ async fn run() -> anyhow::Result<()> {
             if events.is_empty() {
                 eprintln!("[no tool call] @{seat_id}{where_}");
             }
-            match channel {
-                Channel::Thread(root) => {
+            match lane {
+                Lane::Thread(root) => {
                     let Some(child) = children.get_mut(&root) else {
                         continue;
                     };
@@ -680,7 +690,7 @@ async fn run() -> anyhow::Result<()> {
                         }
                     }
                 }
-                Channel::Desk => {
+                Lane::Desk => {
                     for event in events {
                         let ToolCall::Speak(utterance) = event.call else {
                             continue;
@@ -890,9 +900,9 @@ async fn conclude(
     state: &DriverState,
     child: Child,
     forced: bool,
-    concluded: &mut Vec<(Sequence, String, String, String)>,
+    concluded: &mut Vec<(Sequence, String, String, Vec<String>)>,
 ) -> anyhow::Result<DriverState> {
-    let transcript = journal.thread(child.root).join("\n");
+    let transcript = journal.thread(child.root);
     let outcome = if forced {
         "the conversation did not conclude in time; take what was said and proceed".to_owned()
     } else {
@@ -935,86 +945,6 @@ async fn conclude(
     Ok(transition.state)
 }
 
-/// What one desk turn is shown: who it is, the rows above its watermark, the
-/// conversations it had since it last spoke, its assignment, and the one
-/// thing the tools need it to say on every call.
-fn turn_prompt(
-    state: &DriverState,
-    seat: &str,
-    brief: &str,
-    rows: &[String],
-    conversations: &[String],
-) -> String {
-    let rows = if rows.is_empty() {
-        "(nothing new)".to_owned()
-    } else {
-        rows.join("\n")
-    };
-    let conversations = if conversations.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "\n\n## Conversations you had since you last spoke\n{}",
-            conversations.join("\n\n")
-        )
-    };
-    let assignment = state
-        .episode()
-        .participants
-        .iter()
-        .find(|participant| participant.agent_id == seat)
-        .and_then(|participant| participant.open())
-        .map_or_else(
-            || {
-                "You hold no open assignment. If a peer asked you something above, \
-                 the conversation is its own thread and you will be turned to there."
-                    .to_owned()
-            },
-            |record| {
-                format!(
-                    "Your assignment was made at sequence {}.",
-                    record.assigned_at.0
-                )
-            },
-        );
-    // The brief travels with every turn. A live run with it only in the
-    // standing prompt produced twelve turns in which no seat stated a single
-    // thing it privately knew.
-    format!(
-        "## Who you are\n{brief}\n\n## New desk messages\n{rows}{conversations}\n\n{assignment}\n\n\
-         Every tool call must carry \"chat\": \"{DESK_ID}\" and \"parent\": null."
-    )
-}
-
-/// What one turn inside a conversation is shown.
-fn thread_prompt(
-    brief: &str,
-    root: Sequence,
-    other: &str,
-    is_asker: bool,
-    rows: &[String],
-) -> String {
-    let rows = if rows.is_empty() {
-        "(nothing new)".to_owned()
-    } else {
-        rows.join("\n")
-    };
-    let role = if is_asker {
-        "You opened this conversation. Say what you still need with `post`; when you have \
-         what you need, call `complete_episode` to conclude your side."
-    } else {
-        "A peer asked you this. Answer with `post`, from what you privately know; ask back \
-         with `post` if you must. When you have said what you can, call `complete_episode`."
-    };
-    format!(
-        "## Who you are\n{brief}\n\n## A private conversation with @{other} (thread {})\n{rows}\n\n\
-         {role} Only the two of you read this thread.\n\n\
-         Every tool call must carry \"chat\": \"{DESK_ID}\" and \"parent\": \"{}\". \
-         `ask` and `broadcast` are not available inside a conversation.",
-        root.0, root.0
-    )
-}
-
 /// How a row reads on the desk.
 fn describe(utterance: &Utterance) -> String {
     match utterance {
@@ -1041,6 +971,7 @@ fn seat(
     runtime: &Runtime,
     id: &str,
     brief: &str,
+    contract: &str,
     run_id: &str,
     endpoint: &str,
 ) -> anyhow::Result<Agent> {
@@ -1048,7 +979,7 @@ fn seat(
     // and a definition not in the registry is sanitised to "rejected by
     // policy" on the way out. Seed it.
     let agent_id = format!("{id}-conducted-{run_id}");
-    let prompt = format!("{brief}\n\n{PROTOCOL}");
+    let prompt = format!("{brief}\n\n{contract}");
     let registry_entry = AgentRegistryEntry {
         id: agent_id.clone(),
         name: id.to_owned(),

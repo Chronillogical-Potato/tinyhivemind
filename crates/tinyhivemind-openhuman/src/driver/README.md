@@ -42,6 +42,7 @@ width. A broadcast run action retains the exact accepted `RoutingPlan`.
 | --- | --- |
 | `mod.rs` | `DriverState`, `CompletionDriver`, `HostAction`, start/resume validation, the per-event fold, completion |
 | `ledger.rs` | `Ledger`, `Seen`, `Handoff`, `AssignmentSpend`; queue, budget and open-ask bookkeeping |
+| `brief.rs` | `EpisodeBrief`, `Channel`, `ConversationView`, `standing_contract`: what the episode tells a seat before a turn, for a host to prepend its own context to |
 | `broadcast.rs` | routing one broadcast and placing it: assign, queue, or return to author |
 | `round.rs` | folding a whole pending round: replay recognition, validation, preflight |
 | `order.rs` | accepted scheduling order, the wake predicate, and the stalled set |

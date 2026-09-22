@@ -38,7 +38,7 @@ fn candidate(id: &str) -> RouteCandidate {
     }
 }
 
-fn hive() -> OpenHumanHive {
+pub(crate) fn hive() -> OpenHumanHive {
     let ids = ["one", "two", "three", "four"];
     OpenHumanHive::new(
         HiveGraph::new(
@@ -59,7 +59,7 @@ fn hive() -> OpenHumanHive {
     .expect("fixture hive validates")
 }
 
-fn episode(participants: &[&str]) -> CompletionEpisodeState {
+pub(crate) fn episode(participants: &[&str]) -> CompletionEpisodeState {
     CompletionEpisodeState::opened(
         Conversation {
             desk_id: "engineering".into(),
@@ -72,7 +72,11 @@ fn episode(participants: &[&str]) -> CompletionEpisodeState {
     .expect("fixture episode opens")
 }
 
-fn committed(author_id: &str, sequence: u64, utterance: Utterance) -> CommittedUtterance {
+pub(crate) fn committed(
+    author_id: &str,
+    sequence: u64,
+    utterance: Utterance,
+) -> CommittedUtterance {
     CommittedUtterance {
         author_id: author_id.into(),
         sequence: Sequence(sequence),
