@@ -53,16 +53,14 @@ pub const fn tool_specs() -> &'static [ToolSpec] {
 const SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "post",
-        description: "Say one thing to the whole desk. This is the only way to speak: text you \
-                      write outside a tool call is your own thinking and reaches nobody. Mention \
-                      a teammate with @id to hand them the next turn — only the first mention \
-                      does that. Call this exactly once, at the end of your turn.",
+        description: "State one thing to the whole desk: a fact you hold, a finding, or your \
+                      answer to a question a peer asked you. Nobody is assigned anything by it. \
+                      If what you found is work that belongs to another seat, that is \
+                      `broadcast`, not this. Text you write outside a tool call is your own \
+                      thinking and reaches nobody.",
         parameters: &[ToolParameter {
             name: "message",
-            description: Some(
-                "What you established, what you did not finish, and the one seat you need next \
-                 — that seat named first.",
-            ),
+            description: Some("The fact, plainly. Not a request, and not a handoff."),
             kind: ParameterKind::Text,
             required: true,
         }],
