@@ -132,6 +132,75 @@ async fn one_turn<R: SeatRunner>(runner: &R, since: Sequence) -> (String, Vec<Se
     (reply, runner.close("lead"))
 }
 
+/// A host that overrides nothing it need not: no prefix, no wrapper, no
+/// hook. Its seat runs under the process default context the library boot
+/// installed, which is what a host with a booted core of its own has.
+struct PlainHost {
+    log: MemoryLog,
+    library: LibraryHost,
+}
+
+impl EpisodeHost for PlainHost {
+    fn log(&self) -> &dyn SessionLog {
+        &self.log
+    }
+
+    fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> crate::Result<OpenHumanSessionHost> {
+        let policy = belt.admit(None);
+        self.library
+            .session(seat, "You lead the desk.", belt.tools, policy)
+    }
+}
+
+/// A hosted seat on a host that keeps every default, run once on the desk
+/// and once in a thread it is not in: the defaults hold, the thread turn is
+/// seeded from the thread, and a call outside its thread is refused.
+async fn plain(library: LibraryHost, contract: &str) {
+    let log = MemoryLog::new("engineering");
+    log.append("operator", "state the root cause", None, None);
+    let host = Arc::new(PlainHost { log, library });
+    let runner = HostedRunner::seat(
+        Arc::clone(&host),
+        Arc::new(EpisodeTools::new(["lead"])),
+        &["lead".to_owned()],
+        "engineering",
+        "Engineering",
+        SESSION_WINDOW,
+    )
+    .expect("hosted seats");
+    let _ = contract;
+    let (reply, events) = one_turn(&runner, host.log.latest()).await;
+    assert!(!reply.is_empty());
+    assert_eq!(
+        events.len(),
+        1,
+        "the bare-named belt is admitted by default"
+    );
+    runner.open(
+        "lead",
+        Vec::new(),
+        Dispatch {
+            chat: "engineering".into(),
+            parent: Some("1".into()),
+        },
+    );
+    let (_, lane, outcome) = runner
+        .turn(
+            "lead".into(),
+            Lane::Thread(Sequence(1)),
+            Sequence(1),
+            "In the thread.".into(),
+        )
+        .await;
+    assert_eq!(lane, Lane::Thread(Sequence(1)));
+    assert!(matches!(outcome, Some(Ok(_))), "{outcome:?}");
+    assert!(
+        runner.close("lead").is_empty(),
+        "the scripted call names no thread, so the record refused it"
+    );
+    assert_eq!(runner.tools().drain_refusals("lead").len(), 1);
+}
+
 /// A hosted runner over a test host whose log already holds the task.
 fn hosted(library: LibraryHost, contract: &str) -> (Arc<TestHost>, HostedRunner<TestHost>) {
     assert!(format!("{library:?}").contains(offline::MODEL));
@@ -187,6 +256,33 @@ async fn again(raw: &RawRunner, host: &TestHost, hosted: &HostedRunner<TestHost>
     let (_, again) = one_turn(hosted, host.log.latest()).await;
     assert_eq!(again.len(), 1, "the reused session ran and called again");
     assert_eq!(host.wrapped.load(Ordering::SeqCst), 2);
+}
+
+/// A seat none of the runners seated is a failed turn, not a panic; and a
+/// seat registered after the process registry is set is refused by name
+/// rather than seated as a ghost.
+async fn ghosts(embed: &EmbedRunner, raw: &RawRunner, hosted: &HostedRunner<TestHost>) {
+    for outcome in [
+        raw.turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
+            .await,
+        hosted
+            .turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
+            .await,
+        embed
+            .turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
+            .await,
+    ] {
+        assert!(
+            matches!(&outcome, (seat, Lane::Desk, Some(Err(why))) if seat == "ghost" && why.contains("not a seat")),
+            "{outcome:?}"
+        );
+    }
+    let elsewhere = tempfile::tempdir().expect("a workspace");
+    let ghost = register_seats(elsewhere.path(), &[("ghost", "Nobody.")], &[]);
+    assert!(
+        matches!(&ghost, Err(crate::Error::SeatNotRegistered { seat }) if seat == "ghost"),
+        "{ghost:?}"
+    );
 }
 
 /// The hook halting is the turn failing: the host loop sees an error where
@@ -362,6 +458,8 @@ async fn both_runners() {
     assert!(seen.requests >= 6, "each turn is a call and a receipt");
 
     again(&raw, &host, &hosted).await;
+    ghosts(&embed, &raw, &hosted).await;
+    plain(host.library.clone(), &contract(RunnerKind::Hosted)).await;
     halts(&host, &hosted).await;
     metrics.reset();
     assert_eq!(metrics.snapshot().requests, 0);

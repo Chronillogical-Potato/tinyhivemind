@@ -46,7 +46,7 @@ use tinyhivemind_tools::EpisodeTools;
 use tinytools::Tool;
 
 use crate::raw::tools::belt_with_prefix;
-use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob};
+use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob, unseated};
 use crate::{Error, Result};
 use admission::Admission;
 
@@ -255,7 +255,9 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
     /// and run the brief, inside the host's wrapper.
     fn turn(&self, seat: String, lane: Lane, since: Sequence, prompt: String) -> TurnJob {
         let host = Arc::clone(&self.host);
-        let session = Arc::clone(&self.seats[&seat].session);
+        let Some(session) = self.seats.get(&seat).map(|held| Arc::clone(&held.session)) else {
+            return unseated(seat, lane);
+        };
         let usage = Arc::clone(&self.usage);
         let conversation = Conversation {
             thread_root: match lane {
@@ -286,12 +288,14 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                         .await
                         .map_err(|_| Error::TimedOut { seat: seat.clone() })?
                         .map_err(Error::Harness)?;
-                    if let Some(last) = session.last_turn_usage() {
-                        usage
-                            .lock()
-                            .unwrap_or_else(PoisonError::into_inner)
-                            .insert(seat.clone(), last);
-                    }
+                    // This turn's usage, or none: a turn the session reported
+                    // nothing for must not be metered as the one before it.
+                    let mut metered = usage.lock().unwrap_or_else(PoisonError::into_inner);
+                    match session.last_turn_usage() {
+                        Some(last) => metered.insert(seat.clone(), last),
+                        None => metered.remove(&seat),
+                    };
+                    drop(metered);
                     Ok(reply)
                 }
             };

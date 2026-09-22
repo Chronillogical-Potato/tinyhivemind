@@ -33,7 +33,9 @@ pub(super) async fn history(
     let query = SessionQuery {
         conversation,
         viewer: Viewer::Agent { id: seat.into() },
-        before: Some(Sequence(since.0.saturating_add(1))),
+        // Exclusive, so one above `since`; nothing is above the last
+        // sequence, so that reads unbounded rather than one short.
+        before: (since.0 != u64::MAX).then(|| Sequence(since.0 + 1)),
         window,
     };
     let rows = project_session(log, &query).await?;

@@ -17,6 +17,12 @@ fn each_failure_names_itself() {
             "lead",
         ),
         (
+            Error::UnsafeSeatId {
+                seat: "../x".into(),
+            },
+            "plain path",
+        ),
+        (
             Error::TimedOut {
                 seat: "lead".into(),
             },

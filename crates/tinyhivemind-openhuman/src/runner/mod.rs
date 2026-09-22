@@ -35,6 +35,18 @@ pub enum Lane {
 /// A turn's reply, once it is back: `None` timed out.
 pub type TurnResult = Option<std::result::Result<String, String>>;
 
+/// The turn a runner returns for a seat it never seated: failed, at once.
+/// A runner indexes its seats by what the driver proposed, and the driver
+/// proposes only bound seats; a seat outside that is a host bug, and a
+/// failed turn is a better report of it than a panic.
+#[must_use]
+pub fn unseated(seat: String, lane: Lane) -> TurnJob {
+    Box::pin(async move {
+        let failed = format!("`{seat}` is not a seat of this runner");
+        (seat, lane, Some(Err(failed)))
+    })
+}
+
 /// One running turn: the seat, its lane, and the reply when it lands.
 pub type TurnJob = Pin<Box<dyn Future<Output = (String, Lane, TurnResult)> + Send>>;
 

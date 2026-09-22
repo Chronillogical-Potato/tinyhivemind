@@ -55,7 +55,7 @@ use tinyhivemind::Sequence;
 use tinyhivemind_driver::AgentBinding;
 use tinyhivemind_tools::EpisodeTools;
 
-use crate::runner::{Lane, SeatRunner, TurnJob};
+use crate::runner::{Lane, SeatRunner, TurnJob, unseated};
 use crate::{Error, Result};
 pub use library::LibraryHost;
 pub use seat::RawSeat;
@@ -74,6 +74,9 @@ type Contexts = Arc<Mutex<BTreeMap<String, Vec<(String, String)>>>>;
 /// every tool the seat will be handed, as the model calls them -- for a host
 /// that prefixes the episode's tools, the prefixed names, alongside its own.
 ///
+/// A seat id becomes a file name, so it is one plain path component:
+/// ASCII letters, digits, `-`, `_` and `.`, and not `.` or `..` alone.
+///
 /// The loader wants `id`, `when_to_use` and a non-empty `system_prompt`; the
 /// prompt written here is the seat's role for a reader of the workspace, not
 /// the one a session runs under. The registry is process-wide, so a host
@@ -81,9 +84,24 @@ type Contexts = Arc<Mutex<BTreeMap<String, Vec<(String, String)>>>>;
 ///
 /// # Errors
 ///
-/// The directory or a file failing to write, or the registry refusing the
-/// definitions.
+/// A seat id that is not a plain path component, the directory or a file
+/// failing to write, or the registry refusing the definitions.
 pub fn register_seats(workspace: &Path, seats: &[(&str, &str)], tools: &[String]) -> Result<()> {
+    // A seat id names a file: one path component, and nothing a path can
+    // be steered with.
+    for (id, _) in seats {
+        let plain = !id.is_empty()
+            && *id != "."
+            && *id != ".."
+            && id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+        if !plain {
+            return Err(Error::UnsafeSeatId {
+                seat: (*id).to_owned(),
+            });
+        }
+    }
     let agents = workspace.join("agents");
     std::fs::create_dir_all(&agents)?;
     let named: Vec<String> = tools.iter().map(|name| format!("{name:?}")).collect();
@@ -228,7 +246,9 @@ impl SeatRunner for RawRunner {
             .cloned()
             .unwrap_or_default();
         let belt = tools::belt(&seat, &self.tools);
-        let raw_seat = self.seats[&seat].clone();
+        let Some(raw_seat) = self.seats.get(&seat).cloned() else {
+            return unseated(seat, lane);
+        };
         let contexts = Arc::clone(&self.contexts);
         Box::pin(async move {
             let result = match Box::pin(raw_seat.turn(history, &prompt, belt)).await {

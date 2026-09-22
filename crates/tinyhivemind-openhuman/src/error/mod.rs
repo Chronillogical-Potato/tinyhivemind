@@ -12,6 +12,13 @@ pub enum Error {
     /// The definition registry did not come up after the seats were written.
     #[error("the definition registry did not initialise")]
     RegistryMissing,
+    /// A seat id that cannot name a definition file: empty, `.`, `..`, or
+    /// carrying anything but ASCII letters, digits, `-`, `_` and `.`.
+    #[error("seat id `{seat}` is not a plain path component")]
+    UnsafeSeatId {
+        /// The id.
+        seat: String,
+    },
     /// A seat's definition was written and the registry did not load it.
     #[error("seat `{seat}` did not register")]
     SeatNotRegistered {
