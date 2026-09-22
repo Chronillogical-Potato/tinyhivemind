@@ -372,6 +372,46 @@ drain beside the calls, and the host prints it; it also prints when a
 broadcast completed its author, rather than leaving that to be inferred
 from a handoff arriving.
 
+## The tenth run: all three
+
+The triage desk again, with `api` told to ask `db` and `db` told it must
+have `ops`' answer first. `10` turns, `6` waves, `4` routes, `2`
+conversations, `1` discharged, and quiescence -- with all four private facts
+on the desk, which no run of either desk had managed with fewer than
+thirty-one turns.
+
+**Every rule this desk was built for fired, and each did what its ADR
+says.**
+
+*A broadcast completed its author* (ADR 0024): the host's new line printed
+for `dispatcher` on its first handoff, before it had said anything else.
+Its own `complete_episode` two calls later (row 6) was a settled seat
+completing, and benign.
+
+*The budget* (rows 4-5): third handoff refused, work kept, one discharge --
+and the ticket it carried still got done, because `ops`' finding (row 9)
+routed to `qa`, who completed with its fixture fact (row 13).
+
+*An ask inside a conversation was refused* (ADR 0023, at the server): `db`,
+asked by `api` for a count it could not give without `ops`, called `ask`
+inside thread 7 and read the refusal. Its next call was `complete_episode`
+saying exactly what the refusal told it to say: "That's ops' knowledge...
+Could you ask ops" (row 10). `api`, holding `ops`' desk completion already,
+re-asked `db` with the answer in hand (row 15) and got the full picture
+(row 16).
+
+*The open-ask hold* fired beside them: `api` tried to complete while thread
+7 was open (row 11) and was refused (row 12); its final completion (row 18)
+came after both conversations had concluded, and carried both.
+
+**What it cost.** Nothing that the rules did not buy on purpose. Four
+routes for three tickets; two conversations, each one question and one
+answer; one wasted call, `api` completing under an open ask, which the hold
+exists to catch. The refusal log is what settled the third rule: without it,
+`db`'s thread-7 turn would have read as a seat that answered correctly on
+its first try, and the refusal that made it do so would have been
+invisible.
+
 ## What this changes
 
 Across three runs every defect was in what the host owed the seats, not in

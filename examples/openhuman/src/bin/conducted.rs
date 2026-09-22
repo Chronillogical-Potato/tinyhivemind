@@ -884,9 +884,6 @@ async fn run() -> anyhow::Result<()> {
                 .await
             {
                 Ok(transition) => {
-                    if is_broadcast && held && !holds(&transition.state, &seat_id) {
-                        eprintln!("[completed] @{seat_id} by its broadcast");
-                    }
                     let mut routed = false;
                     for action in &transition.actions {
                         match action {
@@ -941,6 +938,9 @@ async fn run() -> anyhow::Result<()> {
                                 );
                             }
                         }
+                    }
+                    if is_broadcast && held && !holds(&transition.state, &seat_id) {
+                        eprintln!("[completed] @{seat_id} by its broadcast");
                     }
                     if is_broadcast && !routed {
                         println!(
