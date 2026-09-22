@@ -195,6 +195,14 @@ pub enum HostAction {
         plan: RoutingPlan,
     },
     /// Deliver an already-committed desk-private message.
+    ///
+    /// For an [`Utterance::Ask`] this is the signal to **open a child
+    /// conversation** between the author and the seat named: a thread of the
+    /// desk rooted at the ask row, with the two as its participants, run to
+    /// its own quiescence. When it concludes, the host cross-posts its outcome
+    /// as a private message from the seat asked to the asker; that row is what
+    /// releases the asker's hold and wakes it, with the whole conversation in
+    /// its context. See ADR 0023.
     DeliverDm {
         /// Private desk route, never a global direct route.
         route: MessageRoute,
@@ -489,13 +497,14 @@ impl<'a> CompletionDriver<'a> {
         {
             next.seen.ran(author, assigned_at);
         }
-        // A question or a handoff from the asked seat is not its answer;
-        // anything it says to the desk, or its own completion, is.
-        if !matches!(
-            event.utterance,
-            Utterance::Ask { .. } | Utterance::Broadcast { .. }
-        ) {
-            next.ledger.answered(author);
+        // The answer an asker awaits is the conversation's conclusion,
+        // cross-posted to it as a private message from the seat it asked.
+        // Nothing that seat says on the open desk counts, so a child
+        // conversation still in progress cannot be mistaken for over.
+        if let Utterance::Dm { to, .. } = &event.utterance {
+            for asker in to {
+                next.ledger.answered(author, asker);
+            }
         }
 
         let actions = match &event.utterance {

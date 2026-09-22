@@ -55,9 +55,9 @@ pub struct Ledger {
     /// Broadcast budgets, by author.
     #[serde(default)]
     pub spent: BTreeMap<String, AssignmentSpend>,
-    /// Open questions: each asker to the seats it awaits, and the sequence of
-    /// the row that asked. A row authored by an asked seat after that sequence
-    /// is its answer.
+    /// Open conversations: each asker to the seats it awaits, and the sequence
+    /// of the row that asked. A private message from an asked seat to the
+    /// asker is the conclusion that releases it.
     #[serde(default)]
     pub outstanding_asks: BTreeMap<String, BTreeMap<String, Sequence>>,
 }
@@ -119,9 +119,10 @@ impl Ledger {
             .insert(seat.to_owned(), at);
     }
 
-    /// A row from `by` answers everyone waiting on it.
-    pub(super) fn answered(&mut self, by: &str) {
-        for asked in self.outstanding_asks.values_mut() {
+    /// A private message from `by` to `asker` is the answer `asker` awaited
+    /// from `by`: the conclusion of the conversation between them.
+    pub(super) fn answered(&mut self, by: &str, asker: &str) {
+        if let Some(asked) = self.outstanding_asks.get_mut(asker) {
             asked.remove(by);
         }
         self.outstanding_asks.retain(|_, asked| !asked.is_empty());

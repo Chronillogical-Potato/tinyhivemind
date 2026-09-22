@@ -33,11 +33,12 @@ pub enum Utterance {
         /// The text to append.
         message: String,
     },
-    /// A question for exactly one peer, answered on a later turn.
+    /// A private conversation opened with exactly one peer.
     ///
     /// Unlike a [`Dm`](Self::Dm) it opens an obligation: the asker cannot
-    /// complete its assignment until the answer has arrived. The seat asked
-    /// keeps whatever it was doing — this is a question, not a handoff.
+    /// complete its assignment until the conversation has concluded and its
+    /// outcome has reached it. The seat asked keeps whatever it was doing —
+    /// this is a question, not a handoff.
     Ask {
         /// The peer asked, without the `@`.
         to: String,

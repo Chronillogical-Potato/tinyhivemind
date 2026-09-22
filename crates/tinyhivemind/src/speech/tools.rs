@@ -103,12 +103,13 @@ const SPECS: &[ToolSpec] = &[
     },
     ToolSpec {
         name: "ask",
-        description: "Ask one named seat a question. It is answered on its own time, not while \
-                      you wait, and the answer reaches you on a later turn — so ask everything \
-                      you need, then end your turn. You will not be able to finish until every \
-                      answer has arrived, so nothing you asked for can be lost. It is a question, \
-                      not a handoff: the work stays yours, and the seat you ask keeps whatever it \
-                      was already doing.",
+        description: "Open a private conversation with one named seat about something you \
+                      need from it. It runs on its own, not while you wait: say what you need, \
+                      then end your turn, and what the two of you concluded reaches you on a \
+                      later turn. You will not be able to finish until every conversation you \
+                      opened has concluded, so nothing you asked for can be lost. It is a \
+                      question, not a handoff — work that belongs to another seat is \
+                      `broadcast`. The seat you ask keeps whatever it was already doing.",
         parameters: &[
             ToolParameter {
                 name: "to",
@@ -118,7 +119,9 @@ const SPECS: &[ToolSpec] = &[
             },
             ToolParameter {
                 name: "message",
-                description: Some("The question, self-contained: what you need and why."),
+                description: Some(
+                    "What you need from them, self-contained: the question and why it matters to your work.",
+                ),
                 kind: ParameterKind::Text,
                 required: true,
             },

@@ -47,6 +47,7 @@ link any earlier ADR it amends.
 | [0020](0020-openhuman-embed-is-a-git-dependency-patched-locally.md) | `openhuman-embed` is a git dependency, patched locally | Accepted — amends 0013 |
 | [0021](0021-an-assignment-is-appended-rather-than-overwritten.md) | An assignment is appended rather than overwritten, and a participant holds at most one open | Proposed — amends 0019 |
 | [0022](0022-the-episode-mcp-server-is-the-one-socket.md) | The episode MCP server is the one socket this repository opens | Proposed |
+| [0023](0023-an-ask-opens-a-child-conversation.md) | An ask opens a child conversation, a thread of the desk | Proposed — amends review decision D22 |
 
 ## Reading order
 

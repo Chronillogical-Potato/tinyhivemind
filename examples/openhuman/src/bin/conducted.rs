@@ -17,6 +17,7 @@ mod conducted {
 }
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -143,7 +144,9 @@ const OPENROUTER: &str = "https://openrouter.ai/api/v1";
 const WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
 const TURN_TIMEOUT: Duration = Duration::from_secs(300);
 /// Hard wall on turns: a chain that will not end is a finding, not a hang.
-const TURN_WALL: u64 = 40;
+const TURN_WALL: u64 = 60;
+/// Turns one conversation may take before it is concluded without an answer.
+const CHILD_TURN_WALL: u64 = 6;
 
 fn main() -> anyhow::Result<()> {
     tokio::runtime::Builder::new_multi_thread()
@@ -159,7 +162,10 @@ struct Row {
     sequence: Sequence,
     author: String,
     body: String,
-    /// A private row reaches one seat; `None` is the whole desk.
+    /// `None` is the open desk; `Some(root)` is the conversation rooted at
+    /// that ask, which only its two seats read.
+    thread: Option<Sequence>,
+    /// On the open desk, a private row reaches one seat.
     only_for: Option<String>,
 }
 
@@ -169,13 +175,20 @@ struct Journal {
 }
 
 impl Journal {
-    fn append(&self, author: &str, body: &str, only_for: Option<&str>) -> Sequence {
+    fn append(
+        &self,
+        author: &str,
+        body: &str,
+        thread: Option<Sequence>,
+        only_for: Option<&str>,
+    ) -> Sequence {
         let mut rows = self.rows.lock().expect("journal is not poisoned");
         let sequence = Sequence(rows.last().map_or(0, |row| row.sequence.0) + 1);
         rows.push(Row {
             sequence,
             author: author.to_owned(),
             body: body.to_owned(),
+            thread,
             only_for: only_for.map(str::to_owned),
         });
         sequence
@@ -189,21 +202,85 @@ impl Journal {
             .map_or(Sequence(0), |row| row.sequence)
     }
 
-    /// What `seat` may read above `after`: desk rows and its own private ones.
-    fn visible_since(&self, seat: &str, after: Sequence) -> Vec<String> {
+    /// What `seat` may read on the open desk above `after`: desk rows, and
+    /// private rows addressed to it.
+    fn desk_since(&self, seat: &str, after: Sequence) -> Vec<String> {
+        self.rows
+            .lock()
+            .expect("journal is not poisoned")
+            .iter()
+            .filter(|row| row.sequence > after && row.thread.is_none())
+            .filter(|row| row.only_for.as_deref().is_none_or(|only| only == seat))
+            .map(render)
+            .collect()
+    }
+
+    /// One conversation, whole: the ask that rooted it and every row in it.
+    fn thread(&self, root: Sequence) -> Vec<String> {
+        self.thread_since(root, Sequence(0))
+    }
+
+    fn thread_since(&self, root: Sequence, after: Sequence) -> Vec<String> {
         self.rows
             .lock()
             .expect("journal is not poisoned")
             .iter()
             .filter(|row| row.sequence > after)
-            .filter(|row| row.only_for.as_deref().is_none_or(|only| only == seat))
-            .map(|row| format!("@{}: {}", row.author, row.body))
+            .filter(|row| row.sequence == root || row.thread == Some(root))
+            .map(render)
             .collect()
     }
 
     fn all(&self) -> Vec<Row> {
         self.rows.lock().expect("journal is not poisoned").clone()
     }
+}
+
+fn render(row: &Row) -> String {
+    format!("@{}: {}", row.author, row.body)
+}
+
+/// One open conversation: a thread of the desk, run as its own episode with
+/// the asker and the seat asked as its participants (ADR 0023).
+struct Child {
+    root: Sequence,
+    asker: String,
+    askee: String,
+    state: DriverState,
+    turns: u64,
+    /// The last thing the seat asked said in it: the conclusion, cross-posted.
+    last_by_askee: Option<String>,
+}
+
+/// Where a turn is running.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Channel {
+    Desk,
+    Thread(Sequence),
+}
+
+/// A turn's reply, once it is back: `None` timed out.
+type TurnResult = Option<Result<String, String>>;
+type TurnJob = std::pin::Pin<Box<dyn Future<Output = (String, Channel, TurnResult)> + Send>>;
+
+fn spawn_turn(
+    agent: Agent,
+    session: String,
+    seat: String,
+    channel: Channel,
+    prompt: String,
+) -> TurnJob {
+    Box::pin(async move {
+        let result =
+            match tokio::time::timeout(TURN_TIMEOUT, agent.turn(prompt).session(&session).send())
+                .await
+            {
+                Ok(Ok(outcome)) => Some(Ok(outcome.reply)),
+                Ok(Err(error)) => Some(Err(error.to_string())),
+                Err(_) => None,
+            };
+        (seat, channel, result)
+    })
 }
 
 /// A router that counts its calls: the provider bill, one line.
@@ -324,7 +401,7 @@ async fn run() -> anyhow::Result<()> {
         calls: AtomicU64::new(0),
     };
     let journal = Journal::default();
-    journal.append("operator", TASK, None);
+    journal.append("operator", TASK, None, None);
 
     // The door route: who starts. Everyone is seated so a handoff can reach
     // any seat; the ones the route passed over are completed at once -- idle,
@@ -393,194 +470,389 @@ async fn run() -> anyhow::Result<()> {
     };
 
     let mut state = driver.start(episode)?;
+    let mut children: BTreeMap<Sequence, Child> = BTreeMap::new();
+    // Concluded conversations, kept whole for the context of the seats that
+    // had them: `(root, asker, askee, transcript)`, and how many each seat has
+    // already been shown.
+    let mut concluded: Vec<(Sequence, String, String, String)> = Vec::new();
+    let mut shown: BTreeMap<String, usize> = BTreeMap::new();
     let mut turns = 0_u64;
     let mut waves = 0_u64;
     let mut discharged = 0_u64;
     let settled = 'episode: loop {
-        if state.quiescent() {
+        if state.quiescent() && children.is_empty() {
             break Ok(());
         }
-        let round = driver.pending_round(&state)?;
-        let seats: Vec<String> = round
+        waves += 1;
+
+        // One turn per seat per wave, and conversations first: a conversation
+        // is what unblocks a desk turn, so it goes ahead of it.
+        let mut taken: BTreeSet<String> = BTreeSet::new();
+        let mut jobs: Vec<TurnJob> = Vec::new();
+        for child in children.values_mut() {
+            // Collected first: the round borrows the state it was proposed
+            // from, and preparing a turn reports delivery into that state.
+            let seats: Vec<String> = driver
+                .pending_round(&child.state)?
+                .agents()
+                .iter()
+                .map(|pending| pending.hive_agent_id.to_owned())
+                .collect();
+            for seat_id in seats {
+                // The asker's question is the thread's first row. Until the
+                // seat asked has said anything, the asker has nothing to add.
+                if child.state.revision() == 0 && seat_id == child.asker {
+                    continue;
+                }
+                if !taken.insert(seat_id.clone()) {
+                    continue;
+                }
+                let through = child
+                    .state
+                    .seen()
+                    .delivered_through
+                    .get(&seat_id)
+                    .copied()
+                    .unwrap_or(child.root);
+                let rows = journal.thread_since(child.root, through);
+                tools.window(&seat_id, journal.thread(child.root));
+                tools.register(
+                    &seat_id,
+                    Dispatch {
+                        chat: DESK_ID.into(),
+                        parent: Some(child.root.0.to_string()),
+                    },
+                );
+                child.state.delivered(&seat_id, journal.latest());
+                child.state.turn_started(&seat_id);
+                child.turns += 1;
+                let other = if seat_id == child.asker {
+                    child.askee.clone()
+                } else {
+                    child.asker.clone()
+                };
+                let prompt = thread_prompt(
+                    &briefs[&seat_id],
+                    child.root,
+                    &other,
+                    seat_id == child.asker,
+                    &rows,
+                );
+                jobs.push(spawn_turn(
+                    agents[&seat_id].clone(),
+                    format!("conducted-{run_id}:{seat_id}"),
+                    seat_id,
+                    Channel::Thread(child.root),
+                    prompt,
+                ));
+            }
+        }
+        let seats: Vec<String> = driver
+            .pending_round(&state)?
             .agents()
             .iter()
             .map(|pending| pending.hive_agent_id.to_owned())
             .collect();
-        if seats.is_empty() {
-            break Err(anyhow::anyhow!(
-                "episode stalled with {:?} holding open work",
-                state.stalled()
-            ));
-        }
-        waves += 1;
-
-        // Prepare every seat in the round, then run them together.
-        let mut jobs = Vec::new();
-        for seat_id in &seats {
+        for seat_id in seats {
+            if !taken.insert(seat_id.clone()) {
+                continue;
+            }
             let through = state
                 .seen()
                 .delivered_through
-                .get(seat_id)
+                .get(&seat_id)
                 .copied()
                 .unwrap_or(Sequence(0));
-            let rows = journal.visible_since(seat_id, through);
-            let latest = journal.latest();
-            tools.window(seat_id, rows.clone());
+            let rows = journal.desk_since(&seat_id, through);
+            tools.window(&seat_id, rows.clone());
             tools.register(
-                seat_id,
+                &seat_id,
                 Dispatch {
                     chat: DESK_ID.into(),
                     parent: None,
                 },
             );
-            state.delivered(seat_id, latest);
-            state.turn_started(seat_id);
-            let prompt = turn_prompt(&state, seat_id, &briefs[seat_id], &rows);
-            let session = format!("conducted-{run_id}:{seat_id}");
-            let agent = agents[seat_id].clone();
-            let id = seat_id.clone();
-            jobs.push(async move {
-                let outcome =
-                    tokio::time::timeout(TURN_TIMEOUT, agent.turn(prompt).session(&session).send())
-                        .await;
-                (id, outcome)
-            });
+            state.delivered(&seat_id, journal.latest());
+            state.turn_started(&seat_id);
+            // The conversations this seat had that it has not yet been shown
+            // whole: its shared context across every channel it was in.
+            let cursor = shown.entry(seat_id.clone()).or_insert(0);
+            let conversations: Vec<String> = concluded[*cursor..]
+                .iter()
+                .filter(|(_, asker, askee, _)| *asker == seat_id || *askee == seat_id)
+                .map(|(root, asker, askee, transcript)| {
+                    format!(
+                        "### With @{} (thread {})\n{transcript}",
+                        if *asker == seat_id { askee } else { asker },
+                        root.0
+                    )
+                })
+                .collect();
+            *cursor = concluded.len();
+            let prompt = turn_prompt(&state, &seat_id, &briefs[&seat_id], &rows, &conversations);
+            jobs.push(spawn_turn(
+                agents[&seat_id].clone(),
+                format!("conducted-{run_id}:{seat_id}"),
+                seat_id,
+                Channel::Desk,
+                prompt,
+            ));
+        }
+        if jobs.is_empty() {
+            // Nothing is due anywhere. A conversation nobody will continue is
+            // concluded without an answer; a desk with open work and nobody
+            // owed a turn is stalled.
+            let stuck: Vec<Sequence> = children.keys().copied().collect();
+            if stuck.is_empty() {
+                break Err(anyhow::anyhow!(
+                    "episode stalled with {:?} holding open work",
+                    state.stalled()
+                ));
+            }
+            for root in stuck {
+                let child = children.remove(&root).expect("listed");
+                state = conclude(&driver, &journal, &state, child, true, &mut concluded).await?;
+            }
+            continue;
         }
         let outcomes = futures::future::join_all(jobs).await;
 
-        for (seat_id, outcome) in outcomes {
+        for (seat_id, channel, outcome) in outcomes {
             tools.clear(&seat_id);
             turns += 1;
-            match outcome {
-                Ok(Ok(reply)) => eprintln!(
-                    "[turn] @{seat_id} replied ({} chars)",
-                    reply.reply.chars().count()
+            let where_ = match channel {
+                Channel::Desk => String::new(),
+                Channel::Thread(root) => format!(" in thread {}", root.0),
+            };
+            match &outcome {
+                Some(Ok(reply)) => eprintln!(
+                    "[turn] @{seat_id}{where_} replied ({} chars)",
+                    reply.chars().count()
                 ),
-                Ok(Err(error)) => eprintln!("[turn] @{seat_id} failed: {error}"),
-                Err(_) => eprintln!("[turn] @{seat_id} timed out"),
+                Some(Err(error)) => eprintln!("[turn] @{seat_id}{where_} failed: {error}"),
+                None => eprintln!("[turn] @{seat_id}{where_} timed out"),
             }
             let events = tools.drain(&seat_id);
             if events.is_empty() {
-                eprintln!("[no tool call] @{seat_id}");
+                eprintln!("[no tool call] @{seat_id}{where_}");
             }
-            for event in events {
-                let ToolCall::Speak(utterance) = event.call else {
-                    continue;
-                };
-                // An ask is private to the seat it asks; everything else is the desk's.
-                let only_for = utterance.asks().map(str::to_owned);
-                let sequence = journal.append(&seat_id, &describe(&utterance), only_for.as_deref());
-                let is_broadcast = utterance.broadcasting();
-                let committed = CommittedUtterance {
-                    author_id: seat_id.clone(),
-                    sequence,
-                    utterance,
-                };
-                match driver
-                    .apply_committed(&state, committed, Some(routing))
-                    .await
-                {
-                    Ok(transition) => {
-                        let mut routed = false;
-                        for action in &transition.actions {
-                            match action {
-                                HostAction::RunAgents { agent_ids, .. } => {
-                                    routed = true;
-                                    println!("[broadcast] @{seat_id} -> {}", agent_ids.join(", "));
+            match channel {
+                Channel::Thread(root) => {
+                    let Some(child) = children.get_mut(&root) else {
+                        continue;
+                    };
+                    for event in events {
+                        let ToolCall::Speak(utterance) = event.call else {
+                            continue;
+                        };
+                        if !matches!(
+                            utterance,
+                            Utterance::Post { .. } | Utterance::CompleteEpisode { .. }
+                        ) {
+                            journal.append(
+                                "desk",
+                                "`ask` and `broadcast` are not available inside a conversation. \
+                                 Answer with `post`, or `complete_episode` to conclude your side.",
+                                Some(root),
+                                None,
+                            );
+                            continue;
+                        }
+                        let sequence =
+                            journal.append(&seat_id, &describe(&utterance), Some(root), None);
+                        if seat_id == child.askee {
+                            child.last_by_askee = Some(utterance.message().to_owned());
+                        }
+                        let committed = CommittedUtterance {
+                            author_id: seat_id.clone(),
+                            sequence,
+                            utterance,
+                        };
+                        match driver.apply_committed(&child.state, committed, None).await {
+                            Ok(transition) => child.state = transition.state,
+                            Err(Error::UndeliveredAssignment { .. }) => {
+                                eprintln!(
+                                    "[refused] @{seat_id} in thread {}: not yet shown",
+                                    root.0
+                                );
+                            }
+                            Err(error) => break 'episode Err(error.into()),
+                        }
+                    }
+                }
+                Channel::Desk => {
+                    for event in events {
+                        let ToolCall::Speak(utterance) = event.call else {
+                            continue;
+                        };
+                        // An ask is private to the seat it asks and roots a
+                        // conversation; everything else is the desk's.
+                        let asked = utterance.asks().map(str::to_owned);
+                        let sequence =
+                            journal.append(&seat_id, &describe(&utterance), None, asked.as_deref());
+                        let is_broadcast = utterance.broadcasting();
+                        let committed = CommittedUtterance {
+                            author_id: seat_id.clone(),
+                            sequence,
+                            utterance,
+                        };
+                        match driver
+                            .apply_committed(&state, committed, Some(routing))
+                            .await
+                        {
+                            Ok(transition) => {
+                                let mut routed = false;
+                                for action in &transition.actions {
+                                    match action {
+                                        HostAction::RunAgents { agent_ids, .. } => {
+                                            routed = true;
+                                            println!(
+                                                "[broadcast] @{seat_id} -> {}",
+                                                agent_ids.join(", ")
+                                            );
+                                        }
+                                        // For an ask, this is the signal to open the
+                                        // conversation: a thread of the desk rooted
+                                        // at the ask row, with the two as its seats.
+                                        HostAction::DeliverDm { .. } => {
+                                            if let Some(askee) = &asked {
+                                                let child_state = driver.start(
+                                                    CompletionEpisodeState::opened(
+                                                        Conversation {
+                                                            desk_id: DESK_ID.into(),
+                                                            desk_name: "Engineering".into(),
+                                                            thread_root: Some(sequence),
+                                                        },
+                                                        sequence,
+                                                        [seat_id.as_str(), askee.as_str()],
+                                                    )?,
+                                                )?;
+                                                println!(
+                                                    "[ask] @{seat_id} opened a conversation with @{askee} (thread {})",
+                                                    sequence.0
+                                                );
+                                                children.insert(
+                                                    sequence,
+                                                    Child {
+                                                        root: sequence,
+                                                        asker: seat_id.clone(),
+                                                        askee: askee.clone(),
+                                                        state: child_state,
+                                                        turns: 0,
+                                                        last_by_askee: None,
+                                                    },
+                                                );
+                                            }
+                                        }
+                                        HostAction::DeliverHandoff { agent_id, handoff } => {
+                                            println!(
+                                                "[handoff] -> @{agent_id} (queued from @{})",
+                                                handoff.from
+                                            );
+                                            journal.append(
+                                                "desk",
+                                                &format!(
+                                                    "handoff from @{}: {}",
+                                                    handoff.from, handoff.body
+                                                ),
+                                                None,
+                                                Some(agent_id),
+                                            );
+                                        }
+                                    }
                                 }
-                                HostAction::DeliverDm { .. } => {}
-                                HostAction::DeliverHandoff { agent_id, handoff } => {
+                                if is_broadcast && !routed {
                                     println!(
-                                        "[handoff] -> @{agent_id} (queued from @{})",
-                                        handoff.from
+                                        "[unplaced] @{seat_id}'s broadcast fits no seat; it keeps the work"
                                     );
                                     journal.append(
                                         "desk",
-                                        &format!(
-                                            "handoff from @{}: {}",
-                                            handoff.from, handoff.body
-                                        ),
-                                        Some(agent_id),
+                                        "nobody on this desk can take that; the work stays with you. \
+                                         Do what you can with what the desk holds, or complete with \
+                                         what you have.",
+                                        None,
+                                        Some(&seat_id),
                                     );
                                 }
+                                state = transition.state;
                             }
+                            Err(Error::AwaitingReply { waiting_on, .. }) => {
+                                eprintln!(
+                                    "[refused] @{seat_id} may not complete: in conversation with {waiting_on:?}"
+                                );
+                                journal.append(
+                                    "desk",
+                                    &format!(
+                                        "your completion was refused: your conversation with {} has \
+                                         not concluded. Its outcome reaches you on a later turn; \
+                                         complete after it does.",
+                                        waiting_on.join(", ")
+                                    ),
+                                    None,
+                                    Some(&seat_id),
+                                );
+                            }
+                            Err(Error::UndeliveredAssignment { assigned_at, .. }) => {
+                                eprintln!(
+                                    "[refused] @{seat_id} completed before seeing its assignment at {}",
+                                    assigned_at.0
+                                );
+                                journal.append(
+                                    "desk",
+                                    &format!(
+                                        "you were handed new work at sequence {} while you were \
+                                         speaking; it is in your next messages. Your completion \
+                                         applied to nothing.",
+                                        assigned_at.0
+                                    ),
+                                    None,
+                                    Some(&seat_id),
+                                );
+                            }
+                            Err(Error::BudgetSpent { .. }) => {
+                                eprintln!(
+                                    "[refused] @{seat_id} has spent its broadcast budget; it keeps the work"
+                                );
+                                discharged += 1;
+                                let sequence = journal.append(
+                                    &seat_id,
+                                    "budget spent; keeping the work",
+                                    None,
+                                    None,
+                                );
+                                let transition = driver
+                                    .apply_committed(
+                                        &state,
+                                        CommittedUtterance {
+                                            author_id: seat_id.clone(),
+                                            sequence,
+                                            utterance: Utterance::CompleteEpisode {
+                                                message: "budget spent; keeping the work".into(),
+                                            },
+                                        },
+                                        None,
+                                    )
+                                    .await?;
+                                state = transition.state;
+                            }
+                            Err(error) => break 'episode Err(error.into()),
                         }
-                        // Routing placed it with nobody: the correct call when
-                        // no seat fits, and the author must be told, or it waits
-                        // for a pickup that will never come.
-                        if is_broadcast && !routed {
-                            println!(
-                                "[unplaced] @{seat_id}'s broadcast fits no seat; it keeps the work"
-                            );
-                            journal.append(
-                                "desk",
-                                "nobody on this desk can take that; the work stays with you. \
-                                 Do what you can with what the desk holds, or complete with \
-                                 what you have.",
-                                Some(&seat_id),
-                            );
-                        }
-                        state = transition.state;
                     }
-                    Err(Error::AwaitingReply { waiting_on, .. }) => {
-                        eprintln!(
-                            "[refused] @{seat_id} may not complete: waiting on {waiting_on:?}"
-                        );
-                        journal.append(
-                            "desk",
-                            &format!(
-                                "your completion was refused: you are still waiting on {}. \
-                                 Their answer arrives on a later turn; complete after it does.",
-                                waiting_on.join(", ")
-                            ),
-                            Some(&seat_id),
-                        );
-                    }
-                    // A peer's broadcast handed this seat work while it was
-                    // speaking; what it just said belongs to the turn it was
-                    // in, and the work waits for its next one. A refusal, not
-                    // a failure: the second live run ended here one wave short.
-                    Err(Error::UndeliveredAssignment { assigned_at, .. }) => {
-                        eprintln!(
-                            "[refused] @{seat_id} completed before seeing its assignment at {}",
-                            assigned_at.0
-                        );
-                        journal.append(
-                            "desk",
-                            &format!(
-                                "you were handed new work at sequence {} while you were \
-                                 speaking; it is in your next messages. Your completion \
-                                 applied to nothing.",
-                                assigned_at.0
-                            ),
-                            Some(&seat_id),
-                        );
-                    }
-                    Err(Error::BudgetSpent { .. }) => {
-                        eprintln!(
-                            "[refused] @{seat_id} has spent its broadcast budget; it keeps the work"
-                        );
-                        discharged += 1;
-                        let sequence =
-                            journal.append(&seat_id, "budget spent; keeping the work", None);
-                        let transition = driver
-                            .apply_committed(
-                                &state,
-                                CommittedUtterance {
-                                    author_id: seat_id.clone(),
-                                    sequence,
-                                    utterance: Utterance::CompleteEpisode {
-                                        message: "budget spent; keeping the work".into(),
-                                    },
-                                },
-                                None,
-                            )
-                            .await?;
-                        state = transition.state;
-                    }
-                    Err(error) => break 'episode Err(error.into()),
                 }
             }
+        }
+
+        // Conversations that ended this wave, or ran past their wall, conclude:
+        // their outcome is cross-posted to the asker, which releases its hold.
+        let over: Vec<Sequence> = children
+            .iter()
+            .filter(|(_, child)| child.state.quiescent() || child.turns >= CHILD_TURN_WALL)
+            .map(|(root, _)| *root)
+            .collect();
+        for root in over {
+            let child = children.remove(&root).expect("listed");
+            let forced = !child.state.quiescent();
+            state = conclude(&driver, &journal, &state, child, forced, &mut concluded).await?;
         }
         if turns >= TURN_WALL {
             break Err(anyhow::anyhow!("turn wall of {TURN_WALL} reached"));
@@ -588,15 +860,17 @@ async fn run() -> anyhow::Result<()> {
     };
 
     println!(
-        "turns {turns} | routes {} | waves {waves} | discharged {discharged} | settled {}",
+        "turns {turns} | routes {} | waves {waves} | discharged {discharged} | settled {} | conversations {}",
         router.calls.load(Ordering::SeqCst),
-        state.episode().settled()
+        state.episode().settled(),
+        concluded.len()
     );
     for row in journal.all() {
-        let scope = row
-            .only_for
-            .as_deref()
-            .map_or(String::new(), |only| format!(" (to @{only})"));
+        let scope = match (row.thread, row.only_for.as_deref()) {
+            (Some(root), _) => format!(" (thread {})", root.0),
+            (None, Some(only)) => format!(" (to @{only})"),
+            (None, None) => String::new(),
+        };
         println!(
             "  {:>3}  @{}{scope}: {}",
             row.sequence.0, row.author, row.body
@@ -606,13 +880,83 @@ async fn run() -> anyhow::Result<()> {
     settled
 }
 
-/// What one turn is shown: only the rows above its watermark, its assignment,
-/// and the one thing the tools need it to say on every call.
-fn turn_prompt(state: &DriverState, seat: &str, brief: &str, rows: &[String]) -> String {
+/// Conclude one conversation: cross-post its outcome to the asker as a
+/// private message from the seat asked. That row is what releases the
+/// asker's hold and wakes it; the whole conversation reaches it in its next
+/// prompt. `forced` is a conversation that ran out of turns.
+async fn conclude(
+    driver: &CompletionDriver<'_>,
+    journal: &Journal,
+    state: &DriverState,
+    child: Child,
+    forced: bool,
+    concluded: &mut Vec<(Sequence, String, String, String)>,
+) -> anyhow::Result<DriverState> {
+    let transcript = journal.thread(child.root).join("\n");
+    let outcome = if forced {
+        "the conversation did not conclude in time; take what was said and proceed".to_owned()
+    } else {
+        child
+            .last_by_askee
+            .clone()
+            .unwrap_or_else(|| "concluded".to_owned())
+    };
+    println!(
+        "[concluded] thread {} between @{} and @{}{}",
+        child.root.0,
+        child.asker,
+        child.askee,
+        if forced { " (out of turns)" } else { "" }
+    );
+    let sequence = journal.append(
+        &child.askee,
+        &format!(
+            "concluded our conversation (thread {}): {outcome}",
+            child.root.0
+        ),
+        None,
+        Some(&child.asker),
+    );
+    let transition = driver
+        .apply_committed(
+            state,
+            CommittedUtterance {
+                author_id: child.askee.clone(),
+                sequence,
+                utterance: Utterance::Dm {
+                    to: vec![child.asker.clone()],
+                    message: outcome,
+                },
+            },
+            None,
+        )
+        .await?;
+    concluded.push((child.root, child.asker, child.askee, transcript));
+    Ok(transition.state)
+}
+
+/// What one desk turn is shown: who it is, the rows above its watermark, the
+/// conversations it had since it last spoke, its assignment, and the one
+/// thing the tools need it to say on every call.
+fn turn_prompt(
+    state: &DriverState,
+    seat: &str,
+    brief: &str,
+    rows: &[String],
+    conversations: &[String],
+) -> String {
     let rows = if rows.is_empty() {
         "(nothing new)".to_owned()
     } else {
         rows.join("\n")
+    };
+    let conversations = if conversations.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n\n## Conversations you had since you last spoke\n{}",
+            conversations.join("\n\n")
+        )
     };
     let assignment = state
         .episode()
@@ -622,8 +966,8 @@ fn turn_prompt(state: &DriverState, seat: &str, brief: &str, rows: &[String]) ->
         .and_then(|participant| participant.open())
         .map_or_else(
             || {
-                "You hold no open assignment. A peer asked you something above: answer it \
-                 with `post`, from what you privately know, and end your turn."
+                "You hold no open assignment. If a peer asked you something above, \
+                 the conversation is its own thread and you will be turned to there."
                     .to_owned()
             },
             |record| {
@@ -635,11 +979,39 @@ fn turn_prompt(state: &DriverState, seat: &str, brief: &str, rows: &[String]) ->
         );
     // The brief travels with every turn. A live run with it only in the
     // standing prompt produced twelve turns in which no seat stated a single
-    // thing it privately knew: everyone hunted for a git diff that does not
-    // exist. What a seat is, and what only it knows, has to be in front of it.
+    // thing it privately knew.
     format!(
-        "## Who you are\n{brief}\n\n## New desk messages\n{rows}\n\n{assignment}\n\n\
+        "## Who you are\n{brief}\n\n## New desk messages\n{rows}{conversations}\n\n{assignment}\n\n\
          Every tool call must carry \"chat\": \"{DESK_ID}\" and \"parent\": null."
+    )
+}
+
+/// What one turn inside a conversation is shown.
+fn thread_prompt(
+    brief: &str,
+    root: Sequence,
+    other: &str,
+    is_asker: bool,
+    rows: &[String],
+) -> String {
+    let rows = if rows.is_empty() {
+        "(nothing new)".to_owned()
+    } else {
+        rows.join("\n")
+    };
+    let role = if is_asker {
+        "You opened this conversation. Say what you still need with `post`; when you have \
+         what you need, call `complete_episode` to conclude your side."
+    } else {
+        "A peer asked you this. Answer with `post`, from what you privately know; ask back \
+         with `post` if you must. When you have said what you can, call `complete_episode`."
+    };
+    format!(
+        "## Who you are\n{brief}\n\n## A private conversation with @{other} (thread {})\n{rows}\n\n\
+         {role} Only the two of you read this thread.\n\n\
+         Every tool call must carry \"chat\": \"{DESK_ID}\" and \"parent\": \"{}\". \
+         `ask` and `broadcast` are not available inside a conversation.",
+        root.0, root.0
     )
 }
 

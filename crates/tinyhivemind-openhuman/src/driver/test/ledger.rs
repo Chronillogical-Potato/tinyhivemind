@@ -105,6 +105,15 @@ fn ask(to: &str) -> Utterance {
     }
 }
 
+/// The host's cross-post: the conversation's conclusion, as a private message
+/// from the seat asked to the asker.
+fn concluded(to: &str) -> Utterance {
+    Utterance::Dm {
+        to: vec![to.into()],
+        message: "we concluded it is tight".into(),
+    }
+}
+
 fn apply(
     driver: &CompletionDriver<'_>,
     state: &DriverState,
@@ -196,7 +205,7 @@ fn a_completion_with_nothing_queued_hands_nothing_back() {
 }
 
 #[test]
-fn an_ask_holds_the_askers_completion_until_the_asked_seat_commits_a_row() {
+fn an_ask_holds_the_askers_completion_until_the_conversation_concludes() {
     let hive = hive();
     let driver = CompletionDriver::new(&hive, 4).expect("driver");
     let router = FirstRouter::default();
@@ -217,14 +226,19 @@ fn an_ask_holds_the_askers_completion_until_the_asked_seat_commits_a_row() {
             if agent_id == "one" && waiting_on == &["two".to_string()]),
         "{refused:?}",
     );
-    let answered = apply(&driver, &asked, "two", 3, post(), &router)
-        .expect("answer")
+    // Whatever the asked seat says on the open desk is not the conclusion.
+    let still = apply(&driver, &asked, "two", 3, post(), &router)
+        .expect("post")
+        .state;
+    assert!(still.ledger().awaiting("one").is_some());
+    let concluded_now = apply(&driver, &still, "two", 4, concluded("one"), &router)
+        .expect("cross-post")
         .state;
     assert!(
-        answered.ledger().awaiting("one").is_none(),
-        "any row from two is the answer"
+        concluded_now.ledger().awaiting("one").is_none(),
+        "the private message to the asker is the conclusion",
     );
-    apply(&driver, &answered, "one", 4, complete(), &router).expect("now it may finish");
+    apply(&driver, &concluded_now, "one", 5, complete(), &router).expect("now it may finish");
 }
 
 #[test]
@@ -247,10 +261,10 @@ fn a_settled_seat_that_owes_an_answer_is_woken_for_it() {
     assert_eq!(
         round_ids(&driver, &asked),
         ["one", "two"],
-        "the seat asked is owed a turn to answer, after the pending ones",
+        "the seat asked is owed a turn for the conversation, after the pending ones",
     );
-    let answered = apply(&driver, &asked, "two", 3, post(), &router)
-        .expect("answer")
+    let answered = apply(&driver, &asked, "two", 3, concluded("one"), &router)
+        .expect("cross-post")
         .state;
     assert_eq!(round_ids(&driver, &answered), ["one"]);
 }
@@ -495,42 +509,35 @@ fn a_completion_from_a_settled_seat_is_recorded_and_changes_nothing() {
 }
 
 #[test]
-fn a_question_or_handoff_from_the_asked_seat_is_not_its_answer() {
+fn only_a_private_message_to_the_asker_concludes_the_conversation() {
     let hive = hive();
     let driver = CompletionDriver::new(&hive, 4).expect("driver");
     let router = FirstRouter::default();
-    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let state = driver
+        .start(episode(&["one", "two", "three"]))
+        .expect("state");
     let asked = apply(&driver, &state, "one", 1, ask("two"), &router)
         .expect("ask")
         .state;
-    let two_asks_back = apply(&driver, &asked, "two", 2, ask("one"), &router)
-        .expect("two asks")
+    let mut next = asked;
+    for (sequence, utterance) in [
+        (2, ask("one")),
+        (3, broadcast("work")),
+        (4, post()),
+        (5, concluded("three")),
+    ] {
+        next = apply(&driver, &next, "two", sequence, utterance, &router)
+            .expect("two speaks")
+            .state;
+        assert!(
+            next.ledger().awaiting("one").is_some(),
+            "a question, a handoff, a desk post, or a message to somebody else is not one's answer",
+        );
+    }
+    let done = apply(&driver, &next, "two", 6, concluded("one"), &router)
+        .expect("cross-post")
         .state;
-    assert!(
-        two_asks_back.ledger().awaiting("one").is_some(),
-        "two asking a question of its own has not answered one's",
-    );
-    let two_broadcasts = apply(
-        &driver,
-        &two_asks_back,
-        "two",
-        3,
-        broadcast("work"),
-        &router,
-    )
-    .expect("two broadcasts")
-    .state;
-    assert!(
-        two_broadcasts.ledger().awaiting("one").is_some(),
-        "handing work off is not answering either",
-    );
-    let two_posts = apply(&driver, &two_broadcasts, "two", 4, post(), &router)
-        .expect("two posts")
-        .state;
-    assert!(
-        two_posts.ledger().awaiting("one").is_none(),
-        "saying something to the desk is the answer",
-    );
+    assert!(done.ledger().awaiting("one").is_none());
 }
 
 #[test]
