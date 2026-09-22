@@ -471,3 +471,64 @@ fn a_state_written_before_the_ledger_still_loads() {
     assert_eq!(loaded, state);
     driver.resume(loaded).expect("and validates");
 }
+
+#[test]
+fn a_completion_from_a_settled_seat_is_recorded_and_changes_nothing() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let router = FirstRouter::default();
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let settled = apply(&driver, &state, "two", 1, complete(), &router)
+        .expect("two")
+        .state;
+    assert_eq!(settled.episode().settled(), 1);
+    let again = apply(&driver, &settled, "two", 2, complete(), &router)
+        .expect("a settled seat saying it is done is already true");
+    assert!(again.actions.is_empty());
+    assert_eq!(again.state.episode().settled(), 1, "nothing moved");
+    assert_eq!(again.state.revision(), 2, "the row is still on the record");
+    assert_eq!(
+        again.state.episode().participants[1].assignments.len(),
+        1,
+        "no record was appended"
+    );
+}
+
+#[test]
+fn a_question_or_handoff_from_the_asked_seat_is_not_its_answer() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let router = FirstRouter::default();
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let asked = apply(&driver, &state, "one", 1, ask("two"), &router)
+        .expect("ask")
+        .state;
+    let two_asks_back = apply(&driver, &asked, "two", 2, ask("one"), &router)
+        .expect("two asks")
+        .state;
+    assert!(
+        two_asks_back.ledger().awaiting("one").is_some(),
+        "two asking a question of its own has not answered one's",
+    );
+    let two_broadcasts = apply(
+        &driver,
+        &two_asks_back,
+        "two",
+        3,
+        broadcast("work"),
+        &router,
+    )
+    .expect("two broadcasts")
+    .state;
+    assert!(
+        two_broadcasts.ledger().awaiting("one").is_some(),
+        "handing work off is not answering either",
+    );
+    let two_posts = apply(&driver, &two_broadcasts, "two", 4, post(), &router)
+        .expect("two posts")
+        .state;
+    assert!(
+        two_posts.ledger().awaiting("one").is_none(),
+        "saying something to the desk is the answer",
+    );
+}

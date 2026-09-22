@@ -81,7 +81,10 @@ own arguments:
       -- call once, when you have finished what was asked of you.
 
 Call broadcast and then complete_episode when the work you found is not yours
-at all. Keep your reply brief -- the tool message is what the desk reads.";
+at all. If you are waiting on answers and nothing new bears on your work, end
+your turn without calling any tool -- a post that says only that you are
+waiting tells the desk nothing. Keep your reply brief -- the tool message is
+what the desk reads.";
 
 /// The desk, and what each seat privately knows: a hidden profile, so no seat
 /// can answer alone and the tools are necessary rather than available.
@@ -432,7 +435,7 @@ async fn run() -> anyhow::Result<()> {
             );
             state.delivered(seat_id, latest);
             state.turn_started(seat_id);
-            let prompt = turn_prompt(&state, seat_id, &rows);
+            let prompt = turn_prompt(&state, seat_id, &briefs[seat_id], &rows);
             let session = format!("conducted-{run_id}:{seat_id}");
             let agent = agents[seat_id].clone();
             let id = seat_id.clone();
@@ -467,6 +470,7 @@ async fn run() -> anyhow::Result<()> {
                 // An ask is private to the seat it asks; everything else is the desk's.
                 let only_for = utterance.asks().map(str::to_owned);
                 let sequence = journal.append(&seat_id, &describe(&utterance), only_for.as_deref());
+                let is_broadcast = utterance.broadcasting();
                 let committed = CommittedUtterance {
                     author_id: seat_id.clone(),
                     sequence,
@@ -477,9 +481,11 @@ async fn run() -> anyhow::Result<()> {
                     .await
                 {
                     Ok(transition) => {
+                        let mut routed = false;
                         for action in &transition.actions {
                             match action {
                                 HostAction::RunAgents { agent_ids, .. } => {
+                                    routed = true;
                                     println!("[broadcast] @{seat_id} -> {}", agent_ids.join(", "));
                                 }
                                 HostAction::DeliverDm { .. } => {}
@@ -498,6 +504,21 @@ async fn run() -> anyhow::Result<()> {
                                     );
                                 }
                             }
+                        }
+                        // Routing placed it with nobody: the correct call when
+                        // no seat fits, and the author must be told, or it waits
+                        // for a pickup that will never come.
+                        if is_broadcast && !routed {
+                            println!(
+                                "[unplaced] @{seat_id}'s broadcast fits no seat; it keeps the work"
+                            );
+                            journal.append(
+                                "desk",
+                                "nobody on this desk can take that; the work stays with you. \
+                                 Do what you can with what the desk holds, or complete with \
+                                 what you have.",
+                                Some(&seat_id),
+                            );
                         }
                         state = transition.state;
                     }
@@ -567,7 +588,7 @@ async fn run() -> anyhow::Result<()> {
 
 /// What one turn is shown: only the rows above its watermark, its assignment,
 /// and the one thing the tools need it to say on every call.
-fn turn_prompt(state: &DriverState, seat: &str, rows: &[String]) -> String {
+fn turn_prompt(state: &DriverState, seat: &str, brief: &str, rows: &[String]) -> String {
     let rows = if rows.is_empty() {
         "(nothing new)".to_owned()
     } else {
@@ -592,9 +613,13 @@ fn turn_prompt(state: &DriverState, seat: &str, rows: &[String]) -> String {
                 )
             },
         );
+    // The brief travels with every turn. A live run with it only in the
+    // standing prompt produced twelve turns in which no seat stated a single
+    // thing it privately knew: everyone hunted for a git diff that does not
+    // exist. What a seat is, and what only it knows, has to be in front of it.
     format!(
-        "## New desk messages\n{rows}\n\n{assignment}\n\nEvery tool call must carry \
-         \"chat\": \"{DESK_ID}\" and \"parent\": null."
+        "## Who you are\n{brief}\n\n## New desk messages\n{rows}\n\n{assignment}\n\n\
+         Every tool call must carry \"chat\": \"{DESK_ID}\" and \"parent\": null."
     )
 }
 

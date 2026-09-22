@@ -480,7 +480,14 @@ impl<'a> CompletionDriver<'a> {
         if let Some(assigned_at) = open_assignment(&state.episode, author) {
             next.seen.ran(author, assigned_at);
         }
-        next.ledger.answered(author);
+        // A question or a handoff from the asked seat is not its answer;
+        // anything it says to the desk, or its own completion, is.
+        if !matches!(
+            event.utterance,
+            Utterance::Ask { .. } | Utterance::Broadcast { .. }
+        ) {
+            next.ledger.answered(author);
+        }
 
         let actions = match &event.utterance {
             Utterance::Post { .. } => Vec::new(),
@@ -530,6 +537,12 @@ impl<'a> CompletionDriver<'a> {
         event: &CommittedUtterance,
     ) -> Result<Vec<HostAction>> {
         let author = event.author_id.as_str();
+        // A settled seat saying it is done is already true. A seat woken to
+        // answer a question, having answered, will often say so; the row is
+        // recorded and nothing moves. Refusing it aborted a live episode.
+        if open_assignment(&next.episode, author).is_none() {
+            return Ok(Vec::new());
+        }
         if let Some(waiting) = next.ledger.awaiting(author) {
             return Err(Error::AwaitingReply {
                 agent_id: author.to_owned(),

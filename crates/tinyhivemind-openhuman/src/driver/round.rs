@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use tinyhivemind::{Sequence, speech::Utterance};
 use tinyhivemind_hive::apply_completion;
 
+use super::ledger::open_assignment;
 use super::{
     BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, PendingRound, Transition,
 };
@@ -151,7 +152,10 @@ impl CompletionDriver<'_> {
             match &event.utterance {
                 Utterance::Post { .. } => {}
                 Utterance::CompleteEpisode { .. } => {
-                    episode = apply_completion(&episode, &event.author_id, event.sequence)?;
+                    // Benign for a settled seat, as in the per-event fold.
+                    if open_assignment(&episode, &event.author_id).is_some() {
+                        episode = apply_completion(&episode, &event.author_id, event.sequence)?;
+                    }
                 }
                 Utterance::Dm { to, .. } => {
                     self.hive
