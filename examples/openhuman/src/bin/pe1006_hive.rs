@@ -406,7 +406,7 @@ async fn run() -> anyhow::Result<()> {
                         author: id.clone(),
                         body: format!("BROADCAST: {message}"),
                     });
-                    visibility.mark_own(&id, index);
+                    visibility.mark_own(id, index);
                 }
                 tinyhivemind::speech::Utterance::CompleteEpisode { message } => {
                     let index = transcript.len();
@@ -414,7 +414,7 @@ async fn run() -> anyhow::Result<()> {
                         author: id.clone(),
                         body: format!("COMPLETE: {message}"),
                     });
-                    visibility.mark_own(&id, index);
+                    visibility.mark_own(id, index);
                 }
                 tinyhivemind::speech::Utterance::Post { .. }
                 | tinyhivemind::speech::Utterance::Dm { .. }

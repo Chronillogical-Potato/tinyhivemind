@@ -6,12 +6,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::future::join_all;
+use openhuman_core::agent::registry::types::{
+    AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
+};
 use openhuman_embed::{
     Access, Agent, AgentDefinitionSpec, AgentSpec, CoreError, McpServer, Provider, Runtime,
     RuntimeConfig, ToolScopeSpec, Workspace,
-};
-use openhuman_core::agent::registry::types::{
-    AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
 };
 use serde::{Deserialize, Serialize};
 use tinyhivemind::desk::{Desk, ResponderMode};
