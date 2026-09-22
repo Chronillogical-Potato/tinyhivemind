@@ -40,17 +40,15 @@
 mod sim;
 
 use std::fmt::Write as _;
-use std::sync::OnceLock;
 
-use openhuman_embed::{Agent, AgentSpec, Runtime, Workspace};
 use tinyhivemind::responder::Probability;
 use tinyhivemind::speech::Utterance;
 use tinyhivemind::{Conversation, Sequence, desk::Desk};
 use tinyhivemind_embed::{RouteCandidate, RoutingPolicy};
 use tinyhivemind_hive::CompletionEpisodeState;
 use tinyhivemind_openhuman::{
-    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, Error,
-    HiveGraph, HostAction, OpenHumanHive,
+    AgentBinding, BoundAgent, BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState,
+    Error, HiveGraph, HostAction, OpenHumanHive,
 };
 
 use sim::{AgentModel, Room, Spread};
@@ -199,36 +197,25 @@ fn main() {
     print!("{table}");
 }
 
-/// One `OpenHuman` runtime for the process: the driver binds real agent handles,
-/// and building them is the only thing here that is not a fold.
-fn agents(count: usize) -> &'static [Agent] {
-    static AGENTS: OnceLock<Vec<Agent>> = OnceLock::new();
-    let built = AGENTS.get_or_init(|| {
-        let executor = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("runtime");
-        let runtime = executor
-            .block_on(
-                Runtime::builder()
-                    .workspace(Workspace::Ephemeral)
-                    .api_key("th_bench")
-                    .build(),
-            )
-            .expect("an ephemeral OpenHuman runtime needs no credential");
-        (0..16)
-            .map(|index| {
-                runtime
-                    .agent(AgentSpec::new(format!("a{index}")))
-                    .expect("agent")
-            })
-            .collect()
-    });
-    assert!(count <= built.len(), "at most {} members", built.len());
-    &built[..count]
+/// The benchmark's seat: a handle with a runtime id and nothing behind it.
+///
+/// The driver stores what a hive binds and hands it back with a pending
+/// round; it never runs one. So the room here is bound to plain seats, and
+/// nothing in this benchmark boots an `OpenHuman` runtime -- every arm is a
+/// fold over the same rooms, and the header's promise that nothing needs a
+/// model, a provider or a credential is literally true.
+#[derive(Clone, Debug)]
+struct Seat {
+    id: String,
 }
 
-fn hive(ids: &[String]) -> OpenHumanHive {
+impl BoundAgent for Seat {
+    fn runtime_id(&self) -> &str {
+        &self.id
+    }
+}
+
+fn hive(ids: &[String]) -> OpenHumanHive<Seat> {
     OpenHumanHive::new(
         HiveGraph::new(
             Desk {
@@ -251,8 +238,7 @@ fn hive(ids: &[String]) -> OpenHumanHive {
                 .collect(),
         ),
         ids.iter()
-            .zip(agents(ids.len()))
-            .map(|(id, agent)| AgentBinding::new(id.clone(), agent.clone()))
+            .map(|id| AgentBinding::new(id.clone(), Seat { id: id.clone() }))
             .collect(),
     )
     .expect("the benchmark desk validates")
@@ -351,7 +337,7 @@ fn run_arm(arm: &Arm, episodes: u32, members: usize) -> Tally {
 /// The host loop, as a host would write it: propose a round, run it, commit
 /// what it said in landing order, report delivery, repeat until quiescent.
 async fn run_episode(
-    driver: &CompletionDriver<'_>,
+    driver: &CompletionDriver<'_, Seat>,
     ids: &[String],
     room: &mut Room,
     routing: BroadcastRouting<'_>,
@@ -425,7 +411,7 @@ async fn run_episode(
 /// an author whose budget is spent keeps the work and is finished with it.
 #[allow(clippy::too_many_arguments)]
 async fn commit(
-    driver: &CompletionDriver<'_>,
+    driver: &CompletionDriver<'_, Seat>,
     state: &DriverState,
     ids: &[String],
     room: &mut Room,
