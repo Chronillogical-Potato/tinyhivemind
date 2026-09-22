@@ -3016,6 +3016,7 @@ name = "tinyhivemind-openhuman-example"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "env_logger",
  "futures",
  "openhuman",
@@ -3031,6 +3032,8 @@ dependencies = [
  "tinyhivemind-openhuman",
  "tinyhivemind-typesafe",
  "tinyjevclient",
+ "tinytools 0.3.0",
+ "tinytools-agent 0.3.0",
  "tokio",
  "wait-timeout",
  "wiremock",

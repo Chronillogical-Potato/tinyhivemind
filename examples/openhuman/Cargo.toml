@@ -26,6 +26,15 @@ tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }
 tinyhivemind-hive = { path = "../../crates/tinyhivemind-hive" }
 tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman" }
 tinyhivemind-typesafe = { path = "../../crates/tinyhivemind-typesafe" }
+# The raw-session proof (`conducted_raw`) implements `tinytools::Tool` for the
+# episode tools it hands `OpenHumanSessionHost::builder()`, and names the
+# native tool dialect from `tinytools-agent`. Both are the vendored checkout's
+# own copies, at the same path OpenHuman itself resolves them from, so the
+# `Tool` a raw session takes is the `Tool` this example implements.
+tinytools = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
+tinytools-agent = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
+# `tinytools::Tool` and OpenHuman's `ToolPolicy` and `Memory` are async traits.
+async-trait = "0.1"
 # The room's tools, served over MCP, for the `conducted` binary: the one seam
 # OpenHuman offers a foreign component, and the one socket the repository
 # opens (ADR 0022).

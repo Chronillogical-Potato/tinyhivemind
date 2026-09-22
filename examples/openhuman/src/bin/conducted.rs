@@ -7,29 +7,35 @@
 //! quiescent -- and what is written here is only what a host owns: agents,
 //! a journal, sessions, and the prompt a turn is shown.
 //!
+//! How a seat's turn *runs* is behind one seam, [`conducted::runner::SeatRunner`],
+//! with two implementations: `openhuman-embed` agents reaching the tools over
+//! MCP ([`conducted::embed`], the default), and raw `OpenHumanSessionHost`
+//! sessions handed the same tools natively ([`conducted::raw`]). The loop
+//! cannot tell them apart; `TINYHIVEMIND_RUNNER=raw` picks the second.
+//!
 //! ```sh
 //! set -a; . ~/.config/tinyhivemind/live.env; set +a
 //! TINYHIVEMIND_LIVE_OPENROUTER=1 cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
+//! # The raw runner also runs offline, against a scripted model, as a proof of its mechanics:
+//! TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
 //! ```
 
 mod conducted {
+    pub mod embed;
     pub mod jev;
+    pub mod raw;
+    pub mod runner;
 }
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
+use conducted::embed::EmbedRunner;
 use conducted::jev::LiveJev;
-use openhuman_core::agent::registry::types::{
-    AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
-};
-use openhuman_embed::{
-    Access, Agent, AgentDefinitionSpec, AgentSpec, McpServer, Provider, Runtime, RuntimeConfig,
-    ServiceSet, ToolScopeSpec, Workspace,
-};
+use conducted::raw::{self, RawRunner, Route};
+use conducted::runner::{Lane, RunnerKind, SeatRunner, TurnJob};
+use openhuman_embed::{Access, Provider, Runtime, RuntimeConfig, ServiceSet, Workspace};
 use serde_json::json;
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
@@ -40,11 +46,10 @@ use tinyhivemind_embed::{
     RoutingPolicy, RoutingRequest, RoutingSource, route_message,
 };
 use tinyhivemind_hive::{CompletionEpisodeState, apply_completion};
-use tinyhivemind_mcp::{Dispatch, EpisodeTools, serve};
+use tinyhivemind_mcp::{Dispatch, EpisodeTools};
 use tinyhivemind_openhuman::{
-    AgentBinding, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,
-    ConversationView, DriverState, EpisodeBrief, Error, HiveGraph, HostAction, OpenHumanHive,
-    standing_contract,
+    BoundAgent, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver, ConversationView,
+    DriverState, EpisodeBrief, Error, HiveGraph, HostAction, OpenHumanHive, standing_contract,
 };
 use tinyhivemind_typesafe::JevRouter;
 use wiremock::matchers::any;
@@ -194,7 +199,6 @@ const REPLY_SHOWN: usize = 600;
 const JEV_MODEL: &str = "jev-1.13.0";
 const OPENROUTER: &str = "https://openrouter.ai/api/v1";
 const WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
-const TURN_TIMEOUT: Duration = Duration::from_secs(300);
 /// Hard wall on turns: a chain that will not end is a finding, not a hang.
 const TURN_WALL: u64 = 60;
 /// Turns one conversation may take before it is concluded without an answer.
@@ -310,31 +314,6 @@ struct Child {
     turned: bool,
 }
 
-/// Where a turn is running, for the host's own bookkeeping.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Lane {
-    Desk,
-    Thread(Sequence),
-}
-
-/// A turn's reply, once it is back: `None` timed out.
-type TurnResult = Option<Result<String, String>>;
-type TurnJob = std::pin::Pin<Box<dyn Future<Output = (String, Lane, TurnResult)> + Send>>;
-
-fn spawn_turn(agent: Agent, session: String, seat: String, lane: Lane, prompt: String) -> TurnJob {
-    Box::pin(async move {
-        let result =
-            match tokio::time::timeout(TURN_TIMEOUT, agent.turn(prompt).session(&session).send())
-                .await
-            {
-                Ok(Ok(outcome)) => Some(Ok(outcome.reply)),
-                Ok(Err(error)) => Some(Err(error.to_string())),
-                Err(_) => None,
-            };
-        (seat, lane, result)
-    })
-}
-
 /// A router that counts its calls: the provider bill, one line.
 struct Counted<R> {
     inner: R,
@@ -352,16 +331,17 @@ async fn run() -> anyhow::Result<()> {
     let scenario = scenario_from_env()?;
     let desk_id = scenario.id;
     let _ = env_logger::builder().is_test(false).try_init();
-    if std::env::var_os("TINYHIVEMIND_LIVE_OPENROUTER").is_none() {
+    let kind = RunnerKind::from_env()?;
+    let live = std::env::var_os("TINYHIVEMIND_LIVE_OPENROUTER").is_some();
+    if !live && kind == RunnerKind::Embed {
         eprintln!(
             "conducted: set TINYHIVEMIND_LIVE_OPENROUTER=1, OPENROUTER_API_KEY,\n\
              OPENROUTER_MODEL and TYPESAFE_API_KEY to run a live episode.\n\
-             It makes one model call per agent turn and one Jev call per route."
+             It makes one model call per agent turn and one Jev call per route.\n\
+             TINYHIVEMIND_RUNNER=raw runs the raw runner offline, against a scripted model."
         );
         return Ok(());
     }
-    let key = required("OPENROUTER_API_KEY")?;
-    let model = required("OPENROUTER_MODEL")?;
 
     // The core makes non-inference backend calls; signed out of the real one
     // those hang rather than fail. Stub them, the way `pe1006_hive` does.
@@ -376,38 +356,57 @@ async fn run() -> anyhow::Result<()> {
 
     let run_id = std::process::id().to_string();
     let run_dir = std::env::temp_dir().join(format!("tinyhivemind-conducted-{run_id}"));
-    std::fs::create_dir_all(&run_dir)?;
+    let workspace = run_dir.join("openhuman-runtime");
+    std::fs::create_dir_all(&workspace)?;
 
-    let mut config = RuntimeConfig::load_or_init().await?;
-    config.agent.max_tool_iterations = 6;
-    config.default_temperature = 0.0;
+    // Where inference comes from: OpenRouter, or -- with no credential -- the
+    // scripted model that proves the raw runner's mechanics offline.
+    let scripted = if live {
+        None
+    } else {
+        eprintln!("conducted: offline, against a scripted model; no route is semantic");
+        Some(raw::offline::model(desk_id).await)
+    };
+    let route = match &scripted {
+        None => Route {
+            endpoint: OPENROUTER.to_owned(),
+            api_key: required("OPENROUTER_API_KEY")?,
+            model: required("OPENROUTER_MODEL")?,
+        },
+        Some(server) => Route {
+            endpoint: format!("{}/v1", server.uri()),
+            api_key: "local-test-key".to_owned(),
+            model: raw::offline::MODEL.to_owned(),
+        },
+    };
 
-    let runtime = Runtime::builder()
-        .config(config)
-        .workspace(Workspace::dir(run_dir.join("openhuman-runtime")))
-        // `none()` leaves `mcp_boot` false, and without it the MCP subsystem
-        // never dials the episode's endpoint: the seats are never offered a
-        // tool at all, which reads exactly like a model declining to call one.
-        .services(episode_services())
-        .backend_url(backend.uri())
-        .provider(Provider::openai_compatible(OPENROUTER, key).model(model))
-        // `mcp_call_tool` is a write as far as the gate is concerned, so a
-        // read-only tier blocks the episode's own tools. The blast radius is
-        // the allowlist below, not the tier: three dispatchers and no shell.
-        .access(Access::full())
-        .build()
-        .await?;
-
-    // The room's tools, served by the crate that owns them. One endpoint per
-    // seat: identity is the URL dialled, never a field filled in.
     let ids: Vec<String> = scenario
         .seats
         .iter()
         .map(|(id, _, _)| (*id).to_owned())
         .collect();
-    let tools = Arc::new(EpisodeTools::new(ids.iter().cloned()));
-    let server = serve(Arc::clone(&tools)).await?;
+    // A raw seat is resolved by the hosted turn against the process
+    // registry, which is read when a runtime boots: register first.
+    if kind == RunnerKind::Raw {
+        let seats: Vec<(&str, &str)> = scenario
+            .seats
+            .iter()
+            .map(|(id, role, _)| (*id, *role))
+            .collect();
+        RawRunner::prepare(&workspace, &seats)?;
+    }
 
+    let mut config = if live {
+        RuntimeConfig::load_or_init().await?
+    } else {
+        offline_config()
+    };
+    config.agent.max_tool_iterations = 6;
+    config.default_temperature = 0.0;
+
+    // The room's tools: one record every call lands in, whichever road it
+    // took. The embed runner serves it over MCP; the raw runner calls it.
+    let tools = Arc::new(EpisodeTools::new(ids.iter().cloned()));
     let briefs: BTreeMap<String, String> = scenario
         .seats
         .iter()
@@ -419,43 +418,101 @@ async fn run() -> anyhow::Result<()> {
         })
         .collect();
     // The standing contract comes from the vocabulary, for exactly the tools
-    // the server serves; the host adds its one sentence on the mechanics.
+    // the record serves; the runner adds its one sentence on the mechanics.
     let contract = format!(
         "{DESK_PREAMBLE}\n\n{}",
         standing_contract(
             tinyhivemind_mcp::served_specs(),
             desk_id,
-            "Use `mcp_call_tool` with `server: \"episode\"`; its `arguments` is a JSON \
-             object, never a string.",
+            kind.how_to_call()
         )
     );
-    let mut agents: BTreeMap<String, Agent> = BTreeMap::new();
-    for (id, _, _) in scenario.seats {
-        let agent = seat(
-            &runtime,
-            id,
-            &briefs[*id],
-            &contract,
-            &run_id,
-            &server.endpoint(id),
-        )?;
-        eprintln!(
-            "[seat] {id}: {} mcp server(s) registered",
-            agent.config().mcp_client.servers.len()
-        );
-        agents.insert((*id).to_owned(), agent);
-    }
-
     let candidates: Vec<RouteCandidate> = scenario
         .seats
         .iter()
         .map(|(id, role, _)| candidate(id, role))
         .collect();
-    let seated: BTreeSet<&str> = agents.keys().map(String::as_str).collect();
+    println!("[runner] {}", kind.name());
+    let setup = Setup {
+        scenario,
+        ids,
+        candidates,
+        briefs,
+        live,
+        scripted,
+    };
+    match kind {
+        RunnerKind::Embed => {
+            let runtime = Runtime::builder()
+                .config(config)
+                .workspace(Workspace::dir(workspace.clone()))
+                // `none()` leaves `mcp_boot` false, and without it the MCP
+                // subsystem never dials the episode's endpoint: the seats are
+                // never offered a tool at all, which reads exactly like a
+                // model declining to call one.
+                .services(episode_services())
+                .backend_url(backend.uri())
+                .provider(
+                    Provider::openai_compatible(route.endpoint.clone(), route.api_key.clone())
+                        .model(route.model.clone()),
+                )
+                // `mcp_call_tool` is a write as far as the gate is concerned,
+                // so a read-only tier blocks the episode's own tools. The
+                // blast radius is the allowlist, not the tier: three
+                // dispatchers and no shell.
+                .access(Access::full())
+                .build()
+                .await?;
+            let runner =
+                EmbedRunner::seat(&runtime, tools, &setup.briefs, &contract, &run_id).await?;
+            episode(runner, setup).await
+        }
+        RunnerKind::Raw => {
+            let runner = RawRunner::seat(
+                tools,
+                &setup.briefs,
+                &contract,
+                &config,
+                &backend.uri(),
+                &route,
+                &workspace,
+            )?;
+            episode(runner, setup).await
+        }
+    }
+}
+
+/// What the episode needs from setup, whichever runner runs it.
+struct Setup {
+    scenario: &'static Scenario,
+    ids: Vec<String>,
+    candidates: Vec<RouteCandidate>,
+    briefs: BTreeMap<String, String>,
+    live: bool,
+    /// The scripted model, held for the run: dropping it stops the server.
+    scripted: Option<MockServer>,
+}
+
+/// One episode over `runner`, stepped to quiescence.
+///
+/// Generic rather than boxed so each runner's bound seat type flows into the
+/// hive and the driver as itself: the loop never names it.
+async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<()> {
+    let Setup {
+        scenario,
+        ids,
+        candidates,
+        briefs,
+        live,
+        scripted,
+    } = setup;
+    let desk_id = scenario.id;
+    let bindings = runner.bindings();
+    let seated: BTreeSet<&str> = bindings.iter().map(|b| b.hive_agent_id.as_str()).collect();
     let advertised: BTreeSet<&str> = candidates.iter().map(|c| c.id.as_str()).collect();
     anyhow::ensure!(
         seated == advertised,
-        "roster drift: instantiated {seated:?} but advertising {advertised:?}"
+        "roster drift: seated {seated:?} but advertising {advertised:?}"
     );
     let hive = OpenHumanHive::new(
         HiveGraph::new(
@@ -468,16 +525,22 @@ async fn run() -> anyhow::Result<()> {
             },
             candidates.clone(),
         ),
-        agents
-            .iter()
-            .map(|(id, agent)| AgentBinding::new(id.clone(), agent.clone()))
-            .collect(),
+        bindings,
     )?;
 
-    let router = Counted {
-        inner: JevRouter::with_model(LiveJev::from_env()?, JEV_MODEL),
-        calls: AtomicU64::new(0),
+    // Jev routes for real only live; offline every route is the deterministic
+    // fallback, and the loop does not change either way. The fallback seat is
+    // the desk's first seat: `theory` on the login desk, `dispatcher` on triage.
+    let fallback = scenario.seats[0].0;
+    let router = if live {
+        Some(Counted {
+            inner: JevRouter::with_model(LiveJev::from_env()?, JEV_MODEL),
+            calls: AtomicU64::new(0),
+        })
+    } else {
+        None
     };
+    let primary: Option<&(dyn Router + '_)> = router.as_ref().map(|r| r as &(dyn Router + '_));
     let journal = Journal::default();
     journal.append("operator", scenario.task, None, None);
 
@@ -498,7 +561,7 @@ async fn run() -> anyhow::Result<()> {
         roster_version: 1,
         policy: policy(4),
     };
-    let plan = route_message(Some(&router), None, &door, None, "lead").await;
+    let plan = route_message(primary, None, &door, None, fallback).await;
     let starters = match &plan {
         RoutingPlan::One { responder_id, .. } | RoutingPlan::Fallback { responder_id, .. } => {
             vec![responder_id.clone()]
@@ -512,7 +575,7 @@ async fn run() -> anyhow::Result<()> {
             .collect(),
         RoutingPlan::Clarify { .. } => {
             eprintln!("[door] routing asked for clarification; lead owns it");
-            vec!["lead".to_owned()]
+            vec![fallback.to_owned()]
         }
     };
     println!("[door] starts: {}", starters.join(", "));
@@ -540,7 +603,7 @@ async fn run() -> anyhow::Result<()> {
         .with_broadcast_budget(Some(2));
     let broadcast_policy = policy(1);
     let routing = BroadcastRouting {
-        primary: Some(&router),
+        primary,
         reasoning: None,
         policy: &broadcast_policy,
         roster_version: 1,
@@ -621,9 +684,9 @@ async fn run() -> anyhow::Result<()> {
                     .copied()
                     .unwrap_or(child.root);
                 let rows = journal.thread_since(child.root, through);
-                tools.window(&seat_id, journal.thread(child.root));
-                tools.register(
+                runner.open(
                     &seat_id,
+                    journal.thread(child.root),
                     Dispatch {
                         chat: desk_id.into(),
                         parent: Some(child.root.0.to_string()),
@@ -655,13 +718,7 @@ async fn run() -> anyhow::Result<()> {
                     briefs[&seat_id],
                     brief.render()
                 );
-                jobs.push(spawn_turn(
-                    agents[&seat_id].clone(),
-                    format!("conducted-{run_id}:{seat_id}"),
-                    seat_id,
-                    Lane::Thread(child.root),
-                    prompt,
-                ));
+                jobs.push(runner.turn(seat_id, Lane::Thread(child.root), prompt));
             }
         }
         let seats: Vec<String> = driver
@@ -681,9 +738,9 @@ async fn run() -> anyhow::Result<()> {
                 .copied()
                 .unwrap_or(Sequence(0));
             let rows = journal.desk_since(&seat_id, through);
-            tools.window(&seat_id, rows.clone());
-            tools.register(
+            runner.open(
                 &seat_id,
+                rows.clone(),
                 Dispatch {
                     chat: desk_id.into(),
                     parent: None,
@@ -735,13 +792,7 @@ async fn run() -> anyhow::Result<()> {
                 briefs[&seat_id],
                 brief.render()
             );
-            jobs.push(spawn_turn(
-                agents[&seat_id].clone(),
-                format!("conducted-{run_id}:{seat_id}"),
-                seat_id,
-                Lane::Desk,
-                prompt,
-            ));
+            jobs.push(runner.turn(seat_id, Lane::Desk, prompt));
         }
         if jobs.is_empty() {
             // Nothing is due anywhere. A conversation nobody will continue is
@@ -769,7 +820,6 @@ async fn run() -> anyhow::Result<()> {
         let mut desk_events: Vec<(String, Utterance)> = Vec::new();
         let mut thread_events: Vec<(Sequence, String, Utterance)> = Vec::new();
         for (seat_id, lane, outcome) in outcomes {
-            tools.clear(&seat_id);
             turns += 1;
             let where_ = match lane {
                 Lane::Desk => String::new(),
@@ -783,13 +833,15 @@ async fn run() -> anyhow::Result<()> {
                 Some(Err(error)) => eprintln!("[turn] @{seat_id}{where_} failed: {error}"),
                 None => eprintln!("[turn] @{seat_id}{where_} timed out"),
             }
-            for refused in tools.drain_refusals(&seat_id) {
+            // Close the turn first: the record refuses a call on a closed
+            // turn, so nothing can land after this point is read.
+            let events = runner.close(&seat_id);
+            for refused in runner.tools().drain_refusals(&seat_id) {
                 eprintln!(
-                    "[refused at server] @{seat_id}{where_} `{}`: {}",
+                    "[refused] @{seat_id}{where_} `{}`: {}",
                     refused.tool, refused.reason
                 );
             }
-            let events = tools.drain(&seat_id);
             if events.is_empty() {
                 eprintln!("[no tool call] @{seat_id}{where_}");
                 // What the seat wrote instead: the only trace of a refusal
@@ -1033,7 +1085,9 @@ async fn run() -> anyhow::Result<()> {
 
     println!(
         "turns {turns} | routes {} | waves {waves} | discharged {discharged} | settled {} | conversations {}",
-        router.calls.load(Ordering::SeqCst),
+        router
+            .as_ref()
+            .map_or(0, |r| r.calls.load(Ordering::SeqCst)),
         state.episode().settled(),
         concluded.len()
     );
@@ -1048,16 +1102,42 @@ async fn run() -> anyhow::Result<()> {
             row.sequence.0, row.author, row.body
         );
     }
-    drop(server);
-    settled
+    settled?;
+    // Offline, the run is a proof and says so: the scripted seat's native
+    // tool call must have become a desk row through the belt, the gate and
+    // the record, with no transport in between.
+    if scripted.is_some() {
+        let expected = format!("COMPLETE: {}", raw::offline::COMPLETION);
+        anyhow::ensure!(
+            journal.all().iter().any(|row| row.body == expected),
+            "the scripted completion never reached the journal"
+        );
+        println!("offline proof: a native tool call became a desk row");
+    }
+    drop(runner);
+    drop(scripted);
+    Ok(())
+}
+
+/// A config that touches nothing on this machine: no local runtime, no
+/// python, no embedding endpoint. The same neutralisation `main.rs` uses.
+fn offline_config() -> RuntimeConfig {
+    let mut config = RuntimeConfig::default();
+    config.local_ai.runtime_enabled = false;
+    config.runtime_python.enabled = false;
+    config.memory_tree.spacy_enabled = false;
+    config.memory_tree.embedding_endpoint = None;
+    config.memory_tree.embedding_model = None;
+    config.memory_tree.embedding_strict = false;
+    config
 }
 
 /// Conclude one conversation: cross-post its outcome to the asker as a
 /// private message from the seat asked. That row is what releases the
 /// asker's hold and wakes it; the whole conversation reaches it in its next
 /// prompt. `forced` is a conversation that ran out of turns.
-async fn conclude(
-    driver: &CompletionDriver<'_>,
+async fn conclude<A: BoundAgent>(
+    driver: &CompletionDriver<'_, A>,
     journal: &Journal,
     state: &DriverState,
     child: Child,
@@ -1140,57 +1220,6 @@ fn holds(state: &DriverState, seat: &str) -> bool {
         .participants
         .iter()
         .any(|participant| participant.agent_id == seat && participant.open().is_some())
-}
-
-fn seat(
-    runtime: &Runtime,
-    id: &str,
-    brief: &str,
-    contract: &str,
-    run_id: &str,
-    endpoint: &str,
-) -> anyhow::Result<Agent> {
-    // The hosted harness resolves an agent by its *definition* at turn time,
-    // and a definition not in the registry is sanitised to "rejected by
-    // policy" on the way out. Seed it.
-    let agent_id = format!("{id}-conducted-{run_id}");
-    let prompt = format!("{brief}\n\n{contract}");
-    let registry_entry = AgentRegistryEntry {
-        id: agent_id.clone(),
-        name: id.to_owned(),
-        description: "TinyHiveMind desk seat".into(),
-        source: AgentRegistrySource::Custom,
-        enabled: true,
-        model: None,
-        system_prompt: Some(prompt.clone()),
-        tool_allowlist: dispatchers(),
-        tool_denylist: Vec::new(),
-        subagents: AgentSubagentPolicy::default(),
-        tags: Vec::new(),
-        metadata: serde_json::Value::Null,
-    };
-    Ok(runtime.agent(
-        AgentSpec::new(agent_id)
-            .config(move |config| config.agent_registry.entries.push(registry_entry))
-            .system_prompt(prompt)
-            .mcp(McpServer::http("episode", endpoint))
-            .definition(
-                AgentDefinitionSpec::new()
-                    // OpenHuman reaches a remote MCP tool through three
-                    // generic dispatchers. Allowlisting the destination
-                    // blocks the only road to it; these three are the road.
-                    .tools(ToolScopeSpec::Named(dispatchers()))
-                    .max_iterations(16)
-                    .temperature(0.0),
-            ),
-    )?)
-}
-
-fn dispatchers() -> Vec<String> {
-    ["mcp_list_servers", "mcp_list_tools", "mcp_call_tool"]
-        .into_iter()
-        .map(str::to_owned)
-        .collect()
 }
 
 fn candidate(id: &str, role: &str) -> RouteCandidate {
