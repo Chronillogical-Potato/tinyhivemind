@@ -180,6 +180,22 @@ pub(super) fn open_assignment(
         .map(|record| record.assigned_at)
 }
 
+/// The sequence of this seat's most recent assignment, open or closed.
+///
+/// A broadcast is charged to it: a seat that has just been completed by its
+/// own handoff is still spending the budget of the work it was doing.
+pub(super) fn latest_assignment(
+    episode: &CompletionEpisodeState,
+    agent_id: &str,
+) -> Option<Sequence> {
+    episode
+        .participants
+        .iter()
+        .find(|participant| participant.agent_id == agent_id)
+        .and_then(|participant| participant.assignments.last())
+        .map(|record| record.assigned_at)
+}
+
 /// Every id the ledger names, for membership validation on resume.
 pub(super) fn named_ids(ledger: &Ledger) -> BTreeSet<&str> {
     ledger

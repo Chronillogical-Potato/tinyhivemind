@@ -169,6 +169,17 @@ fn call(tools: &EpisodeTools, seat: &str, request: &Value, id: &Value) -> Value 
             ),
         );
     }
+    // Inside a conversation the seat asked answers; it does not open another.
+    // Refused here, in the tool result, while the seat can still call again:
+    // a refusal that arrived later as a row bred a call the seat never made.
+    if dispatch.parent.is_some() && name == "ask" {
+        return refusal(
+            id,
+            "inside a conversation you answer the seat that asked you: call `complete_episode`, \
+             and its message is your answer. If you need another seat first, say so in that \
+             answer, and the seat that asked you will ask them.",
+        );
+    }
     if !serves(name) {
         return refusal(id, &unknown_tool(name));
     }

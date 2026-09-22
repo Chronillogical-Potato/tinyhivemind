@@ -13,9 +13,9 @@ use tinyhivemind_embed::{
     ConversationKind, ConversationRef, RoutingPlan, RoutingPolicy, RoutingRequest, RoutingSource,
     route_broadcast,
 };
-use tinyhivemind_hive::{CompletionEpisodeState, apply_assignment};
+use tinyhivemind_hive::{CompletionEpisodeState, apply_assignment, apply_completion};
 
-use super::ledger::{Handoff, open_assignment};
+use super::ledger::{Handoff, latest_assignment, open_assignment};
 use super::order::{broadcast_fallback, extend_pending_order};
 use super::{
     BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, HostAction, is_pending,
@@ -37,8 +37,10 @@ impl CompletionDriver<'_> {
         };
         let author = event.author_id.as_str();
         // Admitted before the model is called, so a refusal costs nothing.
-        let open_at = open_assignment(&next.episode, author);
-        if let (Some(cap), Some(assigned_at)) = (self.broadcast_budget, open_at)
+        // Charged to the most recent assignment, open or just closed by the
+        // seat's own handoff, so completing does not refill the budget.
+        let charged_at = latest_assignment(&next.episode, author);
+        if let (Some(cap), Some(assigned_at)) = (self.broadcast_budget, charged_at)
             && next.ledger.charged(author, assigned_at) >= cap
         {
             return Err(Error::BudgetSpent {
@@ -58,7 +60,7 @@ impl CompletionDriver<'_> {
             fallback_responder,
         )
         .await;
-        if let Some(assigned_at) = open_at {
+        if let Some(assigned_at) = charged_at {
             next.ledger.charge(author, assigned_at);
         }
         let recipients = route_ids(&plan);
@@ -88,10 +90,26 @@ impl CompletionDriver<'_> {
             return Ok(Vec::new());
         }
         self.place(next, event, message, &recipients)?;
-        Ok(vec![HostAction::RunAgents {
+        let mut actions = vec![HostAction::RunAgents {
             agent_ids: recipients,
             plan,
-        }])
+        }];
+        // Handing work off is a finding. Unless the author is still waiting
+        // on a question it asked, its part is complete (ADR 0024) -- and a
+        // handoff queued for it is handed over now, as at any completion.
+        if open_assignment(&next.episode, author).is_some()
+            && next.ledger.awaiting(author).is_none()
+        {
+            next.episode = apply_completion(&next.episode, author, event.sequence)?;
+            if let Some(handoff) = next.ledger.pop(author) {
+                next.episode = apply_assignment(&next.episode, [author], event.sequence)?;
+                actions.push(HostAction::DeliverHandoff {
+                    agent_id: author.to_owned(),
+                    handoff,
+                });
+            }
+        }
+        Ok(actions)
     }
 
     fn place(

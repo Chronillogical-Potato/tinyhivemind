@@ -71,7 +71,10 @@ const SPECS: &[ToolSpec] = &[
                       to take it. The host routes this message with one TypeSafe Choice over the \
                       currently eligible team; it is not a broadcast-to-all fan-out. Call this \
                       when you hold work that belongs to another seat, whoever that turns out \
-                      to be. One piece of work per call: two things for two seats are two calls.",
+                      to be. One piece of work per call: two things for two seats are two calls. \
+                      Handing work off is a finding: unless you are waiting on a question you \
+                      asked, it completes your part, and you need not call `complete_episode` \
+                      after it.",
         parameters: &[ToolParameter {
             name: "message",
             description: Some(

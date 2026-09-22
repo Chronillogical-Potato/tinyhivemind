@@ -178,6 +178,13 @@ impl CompletionDriver<'_> {
                         &event.author_id,
                     )?;
                     broadcast_fallbacks.insert(event.sequence, fallback.to_owned());
+                    // Mirrors the fold: a broadcast completes an author that is
+                    // not waiting, and a later fallback in the batch sees that.
+                    if open_assignment(&episode, &event.author_id).is_some()
+                        && state.ledger().awaiting(&event.author_id).is_none()
+                    {
+                        episode = apply_completion(&episode, &event.author_id, event.sequence)?;
+                    }
                 }
             }
         }

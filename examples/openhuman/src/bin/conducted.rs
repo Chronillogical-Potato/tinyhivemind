@@ -221,12 +221,10 @@ struct Child {
     turns: u64,
     /// The last thing the seat asked said in it: the conclusion, cross-posted.
     last_by_askee: Option<String>,
-    /// Whether the seat asked has been told once that a reply without a tool
-    /// call reached nobody.
+    /// Whether the seat asked has been told once that it has not answered.
     nudged: bool,
-    /// A conversation the seat asked opened from inside this one, whose
-    /// answer it needs before it can answer here.
-    waiting_on: Option<Sequence>,
+    /// Whether the seat asked took a turn in this wave.
+    turned: bool,
 }
 
 /// Where a turn is running, for the host's own bookkeeping.
@@ -464,6 +462,7 @@ async fn run() -> anyhow::Result<()> {
     // already been shown.
     let mut concluded: Vec<(Sequence, String, String, Vec<String>)> = Vec::new();
     let mut shown: BTreeMap<String, usize> = BTreeMap::new();
+    let mut desk_nudged: BTreeMap<String, Sequence> = BTreeMap::new();
     let mut turns = 0_u64;
     let mut waves = 0_u64;
     let mut discharged = 0_u64;
@@ -472,6 +471,37 @@ async fn run() -> anyhow::Result<()> {
             break Ok(());
         }
         waves += 1;
+
+        // A seat that holds open desk work, ran for it, and has been shown
+        // everything is stalled: nothing will wake it. Once per assignment it
+        // is told, and owed one more turn.
+        for seat_id in state.stalled() {
+            let assigned_at = state
+                .episode()
+                .participants
+                .iter()
+                .find(|participant| participant.agent_id == seat_id)
+                .and_then(|participant| participant.open())
+                .map(|record| record.assigned_at);
+            if desk_nudged.get(&seat_id) == assigned_at.as_ref() {
+                continue;
+            }
+            if let Some(at) = assigned_at {
+                desk_nudged.insert(seat_id.clone(), at);
+            }
+            eprintln!("[nudged] @{seat_id} on the desk: stalled with open work");
+            journal.append(
+                "desk",
+                "you hold open work and nothing new has arrived: complete with what you \
+                 have, or say what you are waiting on.",
+                None,
+                Some(&seat_id),
+            );
+            state.owe_turn(&seat_id);
+        }
+        for child in children.values_mut() {
+            child.turned = false;
+        }
 
         // One turn per seat per wave, and conversations first: a conversation
         // is what unblocks a desk turn, so it goes ahead of it.
@@ -509,22 +539,12 @@ async fn run() -> anyhow::Result<()> {
                 child.state.delivered(&seat_id, journal.latest());
                 child.state.turn_started(&seat_id);
                 child.turns += 1;
+                child.turned = true;
                 let other = if seat_id == child.asker {
                     child.askee.clone()
                 } else {
                     child.asker.clone()
                 };
-                let meanwhile: Vec<ConversationView> = concluded
-                    .iter()
-                    .filter(|(root, asker, _, _)| *asker == seat_id && *root > child.root)
-                    .map(|(root, _, askee, transcript)| ConversationView {
-                        root: *root,
-                        other: askee.clone(),
-                        opened_it: true,
-                        transcript: transcript.clone(),
-                        concluded: true,
-                    })
-                    .collect();
                 let brief = EpisodeBrief::for_turn(
                     &child.state,
                     DESK_ID,
@@ -535,7 +555,7 @@ async fn run() -> anyhow::Result<()> {
                         opened_it: seat_id == child.asker,
                     },
                     rows,
-                    meanwhile,
+                    Vec::new(),
                 );
                 let prompt = format!(
                     "## The desk\n{DESK_PREAMBLE}\n\n## Who you are\n{}\n\n{}",
@@ -643,16 +663,7 @@ async fn run() -> anyhow::Result<()> {
             }
             for root in stuck {
                 let child = children.remove(&root).expect("listed");
-                state = conclude(
-                    &driver,
-                    &journal,
-                    &state,
-                    &mut children,
-                    child,
-                    true,
-                    &mut concluded,
-                )
-                .await?;
+                state = conclude(&driver, &journal, &state, child, true, &mut concluded).await?;
             }
             continue;
         }
@@ -662,8 +673,7 @@ async fn run() -> anyhow::Result<()> {
         // A broadcast made inside a conversation is desk work: the seat found
         // something for someone else while talking, and refusing it there
         // cost a live run both of its deliverables.
-        // A desk event carries the thread it was made from, if any.
-        let mut desk_events: Vec<(String, Utterance, Option<Sequence>)> = Vec::new();
+        let mut desk_events: Vec<(String, Utterance)> = Vec::new();
         let mut thread_events: Vec<(Sequence, String, Utterance)> = Vec::new();
         for (seat_id, lane, outcome) in outcomes {
             tools.clear(&seat_id);
@@ -683,35 +693,15 @@ async fn run() -> anyhow::Result<()> {
             let events = tools.drain(&seat_id);
             if events.is_empty() {
                 eprintln!("[no tool call] @{seat_id}{where_}");
-                // A seat asked a question that replies in prose has answered
-                // nobody, and nothing would wake it again. Once, it is told
-                // so and owed another turn; a second silence stands.
-                if let Lane::Thread(root) = lane
-                    && let Some(child) = children.get_mut(&root)
-                    && seat_id == child.askee
-                    && child.state.revision() == 0
-                    && !child.nudged
-                {
-                    child.nudged = true;
-                    journal.append(
-                        "desk",
-                        "your reply reached nobody: nothing outside a tool call is recorded. \
-                         Say it again with `post`, then `complete_episode` when you are done.",
-                        Some(root),
-                        None,
-                    );
-                    child.state.owe_turn(&seat_id);
-                    eprintln!("[nudged] @{seat_id} in thread {}", root.0);
-                }
             }
             for event in events {
                 let ToolCall::Speak(utterance) = event.call else {
                     continue;
                 };
                 match (lane, &utterance) {
-                    (Lane::Desk, _) => desk_events.push((seat_id.clone(), utterance, None)),
-                    (Lane::Thread(from), Utterance::Broadcast { .. } | Utterance::Ask { .. }) => {
-                        desk_events.push((seat_id.clone(), utterance, Some(from)));
+                    (Lane::Desk, _)
+                    | (Lane::Thread(_), Utterance::Broadcast { .. } | Utterance::Ask { .. }) => {
+                        desk_events.push((seat_id.clone(), utterance));
                     }
                     (Lane::Thread(root), _) => {
                         thread_events.push((root, seat_id.clone(), utterance))
@@ -749,7 +739,25 @@ async fn run() -> anyhow::Result<()> {
             }
         }
 
-        for (seat_id, utterance, from_thread) in desk_events {
+        // The seat asked took its turn and the conversation is not over: it
+        // did not answer, whatever it did instead. Once, it is told so and
+        // owed one more turn; a second silence stands.
+        for child in children.values_mut() {
+            if child.turned && !child.state.quiescent() && !child.nudged {
+                child.nudged = true;
+                journal.append(
+                    "desk",
+                    "the seat that asked you is waiting: answer with `complete_episode`, and its \
+                     message is your answer. If you need another seat first, say so in that answer.",
+                    Some(child.root),
+                    None,
+                );
+                child.state.owe_turn(&child.askee);
+                eprintln!("[nudged] @{} in thread {}", child.askee, child.root.0);
+            }
+        }
+
+        for (seat_id, utterance) in desk_events {
             // An ask is private to the seat it asks and roots a conversation;
             // everything else is the desk's.
             let asked = utterance.asks().map(str::to_owned);
@@ -791,13 +799,6 @@ async fn run() -> anyhow::Result<()> {
                                         "[ask] @{seat_id} opened a conversation with @{askee} (thread {})",
                                         sequence.0
                                     );
-                                    // Asked from inside another conversation: that
-                                    // one waits on this answer before it can answer.
-                                    if let Some(origin) = from_thread
-                                        && let Some(parent) = children.get_mut(&origin)
-                                    {
-                                        parent.waiting_on = Some(sequence);
-                                    }
                                     children.insert(
                                         sequence,
                                         Child {
@@ -808,7 +809,7 @@ async fn run() -> anyhow::Result<()> {
                                             turns: 0,
                                             last_by_askee: None,
                                             nudged: false,
-                                            waiting_on: None,
+                                            turned: false,
                                         },
                                     );
                                 }
@@ -909,16 +910,7 @@ async fn run() -> anyhow::Result<()> {
         for root in over {
             let child = children.remove(&root).expect("listed");
             let forced = !child.state.quiescent();
-            state = conclude(
-                &driver,
-                &journal,
-                &state,
-                &mut children,
-                child,
-                forced,
-                &mut concluded,
-            )
-            .await?;
+            state = conclude(&driver, &journal, &state, child, forced, &mut concluded).await?;
         }
         if turns >= TURN_WALL {
             break Err(anyhow::anyhow!("turn wall of {TURN_WALL} reached"));
@@ -954,7 +946,6 @@ async fn conclude(
     driver: &CompletionDriver<'_>,
     journal: &Journal,
     state: &DriverState,
-    children: &mut BTreeMap<Sequence, Child>,
     child: Child,
     forced: bool,
     concluded: &mut Vec<(Sequence, String, String, Vec<String>)>,
@@ -1002,18 +993,6 @@ async fn conclude(
             None,
         )
         .await?;
-    // The asker may have asked this from inside a conversation it still owes
-    // an answer in: it is owed that turn again, with this answer in front of it.
-    for waiting in children.values_mut() {
-        if waiting.waiting_on == Some(child.root) && waiting.askee == child.asker {
-            waiting.waiting_on = None;
-            waiting.state.owe_turn(&child.asker);
-            println!(
-                "[resumed] thread {} between @{} and @{}: @{} has its answer",
-                waiting.root.0, waiting.asker, waiting.askee, child.asker
-            );
-        }
-    }
     concluded.push((child.root, child.asker, child.askee, transcript));
     Ok(transition.state)
 }

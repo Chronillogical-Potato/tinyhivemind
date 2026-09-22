@@ -61,7 +61,23 @@ fn all_broadcast_round_uses_a_distinct_valid_fallback_for_each_author() {
             | HostAction::DeliverHandoff { .. } => None,
         })
         .collect();
-    assert_eq!(transition.actions.len(), 3);
+    let runs = transition
+        .actions
+        .iter()
+        .filter(|action| matches!(action, HostAction::RunAgents { .. }))
+        .count();
+    assert_eq!(runs, 3, "one route per broadcast");
+    // Each broadcast completed its author (ADR 0024). The handoffs the first
+    // two broadcasts queued for the second and third authors -- each was still
+    // working when named -- are handed over at those completions.
+    assert_eq!(
+        transition
+            .actions
+            .iter()
+            .filter(|action| matches!(action, HostAction::DeliverHandoff { .. }))
+            .count(),
+        2
+    );
     assert_eq!(responders, ["two", "three", "one"]);
     assert_eq!(transition.state.revision(), 3);
 }

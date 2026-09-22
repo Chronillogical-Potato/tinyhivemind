@@ -81,6 +81,21 @@ fn in_thread(extra: &Value) -> Value {
     merged
 }
 
+fn desk_dispatch() -> Dispatch {
+    Dispatch {
+        chat: "engineering".into(),
+        parent: None,
+    }
+}
+
+fn on_desk(extra: &Value) -> Value {
+    let mut merged = json!({ "chat": "engineering", "parent": null });
+    for (key, value) in extra.as_object().unwrap() {
+        merged[key] = value.clone();
+    }
+    merged
+}
+
 async fn stand_up() -> (Arc<EpisodeTools>, Server) {
     let tools = Arc::new(EpisodeTools::new(["lead", "solver", "checker"]));
     let server = serve(Arc::clone(&tools)).await.expect("loopback binds");
@@ -216,22 +231,19 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
 #[tokio::test]
 async fn refusals_are_the_vocabularys_own_sentences() {
     let (tools, server) = stand_up().await;
-    tools.register("lead", dispatch());
+    tools.register("lead", desk_dispatch());
     let port = server.port();
     let (_, reply) = post(
         port,
         "/seat/lead",
-        call("complete_episode", &in_thread(&json!({ "message": "  " }))),
+        call("complete_episode", &on_desk(&json!({ "message": "  " }))),
     )
     .await;
     assert_eq!(text(&reply), "`message` must be a non-empty string");
     let (_, reply) = post(
         port,
         "/seat/lead",
-        call(
-            "dm",
-            &in_thread(&json!({ "message": "x", "to": ["solver"] })),
-        ),
+        call("dm", &on_desk(&json!({ "message": "x", "to": ["solver"] }))),
     )
     .await;
     assert_eq!(
@@ -244,7 +256,7 @@ async fn refusals_are_the_vocabularys_own_sentences() {
         "/seat/lead",
         call(
             "ask",
-            &in_thread(&json!({ "message": "?", "to": ["solver", "checker"] })),
+            &on_desk(&json!({ "message": "?", "to": ["solver", "checker"] })),
         ),
     )
     .await;
@@ -255,7 +267,7 @@ async fn refusals_are_the_vocabularys_own_sentences() {
     let (_, reply) = post(
         port,
         "/seat/lead",
-        call("ask", &in_thread(&json!({ "message": "?", "to": "lead" }))),
+        call("ask", &on_desk(&json!({ "message": "?", "to": "lead" }))),
     )
     .await;
     assert_eq!(
@@ -265,10 +277,7 @@ async fn refusals_are_the_vocabularys_own_sentences() {
     let (_, reply) = post(
         port,
         "/seat/lead",
-        call(
-            "ask",
-            &in_thread(&json!({ "message": "?", "to": "johnny" })),
-        ),
+        call("ask", &on_desk(&json!({ "message": "?", "to": "johnny" }))),
     )
     .await;
     assert_eq!(
@@ -281,13 +290,13 @@ async fn refusals_are_the_vocabularys_own_sentences() {
 #[tokio::test]
 async fn an_ask_is_recorded_and_told_the_answer_comes_later() {
     let (tools, server) = stand_up().await;
-    tools.register("lead", dispatch());
+    tools.register("lead", desk_dispatch());
     let (_, reply) = post(
         server.port(),
         "/seat/lead",
         call(
             "ask",
-            &in_thread(&json!({ "message": "is it tight?", "to": "solver" })),
+            &on_desk(&json!({ "message": "is it tight?", "to": "solver" })),
         ),
     )
     .await;
@@ -337,4 +346,32 @@ async fn shutdown_stops_accepting() {
     server.shutdown();
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     assert!(TcpStream::connect(("127.0.0.1", port)).await.is_err());
+}
+
+#[tokio::test]
+async fn an_ask_inside_a_conversation_is_refused_with_what_to_do_instead() {
+    let (tools, server) = stand_up().await;
+    tools.register("solver", dispatch());
+    let (_, reply) = post(
+        server.port(),
+        "/seat/solver",
+        call("ask", &in_thread(&json!({ "message": "?", "to": "lead" }))),
+    )
+    .await;
+    assert_eq!(reply["result"]["isError"], true);
+    assert!(text(&reply).starts_with("inside a conversation you answer the seat that asked you"));
+    assert!(tools.drain("solver").is_empty());
+    let (_, reply) = post(
+        server.port(),
+        "/seat/solver",
+        call(
+            "broadcast",
+            &in_thread(&json!({ "message": "work for someone" })),
+        ),
+    )
+    .await;
+    assert!(
+        reply["result"].get("isError").is_none(),
+        "a broadcast from a thread is served"
+    );
 }

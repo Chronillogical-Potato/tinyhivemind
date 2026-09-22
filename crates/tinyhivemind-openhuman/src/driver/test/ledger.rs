@@ -343,6 +343,10 @@ fn an_unplaceable_broadcast_leaves_the_work_with_an_author_owed_a_turn() {
         "the author is owed another turn for the work it still holds",
     );
     assert!(
+        transition.state.episode().participants[0].is_pending(),
+        "and it is not completed: the work has no owner but it",
+    );
+    assert!(
         transition.state.ledger().is_drained(),
         "nothing was queued either"
     );
@@ -589,5 +593,93 @@ fn a_host_may_say_a_seat_is_owed_another_turn() {
     assert!(
         round_ids(&driver, &ran).contains(&"one".to_owned()),
         "the host said the turn did not count, so it is owed again",
+    );
+}
+
+#[test]
+fn a_placed_broadcast_completes_its_author() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let router = FirstRouter::default();
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let transition = apply(&driver, &state, "one", 1, broadcast("yours"), &router).expect("b");
+    assert!(matches!(
+        transition.actions.as_slice(),
+        [HostAction::RunAgents { .. }]
+    ));
+    assert_eq!(
+        transition.state.episode().settled(),
+        1,
+        "handing off is a finding"
+    );
+    assert!(!transition.state.episode().participants[0].is_pending());
+    assert_eq!(
+        transition.state.ledger().queue_len("two"),
+        1,
+        "two was working, so it is queued"
+    );
+}
+
+#[test]
+fn a_broadcast_while_waiting_leaves_its_author_pending() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let router = FirstRouter::default();
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let asked = apply(&driver, &state, "one", 1, ask("two"), &router)
+        .expect("ask")
+        .state;
+    let after = apply(&driver, &asked, "one", 2, broadcast("yours"), &router)
+        .expect("b")
+        .state;
+    assert!(
+        after.episode().participants[0].is_pending(),
+        "still waiting on two, so still open",
+    );
+}
+
+#[test]
+fn a_queued_handoff_drains_on_the_completing_broadcast() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let router = FirstRouter::default();
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    // two hands work to one, who is working: queued for one; two completes.
+    let queued = apply(&driver, &state, "two", 1, broadcast("for one"), &router)
+        .expect("b")
+        .state;
+    assert_eq!(queued.ledger().queue_len("one"), 1);
+    assert!(!queued.episode().participants[1].is_pending());
+    // one hands its own work to two (settled, so assigned) and completes --
+    // which hands one the work two queued for it.
+    let transition = apply(&driver, &queued, "one", 2, broadcast("for two"), &router).expect("b");
+    assert!(matches!(
+        transition.actions.as_slice(),
+        [HostAction::RunAgents { .. }, HostAction::DeliverHandoff { agent_id, .. }] if agent_id == "one"
+    ));
+    assert_eq!(open_at(&transition.state, "one"), Some(Sequence(2)));
+    assert_eq!(open_at(&transition.state, "two"), Some(Sequence(2)));
+    assert!(!transition.state.quiescent());
+}
+
+#[test]
+fn completing_by_handoff_does_not_refill_the_broadcast_budget() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4)
+        .expect("driver")
+        .with_broadcast_budget(Some(1));
+    let router = FirstRouter::default();
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let spent = apply(&driver, &state, "one", 1, broadcast("a"), &router)
+        .expect("first")
+        .state;
+    assert!(
+        !spent.episode().participants[0].is_pending(),
+        "completed by its own handoff"
+    );
+    let refused = apply(&driver, &spent, "one", 2, broadcast("b"), &router);
+    assert!(
+        matches!(refused, Err(Error::BudgetSpent { .. })),
+        "{refused:?}"
     );
 }

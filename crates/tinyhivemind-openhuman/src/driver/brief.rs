@@ -188,27 +188,19 @@ impl EpisodeBrief {
     }
 
     fn render_thread(&self, root: Sequence, other: &str, opened_it: bool) -> String {
-        let meanwhile: Vec<String> = self.conversations.iter().map(render_conversation).collect();
-        let meanwhile = if meanwhile.is_empty() {
-            String::new()
-        } else {
-            format!(
-                "\n\n## Answers you asked for meanwhile\n{}",
-                meanwhile.join("\n\n")
-            )
-        };
         let role = if opened_it {
             "You opened this conversation; their answer reaches you on the desk. There is \
              nothing for you to do here."
         } else {
             "A peer asked you this. Answer with `complete_episode`: its message is your answer \
-             and reaches them. If you need something from them first, `ask` them back."
+             and reaches them. If you need another seat first, say so in that answer, and the \
+             seat that asked you will ask them."
         };
         format!(
-            "## A private conversation with @{other} (thread {})\n{}{meanwhile}\n\n{role} Only the \
-             two of you read this thread.\n\nEvery tool call must carry \"chat\": \"{}\" and \
-             \"parent\": \"{}\". An `ask` or a `broadcast` made here goes to the desk: it opens a \
-             new conversation, or hands work off, exactly as it would there.",
+            "## A private conversation with @{other} (thread {})\n{}\n\n{role} Only the two of \
+             you read this thread.\n\nEvery tool call must carry \"chat\": \"{}\" and \
+             \"parent\": \"{}\". `ask` is not available inside a conversation. A `broadcast` made here \
+             hands work off on the desk, exactly as it would there.",
             root.0,
             rows_or_nothing(&self.new_rows),
             self.chat,
