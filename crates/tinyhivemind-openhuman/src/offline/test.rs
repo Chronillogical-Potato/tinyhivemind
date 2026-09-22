@@ -23,7 +23,12 @@ fn request(body: &serde_json::Value) -> Request {
 fn the_dialect_is_read_from_the_tools_the_request_advertises() {
     assert_eq!(
         dialect(&json!({"tools": [{"function": {"name": "complete_episode"}}]})),
-        Dialect::Native
+        Dialect::Native("complete_episode".into())
+    );
+    assert_eq!(
+        dialect(&json!({"tools": [{"function": {"name": "desk_complete_episode"}}]})),
+        Dialect::Native("desk_complete_episode".into()),
+        "a host's prefix is called by"
     );
     assert_eq!(
         dialect(&json!({"tools": [{"name": "mcp_call_tool"}]})),

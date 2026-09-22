@@ -21,9 +21,11 @@ host, through `EpisodeHost`, for three things: its log, a seat built with the
 episode's belt, and a wrapper around each turn. `OpenHuman` fixes a session's
 belt when it is built, so the host builds each seat once per episode, and the
 runner reuses it: each turn it clears the session, seeds it from the host's
-log up to the seat's watermark, runs the brief, and keeps the turn's usage.
-Nothing about the host's agent -- model, tools, gate, memory, prompt -- is
-re-expressed here. `RunnerKind`
+log up to the seat's watermark, runs the brief, keeps the turn's usage, and
+hands it to the host's after-turn hook, where approvals are parked and spend
+is metered. A host with tools of its own prefixes the episode's, so none
+shares a name with its own and is admitted past its gate. Nothing about the
+host's agent -- model, tools, gate, memory, prompt -- is re-expressed here. `RunnerKind`
 names one, from `TINYHIVEMIND_RUNNER` or directly.
 
 The raw runner also carries the two things the current OpenHuman asks of a

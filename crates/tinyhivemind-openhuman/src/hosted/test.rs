@@ -12,7 +12,7 @@ use openhuman_core::agent::tool_policy::{
 };
 use serde_json::json;
 use tinyhivemind::{Conversation, Sequence, SessionLog};
-use tinyhivemind_tools::{EpisodeTools, served_specs};
+use tinyhivemind_tools::{Dispatch, EpisodeTools, served_specs};
 
 use super::EpisodeBelt;
 use super::seed::history;
@@ -174,7 +174,7 @@ impl ToolPolicy for AllowAll {
 #[tokio::test]
 async fn the_belt_is_the_served_vocabulary_admitted_over_the_hosts_own_gate() {
     let tools = Arc::new(EpisodeTools::new(["lead"]));
-    let belt = EpisodeBelt::new("lead", &tools);
+    let belt = EpisodeBelt::new("lead", &tools, "");
     let served: Vec<&str> = served_specs().map(|spec| spec.name).collect();
     assert_eq!(belt.names(), served.as_slice());
     assert_eq!(belt.tools.len(), served.len());
@@ -203,4 +203,63 @@ async fn the_belt_is_the_served_vocabulary_admitted_over_the_hosts_own_gate() {
         ),
         "the host's own tools are the host's gate's to decide"
     );
+}
+
+#[tokio::test]
+async fn a_prefixed_belt_is_called_by_the_prefixed_name_and_records_the_served_one() {
+    let tools = Arc::new(EpisodeTools::new(["lead"]));
+    tools.register(
+        "lead",
+        Dispatch {
+            chat: "engineering".into(),
+            parent: None,
+        },
+    );
+    let belt = EpisodeBelt::new("lead", &tools, "desk_");
+    let names: Vec<&str> = belt.tools.iter().map(|tool| tool.name()).collect();
+    assert!(names.contains(&"desk_complete_episode"), "{names:?}");
+    assert!(names.contains(&"desk_read"), "{names:?}");
+    assert!(!names.contains(&"read"), "the bare name is not on the belt");
+    assert!(belt.names().iter().all(|name| name.starts_with("desk_")));
+    // `read` is still the one read-only tool, by its served name.
+    let read = belt
+        .tools
+        .iter()
+        .find(|tool| tool.name() == "desk_read")
+        .expect("served");
+    assert_eq!(
+        read.permission_level(),
+        tinytools::PermissionLevel::ReadOnly
+    );
+    // The gate admits the prefixed name, and a host tool of the bare name
+    // is somebody else's: without a host gate, it is denied.
+    let gate = belt.admit(None);
+    assert!(matches!(
+        gate.check(&request("desk_read")).await,
+        ToolPolicyDecision::Allow
+    ));
+    assert!(matches!(
+        gate.check(&request("read")).await,
+        ToolPolicyDecision::Deny { .. }
+    ));
+    // A call by the prefixed name lands in the record under the served one.
+    let complete = belt
+        .tools
+        .iter()
+        .find(|tool| tool.name() == "desk_complete_episode")
+        .expect("served");
+    let accepted = complete
+        .execute(json!({"message": "done", "chat": "engineering", "parent": null}))
+        .await
+        .expect("executes");
+    assert!(!accepted.is_error);
+    tools.clear("lead");
+    let events = tools.drain("lead");
+    assert_eq!(events.len(), 1);
+    assert!(matches!(
+        events[0].call,
+        tinyhivemind::speech::ToolCall::Speak(
+            tinyhivemind::speech::Utterance::CompleteEpisode { .. }
+        )
+    ));
 }

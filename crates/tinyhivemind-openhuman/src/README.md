@@ -2,7 +2,7 @@
 
 | Path | Purpose |
 |---|---|
-| `lib.rs` | Crate overview and the public surface: `SeatRunner`, `RunnerKind`, `HostedRunner`, `EpisodeHost`, `EpisodeBelt`, `EmbedRunner`, `EmbedSeat`, `RawRunner`, `RawSeat`, `LibraryHost`, `Route`, `offline`. |
+| `lib.rs` | Crate overview and the public surface: `SeatRunner`, `RunnerKind`, `HostedRunner`, `EpisodeHost`, `EpisodeBelt`, `EmbedRunner`, `EmbedSeat`, `RawRunner`, `RawSeat`, `LibraryHost`, `Route`, `register_seats`, `offline`. |
 | `error/` | What seating or running a seat can fail with. |
 | `runner/` | The seam: open, run, close; `Lane`, `TurnJob`; which runner the environment names. |
 | `hosted/` | Seats as the host's own agents, built through `EpisodeHost`, seeded from the host's log. |

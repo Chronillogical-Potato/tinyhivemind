@@ -17,12 +17,30 @@ use tinytools::{PermissionLevel, Tool, ToolResult};
 /// The served tools, bound to one seat.
 #[must_use]
 pub(crate) fn belt(seat: &str, tools: &Arc<EpisodeTools>) -> Vec<Box<dyn Tool>> {
+    belt_with_prefix(seat, tools, "")
+}
+
+/// The served tools, bound to one seat, each named with `prefix` in front
+/// of its served name.
+///
+/// The prefix is what the model sees and what a gate admits; the record is
+/// called by the served name, so `interpret` and the refusals are unchanged.
+/// A host whose own belt could share a bare name -- `read` is the likely
+/// one -- keeps the two apart with it.
+#[must_use]
+pub(crate) fn belt_with_prefix(
+    seat: &str,
+    tools: &Arc<EpisodeTools>,
+    prefix: &str,
+) -> Vec<Box<dyn Tool>> {
     tool_definitions(&tools.seats())
         .into_iter()
         .map(|definition| {
+            let served = text(&definition, "name");
             Box::new(EpisodeTool {
                 seat: seat.to_owned(),
-                name: text(&definition, "name"),
+                name: format!("{prefix}{served}"),
+                served,
                 description: text(&definition, "description"),
                 schema: definition
                     .get("inputSchema")
@@ -44,7 +62,10 @@ fn text(definition: &Value, key: &str) -> String {
 
 struct EpisodeTool {
     seat: String,
+    /// The name the model calls it by: the served name, prefixed.
     name: String,
+    /// The served name, which the record knows it by.
+    served: String,
     description: String,
     schema: Value,
     tools: Arc<EpisodeTools>,
@@ -66,7 +87,7 @@ impl Tool for EpisodeTool {
 
     /// `read` looks; everything else moves the episode.
     fn permission_level(&self) -> PermissionLevel {
-        if self.name == "read" {
+        if self.served == "read" {
             PermissionLevel::ReadOnly
         } else {
             PermissionLevel::Write
@@ -74,7 +95,7 @@ impl Tool for EpisodeTool {
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<ToolResult> {
-        Ok(match self.tools.call(&self.seat, &self.name, &args) {
+        Ok(match self.tools.call(&self.seat, &self.served, &args) {
             Ok(receipt) => ToolResult::success(receipt),
             Err(refusal) => ToolResult::error(refusal),
         })

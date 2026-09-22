@@ -4,9 +4,10 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use openhuman_core::agent::OpenHumanSessionHost;
+use openhuman_core::agent::tinyagents::host::LastTurnUsage;
 use openhuman_embed::{Access, Provider, Runtime, Workspace};
 use tinyhivemind::speech::{ToolCall, Utterance};
 use tinyhivemind::{SESSION_WINDOW, Sequence, SessionLog};
@@ -17,7 +18,7 @@ use super::{Lane, RunnerKind, SeatRunner};
 use crate::offline::MemoryLog;
 use crate::{
     EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, LibraryHost, RawRunner, Route,
-    offline,
+    offline, register_seats,
 };
 
 /// A host with no agents of its own: its seats are library sessions, its
@@ -28,6 +29,11 @@ struct TestHost {
     library: LibraryHost,
     prompt: String,
     wrapped: AtomicUsize,
+    /// Turns the hook saw, and whether any came with usage.
+    after: AtomicUsize,
+    metered: AtomicBool,
+    /// Whether the hook halts the episode on the next turn.
+    halt: AtomicBool,
 }
 
 impl EpisodeHost for TestHost {
@@ -43,6 +49,24 @@ impl EpisodeHost for TestHost {
     fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
         self.wrapped.fetch_add(1, Ordering::SeqCst);
         Box::pin(self.library.scope(turn))
+    }
+
+    fn tool_prefix(&self) -> String {
+        "desk_".into()
+    }
+
+    fn after_turn(&self, seat: &str, usage: Option<&LastTurnUsage>) -> crate::Result<()> {
+        assert_eq!(seat, "lead");
+        self.after.fetch_add(1, Ordering::SeqCst);
+        if usage.is_some() {
+            self.metered.store(true, Ordering::SeqCst);
+        }
+        if self.halt.swap(false, Ordering::SeqCst) {
+            return Err(crate::Error::Harness(anyhow::anyhow!(
+                "the desk's budget is spent"
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -118,6 +142,9 @@ fn hosted(library: LibraryHost, contract: &str) -> (Arc<TestHost>, HostedRunner<
         library,
         prompt: format!("You lead the desk.\n\n{contract}"),
         wrapped: AtomicUsize::new(0),
+        after: AtomicUsize::new(0),
+        metered: AtomicBool::new(false),
+        halt: AtomicBool::new(false),
     });
     let runner = HostedRunner::seat(
         Arc::clone(&host),
@@ -147,6 +174,74 @@ fn one_completion(name: &str, events: &[SeatEvent]) {
         "{name}: {:?}",
         events[0].call
     );
+}
+
+/// A second turn on each native runner: raw is seeded with what it said,
+/// hosted clears and reseeds the session it reuses, and both call again.
+async fn again(raw: &RawRunner, host: &TestHost, hosted: &HostedRunner<TestHost>) {
+    // A second raw turn is seeded with the first: what the seat said is what
+    // it is shown, and the record starts empty again.
+    let (_, again) = one_turn(raw, Sequence(0)).await;
+    assert_eq!(again.len(), 1);
+    host.log.append("lead", "COMPLETE: done", None, None);
+    let (_, again) = one_turn(hosted, host.log.latest()).await;
+    assert_eq!(again.len(), 1, "the reused session ran and called again");
+    assert_eq!(host.wrapped.load(Ordering::SeqCst), 2);
+}
+
+/// The hook halting is the turn failing: the host loop sees an error where
+/// a reply would be, after the turn ran and its call landed.
+async fn halts(host: &TestHost, hosted: &HostedRunner<TestHost>) {
+    host.halt.store(true, Ordering::SeqCst);
+    hosted.open(
+        "lead",
+        Vec::new(),
+        Dispatch {
+            chat: "engineering".into(),
+            parent: None,
+        },
+    );
+    let (_, _, halted) = hosted
+        .turn(
+            "lead".into(),
+            Lane::Desk,
+            host.log.latest(),
+            "Once more.".into(),
+        )
+        .await;
+    assert!(
+        matches!(&halted, Some(Err(error)) if error.contains("budget is spent")),
+        "{halted:?}"
+    );
+    assert_eq!(
+        hosted.close("lead").len(),
+        1,
+        "the call it made before the halt stands"
+    );
+}
+
+/// The embed runtime, booted once per process over the scripted route.
+async fn runtime(
+    config: &openhuman_embed::RuntimeConfig,
+    backend: &wiremock::MockServer,
+    route: &Route,
+    workspace: &std::path::Path,
+) -> Runtime {
+    Box::pin(
+        Runtime::builder()
+            .config(config.clone())
+            .workspace(Workspace::dir(workspace.to_path_buf()))
+            .services(EmbedRunner::services())
+            .backend_url(backend.uri())
+            .provider(
+                Provider::openai_compatible(route.endpoint.clone(), route.api_key.clone())
+                    .model(route.model.clone()),
+            )
+            .access(Access::full())
+            .build(),
+    )
+    .await
+    .expect("the runtime boots")
 }
 
 /// Every runner, offline, against one scripted model: the same call lands in
@@ -196,23 +291,14 @@ async fn both_runners() {
     let contract =
         |kind: RunnerKind| standing_contract(served_specs(), "engineering", kind.how_to_call());
 
-    RawRunner::prepare(workspace.path(), &[("lead", "You lead the desk.")])
+    // One definition for `lead` names every tool either native runner hands
+    // it: the served belt for raw, and the host's prefixed one for hosted.
+    let named: Vec<String> = served_specs()
+        .flat_map(|spec| [spec.name.to_owned(), format!("desk_{}", spec.name)])
+        .collect();
+    register_seats(workspace.path(), &[("lead", "You lead the desk.")], &named)
         .expect("seats register");
-    let runtime = Box::pin(
-        Runtime::builder()
-            .config(config.clone())
-            .workspace(Workspace::dir(workspace.path().to_path_buf()))
-            .services(EmbedRunner::services())
-            .backend_url(backend.uri())
-            .provider(
-                Provider::openai_compatible(route.endpoint.clone(), route.api_key.clone())
-                    .model(route.model.clone()),
-            )
-            .access(Access::full())
-            .build(),
-    )
-    .await
-    .expect("the runtime boots");
+    let runtime = runtime(&config, &backend, &route, workspace.path()).await;
     let embed = EmbedRunner::seat(
         &runtime,
         Arc::new(EpisodeTools::new(["lead"])),
@@ -257,6 +343,8 @@ async fn both_runners() {
         "the host wrapped the turn"
     );
     assert!(hosted.usage("lead").is_some(), "the turn's usage is kept");
+    assert_eq!(host.after.load(Ordering::SeqCst), 1, "the hook ran once");
+    assert!(host.metered.load(Ordering::SeqCst), "and saw the usage");
     assert_eq!(hosted_reply, raw_reply);
     for (name, events) in [
         ("embed", &embed_events),
@@ -273,15 +361,8 @@ async fn both_runners() {
     assert_eq!(seen.round_trips.len(), 3, "one receipted call per runner");
     assert!(seen.requests >= 6, "each turn is a call and a receipt");
 
-    // A second raw turn is seeded with the first: what the seat said is what
-    // it is shown, and the record starts empty again.
-    let (_, again) = one_turn(&raw, Sequence(0)).await;
-    assert_eq!(again.len(), 1);
-    // A second hosted turn reuses the seat's session: cleared, reseeded, run.
-    host.log.append("lead", "COMPLETE: done", None, None);
-    let (_, again) = one_turn(&hosted, host.log.latest()).await;
-    assert_eq!(again.len(), 1, "the reused session ran and called again");
-    assert_eq!(host.wrapped.load(Ordering::SeqCst), 2);
+    again(&raw, &host, &hosted).await;
+    halts(&host, &hosted).await;
     metrics.reset();
     assert_eq!(metrics.snapshot().requests, 0);
 }

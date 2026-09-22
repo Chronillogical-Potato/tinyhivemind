@@ -105,5 +105,5 @@ pub mod runner;
 pub use embed::{EmbedRunner, EmbedSeat};
 pub use error::{Error, Result};
 pub use hosted::{EpisodeBelt, EpisodeHost, HostedRunner, HostedSeat, HostedTurn};
-pub use raw::{LibraryHost, RawRunner, RawSeat, Route};
+pub use raw::{LibraryHost, RawRunner, RawSeat, Route, register_seats};
 pub use runner::{Lane, RunnerKind, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult};

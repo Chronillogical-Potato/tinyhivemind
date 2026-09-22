@@ -16,9 +16,16 @@
 //!   tools and gate read while a turn runs -- a turn-scoped approval queue, a
 //!   delegation context, a core context.
 //!
+//! And two things it may give: a **prefix** for the episode tools' names,
+//! so none can share a name with a tool of its own and be admitted past its
+//! gate; and an **after-turn hook**, handed the turn's usage, which is where
+//! a host parks what the turn left waiting, meters its spend, and halts the
+//! episode by returning an error.
+//!
 //! A turn, then: clear the seat's session, seed it with what the seat was
-//! shown up to its watermark, send the brief, and record the usage. The
-//! calls it made land in the shared record like any other runner's.
+//! shown up to its watermark, send the brief inside the wrapper, record the
+//! usage, and call the hook. The calls it made land in the shared record
+//! like any other runner's.
 
 mod admission;
 mod seed;
@@ -38,7 +45,7 @@ use tinyhivemind_driver::{AgentBinding, BoundAgent};
 use tinyhivemind_tools::EpisodeTools;
 use tinytools::Tool;
 
-use crate::raw::tools::belt;
+use crate::raw::tools::belt_with_prefix;
 use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob};
 use crate::{Error, Result};
 use admission::Admission;
@@ -67,6 +74,34 @@ pub trait EpisodeHost: Send + Sync + 'static {
         let _ = seat;
         turn
     }
+
+    /// What the episode's tools are called, in front of their served names:
+    /// `desk_` makes `read` into `desk_read`. The record is called by the
+    /// served name either way. The default is no prefix.
+    ///
+    /// A host with tools of its own gives one, because [`EpisodeBelt::admit`]
+    /// admits by name and a host tool sharing a bare name would be admitted
+    /// past the host's gate. The brief and the desk's notes name the served
+    /// vocabulary, so a host that prefixes says so in its own prompt.
+    fn tool_prefix(&self) -> String {
+        String::new()
+    }
+
+    /// After a turn ran, with its usage when the session reported any. The
+    /// default does nothing.
+    ///
+    /// This is where a host parks what the turn left waiting on approval,
+    /// meters the spend, and decides whether the episode goes on: an error
+    /// here is the turn's error, and the host loop treats it as it treats
+    /// any failed turn.
+    ///
+    /// # Errors
+    ///
+    /// Whatever stops the episode.
+    fn after_turn(&self, seat: &str, usage: Option<&LastTurnUsage>) -> Result<()> {
+        let _ = (seat, usage);
+        Ok(())
+    }
 }
 
 /// The episode's tools for one seat, and the gate that admits them.
@@ -85,14 +120,14 @@ impl std::fmt::Debug for EpisodeBelt {
 }
 
 impl EpisodeBelt {
-    fn new(seat: &str, tools: &Arc<EpisodeTools>) -> Self {
-        let tools = belt(seat, tools);
+    fn new(seat: &str, tools: &Arc<EpisodeTools>, prefix: &str) -> Self {
+        let tools = belt_with_prefix(seat, tools, prefix);
         let names = tools.iter().map(|tool| tool.name().to_owned()).collect();
         Self { tools, names }
     }
 
-    /// The episode tools' names, for a host that registers a seat's belt by
-    /// name.
+    /// The episode tools' names as the model calls them, prefixed, for a
+    /// host that registers a seat's belt by name.
     #[must_use]
     pub fn names(&self) -> &[String] {
         &self.names
@@ -167,7 +202,8 @@ impl<H: EpisodeHost> HostedRunner<H> {
     ) -> Result<Self> {
         let mut built = BTreeMap::new();
         for id in seats {
-            let session = host.build_seat(id, EpisodeBelt::new(id, &tools))?;
+            let belt = EpisodeBelt::new(id, &tools, &host.tool_prefix());
+            let session = host.build_seat(id, belt)?;
             built.insert(
                 id.clone(),
                 HostedSeat {
@@ -233,6 +269,7 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
             let run = {
                 let seat = seat.clone();
                 let host = Arc::clone(&host);
+                let usage = Arc::clone(&usage);
                 async move {
                     let history =
                         seed::history(host.log(), conversation, &seat, since, window).await?;
@@ -258,7 +295,17 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                     Ok(reply)
                 }
             };
-            let result = host.wrap_turn(&seat, Box::pin(run)).await;
+            let result = match host.wrap_turn(&seat, Box::pin(run)).await {
+                Ok(reply) => {
+                    let last = usage
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .get(&seat)
+                        .cloned();
+                    host.after_turn(&seat, last.as_ref()).map(|()| reply)
+                }
+                Err(error) => Err(error),
+            };
             (seat, lane, Some(result.map_err(|error| error.to_string())))
         })
     }

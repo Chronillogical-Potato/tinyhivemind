@@ -12,7 +12,7 @@ builds its seats.
 
 | file | holds |
 | --- | --- |
-| `mod.rs` | `RawRunner`, `Route`, `prepare`, `seat`, the per-seat context log |
+| `mod.rs` | `RawRunner`, `Route`, `register_seats` (and `prepare`, which names the served belt), `seat`, the per-seat context log |
 | `library.rs` | `LibraryHost`: the library-host core, its sessions, and its scope |
 | `seat.rs` | `RawSeat`: one session built, seeded, run and dropped |
 | `tools.rs` | the served definitions as `tinytools::Tool`s whose execute is `EpisodeTools::call` |

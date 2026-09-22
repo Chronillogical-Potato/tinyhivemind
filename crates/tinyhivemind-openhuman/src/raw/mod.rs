@@ -63,6 +63,49 @@ pub use seat::RawSeat;
 /// What each seat has been shown and said, keyed by seat.
 type Contexts = Arc<Mutex<BTreeMap<String, Vec<(String, String)>>>>;
 
+/// Register every seat as a workspace definition naming `tools` as its
+/// belt, before the process registry is read.
+///
+/// A session's turn runs as a hosted root invocation, which resolves the
+/// seat against `OpenHuman`'s process registry and takes the model's
+/// allowlist from the seat's *definition*, not from the belt the session was
+/// built with: a tool the definition does not name is stripped before the
+/// model sees it, and a wildcard projects to nothing. So `tools` must name
+/// every tool the seat will be handed, as the model calls them -- for a host
+/// that prefixes the episode's tools, the prefixed names, alongside its own.
+///
+/// The loader wants `id`, `when_to_use` and a non-empty `system_prompt`; the
+/// prompt written here is the seat's role for a reader of the workspace, not
+/// the one a session runs under. The registry is process-wide, so a host
+/// seating more than one desk in one process names its seats apart.
+///
+/// # Errors
+///
+/// The directory or a file failing to write, or the registry refusing the
+/// definitions.
+pub fn register_seats(workspace: &Path, seats: &[(&str, &str)], tools: &[String]) -> Result<()> {
+    let agents = workspace.join("agents");
+    std::fs::create_dir_all(&agents)?;
+    let named: Vec<String> = tools.iter().map(|name| format!("{name:?}")).collect();
+    for (id, role) in seats {
+        let toml = format!(
+            "id = {id:?}\nwhen_to_use = {role:?}\nsystem_prompt = {{ inline = {role:?} }}\ntools = {{ named = [{}] }}\n",
+            named.join(", ")
+        );
+        std::fs::write(agents.join(format!("{id}.toml")), toml)?;
+    }
+    AgentDefinitionRegistry::init_global(workspace)?;
+    let registry = AgentDefinitionRegistry::global().ok_or(Error::RegistryMissing)?;
+    for (id, _) in seats {
+        if registry.get(id).is_none() {
+            return Err(Error::SeatNotRegistered {
+                seat: (*id).to_owned(),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Where a run's inference comes from, as the raw session needs it: the
 /// embed runtime applies its route per call, a raw session resolves the
 /// `chat` role from its config, so the route is written into that config.
@@ -88,41 +131,20 @@ pub struct RawRunner {
 }
 
 impl RawRunner {
-    /// Register every seat as a workspace definition, before the runtime
-    /// boots and the process registry is read.
-    ///
-    /// The loader wants `id`, `when_to_use` and a non-empty `system_prompt`;
-    /// the prompt written here is the seat's role for a reader of the
-    /// workspace, not the one a session runs under. `tools` is the served
-    /// belt by name: the hosted turn's allowlist comes from here.
+    /// Register every seat as a workspace definition naming the served belt,
+    /// before the runtime boots and the process registry is read. See
+    /// [`register_seats`] for why, and for a host whose belt is named
+    /// otherwise.
     ///
     /// # Errors
     ///
     /// The directory or a file failing to write, or the registry refusing the
     /// definitions.
     pub fn prepare(workspace: &Path, seats: &[(&str, &str)]) -> Result<()> {
-        let agents = workspace.join("agents");
-        std::fs::create_dir_all(&agents)?;
         let belt: Vec<String> = tinyhivemind_tools::served_specs()
-            .map(|spec| format!("{:?}", spec.name))
+            .map(|spec| spec.name.to_owned())
             .collect();
-        for (id, role) in seats {
-            let toml = format!(
-                "id = {id:?}\nwhen_to_use = {role:?}\nsystem_prompt = {{ inline = {role:?} }}\ntools = {{ named = [{}] }}\n",
-                belt.join(", ")
-            );
-            std::fs::write(agents.join(format!("{id}.toml")), toml)?;
-        }
-        AgentDefinitionRegistry::init_global(workspace)?;
-        let registry = AgentDefinitionRegistry::global().ok_or(Error::RegistryMissing)?;
-        for (id, _) in seats {
-            if registry.get(id).is_none() {
-                return Err(Error::SeatNotRegistered {
-                    seat: (*id).to_owned(),
-                });
-            }
-        }
-        Ok(())
+        register_seats(workspace, seats, &belt)
     }
 
     /// Seat every brief as a raw seat over one resolved config.
