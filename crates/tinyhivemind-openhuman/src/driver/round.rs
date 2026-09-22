@@ -9,9 +9,10 @@ use super::ledger::open_assignment;
 use super::{
     BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, PendingRound, Transition,
 };
+use crate::graph::BoundAgent;
 use crate::{Error, Result};
 
-impl CompletionDriver<'_> {
+impl<A: BoundAgent> CompletionDriver<'_, A> {
     /// Fold exactly one committed result for every agent in a proposed round.
     ///
     /// An exact receipt-only replay returns unchanged without host actions
@@ -26,7 +27,7 @@ impl CompletionDriver<'_> {
     pub async fn apply_committed_round(
         &self,
         state: &DriverState,
-        round: &PendingRound<'_>,
+        round: &PendingRound<'_, A>,
         events: Vec<CommittedUtterance>,
         routing: Option<BroadcastRouting<'_>>,
     ) -> Result<Transition> {
@@ -99,7 +100,7 @@ impl CompletionDriver<'_> {
         })
     }
 
-    fn validate_round_state(state: &DriverState, round: &PendingRound<'_>) -> Result<()> {
+    fn validate_round_state(state: &DriverState, round: &PendingRound<'_, A>) -> Result<()> {
         if round.state_revision < state.revision {
             return Err(Error::StaleRound {
                 round_revision: round.state_revision,

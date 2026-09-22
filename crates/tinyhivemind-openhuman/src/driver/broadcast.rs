@@ -20,9 +20,10 @@ use super::order::{broadcast_fallback, extend_pending_order};
 use super::{
     BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, HostAction, is_pending,
 };
+use crate::graph::BoundAgent;
 use crate::{Error, Result};
 
-impl CompletionDriver<'_> {
+impl<A: BoundAgent> CompletionDriver<'_, A> {
     pub(super) async fn fold_broadcast(
         &self,
         state: &DriverState,

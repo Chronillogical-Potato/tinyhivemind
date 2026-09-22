@@ -11,6 +11,8 @@ mod test;
 use std::collections::{BTreeMap, BTreeSet};
 
 use openhuman_embed::Agent;
+
+use crate::graph::BoundAgent;
 use serde::{Deserialize, Serialize};
 use tinyhivemind::{Sequence, speech::Utterance};
 use tinyhivemind_embed::{MessageRoute, Router, RoutingPlan, RoutingPolicy};
@@ -164,26 +166,42 @@ pub struct CommittedUtterance {
 }
 
 /// One pending canonical id and the exact bound `OpenHuman` agent.
-#[derive(Clone, Copy, Debug)]
-pub struct PendingAgent<'a> {
+pub struct PendingAgent<'a, A = Agent> {
     /// Canonical hive id.
     pub hive_agent_id: &'a str,
     /// Existing `OpenHuman` runtime handle.
-    pub agent: &'a Agent,
+    pub agent: &'a A,
+}
+
+impl<A> Clone for PendingAgent<'_, A> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<A> Copy for PendingAgent<'_, A> {}
+
+impl<A: std::fmt::Debug> std::fmt::Debug for PendingAgent<'_, A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingAgent")
+            .field("hive_agent_id", &self.hive_agent_id)
+            .field("agent", &self.agent)
+            .finish()
+    }
 }
 
 /// One bounded round the host may run concurrently.
 #[derive(Clone, Debug)]
-pub struct PendingRound<'a> {
-    agents: Vec<PendingAgent<'a>>,
+pub struct PendingRound<'a, A = Agent> {
+    agents: Vec<PendingAgent<'a, A>>,
     state: &'a DriverState,
     state_revision: u64,
 }
 
-impl PendingRound<'_> {
+impl<A: BoundAgent> PendingRound<'_, A> {
     /// Borrow pending agents in stable completion-participant order.
     #[must_use]
-    pub fn agents(&self) -> &[PendingAgent<'_>] {
+    pub fn agents(&self) -> &[PendingAgent<'_, A>] {
         &self.agents
     }
 
@@ -274,14 +292,14 @@ pub struct Transition {
 
 /// A bounded driver over one validated `OpenHuman` hive.
 #[derive(Debug)]
-pub struct CompletionDriver<'a> {
-    hive: &'a OpenHumanHive,
+pub struct CompletionDriver<'a, A = Agent> {
+    hive: &'a OpenHumanHive<A>,
     round_width: usize,
     queue_depth: usize,
     broadcast_budget: Option<u32>,
 }
 
-impl<'a> CompletionDriver<'a> {
+impl<'a, A: BoundAgent> CompletionDriver<'a, A> {
     /// Bind a completion driver to one hive and nonzero round width.
     ///
     /// Each recipient may hold `round_width` queued handoffs, and an
@@ -292,7 +310,7 @@ impl<'a> CompletionDriver<'a> {
     /// # Errors
     ///
     /// Returns [`Error::ZeroRoundWidth`] for a zero bound.
-    pub fn new(hive: &'a OpenHumanHive, round_width: usize) -> Result<Self> {
+    pub fn new(hive: &'a OpenHumanHive<A>, round_width: usize) -> Result<Self> {
         if round_width == 0 {
             return Err(Error::ZeroRoundWidth);
         }
@@ -436,7 +454,7 @@ impl<'a> CompletionDriver<'a> {
     ///
     /// Returns [`Error::UnknownBoundAgent`] if validated state was externally
     /// replaced with an unbound participant.
-    pub fn pending_round<'b>(&'b self, state: &'b DriverState) -> Result<PendingRound<'b>> {
+    pub fn pending_round<'b>(&'b self, state: &'b DriverState) -> Result<PendingRound<'b, A>> {
         let complete = matches!(
             completion_status(&state.episode),
             CompletionStep::Complete { .. }
