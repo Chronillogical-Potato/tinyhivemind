@@ -224,6 +224,9 @@ struct Child {
     /// Whether the seat asked has been told once that a reply without a tool
     /// call reached nobody.
     nudged: bool,
+    /// A conversation the seat asked opened from inside this one, whose
+    /// answer it needs before it can answer here.
+    waiting_on: Option<Sequence>,
 }
 
 /// Where a turn is running, for the host's own bookkeeping.
@@ -511,6 +514,17 @@ async fn run() -> anyhow::Result<()> {
                 } else {
                     child.asker.clone()
                 };
+                let meanwhile: Vec<ConversationView> = concluded
+                    .iter()
+                    .filter(|(root, asker, _, _)| *asker == seat_id && *root > child.root)
+                    .map(|(root, _, askee, transcript)| ConversationView {
+                        root: *root,
+                        other: askee.clone(),
+                        opened_it: true,
+                        transcript: transcript.clone(),
+                        concluded: true,
+                    })
+                    .collect();
                 let brief = EpisodeBrief::for_turn(
                     &child.state,
                     DESK_ID,
@@ -521,9 +535,13 @@ async fn run() -> anyhow::Result<()> {
                         opened_it: seat_id == child.asker,
                     },
                     rows,
-                    Vec::new(),
+                    meanwhile,
                 );
-                let prompt = format!("## Who you are\n{}\n\n{}", briefs[&seat_id], brief.render());
+                let prompt = format!(
+                    "## The desk\n{DESK_PREAMBLE}\n\n## Who you are\n{}\n\n{}",
+                    briefs[&seat_id],
+                    brief.render()
+                );
                 jobs.push(spawn_turn(
                     agents[&seat_id].clone(),
                     format!("conducted-{run_id}:{seat_id}"),
@@ -599,7 +617,11 @@ async fn run() -> anyhow::Result<()> {
             let brief =
                 EpisodeBrief::for_turn(&state, DESK_ID, &seat_id, Channel::Desk, rows, views);
             // What the host owns first; what the episode knows after.
-            let prompt = format!("## Who you are\n{}\n\n{}", briefs[&seat_id], brief.render());
+            let prompt = format!(
+                "## The desk\n{DESK_PREAMBLE}\n\n## Who you are\n{}\n\n{}",
+                briefs[&seat_id],
+                brief.render()
+            );
             jobs.push(spawn_turn(
                 agents[&seat_id].clone(),
                 format!("conducted-{run_id}:{seat_id}"),
@@ -621,7 +643,16 @@ async fn run() -> anyhow::Result<()> {
             }
             for root in stuck {
                 let child = children.remove(&root).expect("listed");
-                state = conclude(&driver, &journal, &state, child, true, &mut concluded).await?;
+                state = conclude(
+                    &driver,
+                    &journal,
+                    &state,
+                    &mut children,
+                    child,
+                    true,
+                    &mut concluded,
+                )
+                .await?;
             }
             continue;
         }
@@ -631,7 +662,8 @@ async fn run() -> anyhow::Result<()> {
         // A broadcast made inside a conversation is desk work: the seat found
         // something for someone else while talking, and refusing it there
         // cost a live run both of its deliverables.
-        let mut desk_events: Vec<(String, Utterance)> = Vec::new();
+        // A desk event carries the thread it was made from, if any.
+        let mut desk_events: Vec<(String, Utterance, Option<Sequence>)> = Vec::new();
         let mut thread_events: Vec<(Sequence, String, Utterance)> = Vec::new();
         for (seat_id, lane, outcome) in outcomes {
             tools.clear(&seat_id);
@@ -677,9 +709,9 @@ async fn run() -> anyhow::Result<()> {
                     continue;
                 };
                 match (lane, &utterance) {
-                    (Lane::Desk, _)
-                    | (Lane::Thread(_), Utterance::Broadcast { .. } | Utterance::Ask { .. }) => {
-                        desk_events.push((seat_id.clone(), utterance));
+                    (Lane::Desk, _) => desk_events.push((seat_id.clone(), utterance, None)),
+                    (Lane::Thread(from), Utterance::Broadcast { .. } | Utterance::Ask { .. }) => {
+                        desk_events.push((seat_id.clone(), utterance, Some(from)));
                     }
                     (Lane::Thread(root), _) => {
                         thread_events.push((root, seat_id.clone(), utterance))
@@ -717,7 +749,7 @@ async fn run() -> anyhow::Result<()> {
             }
         }
 
-        for (seat_id, utterance) in desk_events {
+        for (seat_id, utterance, from_thread) in desk_events {
             // An ask is private to the seat it asks and roots a conversation;
             // everything else is the desk's.
             let asked = utterance.asks().map(str::to_owned);
@@ -759,6 +791,13 @@ async fn run() -> anyhow::Result<()> {
                                         "[ask] @{seat_id} opened a conversation with @{askee} (thread {})",
                                         sequence.0
                                     );
+                                    // Asked from inside another conversation: that
+                                    // one waits on this answer before it can answer.
+                                    if let Some(origin) = from_thread
+                                        && let Some(parent) = children.get_mut(&origin)
+                                    {
+                                        parent.waiting_on = Some(sequence);
+                                    }
                                     children.insert(
                                         sequence,
                                         Child {
@@ -769,6 +808,7 @@ async fn run() -> anyhow::Result<()> {
                                             turns: 0,
                                             last_by_askee: None,
                                             nudged: false,
+                                            waiting_on: None,
                                         },
                                     );
                                 }
@@ -869,7 +909,16 @@ async fn run() -> anyhow::Result<()> {
         for root in over {
             let child = children.remove(&root).expect("listed");
             let forced = !child.state.quiescent();
-            state = conclude(&driver, &journal, &state, child, forced, &mut concluded).await?;
+            state = conclude(
+                &driver,
+                &journal,
+                &state,
+                &mut children,
+                child,
+                forced,
+                &mut concluded,
+            )
+            .await?;
         }
         if turns >= TURN_WALL {
             break Err(anyhow::anyhow!("turn wall of {TURN_WALL} reached"));
@@ -905,6 +954,7 @@ async fn conclude(
     driver: &CompletionDriver<'_>,
     journal: &Journal,
     state: &DriverState,
+    children: &mut BTreeMap<Sequence, Child>,
     child: Child,
     forced: bool,
     concluded: &mut Vec<(Sequence, String, String, Vec<String>)>,
@@ -952,6 +1002,18 @@ async fn conclude(
             None,
         )
         .await?;
+    // The asker may have asked this from inside a conversation it still owes
+    // an answer in: it is owed that turn again, with this answer in front of it.
+    for waiting in children.values_mut() {
+        if waiting.waiting_on == Some(child.root) && waiting.askee == child.asker {
+            waiting.waiting_on = None;
+            waiting.state.owe_turn(&child.asker);
+            println!(
+                "[resumed] thread {} between @{} and @{}: @{} has its answer",
+                waiting.root.0, waiting.asker, waiting.askee, child.asker
+            );
+        }
+    }
     concluded.push((child.root, child.asker, child.askee, transcript));
     Ok(transition.state)
 }

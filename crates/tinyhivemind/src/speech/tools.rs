@@ -108,8 +108,9 @@ const SPECS: &[ToolSpec] = &[
                       need from it. It runs on its own, not while you wait: say what you need, \
                       then end your turn, and their answer reaches you on a later turn. You \
                       will not be able to finish until every question you asked has been \
-                      answered, so nothing you asked for can be lost. If their answer raises \
-                      another question, ask again. It is a question, not a handoff — work that \
+                      answered, so nothing you asked for can be lost. Ask everyone you need in \
+                      one turn; each ask is its own conversation. If an answer raises another \
+                      question, ask again. It is a question, not a handoff — work that \
                       belongs to another seat is `broadcast`. The seat you ask keeps whatever it \
                       was already doing.",
         parameters: &[

@@ -220,6 +220,47 @@ there. ADR 0023 is amended to say so.
 The root cause was complete for the first time -- library swap *and* the
 migration that never ran -- and neither deliverable was produced.
 
+## The sixth run: no `post`
+
+Same desk. The episode server serves `broadcast`, `ask`, `complete_episode`
+and `read`; a conversation is one question and one answer, the seat asked its
+only participant. `31` turns, `22` waves, `4` routes, `10` conversations, and
+quiescence.
+
+**Both deliverables, and all four facts.** With no way to say a thing without
+a consequence, every fact arrived as a completion: `theory`'s structural
+picture, `solver`'s migration -- on its first turn, for the first time --
+`researcher`'s prefix and changelog, and `checker`'s age split, which no
+earlier run had surfaced at all. `lead`'s broadcast (row 8) carried the whole
+root cause, both halves, *and* the dual-verify fallback as code; it landed on
+`checker`, who delivered a six-case regression matrix as its completion (row
+36) and re-broadcast the fix to `solver` (row 33). Ten conversations, ten
+answers. Three broadcasts: two placed, one -- a finished test, sent as if it
+were work -- correctly unplaced and kept.
+
+**What it cost, and why.**
+
+*Seven serial asks, hunting for a repo.* `checker` asked one seat per turn,
+waiting each time, and from the third ask on it was asking for shell output
+and file listings that do not exist (rows 21-30). "You have no codebase,
+shell or filesystem" was in the system prompt only -- the same place the
+briefs were in run one, and read the same amount. It now travels in every
+turn. And `ask` now says: ask everyone you need in one turn.
+
+*Two seats answered every question with their one fact.* `solver` gave the
+same migration sentence to four different questions and said so itself at
+the end (row 37); `researcher` gave the same prefix sentence three times. A
+fresh thread prompt with the brief on top invites restating it. Recorded,
+not patched: it is the model reaching for what it holds, and the prompt
+change above removes the questions that provoked it.
+
+*A thread was force-closed under an askee that had asked onward.* `lead`,
+asked by `checker`, needed `solver` first and asked -- correctly, on the desk
+-- but was never turned back to `checker`'s thread when the answer came, and
+the host closed it empty (row 20). The host now records which thread an ask
+was made from, re-owes that thread when the sub-answer concludes, and shows
+the answer in that turn.
+
 ## What this changes
 
 Across three runs every defect was in what the host owed the seats, not in
