@@ -454,26 +454,21 @@ fn a_conclusion_the_fold_refuses_leaves_the_conversation_to_conclude_later() {
         }
     }
     let mut refused = false;
-    loop {
-        match conductor.step() {
-            Ok(None) => break,
-            Ok(Some(Step::Commit(commit))) => {
-                let sequence = if matches!(commit.utterance, Utterance::Dm { .. }) {
-                    root
-                } else {
-                    journal.append(
-                        &commit.author,
-                        "row",
-                        commit.thread,
-                        commit.only_for.clone(),
-                    )
-                };
-                if run(conductor.committed(sequence)).is_err() {
-                    refused = true;
-                }
+    while let Some(step) = conductor.step().expect("steps") {
+        if let Step::Commit(commit) = step {
+            let sequence = if matches!(commit.utterance, Utterance::Dm { .. }) {
+                root
+            } else {
+                journal.append(
+                    &commit.author,
+                    "row",
+                    commit.thread,
+                    commit.only_for.clone(),
+                )
+            };
+            if run(conductor.committed(sequence)).is_err() {
+                refused = true;
             }
-            Ok(Some(_)) => {}
-            Err(error) => panic!("{error}"),
         }
     }
     assert!(refused, "a reused sequence is refused by the fold");
