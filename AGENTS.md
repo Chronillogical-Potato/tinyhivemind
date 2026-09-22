@@ -72,8 +72,12 @@ crates/
                         # episode state machine. Pure, opt-in; lands in P8.
 ├── tinyhivemind-embed/    # host-neutral conversation surfaces and validated
 │                       # Jev-first routing composition
-└── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
-                        # one transport port; no HTTP client or async runtime
+├── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
+│                       # one transport port; no HTTP client or async runtime
+├── tinyhivemind-openhuman/ # OpenHuman agent bindings and the completion driver:
+│                       # who runs next, and what a committed row means
+└── tinyhivemind-mcp/      # the room's tools served over MCP; the one socket the
+                        # repository opens, by ADR 0022
 docs/
 ├── specs/              # behavior and architecture specifications
 ├── plans/              # test-first implementation plans

@@ -1,0 +1,31 @@
+[package]
+name = "tinyhivemind-mcp"
+description = "The room's tools served over MCP: what a seat calls to move a completion episode"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+
+[dependencies]
+# The tool vocabulary this crate renders and the fold that reads a call. Nothing
+# here invents a tool: `speech::tool_specs()` states them and `interpret` reads
+# them, and this crate is the MCP shape of exactly that.
+tinyhivemind.workspace = true
+# MCP is JSON-RPC over HTTP. This is the one crate in the workspace that parses
+# JSON on a live path, because it is the one crate that owns a wire.
+serde_json.workspace = true
+thiserror.workspace = true
+# The listener. This is the one socket the repository opens -- see ADR 0022.
+# `net` and `io-util` on top of the workspace features, for the loopback
+# listener and the framed read/write.
+tokio = { workspace = true, features = ["net", "io-util"] }
+
+[dev-dependencies]
+# The tests speak to the server over a real loopback connection.
+tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread", "macros", "time"] }
+
+[lints]
+workspace = true
