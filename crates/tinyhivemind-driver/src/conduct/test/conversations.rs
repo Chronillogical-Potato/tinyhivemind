@@ -423,3 +423,72 @@ fn nothing_due_concludes_every_open_conversation_without_an_answer() {
     );
     assert_eq!(conductor.conversations(), 1);
 }
+
+#[test]
+fn a_conclusion_the_fold_refuses_leaves_the_conversation_to_conclude_later() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+    let asked = wave(&mut conductor, &journal, &[("one", vec![ask("two", "?")])]).expect("wave");
+    let root = asked.commits[0].0;
+
+    // The askee answers, and the host reports the conclusion's row at a
+    // sequence the episode already holds: the fold refuses it.
+    conductor.begin_wave();
+    let turns = conductor.turns().expect("turns");
+    for turn in &turns {
+        conductor.open_turn(turn, journal.latest(), Vec::new(), |root| {
+            journal.thread(root)
+        });
+        if turn.seat == "two" {
+            conductor.record(turn, vec![ToolCall::Speak(complete("port 8080"))]);
+        }
+    }
+    let mut refused = false;
+    loop {
+        match conductor.step() {
+            Ok(None) => break,
+            Ok(Some(Step::Commit(commit))) => {
+                let sequence = if matches!(commit.utterance, Utterance::Dm { .. }) {
+                    root
+                } else {
+                    journal.append(
+                        &commit.author,
+                        "row",
+                        commit.thread,
+                        commit.only_for.clone(),
+                    )
+                };
+                if run(conductor.committed(sequence)).is_err() {
+                    refused = true;
+                }
+            }
+            Ok(Some(_)) => {}
+            Err(error) => panic!("{error}"),
+        }
+    }
+    assert!(refused, "a reused sequence is refused by the fold");
+    assert_eq!(conductor.conversations(), 0, "nothing concluded");
+    assert!(!conductor.finished(), "the conversation is still open");
+
+    // The next wave concludes it, at a row the host gives properly.
+    let later = wave(&mut conductor, &journal, &[]).expect("wave");
+    assert!(
+        later
+            .events
+            .iter()
+            .any(|event| matches!(event, Event::Concluded { root: at, .. } if *at == root)),
+        "{:?}",
+        later.events
+    );
+    assert_eq!(conductor.conversations(), 1);
+}

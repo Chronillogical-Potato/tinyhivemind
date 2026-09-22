@@ -456,15 +456,20 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         forced: bool,
         committed: CommittedUtterance,
     ) -> Result<()> {
-        let Some(child) = self.children.remove(&root) else {
+        if !self.children.contains_key(&root) {
             return Ok(());
-        };
+        }
         let at = committed.sequence;
+        // The fold first: a conclusion it refuses leaves the conversation
+        // open, to be concluded again on a later wave, rather than gone.
         let transition = self
             .driver
             .apply_committed(&self.state, committed, None)
             .await?;
         self.state = transition.state;
+        let Some(child) = self.children.remove(&root) else {
+            return Ok(());
+        };
         self.wave.event(Event::Concluded {
             root,
             asker: child.asker.clone(),
