@@ -89,7 +89,7 @@ fn the_runner_is_named_by_the_environment_and_defaults_to_embed() {
     assert_eq!(
         from_env.map_err(|error| error.to_string()),
         RunnerKind::parse(value.as_deref()).map_err(|other| format!(
-            "TINYHIVEMIND_RUNNER must be `embed` or `raw`, not `{other}`"
+            "TINYHIVEMIND_RUNNER must be `embed`, `raw` or `hosted`, not `{other}`"
         ))
     );
 }
@@ -314,6 +314,35 @@ async fn halts(host: &TestHost, hosted: &HostedRunner<TestHost>) {
         1,
         "the call it made before the halt stands"
     );
+    // A turn in a thread the log does not have is seeded with nothing and
+    // runs; the hook still runs after it, and halts it. Whichever side
+    // fails, the hook has run once per started turn.
+    let before = host.after.load(Ordering::SeqCst);
+    host.halt.store(true, Ordering::SeqCst);
+    hosted.open(
+        "lead",
+        Vec::new(),
+        Dispatch {
+            chat: "engineering".into(),
+            parent: Some(u64::MAX.to_string()),
+        },
+    );
+    let (_, _, failed) = hosted
+        .turn(
+            "lead".into(),
+            Lane::Thread(Sequence(u64::MAX)),
+            Sequence(u64::MAX),
+            "Once more.".into(),
+        )
+        .await;
+    assert_eq!(
+        host.after.load(Ordering::SeqCst),
+        before + 1,
+        "the hook ran"
+    );
+    assert!(matches!(&failed, Some(Err(_))), "{failed:?}");
+    hosted.close("lead");
+    host.halt.store(false, Ordering::SeqCst);
 }
 
 /// The embed runtime, booted once per process over the scripted route.

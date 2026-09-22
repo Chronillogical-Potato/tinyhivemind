@@ -4,7 +4,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// `TINYHIVEMIND_RUNNER` named neither runner.
-    #[error("TINYHIVEMIND_RUNNER must be `embed` or `raw`, not `{0}`")]
+    #[error("TINYHIVEMIND_RUNNER must be `embed`, `raw` or `hosted`, not `{0}`")]
     UnknownRunner(String),
     /// A route was missing its endpoint or its key.
     #[error("a route needs both an endpoint and a key")]

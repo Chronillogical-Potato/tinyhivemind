@@ -65,7 +65,7 @@ pub enum RunnerKind {
 }
 
 impl RunnerKind {
-    /// `TINYHIVEMIND_RUNNER=embed` (default) or `raw`.
+    /// `TINYHIVEMIND_RUNNER=embed` (default), `raw` or `hosted`.
     ///
     /// # Errors
     ///

@@ -259,6 +259,13 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
             return unseated(seat, lane);
         };
         let usage = Arc::clone(&self.usage);
+        // Whatever the turn before left under this seat is not this turn's:
+        // a turn that fails before the session reports anything is metered
+        // as nothing, not as its predecessor.
+        usage
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&seat);
         let conversation = Conversation {
             thread_root: match lane {
                 Lane::Desk => None,
@@ -299,16 +306,21 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                     Ok(reply)
                 }
             };
-            let result = match host.wrap_turn(&seat, Box::pin(run)).await {
-                Ok(reply) => {
-                    let last = usage
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .get(&seat)
-                        .cloned();
-                    host.after_turn(&seat, last.as_ref()).map(|()| reply)
-                }
-                Err(error) => Err(error),
+            // Every started turn is finalized: the hook runs whether the
+            // turn came back or not, with whatever usage the session
+            // reported, so a host parks what a failed turn left waiting
+            // too. A turn that failed keeps its own error over the hook's.
+            let outcome = host.wrap_turn(&seat, Box::pin(run)).await;
+            let last = usage
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .get(&seat)
+                .cloned();
+            let finalized = host.after_turn(&seat, last.as_ref());
+            let result = match (outcome, finalized) {
+                (Ok(reply), Ok(())) => Ok(reply),
+                (Ok(_), Err(halt)) => Err(halt),
+                (Err(error), _) => Err(error),
             };
             (seat, lane, Some(result.map_err(|error| error.to_string())))
         })
