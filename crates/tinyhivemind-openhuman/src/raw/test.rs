@@ -161,3 +161,21 @@ async fn a_route_without_a_key_is_refused_before_the_core_is_asked() {
     .await;
     assert!(matches!(refused, Err(crate::Error::IncompleteRoute)));
 }
+
+#[test]
+fn a_seat_id_that_is_not_a_plain_path_component_names_no_file() {
+    let workspace = tempfile::tempdir().expect("a workspace");
+    for id in [
+        "", ".", "..", "../lead", "a/b", "lead\\x", "le ad", "l\u{e9}",
+    ] {
+        let refused = super::register_seats(workspace.path(), &[(id, "Nobody.")], &[]);
+        assert!(
+            matches!(&refused, Err(crate::Error::UnsafeSeatId { seat }) if seat == id),
+            "{id:?}: {refused:?}"
+        );
+    }
+    assert!(
+        !workspace.path().join("agents").exists(),
+        "nothing was written for a refused id"
+    );
+}

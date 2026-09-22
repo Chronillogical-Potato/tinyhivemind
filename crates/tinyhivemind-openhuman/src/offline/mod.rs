@@ -19,6 +19,7 @@
 //! trip as the model experiences it, whichever road the call took. That is
 //! what the example's bench compares between the runners.
 
+mod log;
 #[cfg(test)]
 mod test;
 
@@ -26,6 +27,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+pub use log::{MemoryLog, Row};
 use openhuman_embed::RuntimeConfig;
 use serde_json::{Value, json};
 use wiremock::matchers::{any, method, path};
@@ -101,8 +103,9 @@ impl Metrics {
 /// Which way the request lets the model call the room's tools.
 #[derive(Debug, PartialEq, Eq)]
 enum Dialect {
-    /// The room's tools are the request's own: call `complete_episode`.
-    Native,
+    /// The room's tools are the request's own: call `complete_episode`, by
+    /// whatever name the belt advertises it under -- a host may prefix it.
+    Native(String),
     /// `OpenHuman`'s dispatchers are: call `mcp_call_tool` on `episode`.
     Mcp,
     /// No tool at all: a session with no belt, such as an answer to an ask.
@@ -123,8 +126,8 @@ fn dialect(body: &Value) -> Dialect {
                 .collect()
         })
         .unwrap_or_default();
-    if names.contains(&"complete_episode") {
-        Dialect::Native
+    if let Some(name) = names.iter().find(|name| name.ends_with("complete_episode")) {
+        Dialect::Native((*name).to_owned())
     } else if names.contains(&"mcp_call_tool") {
         Dialect::Mcp
     } else {
@@ -157,9 +160,9 @@ impl Respond for ScriptedModel {
             None
         } else {
             match dialect(&body) {
-                Dialect::Native => Some(("complete_episode", arguments)),
+                Dialect::Native(name) => Some((name, arguments)),
                 Dialect::Mcp => Some((
-                    "mcp_call_tool",
+                    "mcp_call_tool".to_owned(),
                     json!({
                         "server": "episode",
                         "tool": "complete_episode",

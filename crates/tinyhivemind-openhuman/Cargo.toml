@@ -49,7 +49,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 # A turn has a wall; `tokio::time::timeout` is it. Both harnesses run on
 # tokio already.
-tokio = { workspace = true, features = ["time"] }
+tokio = { workspace = true, features = ["sync", "time"] }
 tinyhivemind.workspace = true
 # The record every call lands in, and the served definitions.
 tinyhivemind-tools.workspace = true

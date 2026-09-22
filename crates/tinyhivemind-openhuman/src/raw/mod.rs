@@ -38,11 +38,12 @@
 //!   signing in. So the seats are booted under a library-host context once,
 //!   at seating ([`RawRunner::seat`]), and every turn runs inside it.
 
+mod library;
 mod policy;
 mod seat;
 #[cfg(test)]
 mod test;
-mod tools;
+pub(crate) mod tools;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -50,19 +51,78 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use openhuman_core::agent::harness::AgentDefinitionRegistry;
 use openhuman_core::config::Config;
-use openhuman_core::config::schema::ephemeral_route::{self, EphemeralRoute};
-use openhuman_core::core::runtime::{CoreContext, DomainSet, TokenSource};
-use openhuman_core::core::types::HostKind;
-use openhuman_core::tools::toolpacks::ToolGroups;
+use tinyhivemind::Sequence;
 use tinyhivemind_driver::AgentBinding;
 use tinyhivemind_tools::EpisodeTools;
 
-use crate::runner::{Lane, SeatRunner, TurnJob};
+use crate::runner::{Lane, SeatRunner, TurnJob, unseated};
 use crate::{Error, Result};
+pub use library::LibraryHost;
 pub use seat::RawSeat;
 
 /// What each seat has been shown and said, keyed by seat.
 type Contexts = Arc<Mutex<BTreeMap<String, Vec<(String, String)>>>>;
+
+/// Register every seat as a workspace definition naming `tools` as its
+/// belt, before the process registry is read.
+///
+/// A session's turn runs as a hosted root invocation, which resolves the
+/// seat against `OpenHuman`'s process registry and takes the model's
+/// allowlist from the seat's *definition*, not from the belt the session was
+/// built with: a tool the definition does not name is stripped before the
+/// model sees it, and a wildcard projects to nothing. So `tools` must name
+/// every tool the seat will be handed, as the model calls them -- for a host
+/// that prefixes the episode's tools, the prefixed names, alongside its own.
+///
+/// A seat id becomes a file name, so it is one plain path component:
+/// ASCII letters, digits, `-`, `_` and `.`, and not `.` or `..` alone.
+///
+/// The loader wants `id`, `when_to_use` and a non-empty `system_prompt`; the
+/// prompt written here is the seat's role for a reader of the workspace, not
+/// the one a session runs under. The registry is process-wide, so a host
+/// seating more than one desk in one process names its seats apart.
+///
+/// # Errors
+///
+/// A seat id that is not a plain path component, the directory or a file
+/// failing to write, or the registry refusing the definitions.
+pub fn register_seats(workspace: &Path, seats: &[(&str, &str)], tools: &[String]) -> Result<()> {
+    // A seat id names a file: one path component, and nothing a path can
+    // be steered with.
+    for (id, _) in seats {
+        let plain = !id.is_empty()
+            && *id != "."
+            && *id != ".."
+            && id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+        if !plain {
+            return Err(Error::UnsafeSeatId {
+                seat: (*id).to_owned(),
+            });
+        }
+    }
+    let agents = workspace.join("agents");
+    std::fs::create_dir_all(&agents)?;
+    let named: Vec<String> = tools.iter().map(|name| format!("{name:?}")).collect();
+    for (id, role) in seats {
+        let toml = format!(
+            "id = {id:?}\nwhen_to_use = {role:?}\nsystem_prompt = {{ inline = {role:?} }}\ntools = {{ named = [{}] }}\n",
+            named.join(", ")
+        );
+        std::fs::write(agents.join(format!("{id}.toml")), toml)?;
+    }
+    AgentDefinitionRegistry::init_global(workspace)?;
+    let registry = AgentDefinitionRegistry::global().ok_or(Error::RegistryMissing)?;
+    for (id, _) in seats {
+        if registry.get(id).is_none() {
+            return Err(Error::SeatNotRegistered {
+                seat: (*id).to_owned(),
+            });
+        }
+    }
+    Ok(())
+}
 
 /// Where a run's inference comes from, as the raw session needs it: the
 /// embed runtime applies its route per call, a raw session resolves the
@@ -89,41 +149,20 @@ pub struct RawRunner {
 }
 
 impl RawRunner {
-    /// Register every seat as a workspace definition, before the runtime
-    /// boots and the process registry is read.
-    ///
-    /// The loader wants `id`, `when_to_use` and a non-empty `system_prompt`;
-    /// the prompt written here is the seat's role for a reader of the
-    /// workspace, not the one a session runs under. `tools` is the served
-    /// belt by name: the hosted turn's allowlist comes from here.
+    /// Register every seat as a workspace definition naming the served belt,
+    /// before the runtime boots and the process registry is read. See
+    /// [`register_seats`] for why, and for a host whose belt is named
+    /// otherwise.
     ///
     /// # Errors
     ///
     /// The directory or a file failing to write, or the registry refusing the
     /// definitions.
     pub fn prepare(workspace: &Path, seats: &[(&str, &str)]) -> Result<()> {
-        let agents = workspace.join("agents");
-        std::fs::create_dir_all(&agents)?;
         let belt: Vec<String> = tinyhivemind_tools::served_specs()
-            .map(|spec| format!("{:?}", spec.name))
+            .map(|spec| spec.name.to_owned())
             .collect();
-        for (id, role) in seats {
-            let toml = format!(
-                "id = {id:?}\nwhen_to_use = {role:?}\nsystem_prompt = {{ inline = {role:?} }}\ntools = {{ named = [{}] }}\n",
-                belt.join(", ")
-            );
-            std::fs::write(agents.join(format!("{id}.toml")), toml)?;
-        }
-        AgentDefinitionRegistry::init_global(workspace)?;
-        let registry = AgentDefinitionRegistry::global().ok_or(Error::RegistryMissing)?;
-        for (id, _) in seats {
-            if registry.get(id).is_none() {
-                return Err(Error::SeatNotRegistered {
-                    seat: (*id).to_owned(),
-                });
-            }
-        }
-        Ok(())
+        register_seats(workspace, seats, &belt)
     }
 
     /// Seat every brief as a raw seat over one resolved config.
@@ -146,53 +185,14 @@ impl RawRunner {
         route: &Route,
         workspace: &Path,
     ) -> Result<Self> {
-        let mut config = base.clone();
-        config.workspace_dir = workspace.to_path_buf();
-        config.action_dir = workspace.to_path_buf();
-        config.api_url = Some(backend_url.to_owned());
-        config.default_model = Some(route.model.clone());
-        let ephemeral =
-            EphemeralRoute::from_params(Some(route.endpoint.clone()), Some(route.api_key.clone()))
-                .ok_or(Error::IncompleteRoute)?;
-        ephemeral_route::apply(&mut config, ephemeral);
-        let config = Arc::new(config);
-        // A raw session runs inside the core the way a library embedder's
-        // does. The core reads its ambient context to decide whose product
-        // policy applies; with none it is the desktop's, and inference waits
-        // on the operator signing in. `HostKind::Library` says the caller
-        // owns the provider and its credential -- this config's route -- and
-        // is what the embed runtime says of itself when it boots. Nothing
-        // else is asked of the core: no domain, no service, no store.
-        let (context, _, _) = Box::pin(CoreContext::init_with_config(
-            HostKind::Library,
-            &TokenSource::Fixed(Arc::new(format!("tinyhivemind-raw-{}", std::process::id()))),
-            DomainSet::none(),
-            ToolGroups::default(),
-            Some((*config).clone()),
-            None,
-        ))
-        .await?;
-        // Resolve the `chat` role once, at seating: a route the factory
-        // cannot resolve fails here rather than at the first turn.
-        let (_, model) = CoreContext::scope(Arc::clone(&context), async {
-            openhuman_core::inference::provider::create_chat_model_with_model_id(
-                "chat", &config, 0.0,
-            )
-        })
-        .await?;
+        let library = LibraryHost::boot(base, backend_url, route, workspace).await?;
+        let model = library.model().to_owned();
         let seats = briefs
             .iter()
             .map(|(id, brief)| {
                 (
                     id.clone(),
-                    RawSeat::new(
-                        id,
-                        format!("{brief}\n\n{contract}"),
-                        Arc::clone(&config),
-                        Arc::clone(&context),
-                        model.clone(),
-                        workspace.to_path_buf(),
-                    ),
+                    RawSeat::new(id, format!("{brief}\n\n{contract}"), library.clone()),
                 )
             })
             .collect();
@@ -237,7 +237,7 @@ impl SeatRunner for RawRunner {
     /// A fresh session, seeded with what this seat has been shown and said
     /// so far, run once and dropped. Its belt is built for this seat and this
     /// turn, and every call it makes lands in the shared record.
-    fn turn(&self, seat: String, lane: Lane, prompt: String) -> TurnJob {
+    fn turn(&self, seat: String, lane: Lane, _since: Sequence, prompt: String) -> TurnJob {
         let history = self
             .contexts
             .lock()
@@ -246,7 +246,9 @@ impl SeatRunner for RawRunner {
             .cloned()
             .unwrap_or_default();
         let belt = tools::belt(&seat, &self.tools);
-        let raw_seat = self.seats[&seat].clone();
+        let Some(raw_seat) = self.seats.get(&seat).cloned() else {
+            return unseated(seat, lane);
+        };
         let contexts = Arc::clone(&self.contexts);
         Box::pin(async move {
             let result = match Box::pin(raw_seat.turn(history, &prompt, belt)).await {

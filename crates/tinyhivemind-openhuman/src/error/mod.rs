@@ -4,7 +4,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// `TINYHIVEMIND_RUNNER` named neither runner.
-    #[error("TINYHIVEMIND_RUNNER must be `embed` or `raw`, not `{0}`")]
+    #[error("TINYHIVEMIND_RUNNER must be `embed`, `raw` or `hosted`, not `{0}`")]
     UnknownRunner(String),
     /// A route was missing its endpoint or its key.
     #[error("a route needs both an endpoint and a key")]
@@ -12,6 +12,13 @@ pub enum Error {
     /// The definition registry did not come up after the seats were written.
     #[error("the definition registry did not initialise")]
     RegistryMissing,
+    /// A seat id that cannot name a definition file: empty, `.`, `..`, or
+    /// carrying anything but ASCII letters, digits, `-`, `_` and `.`.
+    #[error("seat id `{seat}` is not a plain path component")]
+    UnsafeSeatId {
+        /// The id.
+        seat: String,
+    },
     /// A seat's definition was written and the registry did not load it.
     #[error("seat `{seat}` did not register")]
     SeatNotRegistered {
@@ -33,6 +40,10 @@ pub enum Error {
     /// An `openhuman-embed` agent could not be instantiated.
     #[error(transparent)]
     Agent(#[from] openhuman_embed::AgentError),
+    /// The host's log failed to read, or broke the port's contract, while a
+    /// turn was being seeded.
+    #[error(transparent)]
+    Session(#[from] tinyhivemind::Error),
     /// `OpenHuman` refused: booting as a library host, resolving the route,
     /// building or seeding a session, or running the turn.
     #[error(transparent)]

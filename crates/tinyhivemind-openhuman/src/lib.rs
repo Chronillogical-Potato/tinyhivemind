@@ -1,4 +1,4 @@
-//! The `OpenHuman` adapter: how a seat's turn runs on `OpenHuman`, both ways.
+//! The `OpenHuman` adapter: how a seat's turn runs on `OpenHuman`.
 //!
 //! `tinyhivemind-driver` says who runs next and what a committed row means,
 //! over a handle the host binds; it never runs a turn. This crate is the
@@ -7,23 +7,27 @@
 //! and the first and last are the same for every embedding, because
 //! [`EpisodeTools`](tinyhivemind_tools::EpisodeTools) is where a call lands
 //! whichever road it took. What genuinely varies is [`SeatRunner::turn`],
-//! and there are two answers:
+//! and there are three answers:
 //!
+//! - [`HostedRunner`]: a seat is the host's own agent -- its model, tools,
+//!   approval gate, memory and prompt -- built by the host through
+//!   [`EpisodeHost`] with the episode's tools added to its belt, and seeded
+//!   every turn from the host's own log up to the seat's watermark. This is
+//!   the runner for a host that already has agents.
 //! - [`EmbedRunner`]: a seat is an `openhuman-embed` `AgentSpec` agent on a
 //!   runtime the host booted, holding one session across the episode, and
 //!   reaching the episode's tools through `OpenHuman`'s three MCP dispatchers
 //!   against `tinyhivemind-mcp`'s server -- the only road a spec offers a
 //!   tool the runtime did not ship.
-//! - [`RawRunner`]: a seat is an `OpenHumanSessionHost` built one level down
-//!   on every turn, handed the same tools natively as its belt, with a policy
-//!   gate and a memory that keeps nothing, and seeded from a per-seat log this
-//!   crate keeps.
+//! - [`RawRunner`]: a seat is an `OpenHumanSessionHost` this crate builds on
+//!   a [`LibraryHost`] every turn, handed the same tools natively, with a
+//!   gate and a memory that keeps nothing, and seeded from a per-seat log it
+//!   keeps itself.
 //!
-//! Both land every call in the same record, so the driver drains identical
-//! events and a seat is refused and acknowledged in the same words either
-//! way. The bound handle differs -- [`EmbedSeat`] wraps the agent, [`RawSeat`]
-//! is the seat itself -- which is what [`BoundAgent`](tinyhivemind_driver::BoundAgent)
-//! is for.
+//! All three land every call in the same record, so the driver drains
+//! identical events and a seat is refused and acknowledged in the same
+//! words whichever runs it. The bound handle differs, which is what
+//! [`BoundAgent`](tinyhivemind_driver::BoundAgent) is for.
 //!
 //! This is the one crate in the workspace that links a harness. A host that
 //! seats agents some other way does not link it; it implements `BoundAgent`
@@ -31,37 +35,59 @@
 //!
 //! # Example
 //!
-//! A raw seat, against any OpenAI-compatible endpoint: the route is the
-//! credential. The same steps seat one against the scripted model the
-//! `offline` feature ships, which is how the crate's own tests prove it.
+//! A hosted seat. The host has a log and knows how to build its agents; here
+//! the agent is a library session with nothing but the episode's tools, and
+//! the wrapper is the core context such a session runs under.
 //!
 //! ```no_run
 //! use std::sync::Arc;
-//! use openhuman_embed::RuntimeConfig;
-//! use tinyhivemind_openhuman::{Lane, RawRunner, Route, SeatRunner};
+//! use openhuman_core::agent::OpenHumanSessionHost;
+//! use tinyhivemind::{SESSION_WINDOW, SessionLog};
+//! use tinyhivemind_openhuman::{
+//!     EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Lane, LibraryHost, SeatRunner,
+//! };
 //! use tinyhivemind_tools::{Dispatch, EpisodeTools};
 //!
-//! # async fn run() -> tinyhivemind_openhuman::Result<()> {
-//! let workspace = std::env::temp_dir().join("episode");
-//! // Every seat is a registered definition before a raw session runs: the
-//! // hosted turn resolves the seat, and its belt, by name.
-//! RawRunner::prepare(&workspace, &[("lead", "You lead the desk.")])?;
-//! let runner = RawRunner::seat(
+//! struct Desk<L: SessionLog> {
+//!     log: L,
+//!     library: LibraryHost,
+//! }
+//!
+//! impl<L: SessionLog + 'static> EpisodeHost for Desk<L> {
+//!     fn log(&self) -> &dyn SessionLog {
+//!         &self.log
+//!     }
+//!
+//!     fn build_seat(
+//!         &self,
+//!         seat: &str,
+//!         belt: EpisodeBelt,
+//!     ) -> tinyhivemind_openhuman::Result<OpenHumanSessionHost> {
+//!         // A real host builds the agent it always builds, adds `belt.tools`,
+//!         // and passes its own gate here instead of `None`.
+//!         let gate = belt.admit(None);
+//!         self.library.session(seat, "You lead the desk.", belt.tools, gate)
+//!     }
+//!
+//!     fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
+//!         Box::pin(self.library.scope(turn))
+//!     }
+//! }
+//!
+//! # async fn run<L: SessionLog + 'static>(desk: Desk<L>) -> tinyhivemind_openhuman::Result<()> {
+//! let runner = HostedRunner::seat(
+//!     Arc::new(desk),
 //!     Arc::new(EpisodeTools::new(["lead"])),
-//!     &[("lead".to_owned(), "You lead the desk.".to_owned())].into_iter().collect(),
-//!     "Call `complete_episode` when you are done.",
-//!     &RuntimeConfig::default(),
-//!     "http://127.0.0.1:1/backend",
-//!     &Route {
-//!         endpoint: "http://127.0.0.1:1/v1".into(),
-//!         api_key: "key".into(),
-//!         model: "a-model".into(),
-//!     },
-//!     &workspace,
-//! )
-//! .await?;
+//!     &["lead".to_owned()],
+//!     "engineering",
+//!     "Engineering",
+//!     SESSION_WINDOW,
+//! )?;
 //! runner.open("lead", Vec::new(), Dispatch { chat: "engineering".into(), parent: None });
-//! let (_, _, reply) = runner.turn("lead".into(), Lane::Desk, "Go.".into()).await;
+//! // The newest row `lead` was shown before this turn: its history is read
+//! // from the host's log up to here, and the brief carries what is above.
+//! let since = tinyhivemind::Sequence(1);
+//! let (_, _, reply) = runner.turn("lead".into(), Lane::Desk, since, "Go.".into()).await;
 //! let events = runner.close("lead");
 //! # let _ = (reply, events);
 //! # Ok(())
@@ -70,6 +96,7 @@
 
 pub mod embed;
 pub mod error;
+pub mod hosted;
 #[cfg(any(test, feature = "offline"))]
 pub mod offline;
 pub mod raw;
@@ -77,5 +104,6 @@ pub mod runner;
 
 pub use embed::{EmbedRunner, EmbedSeat};
 pub use error::{Error, Result};
-pub use raw::{RawRunner, RawSeat, Route};
+pub use hosted::{EpisodeBelt, EpisodeHost, HostedRunner, HostedSeat, HostedTurn};
+pub use raw::{LibraryHost, RawRunner, RawSeat, Route, register_seats};
 pub use runner::{Lane, RunnerKind, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult};
