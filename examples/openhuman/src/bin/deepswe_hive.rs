@@ -416,7 +416,8 @@ fn accepted_action_reply(
             format!("COMPLETE: {message}")
         }
         tinyhivemind::speech::Utterance::Post { .. }
-        | tinyhivemind::speech::Utterance::Dm { .. } => {
+        | tinyhivemind::speech::Utterance::Dm { .. }
+        | tinyhivemind::speech::Utterance::Ask { .. } => {
             anyhow::bail!("@{id} emitted an unsupported hive action")
         }
     };

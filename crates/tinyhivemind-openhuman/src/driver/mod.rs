@@ -1,6 +1,9 @@
 //! Resumable, host-committed completion episodes.
 
+mod broadcast;
+mod ledger;
 mod order;
+mod round;
 #[cfg(test)]
 mod test;
 
@@ -9,16 +12,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use openhuman_embed::Agent;
 use serde::{Deserialize, Serialize};
 use tinyhivemind::{Sequence, speech::Utterance};
-use tinyhivemind_embed::{
-    ConversationKind, ConversationRef, MessageRoute, Router, RoutingPlan, RoutingPolicy,
-    RoutingRequest, RoutingSource, route_broadcast,
-};
+use tinyhivemind_embed::{MessageRoute, Router, RoutingPlan, RoutingPolicy};
 use tinyhivemind_hive::{
     CompletionEpisodeState, CompletionStep, apply_assignment, apply_completion, completion_status,
 };
 
 use crate::{Error, OpenHumanHive, Result};
-use order::{broadcast_fallback, extend_pending_order, pending_ids_in_order, prune_pending_order};
+#[cfg(test)]
+use broadcast::route_ids;
+pub use ledger::{AssignmentSpend, Handoff, Ledger, Seen};
+use ledger::{named_ids, open_assignment};
+use order::{pending_ids_in_order, prune_pending_order, stalled_ids};
 
 /// Caller-owned resumable completion state.
 ///
@@ -27,6 +31,10 @@ use order::{broadcast_fallback, extend_pending_order, pending_ids_in_order, prun
 /// different event reusing the same host sequence. The persisted freshness
 /// floor is the maximum episode watermark, participant assignment/completion
 /// sequence, or committed receipt sequence.
+///
+/// The [`Ledger`] moves only with committed events and is part of what a
+/// pending round binds to. [`Seen`] is what the host has reported about
+/// delivery and turns; it moves the wake predicate and nothing else.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DriverState {
@@ -35,6 +43,10 @@ pub struct DriverState {
     freshness_floor: Sequence,
     pending_order: Vec<String>,
     revision: u64,
+    #[serde(default)]
+    ledger: Ledger,
+    #[serde(default)]
+    seen: Seen,
 }
 
 impl DriverState {
@@ -54,6 +66,69 @@ impl DriverState {
     #[must_use]
     pub const fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// Queued handoffs, budgets, and open questions.
+    #[must_use]
+    pub const fn ledger(&self) -> &Ledger {
+        &self.ledger
+    }
+
+    /// What the host has reported about each seat.
+    #[must_use]
+    pub const fn seen(&self) -> &Seen {
+        &self.seen
+    }
+
+    /// Record that a seat has been shown every row through `through`.
+    ///
+    /// This is how a completion becomes checkable against delivery, and how
+    /// a seat stops being owed a turn for rows it has already read. A host
+    /// that never reports delivery keeps the prior behaviour: every pending
+    /// seat is always owed a turn.
+    pub fn delivered(&mut self, agent_id: &str, through: Sequence) {
+        self.seen.delivered(agent_id, through);
+    }
+
+    /// Record that a seat's turn was started for the assignment it holds.
+    ///
+    /// A committed row from the seat records this on its own; the explicit
+    /// call is for a turn that returns without committing anything, which is
+    /// the one way a pending seat can otherwise be woken forever.
+    pub fn turn_started(&mut self, agent_id: &str) {
+        if let Some(assigned_at) = open_assignment(&self.episode, agent_id) {
+            self.seen.ran(agent_id, assigned_at);
+        }
+    }
+
+    /// Whether the episode is actually over.
+    ///
+    /// [`CompletionStep::Complete`] is necessary and not sufficient: between a
+    /// completion and its queue drain, or while an answer is still owed, the
+    /// status reads complete and the episode is not. Gate termination on this.
+    #[must_use]
+    pub fn quiescent(&self) -> bool {
+        matches!(
+            completion_status(&self.episode),
+            CompletionStep::Complete { .. }
+        ) && self.ledger.is_drained()
+    }
+
+    /// Pending seats nothing will ever wake: they ran for what they hold and
+    /// have been shown everything. The failure is otherwise silent.
+    #[must_use]
+    pub fn stalled(&self) -> Vec<String> {
+        stalled_ids(self)
+    }
+
+    /// Everything except what the host reported about delivery and turns.
+    fn same_commitments(&self, other: &Self) -> bool {
+        self.episode == other.episode
+            && self.receipts == other.receipts
+            && self.freshness_floor == other.freshness_floor
+            && self.pending_order == other.pending_order
+            && self.revision == other.revision
+            && self.ledger == other.ledger
     }
 }
 
@@ -126,6 +201,17 @@ pub enum HostAction {
         /// Exact authored message.
         message: String,
     },
+    /// Hand a queued broadcast to the seat that just came free, and run it.
+    ///
+    /// The seat was assigned it at the completion that freed it, so the
+    /// assignment sits at a row that exists rather than one the journal has
+    /// yet to reach.
+    DeliverHandoff {
+        /// The seat now holding the work.
+        agent_id: String,
+        /// The handoff, as it was queued.
+        handoff: Handoff,
+    },
 }
 
 /// Routing inputs supplied only when folding an agent broadcast.
@@ -170,10 +256,17 @@ pub struct Transition {
 pub struct CompletionDriver<'a> {
     hive: &'a OpenHumanHive,
     round_width: usize,
+    queue_depth: usize,
+    broadcast_budget: Option<u32>,
 }
 
 impl<'a> CompletionDriver<'a> {
     /// Bind a completion driver to one hive and nonzero round width.
+    ///
+    /// Each recipient may hold `round_width` queued handoffs, and an
+    /// assignment may broadcast without limit; see
+    /// [`with_queue_depth`](Self::with_queue_depth) and
+    /// [`with_broadcast_budget`](Self::with_broadcast_budget).
     ///
     /// # Errors
     ///
@@ -182,7 +275,34 @@ impl<'a> CompletionDriver<'a> {
         if round_width == 0 {
             return Err(Error::ZeroRoundWidth);
         }
-        Ok(Self { hive, round_width })
+        Ok(Self {
+            hive,
+            round_width,
+            queue_depth: round_width,
+            broadcast_budget: None,
+        })
+    }
+
+    /// How many handoffs one recipient may hold before further ones are
+    /// refused and the work stays with its author.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::ZeroQueueDepth`] for a zero bound.
+    pub fn with_queue_depth(mut self, queue_depth: usize) -> Result<Self> {
+        if queue_depth == 0 {
+            return Err(Error::ZeroQueueDepth);
+        }
+        self.queue_depth = queue_depth;
+        Ok(self)
+    }
+
+    /// How many broadcasts one assignment may route before the author is
+    /// refused and must finish what it holds. `None` is unlimited.
+    #[must_use]
+    pub const fn with_broadcast_budget(mut self, budget: Option<u32>) -> Self {
+        self.broadcast_budget = budget;
+        self
     }
 
     /// Start and validate new caller-owned completion state.
@@ -199,6 +319,8 @@ impl<'a> CompletionDriver<'a> {
             freshness_floor,
             pending_order: Vec::new(),
             revision: 0,
+            ledger: Ledger::default(),
+            seen: Seen::default(),
         })
     }
 
@@ -207,7 +329,7 @@ impl<'a> CompletionDriver<'a> {
     /// # Errors
     ///
     /// Returns an out-of-hive error when the state names another desk or a
-    /// participant or committed author not present in this hive.
+    /// participant, committed author, or ledger entry not present in this hive.
     pub fn resume(&self, mut state: DriverState) -> Result<DriverState> {
         if usize::try_from(state.revision) != Ok(state.receipts.len()) {
             return Err(Error::InvalidStateRevision {
@@ -234,11 +356,7 @@ impl<'a> CompletionDriver<'a> {
                 }
                 .into());
             }
-            if self.hive.bound_agent(&participant.agent_id).is_none() {
-                return Err(Error::OutOfHiveParticipant {
-                    agent_id: participant.agent_id.clone(),
-                });
-            }
+            self.bound(&participant.agent_id)?;
         }
         for (sequence, receipt) in &state.receipts {
             if *sequence != receipt.event.sequence {
@@ -252,18 +370,16 @@ impl<'a> CompletionDriver<'a> {
                     sequence: *sequence,
                 });
             }
-            if self.hive.bound_agent(&receipt.event.author_id).is_none() {
-                return Err(Error::OutOfHiveParticipant {
-                    agent_id: receipt.event.author_id.clone(),
-                });
-            }
+            self.bound(&receipt.event.author_id)?;
         }
-        for agent_id in &state.pending_order {
-            if self.hive.bound_agent(agent_id).is_none() {
-                return Err(Error::OutOfHiveParticipant {
-                    agent_id: agent_id.clone(),
-                });
-            }
+        for agent_id in state
+            .pending_order
+            .iter()
+            .map(String::as_str)
+            .chain(named_ids(&state.ledger))
+            .chain(state.seen.delivered_through.keys().map(String::as_str))
+        {
+            self.bound(agent_id)?;
         }
         prune_pending_order(&mut state);
         let episode_floor = episode_freshness_floor(&state.episode);
@@ -280,7 +396,20 @@ impl<'a> CompletionDriver<'a> {
         Ok(state)
     }
 
+    fn bound(&self, agent_id: &str) -> Result<()> {
+        if self.hive.bound_agent(agent_id).is_none() {
+            return Err(Error::OutOfHiveParticipant {
+                agent_id: agent_id.to_owned(),
+            });
+        }
+        Ok(())
+    }
+
     /// Return the next bounded round without changing state.
+    ///
+    /// A seat is in the round when it holds an open assignment it has not run
+    /// for, or holds rows it has not been shown -- or when it owes an answer
+    /// to a question asked of it after it was last shown anything.
     ///
     /// # Errors
     ///
@@ -321,8 +450,8 @@ impl<'a> CompletionDriver<'a> {
     ///
     /// # Errors
     ///
-    /// Returns typed stale, duplicate-sequence, membership, routing, and
-    /// completion errors.
+    /// Returns typed stale, duplicate-sequence, membership, routing, budget,
+    /// and completion errors.
     pub async fn apply_committed(
         &self,
         state: &DriverState,
@@ -343,109 +472,92 @@ impl<'a> CompletionDriver<'a> {
         if let Some(replay) = self.replay_or_validate(state, &event)? {
             return Ok(replay);
         }
+        let mut next = state.clone();
+        let author = event.author_id.as_str();
+        // A row is proof its author ran for what it held, and it answers
+        // whoever was waiting on that author. Both before the row's own
+        // effect, which may change what the author holds.
+        if let Some(assigned_at) = open_assignment(&state.episode, author) {
+            next.seen.ran(author, assigned_at);
+        }
+        next.ledger.answered(author);
 
-        let mut episode = state.episode.clone();
-        let mut pending_order = state.pending_order.clone();
         let actions = match &event.utterance {
             Utterance::Post { .. } => Vec::new(),
-            Utterance::CompleteEpisode { .. } => {
-                episode = apply_completion(&episode, &event.author_id, event.sequence)?;
-                Vec::new()
-            }
-            Utterance::Dm { to, message } => {
-                self.deliver_privately(&event.author_id, to, message)?
-            }
-            // An `ask` reaches its one seat exactly as a `dm` does. That it
-            // also holds the asker's completion open until answered is state
-            // this driver does not carry yet; it lands with the outstanding
-            // asks the host must track.
+            Utterance::CompleteEpisode { .. } => Self::fold_completion(&mut next, &event)?,
+            Utterance::Dm { to, message } => self.deliver_privately(author, to, message)?,
             Utterance::Ask { to, message } => {
-                self.deliver_privately(&event.author_id, std::slice::from_ref(to), message)?
+                let actions = self.deliver_privately(author, std::slice::from_ref(to), message)?;
+                next.ledger.open_ask(author, to, event.sequence);
+                actions
             }
             Utterance::Broadcast { message } => {
-                let Some(routing) = routing else {
-                    return Err(Error::MissingBroadcastRouting);
-                };
-                let fallback_responder = match broadcast_fallback {
-                    Some(fallback) => fallback,
-                    None => Self::broadcast_fallback_for(
-                        &state.episode,
-                        &state.pending_order,
-                        &event.author_id,
-                    )?,
-                };
-                let request = self.broadcast_request(&episode, &event.author_id, message, routing);
-                let plan = route_broadcast(
-                    routing.primary,
-                    routing.reasoning,
-                    &request,
-                    fallback_responder,
+                self.fold_broadcast(
+                    state,
+                    &mut next,
+                    &event,
+                    message,
+                    routing,
+                    broadcast_fallback,
                 )
-                .await;
-                let recipients = route_ids(&plan);
-                if recipients.len() > self.round_width {
-                    return Err(Error::BroadcastTooWide {
-                        recipient_count: recipients.len(),
-                        round_width: self.round_width,
-                    });
-                }
-                if recipients.iter().any(|id| id == &event.author_id) {
-                    return Err(Error::BroadcastIncludesAuthor {
-                        agent_id: event.author_id.clone(),
-                    });
-                }
-                for id in &recipients {
-                    if self.hive.bound_agent(id).is_none() {
-                        return Err(Error::UnknownBoundAgent {
-                            agent_id: id.clone(),
-                        });
-                    }
-                }
-                if !recipients.is_empty() {
-                    // A participant holds at most one open assignment, so a
-                    // recipient that is still working cannot be given a second
-                    // one -- see ADR 0021. It keeps its turn through
-                    // `pending_order` and is assigned when it is next free.
-                    //
-                    // Dropping the handoff's message is the cost of not having
-                    // a queue here; `tinyhivemind-host` carries one that keeps
-                    // the body with the deferred recipient.
-                    let idle: Vec<&str> = recipients
-                        .iter()
-                        .filter(|id| !is_pending(&episode, id))
-                        .map(String::as_str)
-                        .collect();
-                    if !idle.is_empty() {
-                        episode = apply_assignment(&episode, idle, event.sequence)?;
-                    }
-                    extend_pending_order(&mut pending_order, &recipients);
-                }
-                if recipients.is_empty() {
-                    Vec::new()
-                } else {
-                    vec![HostAction::RunAgents {
-                        agent_ids: recipients,
-                        plan,
-                    }]
-                }
+                .await?
             }
         };
-        let mut next = DriverState {
-            episode,
-            receipts: state.receipts.clone(),
-            freshness_floor: event.sequence,
-            pending_order,
-            revision: state
-                .revision
-                .checked_add(1)
-                .ok_or(Error::StateRevisionOverflow)?,
-        };
+        next.freshness_floor = event.sequence;
+        next.revision = state
+            .revision
+            .checked_add(1)
+            .ok_or(Error::StateRevisionOverflow)?;
         next.receipts.insert(event.sequence, Receipt { event });
         prune_pending_order(&mut next);
         Ok(Transition {
             state: next,
             actions,
         })
+    }
+
+    /// Record a completion, then hand the seat one queued handoff if it has any.
+    ///
+    /// The order is the whole discipline. Completing first records the work
+    /// the seat actually did; assigning first would move `assigned_at` past
+    /// this row and stale-reject the very completion being recorded. The new
+    /// assignment sits at this completion's sequence -- a row that exists --
+    /// rather than at the broadcast's origin, which the seat's previous work
+    /// would already satisfy, or at some future row the watermark could never
+    /// reach.
+    fn fold_completion(
+        next: &mut DriverState,
+        event: &CommittedUtterance,
+    ) -> Result<Vec<HostAction>> {
+        let author = event.author_id.as_str();
+        if let Some(waiting) = next.ledger.awaiting(author) {
+            return Err(Error::AwaitingReply {
+                agent_id: author.to_owned(),
+                waiting_on: waiting.keys().cloned().collect(),
+            });
+        }
+        // Checkable only where the host has said what it delivered; a host
+        // that never reports keeps the prior, unchecked behaviour.
+        if let (Some(assigned_at), Some(delivered_through)) = (
+            open_assignment(&next.episode, author),
+            next.seen.delivered_through.get(author).copied(),
+        ) && delivered_through < assigned_at
+        {
+            return Err(Error::UndeliveredAssignment {
+                agent_id: author.to_owned(),
+                assigned_at,
+                delivered_through,
+            });
+        }
+        next.episode = apply_completion(&next.episode, author, event.sequence)?;
+        let Some(handoff) = next.ledger.pop(author) else {
+            return Ok(Vec::new());
+        };
+        next.episode = apply_assignment(&next.episode, [author], event.sequence)?;
+        Ok(vec![HostAction::DeliverHandoff {
+            agent_id: author.to_owned(),
+            handoff,
+        }])
     }
 
     fn replay_or_validate(
@@ -469,174 +581,8 @@ impl<'a> CompletionDriver<'a> {
                 sequence: event.sequence,
             });
         }
-        if self.hive.bound_agent(&event.author_id).is_none() {
-            return Err(Error::OutOfHiveParticipant {
-                agent_id: event.author_id.clone(),
-            });
-        }
+        self.bound(&event.author_id)?;
         Ok(None)
-    }
-
-    /// Fold exactly one committed result for every agent in a proposed round.
-    /// An exact receipt-only replay returns unchanged without host actions before round, count, or author validation; it is a safe no-op because every event exactly matches its receipt.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::PartialRound`] for a wrong count or [`Error::UnexpectedRoundAuthor`] for wrong authors. Exact replay returns successfully before both checks.
-    pub async fn apply_committed_round(
-        &self,
-        state: &DriverState,
-        round: &PendingRound<'_>,
-        events: Vec<CommittedUtterance>,
-        routing: Option<BroadcastRouting<'_>>,
-    ) -> Result<Transition> {
-        if Self::is_exact_round_replay(state, &events) {
-            return Ok(Transition {
-                state: state.clone(),
-                actions: Vec::new(),
-            });
-        }
-        Self::validate_round_state(state, round)?;
-        if events.len() != round.agents.len() {
-            return Err(Error::PartialRound {
-                expected: round.agents.len(),
-                received: events.len(),
-            });
-        }
-        let expected: BTreeSet<_> = round
-            .agents
-            .iter()
-            .map(|pending| pending.hive_agent_id)
-            .collect();
-        let actual: BTreeSet<_> = events
-            .iter()
-            .map(|event| event.author_id.as_str())
-            .collect();
-        if actual.len() != events.len() || actual != expected {
-            if let Some(event) = events
-                .iter()
-                .find(|event| !expected.contains(event.author_id.as_str()))
-            {
-                return Err(Error::UnexpectedRoundAuthor {
-                    agent_id: event.author_id.clone(),
-                });
-            }
-            return Err(Error::PartialRound {
-                expected: expected.len(),
-                received: actual.len(),
-            });
-        }
-        let mut events = events;
-        events.sort_by_key(|event| event.sequence);
-        let broadcast_fallbacks = self.preflight_round_events(state, &events, routing)?;
-        let mut next = state.clone();
-        let mut actions = Vec::new();
-        for event in events {
-            let fallback = broadcast_fallbacks.get(&event.sequence).map(String::as_str);
-            let transition = self
-                .apply_committed_with_fallback(&next, event, routing, fallback)
-                .await?;
-            next = transition.state;
-            actions.extend(transition.actions);
-        }
-        Ok(Transition {
-            state: next,
-            actions,
-        })
-    }
-
-    fn is_exact_round_replay(state: &DriverState, events: &[CommittedUtterance]) -> bool {
-        if events.is_empty() {
-            return false;
-        }
-        let mut sequences = BTreeSet::new();
-        events.iter().all(|event| {
-            sequences.insert(event.sequence)
-                && state
-                    .receipts
-                    .get(&event.sequence)
-                    .is_some_and(|receipt| receipt.event == *event)
-        })
-    }
-
-    fn validate_round_state(state: &DriverState, round: &PendingRound<'_>) -> Result<()> {
-        if round.state_revision < state.revision {
-            return Err(Error::StaleRound {
-                round_revision: round.state_revision,
-                state_revision: state.revision,
-            });
-        }
-        if round.state_revision != state.revision || round.state != state {
-            return Err(Error::MismatchedRound {
-                round_revision: round.state_revision,
-                state_revision: state.revision,
-            });
-        }
-        Ok(())
-    }
-
-    fn preflight_round_events(
-        &self,
-        state: &DriverState,
-        events: &[CommittedUtterance],
-        routing: Option<BroadcastRouting<'_>>,
-    ) -> Result<BTreeMap<Sequence, String>> {
-        let mut newest = state.freshness_floor;
-        let mut new_sequences = BTreeSet::new();
-        let mut episode = state.episode.clone();
-        let mut broadcast_fallbacks = BTreeMap::new();
-
-        for event in events {
-            if let Some(receipt) = state.receipts.get(&event.sequence) {
-                if receipt.event != *event {
-                    return Err(Error::DuplicateCommittedSequence {
-                        sequence: event.sequence,
-                    });
-                }
-                continue;
-            }
-            if !new_sequences.insert(event.sequence) {
-                return Err(Error::DuplicateCommittedSequence {
-                    sequence: event.sequence,
-                });
-            }
-            if event.sequence <= newest {
-                return Err(Error::StaleCommittedEvent {
-                    sequence: event.sequence,
-                });
-            }
-            newest = event.sequence;
-
-            match &event.utterance {
-                Utterance::Post { .. } => {}
-                Utterance::CompleteEpisode { .. } => {
-                    episode = apply_completion(&episode, &event.author_id, event.sequence)?;
-                }
-                Utterance::Dm { to, .. } => {
-                    self.hive
-                        .resolve_dm(&event.author_id, to, self.round_width)?;
-                }
-                Utterance::Ask { to, .. } => {
-                    self.hive.resolve_dm(
-                        &event.author_id,
-                        std::slice::from_ref(to),
-                        self.round_width,
-                    )?;
-                }
-                Utterance::Broadcast { .. } => {
-                    if routing.is_none() {
-                        return Err(Error::MissingBroadcastRouting);
-                    }
-                    let fallback = Self::broadcast_fallback_for(
-                        &episode,
-                        &state.pending_order,
-                        &event.author_id,
-                    )?;
-                    broadcast_fallbacks.insert(event.sequence, fallback.to_owned());
-                }
-            }
-        }
-        Ok(broadcast_fallbacks)
     }
 
     /// One private delivery — a `dm` to its peers or an `ask` to its one seat
@@ -652,60 +598,6 @@ impl<'a> CompletionDriver<'a> {
             route: self.hive.resolve_dm(author_id, to, self.round_width)?,
             message: message.to_owned(),
         }])
-    }
-
-    fn broadcast_fallback_for<'state>(
-        episode: &'state CompletionEpisodeState,
-        pending_order: &'state [String],
-        author_id: &str,
-    ) -> Result<&'state str> {
-        broadcast_fallback(episode, pending_order, author_id).ok_or_else(|| {
-            Error::NoBroadcastFallback {
-                agent_id: author_id.to_owned(),
-            }
-        })
-    }
-
-    fn broadcast_request(
-        &self,
-        episode: &CompletionEpisodeState,
-        author_id: &str,
-        message: &str,
-        routing: BroadcastRouting<'_>,
-    ) -> RoutingRequest {
-        let participants: BTreeSet<_> = episode
-            .participants
-            .iter()
-            .map(|participant| participant.agent_id.as_str())
-            .collect();
-        RoutingRequest {
-            message: message.to_owned(),
-            source: RoutingSource::AgentBroadcast {
-                author_id: author_id.to_owned(),
-            },
-            conversation: ConversationRef {
-                id: self.hive.desk().id.clone(),
-                kind: ConversationKind::Desk,
-                thread_root: episode.conversation.thread_root,
-            },
-            desk_purpose: self.hive.desk().description.clone(),
-            thread_context: routing.thread_context.to_vec(),
-            candidates: self
-                .hive
-                .graph()
-                .candidates
-                .iter()
-                .filter(|candidate| {
-                    candidate.id != author_id && participants.contains(candidate.id.as_str())
-                })
-                .cloned()
-                .collect(),
-            roster_version: routing.roster_version,
-            policy: RoutingPolicy {
-                round_width: routing.policy.round_width.min(self.round_width),
-                ..routing.policy.clone()
-            },
-        }
     }
 }
 
@@ -732,20 +624,4 @@ fn episode_freshness_floor(episode: &CompletionEpisodeState) -> Sequence {
                     .max(record.completed_at.unwrap_or(episode.watermark))
             })
         })
-}
-
-fn route_ids(plan: &RoutingPlan) -> Vec<String> {
-    match plan {
-        RoutingPlan::One { responder_id, .. } | RoutingPlan::Fallback { responder_id, .. } => {
-            vec![responder_id.clone()]
-        }
-        RoutingPlan::Hive {
-            primary_id,
-            invited_ids,
-            ..
-        } => std::iter::once(primary_id.clone())
-            .chain(invited_ids.iter().cloned())
-            .collect(),
-        RoutingPlan::Clarify { .. } => Vec::new(),
-    }
 }

@@ -4,6 +4,7 @@
 
 mod broadcast_fallback;
 mod coverage;
+mod ledger;
 mod round;
 
 use std::sync::{
@@ -309,7 +310,9 @@ fn payload_wire_forms_are_exact_and_all_fields_are_required() {
             },
             "freshness_floor": 7,
             "pending_order": [],
-            "revision": 1
+            "revision": 1,
+            "ledger": { "queues": {}, "spent": {}, "outstanding_asks": {} },
+            "seen": { "delivered_through": {} }
         })
     );
     for missing in [

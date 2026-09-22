@@ -205,6 +205,39 @@ pub enum Error {
         /// Request field that disagreed with the graph.
         field: &'static str,
     },
+    /// A seat tried to complete while a question it asked is unanswered.
+    #[error("participant `{agent_id}` is still waiting on {waiting_on:?} and may not complete")]
+    AwaitingReply {
+        /// The seat that asked.
+        agent_id: String,
+        /// The seats whose answers it still awaits.
+        waiting_on: Vec<String>,
+    },
+    /// A seat tried to complete an assignment the host never showed it.
+    #[error(
+        "participant `{agent_id}` was assigned at {assigned_at} but delivered only through {delivered_through}"
+    )]
+    UndeliveredAssignment {
+        /// The seat completing.
+        agent_id: String,
+        /// Where its open assignment sits.
+        assigned_at: Sequence,
+        /// The newest row the host reports having shown it.
+        delivered_through: Sequence,
+    },
+    /// A seat has spent every broadcast its current assignment allows.
+    #[error(
+        "participant `{agent_id}` has spent its broadcast budget for the assignment at {assigned_at}"
+    )]
+    BudgetSpent {
+        /// The author refused.
+        agent_id: String,
+        /// The assignment whose budget is gone.
+        assigned_at: Sequence,
+    },
+    /// The per-recipient handoff queue bound is zero.
+    #[error("handoff queue depth must not be zero")]
+    ZeroQueueDepth,
     /// The underlying completion fold rejected the event.
     #[error(transparent)]
     Completion(#[from] tinyhivemind_hive::Error),

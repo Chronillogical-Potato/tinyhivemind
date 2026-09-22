@@ -76,8 +76,8 @@ pub mod graph;
 mod test_support;
 
 pub use driver::{
-    BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, HostAction, PendingAgent,
-    PendingRound, Transition,
+    AssignmentSpend, BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, Handoff,
+    HostAction, Ledger, PendingAgent, PendingRound, Seen, Transition,
 };
 pub use error::{Error, Result};
 pub use graph::{AgentBinding, HiveGraph, OpenHumanHive};

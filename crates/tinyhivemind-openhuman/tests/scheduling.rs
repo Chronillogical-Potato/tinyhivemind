@@ -294,6 +294,11 @@ fn completed_ids_are_pruned_from_accepted_order() {
         .expect("completion")
         .state;
 
+    // `two` was still working when the broadcast named it, so the handoff was
+    // held rather than dropped, and completing hands it over: `two` is pending
+    // again with new work, not pruned.
+    assert_eq!(completed.ledger().queue_len("two"), 0);
+    assert!(completed.episode().participants[1].is_pending());
     assert_eq!(
         driver
             .pending_round(&completed)
@@ -302,6 +307,32 @@ fn completed_ids_are_pruned_from_accepted_order() {
             .iter()
             .map(|pending| pending.hive_agent_id)
             .collect::<Vec<_>>(),
+        ["two", "three", "four", "one"],
+    );
+    let settled = fixture()
+        .block_on(driver.apply_committed(
+            &completed,
+            committed(
+                "two",
+                3,
+                Utterance::CompleteEpisode {
+                    message: "handoff done".into(),
+                },
+            ),
+            None,
+        ))
+        .expect("second completion")
+        .state;
+
+    assert_eq!(
+        driver
+            .pending_round(&settled)
+            .expect("next round")
+            .agents()
+            .iter()
+            .map(|pending| pending.hive_agent_id)
+            .collect::<Vec<_>>(),
         ["three", "four", "one"],
+        "a seat with nothing queued is settled, and settled seats are pruned",
     );
 }

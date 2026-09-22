@@ -56,7 +56,9 @@ fn all_broadcast_round_uses_a_distinct_valid_fallback_for_each_author() {
                 plan: RoutingPlan::Fallback { responder_id, .. },
                 ..
             } => Some(responder_id.as_str()),
-            HostAction::RunAgents { .. } | HostAction::DeliverDm { .. } => None,
+            HostAction::RunAgents { .. }
+            | HostAction::DeliverDm { .. }
+            | HostAction::DeliverHandoff { .. } => None,
         })
         .collect();
     assert_eq!(transition.actions.len(), 3);
