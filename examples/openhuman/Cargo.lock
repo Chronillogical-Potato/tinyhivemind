@@ -1712,8 +1712,8 @@ dependencies = [
  "tinymemory-sources",
  "tinyruntime-bus",
  "tinyskills",
- "tinytools 0.3.0",
- "tinytools-agent 0.3.0",
+ "tinytools",
+ "tinytools-agent",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
@@ -2796,7 +2796,7 @@ dependencies = [
  "serde_json",
  "tinyagents-harness",
  "tinyinference-llm",
- "tinytools 0.3.0",
+ "tinytools",
  "tokio",
  "tracing",
 ]
@@ -2823,8 +2823,8 @@ dependencies = [
  "tinyagents-definition",
  "tinyinference-embeddings",
  "tinyinference-llm",
- "tinytools 0.3.0",
- "tinytools-agent 0.3.0",
+ "tinytools",
+ "tinytools-agent",
  "tokio",
  "tracing",
  "uuid",
@@ -2847,7 +2847,7 @@ dependencies = [
  "tinyagents-runtime",
  "tinyagents-session",
  "tinyinference-llm",
- "tinytools 0.3.0",
+ "tinytools",
  "tokio",
  "uuid",
 ]
@@ -2863,7 +2863,7 @@ dependencies = [
  "tinyagents-definition",
  "tinyagents-harness",
  "tinyinference-llm",
- "tinytools 0.3.0",
+ "tinytools",
 ]
 
 [[package]]
@@ -2876,7 +2876,7 @@ dependencies = [
  "tinyagents-harness",
  "tinyagents-session",
  "tinyinference-llm",
- "tinytools 0.3.0",
+ "tinytools",
  "tokio",
 ]
 
@@ -2970,6 +2970,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-driver"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "thiserror",
+ "tinyhivemind",
+ "tinyhivemind-core",
+ "tinyhivemind-embed",
+ "tinyhivemind-hive",
+]
+
+[[package]]
 name = "tinyhivemind-embed"
 version = "0.2.1"
 dependencies = [
@@ -3003,13 +3015,20 @@ dependencies = [
 name = "tinyhivemind-openhuman"
 version = "0.2.1"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "openhuman",
  "openhuman-embed",
- "serde",
+ "serde_json",
  "thiserror",
  "tinyhivemind",
- "tinyhivemind-core",
- "tinyhivemind-embed",
- "tinyhivemind-hive",
+ "tinyhivemind-driver",
+ "tinyhivemind-mcp",
+ "tinyhivemind-tools",
+ "tinytools",
+ "tinytools-agent",
+ "tokio",
+ "wiremock",
 ]
 
 [[package]]
@@ -3017,7 +3036,6 @@ name = "tinyhivemind-openhuman-example"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "env_logger",
  "futures",
  "openhuman",
@@ -3027,15 +3045,13 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tinyhivemind",
+ "tinyhivemind-driver",
  "tinyhivemind-embed",
  "tinyhivemind-hive",
- "tinyhivemind-mcp",
  "tinyhivemind-openhuman",
  "tinyhivemind-tools",
  "tinyhivemind-typesafe",
  "tinyjevclient",
- "tinytools 0.3.0",
- "tinytools-agent 0.3.0",
  "tokio",
  "wait-timeout",
  "wiremock",
@@ -3099,7 +3115,7 @@ dependencies = [
  "sha2 0.11.0",
  "thiserror",
  "tinyinference-core",
- "tinytools-agent 0.3.0 (git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71)",
+ "tinytools-agent",
  "tokio",
  "tracing",
 ]
@@ -3300,35 +3316,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinytools"
-version = "0.3.0"
-source = "git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71#a5d04a7f3af0abc1dd748f87f94871b36ae9fe71"
-dependencies = [
- "anyhow",
- "async-trait",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "tinytools-agent"
 version = "0.3.0"
 dependencies = [
  "regex",
  "serde",
  "serde_json",
- "tinytools 0.3.0",
-]
-
-[[package]]
-name = "tinytools-agent"
-version = "0.3.0"
-source = "git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71#a5d04a7f3af0abc1dd748f87f94871b36ae9fe71"
-dependencies = [
- "regex",
- "serde",
- "serde_json",
- "tinytools 0.3.0 (git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71)",
+ "tinytools",
 ]
 
 [[package]]

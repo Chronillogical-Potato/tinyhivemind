@@ -2,7 +2,7 @@
 
 This example builds one real OpenHuman `Runtime`, instantiates two independent
 OpenHuman `Agent`s on it, and hands those existing handles to the first-class
-`tinyhivemind-openhuman` factory. The same `OpenHumanHive` binding factory now
+`tinyhivemind-driver` binding. The same `BoundHive` binding now
 backs the routing proof, the PE1006/PE1008 completion experiment, and the
 DeepSWE binary; none of them maintains a second session registry.
 
@@ -14,7 +14,7 @@ It is deterministic and offline:
   OpenAI-compatible model call;
 - one ephemeral, read-only OpenHuman runtime owns the `engineering` and `legal`
   agents, their transcripts, session continuation, and compaction;
-- `tinyhivemind-openhuman` validates one `HiveGraph`, binds canonical ids to
+- `tinyhivemind-driver` validates one `HiveGraph`, binds canonical ids to
   those instances, and resolves accepted routes without constructing agents or
   storing session state;
 - the engineering agent handles a routed desk turn and a deterministic DM turn
@@ -71,7 +71,7 @@ implementations the loop cannot tell apart:
 Both runners land every call in the same `EpisodeTools`, so the driver drains
 identical events and a seat is refused and acknowledged in the same words
 either way. The bound handle differs -- an `Agent` for embed, the raw seat
-itself for raw -- which is what `tinyhivemind-openhuman`'s `BoundAgent` is
+itself for raw -- which is what `tinyhivemind-driver`'s `BoundAgent` is
 for: the driver stores a handle and hands it back, and never runs one.
 
 What the raw runner establishes, and what it cost, is in its module docs. The
@@ -135,7 +135,7 @@ Before the warm-up episode, whichever arm ran first reported twice the round
 trip and wall of the other, and the earlier numbers in #65 read that as the
 harness's.
 
-The driver's own benchmark, `cargo run --release -p tinyhivemind-openhuman
+The driver's own benchmark, `cargo run --release -p tinyhivemind-driver
 --example bench`, measures the completion driver's policy with no agent at
 all and binds plain seats; it says nothing about either runner.
 

@@ -1,86 +1,75 @@
-//! First-class `OpenHuman` bindings for one host-owned `TinyHiveMind` desk.
+//! The `OpenHuman` adapter: how a seat's turn runs on `OpenHuman`, both ways.
 //!
-//! This crate owns the immutable relationship between canonical hive ids and
-//! the handles a host binds to them -- already-instantiated
-//! [`openhuman_embed::Agent`]s by default, or any [`BoundAgent`] a host that
-//! runs its seats another way supplies. It proposes work
-//! and folds host-committed utterances into caller-owned completion state; it
-//! never stores a transcript, appends a row, or retains an `OpenHuman` session
-//! id. The host creates the runtime and agents, executes proposed turns,
-//! durably assigns sequences, and feeds those committed events back through
-//! [`CompletionDriver`].
+//! `tinyhivemind-driver` says who runs next and what a committed row means,
+//! over a handle the host binds; it never runs a turn. This crate is the
+//! host's side of that seam for `OpenHuman`. A host loop touches a seat at
+//! three points -- open a turn, run it, close it and take what was called --
+//! and the first and last are the same for every embedding, because
+//! [`EpisodeTools`](tinyhivemind_tools::EpisodeTools) is where a call lands
+//! whichever road it took. What genuinely varies is [`SeatRunner::turn`],
+//! and there are two answers:
 //!
-//! This adapter is intentionally the OpenHuman-specific workspace boundary.
-//! Its direct `openhuman-embed` dependency sets the root workspace Rust floor;
-//! the pure `tinyhivemind-core` and `tinyhivemind-hive` dependency graphs stay
-//! separate and continue to be checked as pure crates.
+//! - [`EmbedRunner`]: a seat is an `openhuman-embed` `AgentSpec` agent on a
+//!   runtime the host booted, holding one session across the episode, and
+//!   reaching the episode's tools through `OpenHuman`'s three MCP dispatchers
+//!   against `tinyhivemind-mcp`'s server -- the only road a spec offers a
+//!   tool the runtime did not ship.
+//! - [`RawRunner`]: a seat is an `OpenHumanSessionHost` built one level down
+//!   on every turn, handed the same tools natively as its belt, with a policy
+//!   gate and a memory that keeps nothing, and seeded from a per-seat log this
+//!   crate keeps.
 //!
-//! ```
-//! use openhuman_embed::{AgentSpec, Runtime, Workspace};
-//! use tinyhivemind::{Conversation, Sequence, desk::{Desk, ResponderMode}};
-//! use tinyhivemind_embed::RouteCandidate;
-//! use tinyhivemind_hive::CompletionEpisodeState;
-//! use tinyhivemind_openhuman::{
-//!     AgentBinding, CompletionDriver, HiveGraph, OpenHumanHive,
-//! };
+//! Both land every call in the same record, so the driver drains identical
+//! events and a seat is refused and acknowledged in the same words either
+//! way. The bound handle differs -- [`EmbedSeat`] wraps the agent, [`RawSeat`]
+//! is the seat itself -- which is what [`BoundAgent`](tinyhivemind_driver::BoundAgent)
+//! is for.
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let executor = tokio::runtime::Builder::new_current_thread()
-//!     .enable_all()
-//!     .build()?;
-//! let runtime = executor.block_on(
-//!     Runtime::builder()
-//!         .workspace(Workspace::Ephemeral)
-//!         .api_key("th_example_tinyhivemind")
-//!         .build(),
-//! )?;
-//! let agent = runtime.agent(AgentSpec::new("runtime-solver"))?;
-//! let graph = HiveGraph::new(
-//!     Desk {
-//!         id: "engineering".into(),
-//!         name: "Engineering".into(),
-//!         description: None,
-//!         members: vec!["solver".into()],
-//!         responder_mode: ResponderMode::Auto,
-//!     },
-//!     vec![RouteCandidate {
-//!         id: "solver".into(),
-//!         label: "Solver".into(),
-//!         role: None,
-//!         description: None,
-//!         capabilities: Vec::new(),
-//!         learned_topics: Vec::new(),
-//!         available: true,
-//!     }],
-//! );
-//! let hive = OpenHumanHive::new(graph, vec![AgentBinding::new("solver", agent)])?;
-//! let episode = CompletionEpisodeState::opened(
-//!     Conversation {
-//!         desk_id: "engineering".into(),
-//!         desk_name: "Engineering".into(),
-//!         thread_root: None,
-//!     },
-//!     Sequence(0),
-//!     ["solver"],
-//! )?;
-//! let driver = CompletionDriver::new(&hive, 1)?;
-//! let state = driver.start(episode)?;
-//! assert_eq!(driver.pending_round(&state)?.agents()[0].hive_agent_id, "solver");
+//! This is the one crate in the workspace that links a harness. A host that
+//! seats agents some other way does not link it; it implements `BoundAgent`
+//! and `SeatRunner` itself.
+//!
+//! # Example
+//!
+//! A raw seat, offline, against the scripted model the `offline` feature
+//! ships. The same steps seat a live one: the route is the credential.
+//!
+//! ```no_run
+//! use std::sync::Arc;
+//! use tinyhivemind_openhuman::{RawRunner, Route, SeatRunner, offline};
+//! use tinyhivemind_tools::{Dispatch, EpisodeTools};
+//!
+//! # async fn run() -> tinyhivemind_openhuman::Result<()> {
+//! let workspace = std::env::temp_dir().join("episode");
+//! // Every seat is a registered definition before a raw session runs: the
+//! // hosted turn resolves the seat, and its belt, by name.
+//! RawRunner::prepare(&workspace, &[("lead", "You lead the desk.")])?;
+//! let runner = RawRunner::seat(
+//!     Arc::new(EpisodeTools::new(["lead"])),
+//!     &[("lead".to_owned(), "You lead the desk.".to_owned())].into_iter().collect(),
+//!     "Call `complete_episode` when you are done.",
+//!     &offline::config(),
+//!     "http://127.0.0.1:1/backend",
+//!     &Route { endpoint: "http://127.0.0.1:1/v1".into(), api_key: "key".into(), model: offline::MODEL.into() },
+//!     &workspace,
+//! )
+//! .await?;
+//! runner.open("lead", Vec::new(), Dispatch { chat: "engineering".into(), parent: None });
+//! let (_, _, reply) = runner.turn("lead".into(), tinyhivemind_openhuman::Lane::Desk, "Go.".into()).await;
+//! let events = runner.close("lead");
+//! # let _ = (reply, events);
 //! # Ok(())
 //! # }
 //! ```
 
-pub mod driver;
+pub mod embed;
 pub mod error;
-pub mod graph;
+#[cfg(any(test, feature = "offline"))]
+pub mod offline;
+pub mod raw;
+pub mod runner;
 
-#[cfg(test)]
-mod test_support;
-
-pub use driver::{
-    AssignmentSpend, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,
-    ConversationView, DriverState, EpisodeBrief, Handoff, HostAction, Ledger, PendingAgent,
-    PendingRound, Seen, Transition, standing_contract,
-};
+pub use embed::{EmbedRunner, EmbedSeat};
 pub use error::{Error, Result};
-pub use graph::{AgentBinding, BoundAgent, HiveGraph, OpenHumanHive};
+pub use raw::{RawRunner, RawSeat, Route};
+pub use runner::{Lane, RunnerKind, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult};

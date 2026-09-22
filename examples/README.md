@@ -2,7 +2,7 @@
 
 These standalone workspaces carry experiment-only runtime and tool features
 that do not belong in normal TinyHiveMind builds. The root workspace now has a
-Rust 1.96 floor because its first-class `tinyhivemind-openhuman` adapter binds
+Rust 1.96 floor because its `tinyhivemind-openhuman` adapter binds
 the canonical `openhuman-embed` agent type directly; keeping these binaries
 standalone still isolates their heavier live-provider, MCP, Docker, and
 research dependencies. The pure core and hive crates remain covered by the

@@ -2,8 +2,9 @@
 
 | Path | Purpose |
 |---|---|
-| `lib.rs` | Crate overview and centralized public exports. |
-| `error/` | Typed graph, routing, and committed-event failures. |
-| `graph/` | The owned one-desk graph and OpenHuman agent bindings. |
-| `driver/` | Resumable completion rounds and committed-event folds. |
-| `test_support.rs` | Test-only OpenHuman runtime and agent fixtures shared by unit tests. |
+| `lib.rs` | Crate overview and the public surface: `SeatRunner`, `RunnerKind`, `EmbedRunner`, `EmbedSeat`, `RawRunner`, `RawSeat`, `Route`, `offline`. |
+| `error/` | What seating or running a seat can fail with. |
+| `runner/` | The seam: open, run, close; `Lane`, `TurnJob`; which runner the environment names. |
+| `embed/` | Seats as `openhuman-embed` agents, tools over MCP. |
+| `raw/` | Seats as raw sessions, tools in-process: the belt, the gate, the memory that keeps nothing. |
+| `offline/` | The scripted model, the backend stub and the offline config, behind the `offline` feature and in tests. |

@@ -8,10 +8,10 @@
 //! quiescent -- and what is written here is only what a host owns: agents,
 //! a journal, sessions, and the prompt a turn is shown.
 //!
-//! How a seat's turn *runs* is behind one seam, [`conducted::runner::SeatRunner`],
+//! How a seat's turn *runs* is behind one seam, `tinyhivemind_openhuman::SeatRunner`,
 //! with two implementations: `openhuman-embed` agents reaching the tools over
-//! MCP ([`conducted::embed`], the default), and raw `OpenHumanSessionHost`
-//! sessions handed the same tools natively ([`conducted::raw`]). The loop
+//! MCP (`EmbedRunner`, the default), and raw `OpenHumanSessionHost`
+//! sessions handed the same tools natively (`RawRunner`). The loop
 //! cannot tell them apart; `TINYHIVEMIND_RUNNER=raw` picks the second.
 //!
 //! ```sh
@@ -24,23 +24,15 @@
 //! ```
 
 mod conducted {
-    pub mod embed;
     pub mod jev;
-    pub mod raw;
-    pub mod runner;
 }
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use conducted::embed::EmbedRunner;
 use conducted::jev::LiveJev;
-use conducted::raw::offline;
-use conducted::raw::{RawRunner, Route};
-use conducted::runner::{Lane, RunnerKind, SeatRunner, TurnJob};
-use openhuman_embed::{Access, Provider, Runtime, RuntimeConfig, ServiceSet, Workspace};
-use serde_json::json;
+use openhuman_embed::{Access, Provider, Runtime, RuntimeConfig, Workspace};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
 use tinyhivemind::speech::{ToolCall, Utterance};
@@ -50,14 +42,15 @@ use tinyhivemind_embed::{
     RoutingPolicy, RoutingRequest, RoutingSource, route_message,
 };
 use tinyhivemind_hive::{CompletionEpisodeState, apply_completion};
+use tinyhivemind_driver::{
+    BoundAgent, BoundHive, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,
+    ConversationView, DriverState, EpisodeBrief, Error, HiveGraph, HostAction, standing_contract,
+};
 use tinyhivemind_openhuman::{
-    BoundAgent, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver, ConversationView,
-    DriverState, EpisodeBrief, Error, HiveGraph, HostAction, OpenHumanHive, standing_contract,
+    EmbedRunner, Lane, RawRunner, Route, RunnerKind, SeatRunner, TurnJob, offline,
 };
 use tinyhivemind_tools::{Dispatch, EpisodeTools};
 use tinyhivemind_typesafe::JevRouter;
-use wiremock::matchers::any;
-use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// What the host says about the desk, before the episode's own contract.
 const DESK_PREAMBLE: &str = "\
@@ -355,15 +348,8 @@ async fn run() -> anyhow::Result<()> {
     }
 
     // The core makes non-inference backend calls; signed out of the real one
-    // those hang rather than fail. Stub them, the way `pe1006_hive` does.
-    let backend = MockServer::start().await;
-    Mock::given(any())
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "success": true,
-            "data": {"id": "conducted", "email": "local@openhuman.local"}
-        })))
-        .mount(&backend)
-        .await;
+    // those hang rather than fail. Stub them.
+    let backend = offline::backend().await;
 
     let run_id = std::process::id().to_string();
     let run_dir = std::env::temp_dir().join(format!("tinyhivemind-conducted-{run_id}"));
@@ -399,7 +385,7 @@ async fn run() -> anyhow::Result<()> {
     let mut config = if live {
         RuntimeConfig::load_or_init().await?
     } else {
-        offline_config()
+        offline::config()
     };
     config.agent.max_tool_iterations = 6;
     config.default_temperature = 0.0;
@@ -501,11 +487,7 @@ impl Host {
         Ok(Runtime::builder()
             .config(self.config.clone())
             .workspace(Workspace::dir(self.workspace.clone()))
-            // `none()` leaves `mcp_boot` false, and without it the MCP
-            // subsystem never dials the episode's endpoint: the seats are
-            // never offered a tool at all, which reads exactly like a model
-            // declining to call one.
-            .services(episode_services())
+            .services(EmbedRunner::services())
             .backend_url(self.backend_url.clone())
             .provider(
                 Provider::openai_compatible(
@@ -533,6 +515,7 @@ impl Host {
             &format!("{}-{episode}", self.run_id),
         )
         .await
+        .map_err(Into::into)
     }
 
     /// A raw seat is resolved by the hosted turn against the process
@@ -544,11 +527,11 @@ impl Host {
             .iter()
             .map(|(id, role, _)| (*id, *role))
             .collect();
-        RawRunner::prepare(&self.workspace, &seats)
+        Ok(RawRunner::prepare(&self.workspace, &seats)?)
     }
 
     async fn raw(&self, _episode: u32) -> anyhow::Result<RawRunner> {
-        RawRunner::seat(
+        let runner = RawRunner::seat(
             Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
             &self.briefs,
             &self.contract(RunnerKind::Raw),
@@ -557,7 +540,9 @@ impl Host {
             &self.route,
             &self.workspace,
         )
-        .await
+        .await?;
+        eprintln!("[route] chat resolves to model={}", runner.model());
+        Ok(runner)
     }
 }
 
@@ -721,7 +706,7 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
         seated == advertised,
         "roster drift: seated {seated:?} but advertising {advertised:?}"
     );
-    let hive = OpenHumanHive::new(
+    let hive = BoundHive::new(
         HiveGraph::new(
             Desk {
                 id: desk_id.into(),
@@ -1339,17 +1324,6 @@ async fn episode<R: SeatRunner>(runner: R, setup: Setup) -> anyhow::Result<Repor
 
 /// A config that touches nothing on this machine: no local runtime, no
 /// python, no embedding endpoint. The same neutralisation `main.rs` uses.
-fn offline_config() -> RuntimeConfig {
-    let mut config = RuntimeConfig::default();
-    config.local_ai.runtime_enabled = false;
-    config.runtime_python.enabled = false;
-    config.memory_tree.spacy_enabled = false;
-    config.memory_tree.embedding_endpoint = None;
-    config.memory_tree.embedding_model = None;
-    config.memory_tree.embedding_strict = false;
-    config
-}
-
 /// Conclude one conversation: cross-post its outcome to the asker as a
 /// private message from the seat asked. That row is what releases the
 /// asker's hold and wakes it; the whole conversation reaches it in its next
@@ -1421,12 +1395,6 @@ fn describe(utterance: &Utterance) -> String {
 }
 
 /// Nothing running but the one subsystem the episode's tools arrive through.
-fn episode_services() -> ServiceSet {
-    let mut services = ServiceSet::none();
-    services.mcp_boot = true;
-    services
-}
-
 fn required(name: &str) -> anyhow::Result<String> {
     std::env::var(name).map_err(|_| anyhow::anyhow!("{name} must be set for a live run"))
 }

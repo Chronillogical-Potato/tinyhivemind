@@ -319,7 +319,7 @@ cargo run --release -p tinyhivemind-hive --example bench -- --swarm \
 **No dependency is added to the benchmark or `tinyhivemind-hive` by any of
 that** — this seam remains a URL, and the harness still talks to it through
 `curl` over stdin. The root workspace now also contains the separate
-`tinyhivemind-openhuman` adapter with a direct `openhuman-embed` dependency,
+`tinyhivemind-openhuman` adapter, the one crate that links OpenHuman,
 but the benchmark does not use it. Keeping that boundary explicit preserves
 `tinyhivemind-hive` as a pure crate under `.github/scripts/assert-pure.sh`.
 
