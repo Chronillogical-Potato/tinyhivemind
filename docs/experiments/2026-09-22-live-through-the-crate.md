@@ -298,6 +298,37 @@ the host prints the reply of any turn that recorded nothing, because a
 refusal the seat read and a deliverable it typed look identical in the log
 otherwise.
 
+## The eighth run: told how to record it
+
+Same desk, with the desk render and the nudge naming the tools, and the host
+printing what a seat wrote when it recorded nothing. `9` turns, `5` waves,
+`3` routes, `2` conversations, and quiescence -- the shortest run in the
+series by a factor of three.
+
+**Both deliverables.** `lead` asked `solver` and `researcher` in one turn
+(rows 2-3), both answered, and `lead` completed with the root cause and two
+broadcasts in one turn (rows 9-11). Each landed: `solver` completed with the
+dual-read fix as code (row 12) and `checker` with a five-case regression
+test that attacked `lead`'s weaker version of it (row 13). Both handoff
+seats called `complete_episode` on their first desk turn, which no earlier
+run had seen either of them do.
+
+**Two facts of four.** `theory` was never asked and `checker`'s age split
+never surfaced; `lead` stated the changed prefix in its completion (row 9)
+though no row carried it -- the desk got the right answer with the
+`researcher`'s fact inferred rather than recorded, because `researcher`'s
+answer was one sentence: "I know this failure shape" (row 7).
+
+**What the reply log showed.** `researcher`'s first thread turn (816
+characters, no tool call) was a `complete_episode` call written out in
+prose, with the reason: OpenHuman's `mcp_call_tool` had refused every call
+because the model passed `arguments` as a string, and the harness stopped
+retrying. The episode server accepts a string `arguments`; OpenHuman's
+dispatcher checks before it forwards, and OpenHuman is not modified for
+hivemind. The host's one sentence on the mechanics now says `arguments` is a
+JSON object, never a string. Without the reply log this run would have
+recorded the same "no tool call" as run seven, for a different cause.
+
 ## What this changes
 
 Across three runs every defect was in what the host owed the seats, not in

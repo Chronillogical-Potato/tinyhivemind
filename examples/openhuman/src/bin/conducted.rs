@@ -338,7 +338,8 @@ async fn run() -> anyhow::Result<()> {
         standing_contract(
             tinyhivemind_mcp::served_specs(),
             DESK_ID,
-            "Use `mcp_call_tool` with `server: \"episode\"`.",
+            "Use `mcp_call_tool` with `server: \"episode\"`; its `arguments` is a JSON \
+             object, never a string.",
         )
     );
     let mut agents: BTreeMap<String, Agent> = BTreeMap::new();
