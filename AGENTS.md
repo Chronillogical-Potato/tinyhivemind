@@ -72,8 +72,12 @@ crates/
                         # episode state machine. Pure, opt-in; lands in P8.
 ├── tinyhivemind-embed/    # host-neutral conversation surfaces and validated
 │                       # Jev-first routing composition
-└── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
-                        # one transport port; no HTTP client or async runtime
+├── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
+│                       # one transport port; no HTTP client or async runtime
+├── tinyhivemind-openhuman/ # OpenHuman agent bindings and the completion driver:
+│                       # who runs next, and what a committed row means
+└── tinyhivemind-mcp/      # the room's tools served over MCP; the one socket the
+                        # repository opens, by ADR 0022
 docs/
 ├── specs/              # behavior and architecture specifications
 ├── plans/              # test-first implementation plans
@@ -221,6 +225,10 @@ Supporting commands:
   endpoint and print the flags that pin a run to them. Five of the six columns
   are computed from those constants; `crates/tinyhivemind-hive/examples/bench/COST.md`
   says what they do and do not claim.
+- `cargo run --release -p tinyhivemind-openhuman --example bench -- --episodes 2000`
+  — price the completion driver's policy with no model: the same seeded rooms
+  per arm, queue depth and broadcast budget and width varied one at a time.
+  Findings in `docs/experiments/2026-09-22-the-driver-under-the-benchmark.md`.
 
   The harness is documented in `crates/tinyhivemind-hive/examples/bench/README.md`,
   its accepted behaviour in `docs/specs/benchmark-matrix.md`, and its findings

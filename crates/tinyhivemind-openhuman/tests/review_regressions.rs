@@ -311,7 +311,12 @@ fn completed_round_replays_after_restart_with_a_new_empty_pending_round() {
 fn advanced_episode_sequences_are_the_freshness_floor_without_receipts() {
     let hive = hive();
     let driver = CompletionDriver::new(&hive, 2).expect("driver");
-    let assigned = apply_assignment(&episode(&["one", "two"]), ["one"], Sequence(10))
+    // `one` has to finish what it holds before it can be given more: a
+    // participant carries at most one open assignment (ADR 0021). The point of
+    // the fixture is advanced sequences, which this still produces.
+    let settled = apply_completion(&episode(&["one", "two"]), "one", Sequence(9))
+        .expect("completion advances episode state");
+    let assigned = apply_assignment(&settled, ["one"], Sequence(10))
         .expect("assignment advances episode state");
     let advanced = apply_completion(&assigned, "two", Sequence(12))
         .expect("completion advances episode state");

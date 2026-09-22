@@ -88,6 +88,14 @@ pub(super) fn dm(to: &[&str], message: &str) -> Utterance {
     }
 }
 
+/// An `ask` of one peer.
+pub(super) fn ask(to: &str, message: &str) -> Utterance {
+    Utterance::Ask {
+        to: to.into(),
+        message: message.into(),
+    }
+}
+
 /// A `post`.
 pub(super) fn post(message: &str) -> Utterance {
     Utterance::Post {

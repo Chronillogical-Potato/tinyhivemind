@@ -240,7 +240,7 @@ fn call(request: &serde_json::Value, serving: &Serving) -> Result<String, String
 /// host still resolves the audience when it drains the outbox, so the row is
 /// never wrong — only the seat is uninformed.
 pub(crate) fn price(utterance: &Utterance, serving: &Serving) -> Result<Option<String>, String> {
-    if !matches!(utterance, Utterance::Dm { .. }) {
+    if !matches!(utterance, Utterance::Dm { .. } | Utterance::Ask { .. }) {
         return Ok(None);
     }
     let (Some(desk_path), Some(turn_path)) = (&serving.desk, &serving.turn) else {

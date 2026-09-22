@@ -55,7 +55,10 @@ fn hive(ids: &[&str]) -> OpenHumanHive {
 
 #[test]
 fn rejects_an_empty_desk() {
-    let result = OpenHumanHive::new(HiveGraph::new(desk(&[]), Vec::new()), Vec::new());
+    let result = OpenHumanHive::<openhuman_embed::Agent>::new(
+        HiveGraph::new(desk(&[]), Vec::new()),
+        Vec::new(),
+    );
     assert!(matches!(result, Err(Error::EmptyMembership { .. })));
 }
 
@@ -65,7 +68,7 @@ fn rejects_duplicate_and_mismatched_candidate_ids_before_bindings() {
         desk(&["one", "two"]),
         vec![candidate("one"), candidate("one")],
     );
-    let result = OpenHumanHive::new(graph, Vec::new());
+    let result = OpenHumanHive::<openhuman_embed::Agent>::new(graph, Vec::new());
     assert!(matches!(
         result,
         Err(Error::DuplicateCandidateId { ref agent_id }) if agent_id == "one"
@@ -347,4 +350,83 @@ fn route_desk_rejects_requests_outside_the_hive_graph_without_router_calls() {
         ));
     }
     assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+// ── a handle that is not an `openhuman_embed::Agent` ────────────────────────
+
+/// A host's own seat: the driver stores it and hands it back, and never
+/// needs it to be a runtime agent.
+#[derive(Clone, Debug)]
+struct Seat {
+    runtime_id: String,
+}
+
+impl super::BoundAgent for Seat {
+    fn runtime_id(&self) -> &str {
+        &self.runtime_id
+    }
+}
+
+#[test]
+fn a_hive_binds_any_handle_that_names_its_runtime_id() {
+    let graph = super::HiveGraph::new(
+        tinyhivemind::desk::Desk {
+            id: "engineering".into(),
+            name: "Engineering".into(),
+            description: None,
+            members: vec!["lead".into(), "solver".into()],
+            responder_mode: tinyhivemind::desk::ResponderMode::Auto,
+        },
+        ["lead", "solver"]
+            .into_iter()
+            .map(|id| tinyhivemind_embed::RouteCandidate {
+                id: id.into(),
+                label: id.into(),
+                role: None,
+                description: None,
+                capabilities: Vec::new(),
+                learned_topics: Vec::new(),
+                available: true,
+            })
+            .collect(),
+    );
+    let hive = super::OpenHumanHive::new(
+        graph,
+        ["lead", "solver"]
+            .into_iter()
+            .map(|id| {
+                super::AgentBinding::new(
+                    id,
+                    Seat {
+                        runtime_id: format!("{id}-raw"),
+                    },
+                )
+            })
+            .collect(),
+    )
+    .expect("members, candidates and bindings agree");
+    assert_eq!(
+        hive.binding("lead")
+            .map(super::AgentBinding::runtime_agent_id),
+        Some("lead-raw")
+    );
+    let episode = tinyhivemind_hive::CompletionEpisodeState::opened(
+        tinyhivemind::Conversation {
+            desk_id: "engineering".into(),
+            desk_name: "Engineering".into(),
+            thread_root: None,
+        },
+        tinyhivemind::Sequence(0),
+        ["lead", "solver"],
+    )
+    .expect("opens");
+    let driver = crate::CompletionDriver::new(&hive, 2).expect("width");
+    let state = driver.start(episode).expect("starts");
+    let round = driver.pending_round(&state).expect("a round");
+    let handed_back: Vec<&str> = round
+        .agents()
+        .iter()
+        .map(|pending| pending.agent.runtime_id.as_str())
+        .collect();
+    assert_eq!(handed_back, vec!["lead-raw", "solver-raw"]);
 }

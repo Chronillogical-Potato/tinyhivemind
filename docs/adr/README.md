@@ -45,6 +45,10 @@ link any earlier ADR it amends.
 | [0018](0018-require-host-supplied-conversation-kinds.md) | Require host-supplied conversation kinds | Accepted |
 | [0019](0019-complete-episodes-with-explicit-agent-events.md) | Complete episodes with explicit agent events | Accepted |
 | [0020](0020-openhuman-embed-is-a-git-dependency-patched-locally.md) | `openhuman-embed` is a git dependency, patched locally | Accepted — amends 0013 |
+| [0021](0021-an-assignment-is-appended-rather-than-overwritten.md) | An assignment is appended rather than overwritten, and a participant holds at most one open | Proposed — amends 0019 |
+| [0022](0022-the-episode-mcp-server-is-the-one-socket.md) | The episode MCP server is the one socket this repository opens | Proposed |
+| [0023](0023-an-ask-opens-a-child-conversation.md) | An ask opens a child conversation, a thread of the desk | Proposed — amends review decision D22 |
+| [0024](0024-a-broadcast-completes-its-author.md) | A broadcast completes its author unless it is waiting | Proposed — amends review decision D13 |
 
 ## Reading order
 

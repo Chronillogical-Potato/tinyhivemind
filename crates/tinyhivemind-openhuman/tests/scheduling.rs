@@ -10,9 +10,10 @@ use tinyhivemind_embed::{
     CandidateProbability, ContributionProbability, EvaluationDisposition, RouteCandidate, Router,
     RouterFuture, RoutingEvaluation, RoutingPolicy, RoutingRequest,
 };
-use tinyhivemind_hive::{CompletionEpisodeState, ParticipantCompletion};
+use tinyhivemind_hive::{AssignmentRecord, CompletionEpisodeState, ParticipantCompletion};
 use tinyhivemind_openhuman::{
-    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, OpenHumanHive,
+    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, HostAction,
+    OpenHumanHive,
 };
 
 struct Fixture {
@@ -197,8 +198,10 @@ fn accepted_assignments_merge_in_order_without_duplicates() {
             .into_iter()
             .map(|(agent_id, completed_at)| ParticipantCompletion {
                 agent_id: agent_id.into(),
-                assigned_at: Sequence(0),
-                completed_at,
+                assignments: vec![AssignmentRecord {
+                    assigned_at: Sequence(0),
+                    completed_at,
+                }],
             })
             .collect(),
         })
@@ -230,7 +233,25 @@ fn accepted_assignments_merge_in_order_without_duplicates() {
         ))
         .expect("round commits");
 
-    assert_eq!(transition.actions.len(), 2);
+    // One route per broadcast. Each broadcast also completed its author (ADR
+    // 0024), and `four`, named by `one`'s broadcast while still working, is
+    // handed that queued work at its own completion.
+    assert_eq!(
+        transition
+            .actions
+            .iter()
+            .filter(|action| matches!(action, HostAction::RunAgents { .. }))
+            .count(),
+        2
+    );
+    assert_eq!(
+        transition
+            .actions
+            .iter()
+            .filter(|action| matches!(action, HostAction::DeliverHandoff { .. }))
+            .count(),
+        1
+    );
     assert_eq!(
         driver
             .pending_round(&transition.state)
@@ -292,6 +313,11 @@ fn completed_ids_are_pruned_from_accepted_order() {
         .expect("completion")
         .state;
 
+    // `two` was still working when the broadcast named it, so the handoff was
+    // held rather than dropped, and completing hands it over: `two` is pending
+    // again with new work, not pruned.
+    assert_eq!(completed.ledger().queue_len("two"), 0);
+    assert!(completed.episode().participants[1].is_pending());
     assert_eq!(
         driver
             .pending_round(&completed)
@@ -300,6 +326,33 @@ fn completed_ids_are_pruned_from_accepted_order() {
             .iter()
             .map(|pending| pending.hive_agent_id)
             .collect::<Vec<_>>(),
-        ["three", "four", "one"],
+        ["two", "three", "four"],
+        "`one` was completed by its own handoff (ADR 0024) and is pruned",
+    );
+    let settled = fixture()
+        .block_on(driver.apply_committed(
+            &completed,
+            committed(
+                "two",
+                3,
+                Utterance::CompleteEpisode {
+                    message: "handoff done".into(),
+                },
+            ),
+            None,
+        ))
+        .expect("second completion")
+        .state;
+
+    assert_eq!(
+        driver
+            .pending_round(&settled)
+            .expect("next round")
+            .agents()
+            .iter()
+            .map(|pending| pending.hive_agent_id)
+            .collect::<Vec<_>>(),
+        ["three", "four"],
+        "a seat with nothing queued is settled, and settled seats are pruned",
     );
 }

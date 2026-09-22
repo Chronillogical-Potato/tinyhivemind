@@ -162,7 +162,7 @@ fn commits_private_completion_and_clarification_outcomes() {
         ))
         .expect("completion commits");
     assert_eq!(
-        completed.state.episode.participants[0].completed_at,
+        completed.state.episode.participants[0].assignments[0].completed_at,
         Some(Sequence(1))
     );
 

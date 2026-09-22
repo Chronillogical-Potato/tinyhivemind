@@ -3,10 +3,10 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use openhuman_embed::{Access, Agent, AgentSpec, Provider, Runtime, RuntimeConfig, Workspace};
 use openhuman_core::agent::registry::types::{
     AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
 };
+use openhuman_embed::{Access, Agent, AgentSpec, Provider, Runtime, RuntimeConfig, Workspace};
 use serde_json::json;
 use tinyhivemind::{
     desk::{Desk, ResponderMode},
@@ -208,10 +208,10 @@ async fn run() -> anyhow::Result<()> {
                     AgentSpec::new("legal")
                         .system_prompt("You are the legal specialist.")
                         .config(|config| {
-                            config.agent_registry.entries.push(registry_entry(
-                                "legal",
-                                "You are the legal specialist.",
-                            ));
+                            config
+                                .agent_registry
+                                .entries
+                                .push(registry_entry("legal", "You are the legal specialist."));
                         }),
                 )?,
             ),

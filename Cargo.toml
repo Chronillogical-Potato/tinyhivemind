@@ -44,6 +44,10 @@ tinyhivemind-embed = { path = "crates/tinyhivemind-embed" }
 # Exact System One wire types and Jev question construction behind one host
 # transport port; it deliberately contains no HTTP client or async runtime.
 tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
+# The room's tools served over MCP, for a harness that cannot be handed a native
+# tool. The one socket the repository opens -- see ADR 0022 -- and therefore a
+# separate, explicit dependency that no pure or runtime crate may take.
+tinyhivemind-mcp = { path = "crates/tinyhivemind-mcp" }
 # Canonical OpenHuman agent handles for the first-class embedding adapter. The
 # adapter keeps default features off because it only binds already-built agents;
 # the consuming host chooses the runtime capabilities it enables.

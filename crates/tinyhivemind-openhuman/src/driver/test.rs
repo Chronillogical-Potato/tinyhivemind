@@ -4,6 +4,7 @@
 
 mod broadcast_fallback;
 mod coverage;
+mod ledger;
 mod round;
 
 use std::sync::{
@@ -37,7 +38,7 @@ fn candidate(id: &str) -> RouteCandidate {
     }
 }
 
-fn hive() -> OpenHumanHive {
+pub(crate) fn hive() -> OpenHumanHive {
     let ids = ["one", "two", "three", "four"];
     OpenHumanHive::new(
         HiveGraph::new(
@@ -58,7 +59,7 @@ fn hive() -> OpenHumanHive {
     .expect("fixture hive validates")
 }
 
-fn episode(participants: &[&str]) -> CompletionEpisodeState {
+pub(crate) fn episode(participants: &[&str]) -> CompletionEpisodeState {
     CompletionEpisodeState::opened(
         Conversation {
             desk_id: "engineering".into(),
@@ -71,7 +72,11 @@ fn episode(participants: &[&str]) -> CompletionEpisodeState {
     .expect("fixture episode opens")
 }
 
-fn committed(author_id: &str, sequence: u64, utterance: Utterance) -> CommittedUtterance {
+pub(crate) fn committed(
+    author_id: &str,
+    sequence: u64,
+    utterance: Utterance,
+) -> CommittedUtterance {
     CommittedUtterance {
         author_id: author_id.into(),
         sequence: Sequence(sequence),
@@ -290,8 +295,8 @@ fn payload_wire_forms_are_exact_and_all_fields_are_required() {
                 },
                 "watermark": 0,
                 "participants": [
-                    {"agent_id": "one", "assigned_at": 0, "completed_at": null},
-                    {"agent_id": "two", "assigned_at": 0, "completed_at": null}
+                    {"agent_id": "one", "assignments": [{"assigned_at": 0, "completed_at": null}]},
+                    {"agent_id": "two", "assignments": [{"assigned_at": 0, "completed_at": null}]}
                 ]
             },
             "receipts": {
@@ -309,7 +314,9 @@ fn payload_wire_forms_are_exact_and_all_fields_are_required() {
             },
             "freshness_floor": 7,
             "pending_order": [],
-            "revision": 1
+            "revision": 1,
+            "ledger": { "queues": {}, "spent": {}, "outstanding_asks": {} },
+            "seen": { "delivered_through": {} }
         })
     );
     for missing in [

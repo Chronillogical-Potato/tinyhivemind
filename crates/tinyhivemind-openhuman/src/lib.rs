@@ -1,7 +1,9 @@
 //! First-class `OpenHuman` bindings for one host-owned `TinyHiveMind` desk.
 //!
 //! This crate owns the immutable relationship between canonical hive ids and
-//! already-instantiated [`openhuman_embed::Agent`] handles. It proposes work
+//! the handles a host binds to them -- already-instantiated
+//! [`openhuman_embed::Agent`]s by default, or any [`BoundAgent`] a host that
+//! runs its seats another way supplies. It proposes work
 //! and folds host-committed utterances into caller-owned completion state; it
 //! never stores a transcript, appends a row, or retains an `OpenHuman` session
 //! id. The host creates the runtime and agents, executes proposed turns,
@@ -76,8 +78,9 @@ pub mod graph;
 mod test_support;
 
 pub use driver::{
-    BroadcastRouting, CommittedUtterance, CompletionDriver, DriverState, HostAction, PendingAgent,
-    PendingRound, Transition,
+    AssignmentSpend, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,
+    ConversationView, DriverState, EpisodeBrief, Handoff, HostAction, Ledger, PendingAgent,
+    PendingRound, Seen, Transition, standing_contract,
 };
 pub use error::{Error, Result};
-pub use graph::{AgentBinding, HiveGraph, OpenHumanHive};
+pub use graph::{AgentBinding, BoundAgent, HiveGraph, OpenHumanHive};

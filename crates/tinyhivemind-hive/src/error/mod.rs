@@ -120,6 +120,25 @@ pub enum Error {
         /// Rejected event sequence.
         sequence: Sequence,
     },
+    /// An assignment was routed to a participant that still has open work.
+    ///
+    /// A participant holds at most one open assignment. A host that queues a
+    /// handoff for a busy participant never sees this; a host that forgets to
+    /// gets an error rather than a silent overwrite. See
+    /// `docs/adr/0021-an-assignment-is-appended-rather-than-overwritten.md`.
+    #[error("participant `{agent_id}` already has an assignment open at {assigned_at:?}")]
+    AssignmentWhileOpen {
+        /// Participant that is still working.
+        agent_id: String,
+        /// Sequence of the assignment it has not completed.
+        assigned_at: Sequence,
+    },
+    /// A completion event named a participant with nothing open to complete.
+    #[error("participant `{agent_id}` has no open assignment")]
+    NoOpenAssignment {
+        /// Participant that was already settled.
+        agent_id: String,
+    },
 }
 
 impl From<tinyhivemind_core::error::Error> for Error {

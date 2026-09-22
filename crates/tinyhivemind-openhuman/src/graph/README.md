@@ -1,6 +1,7 @@
 # Graph
 
-`mod.rs` owns one desk, its route candidates, and bindings from canonical hive
+`mod.rs` owns one desk, its route candidates, the `BoundAgent` trait a bound
+handle implements (`openhuman_embed::Agent` does, and is the default), and bindings from canonical hive
 ids to existing OpenHuman agents. Canonical ids need not equal OpenHuman
 runtime ids, but the member, candidate, and binding sets must match exactly;
 blank ids and `none` are invalid. `test.rs` covers identity validation, route

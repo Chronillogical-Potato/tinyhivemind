@@ -1,7 +1,9 @@
 # `tinyhivemind-openhuman`
 
-This crate binds canonical TinyHiveMind agent identities to already-created
-OpenHuman agents. It validates one desk graph, constructs host-neutral routing
+This crate binds canonical TinyHiveMind agent identities to the handles a host
+runs its seats with: already-created OpenHuman agents by default, or any
+`BoundAgent` a host that runs seats another way supplies -- the driver stores
+a bound handle and hands it back with a pending round, and never runs one. It validates one desk graph, constructs host-neutral routing
 requests, resolves desk-private messages, and advances completion episodes only
 after the host supplies a committed sequence.
 

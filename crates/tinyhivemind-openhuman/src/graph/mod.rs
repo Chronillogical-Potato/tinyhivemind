@@ -31,44 +31,67 @@ impl HiveGraph {
     }
 }
 
-/// One canonical hive id bound to a concrete `OpenHuman` agent handle.
+/// What a hive needs from the handle it binds: a runtime identity, so a bound
+/// seat can be told apart from the canonical hive id it stands behind.
 ///
-/// The canonical id deliberately need not equal [`Agent::id`]. Cloning a
-/// binding is cheap and permits the same runtime agent to participate in more
-/// than one hive without changing either identity.
-#[derive(Clone, Debug)]
-pub struct AgentBinding {
-    /// Canonical id used by the desk and routing graph.
-    pub hive_agent_id: String,
-    /// Existing runtime-owned `OpenHuman` agent.
-    pub agent: Agent,
+/// [`openhuman_embed::Agent`] implements it and is the default everywhere a
+/// binding is named, so a host that seats `openhuman-embed` agents writes
+/// nothing new. A host that runs its seats another way -- a raw session it
+/// builds per turn, a worker it reaches over a socket -- binds its own handle
+/// instead. The driver stores the handle and hands it back with a pending
+/// round; it never runs one, which is what makes the bound type the host's
+/// to choose.
+pub trait BoundAgent: Clone + std::fmt::Debug + Send + Sync {
+    /// The runtime's own id for this handle, which may differ from the hive id.
+    fn runtime_id(&self) -> &str;
 }
 
-impl AgentBinding {
-    /// Bind a canonical hive id to an existing `OpenHuman` agent.
+impl BoundAgent for Agent {
+    fn runtime_id(&self) -> &str {
+        self.id()
+    }
+}
+
+/// One canonical hive id bound to a concrete agent handle.
+///
+/// The canonical id deliberately need not equal the handle's runtime id.
+/// Cloning a binding is cheap and permits the same runtime agent to
+/// participate in more than one hive without changing either identity.
+#[derive(Clone, Debug)]
+pub struct AgentBinding<A = Agent> {
+    /// Canonical id used by the desk and routing graph.
+    pub hive_agent_id: String,
+    /// The host's handle for the seat: an existing runtime-owned `OpenHuman`
+    /// agent by default.
+    pub agent: A,
+}
+
+impl<A: BoundAgent> AgentBinding<A> {
+    /// Bind a canonical hive id to an existing handle.
     #[must_use]
-    pub fn new(hive_agent_id: impl Into<String>, agent: Agent) -> Self {
+    pub fn new(hive_agent_id: impl Into<String>, agent: A) -> Self {
         Self {
             hive_agent_id: hive_agent_id.into(),
             agent,
         }
     }
 
-    /// Return the `OpenHuman` runtime id, which may differ from the hive id.
+    /// Return the handle's runtime id, which may differ from the hive id.
     #[must_use]
     pub fn runtime_agent_id(&self) -> &str {
-        self.agent.id()
+        self.agent.runtime_id()
     }
 }
 
-/// A validated graph plus its already-instantiated `OpenHuman` agents.
+/// A validated graph plus the handles bound to its seats: already-instantiated
+/// `OpenHuman` agents by default.
 #[derive(Clone, Debug)]
-pub struct OpenHumanHive {
+pub struct OpenHumanHive<A = Agent> {
     graph: HiveGraph,
-    bindings: BTreeMap<String, AgentBinding>,
+    bindings: BTreeMap<String, AgentBinding<A>>,
 }
 
-impl OpenHumanHive {
+impl<A: BoundAgent> OpenHumanHive<A> {
     /// Validate and own one complete `OpenHuman` hive.
     ///
     /// # Errors
@@ -76,7 +99,7 @@ impl OpenHumanHive {
     /// Returns a typed error for malformed desk data, empty or repeated
     /// membership, repeated candidate or binding ids, or any candidate/binding
     /// set that is not exactly equal to the desk membership set.
-    pub fn new(graph: HiveGraph, bindings: Vec<AgentBinding>) -> Result<Self> {
+    pub fn new(graph: HiveGraph, bindings: Vec<AgentBinding<A>>) -> Result<Self> {
         validate_ids("members", graph.desk.members.iter().map(String::as_str))?;
         validate_ids(
             "candidates",
@@ -143,7 +166,7 @@ impl OpenHumanHive {
 
     /// Look up the concrete `OpenHuman` agent bound to a canonical hive id.
     #[must_use]
-    pub fn bound_agent(&self, hive_agent_id: &str) -> Option<&Agent> {
+    pub fn bound_agent(&self, hive_agent_id: &str) -> Option<&A> {
         self.bindings
             .get(hive_agent_id)
             .map(|binding| &binding.agent)
@@ -151,7 +174,7 @@ impl OpenHumanHive {
 
     /// Look up the full binding for a canonical hive id.
     #[must_use]
-    pub fn binding(&self, hive_agent_id: &str) -> Option<&AgentBinding> {
+    pub fn binding(&self, hive_agent_id: &str) -> Option<&AgentBinding<A>> {
         self.bindings.get(hive_agent_id)
     }
 
@@ -242,7 +265,7 @@ impl OpenHumanHive {
     /// # Errors
     ///
     /// Returns [`Error::UnknownBoundAgent`] if the plan names an outsider.
-    pub fn resolve_plan(&self, plan: &RoutingPlan) -> Result<Vec<&AgentBinding>> {
+    pub fn resolve_plan(&self, plan: &RoutingPlan) -> Result<Vec<&AgentBinding<A>>> {
         let ids: Vec<&str> = match plan {
             RoutingPlan::One { responder_id, .. } | RoutingPlan::Fallback { responder_id, .. } => {
                 vec![responder_id]

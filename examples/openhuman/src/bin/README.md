@@ -2,6 +2,17 @@
 
 | File | Purpose |
 | --- | --- |
+| `conducted.rs` | One completion-driven episode stepped through `CompletionDriver`, over either runner. |
+| `conducted/runner.rs` | The seam: `SeatRunner`, and `RunnerKind` from `TINYHIVEMIND_RUNNER`. |
+| `conducted/runner/test.rs` | The runner is named by the environment; each states its own mechanics. |
+| `conducted/embed.rs` | The embed runner: `openhuman-embed` agents, tools over MCP. |
+| `conducted/raw.rs` | The raw runner: per-turn `OpenHumanSessionHost` sessions, tools in-process. |
+| `conducted/raw/seat.rs` | One raw seat: builds, seeds, runs and drops a session. |
+| `conducted/raw/tools.rs` | The served vocabulary as native tools over the shared record. |
+| `conducted/raw/policy.rs` | The gate that admits only the belt, and the memory that keeps nothing. |
+| `conducted/raw/offline.rs` | A scripted OpenAI-compatible model that speaks both dialects, for the offline proofs, and the harness metrics the bench prints. |
+| `conducted/raw/test.rs` | The belt is the served vocabulary; a native call is recorded through the record; the gate denies the rest. |
+| `conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`. |
 | `deepswe_hive.rs` | Hermetic four-agent external software-engineering adapter with host-side OpenHuman and Docker-confined tools. |
 | `deepswe_hive/` | Task validation, MCP tools, Docker confinement, and contract tests for the DeepSWE adapter. |
 | `pe1006_hive.rs` | Web-assisted five-agent experiment driven by `tinyhivemind-openhuman`, with a durable shared workspace, explicit agent memory, and one OpenHuman runtime per run. |

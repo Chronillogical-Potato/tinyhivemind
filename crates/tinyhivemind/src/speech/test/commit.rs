@@ -2,7 +2,7 @@
 
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
-use super::support::{ASIDES, commit, commit_with, dm, post};
+use super::support::{ASIDES, ask, commit, commit_with, dm, post};
 use crate::speech::Utterance;
 use tinyhivemind_core::{
     aside::{Audience, NoAsideReason},
@@ -176,4 +176,50 @@ fn a_post_that_names_nobody_hands_the_turn_to_nobody() {
     assert!(committed.mentions.is_empty());
     assert_eq!(committed.audience, Audience::Desk);
     assert_eq!(committed.refusal, None);
+}
+
+#[test]
+fn an_ask_is_private_to_the_seat_it_asks_and_records_whom() {
+    let committed = commit("solver", &ask("checker", "is the depth bound tight?"));
+    assert_eq!(
+        committed.audience,
+        Audience::Aside {
+            members: vec!["checker".into()]
+        },
+        "a question is between the asker and the asked",
+    );
+    assert_eq!(agents(&committed), vec!["checker"]);
+    assert_eq!(committed.asks.as_deref(), Some("checker"));
+    assert_eq!(committed.refusal, None);
+    assert!(!committed.completes_episode, "asking is not finishing");
+    assert!(!committed.broadcasting);
+    assert_eq!(committed.content, "is the depth bound tight?");
+}
+
+#[test]
+fn a_post_asks_nobody() {
+    assert_eq!(commit("solver", &post("still working")).asks, None);
+    assert_eq!(commit("solver", &dm(&["checker"], "fyi")).asks, None);
+}
+
+#[test]
+fn an_ask_the_policy_refuses_is_a_desk_row_that_still_records_whom_it_asked() {
+    let disabled = tinyhivemind_core::aside::AsidePolicy {
+        enabled: false,
+        ..ASIDES
+    };
+    let committed = commit_with(
+        "solver",
+        &ask("checker", "is the depth bound tight?"),
+        disabled,
+        0,
+        false,
+    );
+    assert_eq!(committed.audience, Audience::Desk, "fails toward the room");
+    assert!(committed.refusal.is_some(), "and says why");
+    assert_eq!(
+        committed.asks.as_deref(),
+        Some("checker"),
+        "the obligation survives the refusal: the host still waits on checker",
+    );
 }

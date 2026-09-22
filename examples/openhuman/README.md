@@ -47,7 +47,84 @@ corpus and paid campaign described in
 | `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
 | `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS completion-driven hive with stable OpenHuman sessions and live TypeSafe routing. |
 | `src/bin/deepswe_hive.rs` | Hermetic four-seat software-engineering hive over a caller-prepared disposable Git checkout. |
+| `src/bin/conducted.rs` | A live completion-driven episode: the room's tools served by `tinyhivemind-mcp`, the loop stepped through `CompletionDriver`, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline with the raw runner. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal. |
+| `src/bin/conducted/runner.rs` | The seam: `SeatRunner`, the one trait a way of running seats implements, and `RunnerKind` from `TINYHIVEMIND_RUNNER`. |
+| `src/bin/conducted/embed.rs` | The embed runner: `openhuman-embed` agents, one session each, tools over MCP. The default. |
+| `src/bin/conducted/raw.rs` | The raw runner: `OpenHumanSessionHost` sessions built per turn, the same tools in-process. |
+| `src/bin/conducted/raw/` | The raw seat, its native belt over the shared record, its policy gate and null memory, and the scripted offline model. |
+| `src/bin/conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`, bridged through the wire form. |
 | `deepswe-sandbox/` | Reproducible local Docker image used for agent shell and test execution. |
+
+## `conducted`: one loop, two runners
+
+`src/bin/conducted.rs` steps one completion-driven episode the way a host steps
+it: propose a round, run it, commit what it said, report delivery, repeat until
+quiescent. The journal, the lanes, the briefs and the driver are the host's.
+How a seat's turn *runs* is behind one seam, `SeatRunner`, with two
+implementations the loop cannot tell apart:
+
+| `TINYHIVEMIND_RUNNER` | Seat | Tools | Context between turns |
+| --- | --- | --- | --- |
+| `embed` (default) | an `openhuman-embed` `AgentSpec` agent | the three MCP dispatchers, dialling `tinyhivemind-mcp`'s server | OpenHuman's own session, stable for the episode |
+| `raw` | an `OpenHumanSessionHost` built one level down, per turn | the same four tools, in-process, each calling `EpisodeTools::call` | a per-seat log the host seeds the next session with |
+
+Both runners land every call in the same `EpisodeTools`, so the driver drains
+identical events and a seat is refused and acknowledged in the same words
+either way. The bound handle differs -- an `Agent` for embed, the raw seat
+itself for raw -- which is what `tinyhivemind-openhuman`'s `BoundAgent` is
+for: the driver stores a handle and hands it back, and never runs one.
+
+What the raw runner establishes, and what it cost, is in its module docs. The
+one thing worth knowing before reading them: a raw session still runs its turn
+as a hosted root invocation, which resolves the seat against OpenHuman's
+process registry and takes the model's allowlist from the seat's definition.
+So the raw runner registers each seat as a workspace definition with its belt
+declared by name before anything boots. A wildcard scope projects to no
+declared names, and the host fails closed on an undeclared belt: the session
+holds four tools and the loop sees none.
+
+Live, with either runner:
+
+```sh
+set -a; . ~/.config/tinyhivemind/live.env; set +a
+TINYHIVEMIND_LIVE_OPENROUTER=1 cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
+TINYHIVEMIND_LIVE_OPENROUTER=1 TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
+```
+
+Offline, either runner is a proof of its mechanics and needs no credential.
+A scripted model answers every seat with one `complete_episode` call in
+whichever dialect the request offers -- native for a raw session, or
+`mcp_call_tool` against the `episode` server for an embed agent -- routing is
+the deterministic fallback, and the run asserts that the call became a desk
+row.
+
+```sh
+cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
+TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
+```
+
+### Benchmarking the two runners
+
+`CONDUCTED_BENCH=N` runs both runners offline, `N` episodes each on the
+selected desk, and prints one table. The model is scripted, so nothing in it
+is about answers: every seat completes on its first turn, and what differs
+between the arms is the host.
+
+| Column | What it is |
+| --- | --- |
+| `turns/ep`, `waves/ep` | seat turns the loop ran, and rounds it took |
+| `requests/turn` | model calls per turn, including any discovery an embed agent spends on `mcp_list_servers` and `mcp_list_tools` |
+| `KiB/turn` | request bytes sent to the model per turn: the session's history plus the delta for embed, the seeded log plus the delta for raw |
+| `tool rtt ms` | from the model emitting a tool call to seeing its receipt: the whole harness in between, native or over the wire |
+| `wall ms/ep` | one episode end to end |
+
+```sh
+CONDUCTED_BENCH=5 cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin conducted
+```
+
+The driver's own benchmark, `cargo run --release -p tinyhivemind-openhuman
+--example bench`, measures the completion driver's policy with no agent at
+all and binds plain seats; it says nothing about either runner.
 
 ## Hermetic DeepSWE adapter
 

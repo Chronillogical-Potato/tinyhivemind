@@ -285,8 +285,10 @@ async fn run() -> anyhow::Result<()> {
             .iter()
             .map(|id| ParticipantCompletion {
                 agent_id: (*id).into(),
-                assigned_at: tinyhivemind::Sequence(0),
-                completed_at: Some(tinyhivemind::Sequence(0)),
+                assignments: vec![tinyhivemind_hive::AssignmentRecord {
+                    assigned_at: tinyhivemind::Sequence(0),
+                    completed_at: Some(tinyhivemind::Sequence(0)),
+                }],
             })
             .collect(),
     };
@@ -404,7 +406,7 @@ async fn run() -> anyhow::Result<()> {
                         author: id.clone(),
                         body: format!("BROADCAST: {message}"),
                     });
-                    visibility.mark_own(&id, index);
+                    visibility.mark_own(id, index);
                 }
                 tinyhivemind::speech::Utterance::CompleteEpisode { message } => {
                     let index = transcript.len();
@@ -412,10 +414,11 @@ async fn run() -> anyhow::Result<()> {
                         author: id.clone(),
                         body: format!("COMPLETE: {message}"),
                     });
-                    visibility.mark_own(&id, index);
+                    visibility.mark_own(id, index);
                 }
                 tinyhivemind::speech::Utterance::Post { .. }
-                | tinyhivemind::speech::Utterance::Dm { .. } => {
+                | tinyhivemind::speech::Utterance::Dm { .. }
+                | tinyhivemind::speech::Utterance::Ask { .. } => {
                     anyhow::bail!("MCP completion surface emitted an unsupported utterance")
                 }
             }
@@ -459,6 +462,11 @@ async fn run() -> anyhow::Result<()> {
                 }
                 HostAction::DeliverDm { .. } => {
                     anyhow::bail!("MCP completion surface emitted an unsupported DM")
+                }
+                // The seat that just completed was handed queued work; the
+                // next pending round runs it, so there is nothing to start.
+                HostAction::DeliverHandoff { agent_id, handoff } => {
+                    println!("[handoff] -> {agent_id} (from {})", handoff.from);
                 }
             }
         }

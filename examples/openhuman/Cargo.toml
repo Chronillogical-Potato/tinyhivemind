@@ -26,7 +26,28 @@ tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }
 tinyhivemind-hive = { path = "../../crates/tinyhivemind-hive" }
 tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman" }
 tinyhivemind-typesafe = { path = "../../crates/tinyhivemind-typesafe" }
-tokio = { version = "1", features = ["rt-multi-thread"] }
+# The raw-session proof (`conducted_raw`) implements `tinytools::Tool` for the
+# episode tools it hands `OpenHumanSessionHost::builder()`, and names the
+# native tool dialect from `tinytools-agent`. Both are the vendored checkout's
+# own copies, at the same path OpenHuman itself resolves them from, so the
+# `Tool` a raw session takes is the `Tool` this example implements.
+tinytools = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools" }
+tinytools-agent = { path = "../../vendor/openhuman/vendor/tinyagents/vendor/tinytools/crates/tinytools-agent" }
+# `tinytools::Tool` and OpenHuman's `ToolPolicy` and `Memory` are async traits.
+async-trait = "0.1"
+# The room's tools, served over MCP, for the `conducted` binary: the one seam
+# OpenHuman offers a foreign component, and the one socket the repository
+# opens (ADR 0022).
+tinyhivemind-mcp = { path = "../../crates/tinyhivemind-mcp" }
+# The live Jev transport for `conducted`. Reads `TYPESAFE_API_KEY` and nothing
+# else. The vendored checkout rather than the git source, for the reason ADR
+# 0020 gives for `openhuman-embed`: a host that vendors this repository carries
+# its own copy, and two sources for one crate means two sets of types.
+tinyjevclient = { path = "../../vendor/tinyjevclient/crates/tinyjevclient", default-features = false }
+# Diagnostic only: OpenHuman sanitises a hosted-agent failure into a fixed
+# string, so the underlying reason is only visible through its own logging.
+env_logger = "0.11"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 tempfile = "3"
 # The inspector must terminate a hung Docker CLI from the host side.
 wait-timeout = "0.2"

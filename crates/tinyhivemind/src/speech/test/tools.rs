@@ -5,11 +5,39 @@
 use crate::speech::{CallArguments, ParameterKind, READ_DEFAULT, READ_MAX, interpret, tool_specs};
 
 #[test]
-fn serves_exactly_the_five_tools_a_seat_may_call() {
+fn serves_exactly_the_six_tools_a_seat_may_call() {
     let names: Vec<&str> = tool_specs().iter().map(|spec| spec.name).collect();
     assert_eq!(
         names,
-        vec!["post", "broadcast", "dm", "complete_episode", "read"]
+        vec!["post", "broadcast", "dm", "ask", "complete_episode", "read"]
+    );
+}
+
+#[test]
+fn an_ask_takes_one_seat_and_says_the_answer_comes_later() {
+    let ask = tool_specs()
+        .iter()
+        .find(|spec| spec.name == "ask")
+        .expect("ask is served");
+    let to = ask.parameters.first().expect("ask takes a seat");
+    assert_eq!(to.name, "to");
+    assert_eq!(
+        to.kind,
+        ParameterKind::Text,
+        "one seat, so the schema says one string rather than a list",
+    );
+    assert!(to.required);
+    assert!(
+        ask.description.contains("later turn"),
+        "a seat is told the answer does not arrive while it waits",
+    );
+    assert!(
+        ask.description.contains("not be able to finish"),
+        "a seat is told an open question holds its completion",
+    );
+    assert!(
+        ask.description.contains("not a handoff"),
+        "a seat is told the work stays its own",
     );
 }
 
@@ -82,8 +110,10 @@ fn speaking_is_described_as_the_only_way_to_be_heard() {
         .find(|spec| spec.name == "complete_episode")
         .expect("completion is served");
     assert!(
-        complete.description.contains("finished your assigned work"),
-        "a seat is told completion is about its own assignment",
+        complete
+            .description
+            .contains("that message is your finding"),
+        "a seat is told its completion message is how a fact reaches the desk",
     );
     assert!(tool_specs().iter().any(|spec| spec.name == "broadcast"));
     assert!(!tool_specs().iter().any(|spec| spec.name == "close"));
