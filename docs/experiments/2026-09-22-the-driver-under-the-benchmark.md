@@ -119,6 +119,43 @@ responder *is* the other seat -- and one test was failing because of it. They
 now build a whole Choice, and the tests exercise the accepted path they were
 written for.
 
+## Rerun under ADR 0024
+
+The same benchmark after [ADR 0024](../adr/0024-a-broadcast-completes-its-author.md)
+(a placed broadcast completes its author) and ten live runs, 2000 episodes,
+five members:
+
+```text
+arm          quiescent%          95% CI stalled%  exhaus%  turns/ep routes/ep waves/ep  assign  queued drained  disch unplaced  late  peakQ
+queue             100.0      99.8-100.0      0.0      0.0      12.2      3.60      6.6    3.75    3.45    3.45   0.00     0.00  0.34      3
+queue-nocap       100.0      99.8-100.0      0.0      0.0      12.2      3.60      6.6    3.75    3.45    3.45   0.00     0.00  0.34      3
+queue-w1          100.0      99.8-100.0      0.0      0.0       7.1      2.10      7.1    1.15    0.95    0.95   0.00     0.00  0.09      2
+queue-w4          100.0      99.8-100.0      0.0      0.0      12.2      3.61      4.4    3.81    3.39    3.39   0.00     0.00  0.34      3
+```
+
+Turns, routes, waves and queue depth are the recorded table to the second
+decimal: completing the author at its broadcast rather than at its own
+completion moves nothing the benchmark measures, because with one turn per
+assignment the two land in the same wave.
+
+**What the first rerun found instead.** Before two fixes, 30% of episodes
+in every arm ended in a driver error: a seat "assigned at 12 but delivered
+only through 9". A turn's broadcast and its completion land as separate
+rows; the broadcast now completes the author and hands it queued work at
+once, and the same turn's completion then arrives against an assignment the
+seat was never shown. The live host had met this in its second run and
+treats it as a notice; the simulated host treated it as fatal. It now does
+what the host does -- the completion applies to nothing and the seat runs
+for the new assignment -- and counts it in the `late` column: a third of an
+episode at width two and three.
+
+The second fix is the driver's, and the benchmark found it: when the
+completion lands *first*, it hands the seat queued work, and the same turn's
+broadcast then arrived from a seat holding an assignment it had not seen --
+and completed it. Completion-by-broadcast now meets the same delivery guard
+an explicit completion does: a seat not yet shown its assignment keeps it,
+and is owed the turn.
+
 ## What this does not measure
 
 The same absences as before: no accuracy axis, and the termination bounds --

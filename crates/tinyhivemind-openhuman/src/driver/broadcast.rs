@@ -97,8 +97,16 @@ impl CompletionDriver<'_> {
         // Handing work off is a finding. Unless the author is still waiting
         // on a question it asked, its part is complete (ADR 0024) -- and a
         // handoff queued for it is handed over now, as at any completion.
-        if open_assignment(&next.episode, author).is_some()
+        // A seat not yet shown its assignment cannot have finished it: that
+        // assignment stays open, and the seat, which has not run for it, is
+        // owed a turn. The same guard an explicit completion meets.
+        if let Some(assigned_at) = open_assignment(&next.episode, author)
             && next.ledger.awaiting(author).is_none()
+            && next
+                .seen
+                .delivered_through
+                .get(author)
+                .is_none_or(|through| *through >= assigned_at)
         {
             next.episode = apply_completion(&next.episode, author, event.sequence)?;
             if let Some(handoff) = next.ledger.pop(author) {

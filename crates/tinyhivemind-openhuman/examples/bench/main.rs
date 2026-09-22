@@ -99,6 +99,9 @@ struct Counters {
     drained: u64,
     discharged: u64,
     unplaced: u64,
+    /// Completions that landed before the seat had seen the assignment they
+    /// would have closed: applied to nothing, as a live host applies them.
+    late: u64,
     peak_queue: usize,
 }
 
@@ -136,13 +139,14 @@ fn main() {
         "{episodes} episodes, {members} members, same rooms per arm, through CompletionDriver.\n\
          quiescent%: reached a real end. stalled%: pending seats nothing will wake.\n\
          exhausted%: hit the turn wall. routes/ep is the provider bill; waves/ep is\n\
-         depth against turns/ep's width. queued: handoffs that met a working seat.\n"
+         depth against turns/ep's width. queued: handoffs that met a working seat.\n\
+         late: completions a seat's own broadcast had already made; applied to nothing.\n"
     );
 
     let mut table = String::new();
     let _ = writeln!(
         table,
-        "{:<12}{:>11}{:>16}{:>9}{:>9}{:>10}{:>10}{:>9}{:>8}{:>8}{:>8}{:>7}{:>9}{:>7}",
+        "{:<12}{:>11}{:>16}{:>9}{:>9}{:>10}{:>10}{:>9}{:>8}{:>8}{:>8}{:>7}{:>9}{:>6}{:>7}",
         "arm",
         "quiescent%",
         "95% CI",
@@ -156,6 +160,7 @@ fn main() {
         "drained",
         "disch",
         "unplaced",
+        "late",
         "peakQ"
     );
 
@@ -166,7 +171,7 @@ fn main() {
         let per = f64::from(tally.episodes);
         let _ = writeln!(
             table,
-            "{:<12}{:>11.1}{:>16}{:>9.1}{:>9.1}{:>10.1}{:>10.2}{:>9.1}{:>8.2}{:>8.2}{:>8.2}{:>7.2}{:>9.2}{:>7}",
+            "{:<12}{:>11.1}{:>16}{:>9.1}{:>9.1}{:>10.1}{:>10.2}{:>9.1}{:>8.2}{:>8.2}{:>8.2}{:>7.2}{:>9.2}{:>6.2}{:>7}",
             arm.name,
             rate * 100.0,
             format!("{:.1}-{:.1}", low * 100.0, high * 100.0),
@@ -180,6 +185,7 @@ fn main() {
             tally.counters.drained as f64 / per,
             tally.counters.discharged as f64 / per,
             tally.counters.unplaced as f64 / per,
+            tally.counters.late as f64 / per,
             tally.counters.peak_queue,
         );
         if tally.errored > 0 {
@@ -336,6 +342,7 @@ fn run_arm(arm: &Arm, episodes: u32, members: usize) -> Tally {
         tally.counters.drained += counters.drained;
         tally.counters.discharged += counters.discharged;
         tally.counters.unplaced += counters.unplaced;
+        tally.counters.late += counters.late;
         tally.counters.peak_queue = tally.counters.peak_queue.max(counters.peak_queue);
     }
     tally
@@ -436,6 +443,7 @@ async fn commit(
         utterance,
     };
     let before = queue_lengths(state, ids);
+    let held = assigned_at(state, seat);
     let transition = match driver.apply_committed(state, event, Some(routing)).await {
         Ok(transition) => transition,
         Err(Error::BudgetSpent { .. }) => {
@@ -454,6 +462,14 @@ async fn commit(
                     None,
                 )
                 .await?
+        }
+        Err(Error::UndeliveredAssignment { .. }) => {
+            // The seat's own broadcast, landing earlier in this wave,
+            // completed it and handed it queued work it has not seen. This
+            // completion is for the old assignment and applies to nothing;
+            // the seat runs again for the new one. As the live host does.
+            counters.late += 1;
+            return Ok(state.clone());
         }
         Err(error) => return Err(error),
     };
@@ -487,6 +503,11 @@ async fn commit(
     }
     if is_broadcast && !routed {
         counters.unplaced += 1;
+    }
+    // Its handoff completed it (ADR 0024): whatever it next takes up is fresh
+    // work, exactly as after a completion it called itself.
+    if is_broadcast && held.is_some() && assigned_at(&transition.state, seat) != held {
+        room.handed(seat);
     }
     Ok(transition.state)
 }
