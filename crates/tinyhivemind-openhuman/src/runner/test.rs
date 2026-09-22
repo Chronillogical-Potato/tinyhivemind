@@ -126,7 +126,7 @@ fn each_runner_states_its_own_mechanics_and_nothing_else() {
 }
 
 /// One turn through the seam: open, run, close.
-async fn one_turn<R: SeatRunner>(runner: &R, since: Sequence) -> (String, Vec<SeatEvent>) {
+async fn one_turn<R: SeatRunner>(runner: &R, since: Option<Sequence>) -> (String, Vec<SeatEvent>) {
     let bindings = runner.bindings();
     assert_eq!(bindings.len(), 1);
     assert_eq!(bindings[0].hive_agent_id, "lead");
@@ -222,7 +222,7 @@ async fn plain(library: LibraryHost) {
         .turn(
             "lead".into(),
             Lane::Thread(Sequence(1)),
-            Sequence(1),
+            Some(Sequence(1)),
             "In the thread.".into(),
         )
         .await;
@@ -284,7 +284,7 @@ fn one_completion(name: &str, events: &[SeatEvent]) {
 async fn again(raw: &RawRunner, host: &TestHost, hosted: &HostedRunner<TestHost>) {
     // A second raw turn is seeded with the first: what the seat said is what
     // it is shown, and the record starts empty again.
-    let (_, again) = one_turn(raw, Sequence(0)).await;
+    let (_, again) = one_turn(raw, None).await;
     assert_eq!(again.len(), 1);
     host.log.append("lead", "COMPLETE: done", None, None);
     let (_, again) = one_turn(hosted, host.log.latest()).await;
@@ -297,13 +297,12 @@ async fn again(raw: &RawRunner, host: &TestHost, hosted: &HostedRunner<TestHost>
 /// rather than seated as a ghost.
 async fn ghosts(embed: &EmbedRunner, raw: &RawRunner, hosted: &HostedRunner<TestHost>) {
     for outcome in [
-        raw.turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
-            .await,
+        raw.turn("ghost".into(), Lane::Desk, None, "?".into()).await,
         hosted
-            .turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
+            .turn("ghost".into(), Lane::Desk, None, "?".into())
             .await,
         embed
-            .turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
+            .turn("ghost".into(), Lane::Desk, None, "?".into())
             .await,
     ] {
         assert!(
@@ -365,7 +364,7 @@ async fn halts(host: &TestHost, hosted: &HostedRunner<TestHost>) {
         .turn(
             "lead".into(),
             Lane::Thread(Sequence(u64::MAX)),
-            Sequence(u64::MAX),
+            Some(Sequence(u64::MAX)),
             "Once more.".into(),
         )
         .await;
@@ -492,8 +491,8 @@ async fn both_runners() {
         .expect("the library boots");
     let (host, hosted) = hosted(library, &contract(RunnerKind::Hosted));
 
-    let (embed_reply, embed_events) = one_turn(&embed, Sequence(0)).await;
-    let (raw_reply, raw_events) = one_turn(&raw, Sequence(0)).await;
+    let (embed_reply, embed_events) = one_turn(&embed, None).await;
+    let (raw_reply, raw_events) = one_turn(&raw, None).await;
     // Seeded from the host's log: the operator's row is history, not brief.
     let (hosted_reply, hosted_events) = one_turn(&hosted, host.log.latest()).await;
     assert_eq!(

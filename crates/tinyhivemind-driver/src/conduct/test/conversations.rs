@@ -54,7 +54,7 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     );
     assert_eq!(
         answered.turns[0].since,
-        Sequence(root.0 - 1),
+        Some(Sequence(root.0 - 1)),
         "the ask row itself is new to the seat asked"
     );
     assert!(matches!(
@@ -293,7 +293,7 @@ fn a_refused_reply_in_a_conversation_is_not_its_answer() {
         .iter()
         .find(|turn| turn.seat == "two")
         .expect("the askee is due");
-    conductor.open_turn(thread_turn, Sequence(1), Vec::new(), |_| Vec::new());
+    conductor.open_turn(thread_turn, Some(Sequence(1)), Vec::new(), |_| Vec::new());
     conductor.record(thread_turn, vec![ToolCall::Speak(complete("too early"))]);
     let mut refused = false;
     while let Some(step) = conductor.step().expect("steps") {

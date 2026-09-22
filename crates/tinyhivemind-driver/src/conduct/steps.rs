@@ -20,9 +20,13 @@ pub struct Turn {
     pub seat: String,
     /// Where the turn runs: the desk, or a conversation on one of its threads.
     pub channel: Channel,
-    /// The newest row the seat has been shown in this channel: the host
-    /// gives the turn every row above it.
-    pub since: Sequence,
+    /// The newest row the seat has been shown in this channel, or `None`
+    /// for a seat shown nothing there yet: the host gives the turn every
+    /// row above it, which for `None` is every row. A sequence is never
+    /// borrowed to mean "nothing": a host may number its first row zero.
+    /// On the wire the field is present, `null` for `None`.
+    #[serde(deserialize_with = "required_null")]
+    pub since: Option<Sequence>,
 }
 
 impl Turn {
@@ -217,4 +221,15 @@ pub enum Step {
     Commit(Commit),
     /// Show this, or don't.
     Event(Event),
+}
+
+/// Deserialize a nullable field that must be present: `serde` fills a
+/// missing `Option` with `None` by default, and a wire form that dropped
+/// the field would then pass as one that sent `null`.
+fn required_null<'de, D, T>(deserializer: D) -> std::result::Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
 }

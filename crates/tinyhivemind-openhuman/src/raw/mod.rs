@@ -246,7 +246,7 @@ impl SeatRunner for RawRunner {
     /// A fresh session, seeded with what this seat has been shown and said
     /// so far, run once and dropped. Its belt is built for this seat and this
     /// turn, and every call it makes lands in the shared record.
-    fn turn(&self, seat: String, lane: Lane, _since: Sequence, prompt: String) -> TurnJob {
+    fn turn(&self, seat: String, lane: Lane, _since: Option<Sequence>, prompt: String) -> TurnJob {
         let history = self
             .contexts
             .lock()

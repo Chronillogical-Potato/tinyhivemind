@@ -42,6 +42,8 @@ struct ScriptRunner {
     script: Mutex<BTreeMap<String, VecDeque<Vec<Call>>>>,
     /// Every prompt a seat was sent, in order.
     prompts: Mutex<Vec<(String, Lane, String)>>,
+    /// The watermark each turn was opened with, in order.
+    since: Mutex<Vec<Option<Sequence>>>,
 }
 
 impl ScriptRunner {
@@ -56,11 +58,19 @@ impl ScriptRunner {
                     .collect(),
             ),
             prompts: Mutex::new(Vec::new()),
+            since: Mutex::new(Vec::new()),
         }
     }
 
     fn prompts(&self) -> Vec<(String, Lane, String)> {
         self.prompts
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    fn since(&self) -> Vec<Option<Sequence>> {
+        self.since
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
@@ -81,11 +91,15 @@ impl SeatRunner for ScriptRunner {
             .collect()
     }
 
-    fn turn(&self, seat: String, lane: Lane, _since: Sequence, prompt: String) -> TurnJob {
+    fn turn(&self, seat: String, lane: Lane, since: Option<Sequence>, prompt: String) -> TurnJob {
         self.prompts
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push((seat.clone(), lane, prompt));
+        self.since
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(since);
         let calls = self
             .script
             .lock()
@@ -125,8 +139,12 @@ struct TestJournal {
 
 impl TestJournal {
     fn new() -> Self {
+        Self::over(MemoryLog::new("engineering"))
+    }
+
+    fn over(log: MemoryLog) -> Self {
         Self {
-            log: MemoryLog::new("engineering"),
+            log,
             events: Mutex::new(Vec::new()),
             turns: Mutex::new(Vec::new()),
             shown: Mutex::new(Vec::new()),
@@ -411,6 +429,54 @@ fn the_journal_saw_each_turn(journal: &TestJournal, runner: &ScriptRunner) {
 }
 
 #[test]
+fn a_task_on_a_log_numbered_from_zero_reaches_the_first_turn() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy();
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    // A host that numbers its first row zero, as some do: the task is row
+    // zero, and nothing sits below it.
+    let journal = TestJournal::over(MemoryLog::numbered_from("engineering", Sequence(0)));
+    let runner = ScriptRunner::new(
+        &["one", "two"],
+        &[("one", vec![vec![complete("done", None)]])],
+    );
+    let entrance = door(&journal, &["one", "two"], &["one"]);
+    assert_eq!(entrance.opened_at, Sequence(0));
+    let report = run(run_episode(
+        &journal,
+        &runner,
+        &driver,
+        routing,
+        ConductPolicy::default(),
+        entrance,
+    ))
+    .expect("the episode runs");
+    assert_eq!(report.settled, 2);
+    assert_eq!(report.turns, 1);
+    // The seat's one turn was shown the task, and was shown nothing before.
+    let prompts = runner.prompts();
+    assert_eq!(prompts.len(), 1);
+    assert!(
+        prompts[0].2.contains("state the root cause"),
+        "{}",
+        prompts[0].2
+    );
+    assert_eq!(runner.since(), vec![None]);
+    // The completion landed above the task, at row one.
+    let rows = journal.log.all();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[1].sequence, Sequence(1));
+    assert!(rows[1].body.contains("done"));
+}
+
+#[test]
 fn a_seat_that_says_nothing_is_nudged_and_then_the_episode_stalls() {
     let hive = hive(&["one", "two"]);
     let driver = CompletionDriver::new(&hive, 4).expect("driver");
@@ -465,7 +531,7 @@ fn a_seat_that_says_nothing_is_nudged_and_then_the_episode_stalls() {
         prompts.iter().all(|(seat, _, _)| seat == "one"),
         "{prompts:?}"
     );
-    let shown_two = journal.log.desk_since("two", Sequence(0));
+    let shown_two = journal.log.desk_since("two", None);
     assert!(!shown_two.is_empty());
     assert!(
         shown_two.iter().all(|row| !row.contains("open work")),

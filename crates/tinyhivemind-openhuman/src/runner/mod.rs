@@ -135,9 +135,9 @@ pub trait SeatRunner: Send + Sync {
 
     /// Run one turn. The prompt is what the seat is shown this turn; `since`
     /// is the newest row it was shown before it, which a runner that seeds
-    /// from the host's log reads up to. How a seat holds context between
-    /// turns is the runner's business.
-    fn turn(&self, seat: String, lane: Lane, since: Sequence, prompt: String) -> TurnJob;
+    /// from the host's log reads up to, or `None` for a seat shown nothing
+    /// yet. How a seat holds context between turns is the runner's business.
+    fn turn(&self, seat: String, lane: Lane, since: Option<Sequence>, prompt: String) -> TurnJob;
 
     /// Open a turn: what the seat may `read`, and the chat and parent every
     /// call it makes must name.

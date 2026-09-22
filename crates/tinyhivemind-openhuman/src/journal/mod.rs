@@ -35,15 +35,25 @@ pub struct Row {
 #[derive(Debug)]
 pub struct MemoryLog {
     desk: String,
+    /// The sequence the first row is given.
+    first: u64,
     rows: Mutex<Vec<Row>>,
 }
 
 impl MemoryLog {
-    /// An empty journal for `desk`.
+    /// An empty journal for `desk`, numbering its rows from one.
     #[must_use]
     pub fn new(desk: impl Into<String>) -> Self {
+        Self::numbered_from(desk, Sequence(1))
+    }
+
+    /// An empty journal for `desk` whose first row is given `first`: a host
+    /// numbers its log as it likes, and some number the first row zero.
+    #[must_use]
+    pub fn numbered_from(desk: impl Into<String>, first: Sequence) -> Self {
         Self {
             desk: desk.into(),
+            first: first.0,
             rows: Mutex::new(Vec::new()),
         }
     }
@@ -61,7 +71,7 @@ impl MemoryLog {
         only_for: Option<&str>,
     ) -> Sequence {
         let mut rows = self.rows();
-        let sequence = Sequence(rows.last().map_or(0, |row| row.sequence.0) + 1);
+        let sequence = Sequence(rows.last().map_or(self.first, |row| row.sequence.0 + 1));
         rows.push(Row {
             sequence,
             author: author.to_owned(),
@@ -72,18 +82,19 @@ impl MemoryLog {
         sequence
     }
 
-    /// The newest sequence, or zero for an empty journal.
+    /// The newest sequence, or `None` for an empty journal.
     #[must_use]
-    pub fn latest(&self) -> Sequence {
-        self.rows().last().map_or(Sequence(0), |row| row.sequence)
+    pub fn latest(&self) -> Option<Sequence> {
+        self.rows().last().map(|row| row.sequence)
     }
 
-    /// What `seat` may read on the open desk above `after`, rendered.
+    /// What `seat` may read on the open desk above `after`, rendered; all of
+    /// it for `None`.
     #[must_use]
-    pub fn desk_since(&self, seat: &str, after: Sequence) -> Vec<String> {
+    pub fn desk_since(&self, seat: &str, after: Option<Sequence>) -> Vec<String> {
         self.rows()
             .iter()
-            .filter(|row| row.sequence > after && row.thread.is_none())
+            .filter(|row| after.is_none_or(|after| row.sequence > after) && row.thread.is_none())
             .filter(|row| {
                 row.only_for
                     .as_deref()
@@ -97,15 +108,15 @@ impl MemoryLog {
     /// in it.
     #[must_use]
     pub fn thread(&self, root: Sequence) -> Vec<String> {
-        self.thread_since(root, Sequence(0))
+        self.thread_since(root, None)
     }
 
-    /// One conversation above `after`, rendered.
+    /// One conversation above `after`, rendered; whole for `None`.
     #[must_use]
-    pub fn thread_since(&self, root: Sequence, after: Sequence) -> Vec<String> {
+    pub fn thread_since(&self, root: Sequence, after: Option<Sequence>) -> Vec<String> {
         self.rows()
             .iter()
-            .filter(|row| row.sequence > after)
+            .filter(|row| after.is_none_or(|after| row.sequence > after))
             .filter(|row| row.sequence == root || row.thread == Some(root))
             .map(render)
             .collect()

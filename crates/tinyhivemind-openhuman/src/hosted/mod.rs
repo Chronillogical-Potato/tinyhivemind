@@ -251,7 +251,7 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
 
     /// Clear the seat's session, seed it from the host's log up to `since`,
     /// and run the brief, inside the host's wrapper.
-    fn turn(&self, seat: String, lane: Lane, since: Sequence, prompt: String) -> TurnJob {
+    fn turn(&self, seat: String, lane: Lane, since: Option<Sequence>, prompt: String) -> TurnJob {
         let host = Arc::clone(&self.host);
         let Some(session) = self.seats.get(&seat).map(|held| Arc::clone(&held.session)) else {
             return unseated(seat, lane);

@@ -147,7 +147,7 @@ where
             let rows = rows_above(journal.log(), &channel, &turn.seat, turn.since).await?;
             let window = match turn.thread() {
                 None => rows.clone(),
-                Some(_) => rows_above(journal.log(), &channel, &turn.seat, Sequence(0)).await?,
+                Some(_) => rows_above(journal.log(), &channel, &turn.seat, None).await?,
             };
             runner.open(
                 &turn.seat,
@@ -169,7 +169,7 @@ where
                     thread_root: Some(root),
                     ..desk.clone()
                 };
-                let whole = rows_above(journal.log(), &thread, &turn.seat, Sequence(0)).await?;
+                let whole = rows_above(journal.log(), &thread, &turn.seat, None).await?;
                 transcripts.insert(root, whole);
             }
             let brief = conductor.open_turn(turn, latest, rows, |root| {
@@ -260,25 +260,22 @@ async fn join_turns(
     done
 }
 
-/// The newest sequence in the log, or zero for an empty one.
-async fn latest(log: &dyn SessionLog) -> Result<Sequence> {
+/// The newest sequence in the log, or `None` for a log with no rows.
+async fn latest(log: &dyn SessionLog) -> Result<Option<Sequence>> {
     let page = log
         .read_before(None, 1)
         .await
         .map_err(|source| tinyhivemind::Error::Read { source })?;
-    Ok(page
-        .messages
-        .first()
-        .map_or(Sequence(0), |row| row.sequence))
+    Ok(page.messages.first().map(|row| row.sequence))
 }
 
 /// The rows of `conversation` above `since` that `seat` may read, rendered,
-/// newest [`SESSION_WINDOW`] of them.
+/// newest [`SESSION_WINDOW`] of them; every row for `None`.
 async fn rows_above(
     log: &dyn SessionLog,
     conversation: &Conversation,
     seat: &str,
-    since: Sequence,
+    since: Option<Sequence>,
 ) -> Result<Vec<String>> {
     let rows = project_session(
         log,
@@ -292,7 +289,7 @@ async fn rows_above(
     .await?;
     Ok(rows
         .iter()
-        .filter(|row| row.sequence > since)
+        .filter(|row| since.is_none_or(|since| row.sequence > since))
         .filter_map(render)
         .collect())
 }

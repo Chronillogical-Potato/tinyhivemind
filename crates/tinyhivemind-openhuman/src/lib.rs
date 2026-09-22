@@ -104,7 +104,8 @@
 //! runner.open("lead", Vec::new(), Dispatch { chat: "engineering".into(), parent: None });
 //! // The newest row `lead` was shown before this turn: its history is read
 //! // from the host's log up to here, and the brief carries what is above.
-//! let since = tinyhivemind::Sequence(1);
+//! // `None` would be a seat shown nothing yet.
+//! let since = Some(tinyhivemind::Sequence(1));
 //! let (_, _, reply) = runner.turn("lead".into(), Lane::Desk, since, "Go.".into()).await;
 //! let events = runner.close("lead");
 //! # let _ = (reply, events);

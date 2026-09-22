@@ -120,7 +120,7 @@ impl SeatRunner for EmbedRunner {
 
     /// One session per seat for the whole episode, so `OpenHuman` appends to the
     /// context the agent already holds rather than rebuilding one.
-    fn turn(&self, seat: String, lane: Lane, _since: Sequence, prompt: String) -> TurnJob {
+    fn turn(&self, seat: String, lane: Lane, _since: Option<Sequence>, prompt: String) -> TurnJob {
         let Some(agent) = self.agents.get(&seat).cloned() else {
             return unseated(seat, lane);
         };

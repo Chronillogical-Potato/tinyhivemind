@@ -41,7 +41,7 @@ fn a_turn_names_its_seat_channel_and_watermark() {
             other: "one".into(),
             opened_it: false,
         },
-        since: Sequence(4),
+        since: Some(Sequence(4)),
     };
     let wire = serde_json::to_value(&thread).expect("serializes");
     assert_eq!(
@@ -58,11 +58,14 @@ fn a_turn_names_its_seat_channel_and_watermark() {
     let desk = Turn {
         seat: "one".into(),
         channel: Channel::Desk,
-        since: Sequence(0),
+        since: None,
     };
+    let wire = serde_json::to_value(&desk).expect("serializes");
+    assert_eq!(wire["channel"], json!({"kind": "desk"}));
     assert_eq!(
-        serde_json::to_value(&desk).expect("serializes")["channel"],
-        json!({"kind": "desk"})
+        wire["since"],
+        json!(null),
+        "nothing shown yet is null on the wire, never a sequence"
     );
     round_trips(&desk);
 }
