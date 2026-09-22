@@ -20,8 +20,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 # The listener. This is the one socket the repository opens -- see ADR 0022.
 # `net` and `io-util` on top of the workspace features, for the loopback
-# listener and the framed read/write.
-tokio = { workspace = true, features = ["net", "io-util"] }
+# listener and the framed read/write; `time` for the deadline a started request
+# must finish within.
+tokio = { workspace = true, features = ["net", "io-util", "time"] }
 
 [dev-dependencies]
 # The tests speak to the server over a real loopback connection.

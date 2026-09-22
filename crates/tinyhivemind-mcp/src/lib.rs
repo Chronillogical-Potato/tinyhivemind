@@ -9,11 +9,12 @@
 //!
 //! It holds no episode state and runs no turn. A seat's accepted calls are
 //! recorded as [`SeatEvent`]s the host drains after the turn, and its refused
-//! ones as [`Refusal`]s beside them; the driver does the rest. It depends on no harness: any MCP-capable one is given the same
-//! five tools.
+//! ones as [`Refusal`]s beside them; the driver does the rest. It depends on
+//! no harness: any MCP-capable one is given the same four tools.
 //!
-//! **Identity is structural.** A seat dials `/seat/<id>`, so who is calling
-//! comes from the connection, never from an argument. Each call also names the
+//! **Identity is structural.** A seat dials `/seat/<id>/<capability>`, the
+//! capability minted when the server bound, so who is calling comes from the
+//! endpoint it was handed, never from an argument. Each call also names the
 //! `chat` and `parent` the host told the seat it is in, and the server checks
 //! both against the turn the host [`register`](EpisodeTools::register)ed.
 //!

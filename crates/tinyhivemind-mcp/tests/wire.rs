@@ -50,6 +50,16 @@ async fn post(port: u16, path: &str, body: Value) -> (u16, Value) {
     }
 }
 
+/// The path a seat dials: its endpoint without the origin.
+fn path_of(server: &Server, seat: &str) -> String {
+    let endpoint = server.endpoint(seat);
+    let after_scheme = endpoint
+        .strip_prefix("http://")
+        .expect("endpoints are http");
+    let slash = after_scheme.find('/').expect("endpoints have a path");
+    after_scheme[slash..].to_owned()
+}
+
 fn rpc(id: u64, method: &str, params: &Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params })
 }
@@ -107,7 +117,7 @@ async fn the_handshake_echoes_the_protocol_version_and_lists_the_served_tools() 
     let (_tools, server) = stand_up().await;
     let (status, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         rpc(1, "initialize", &json!({})),
     )
     .await;
@@ -115,7 +125,7 @@ async fn the_handshake_echoes_the_protocol_version_and_lists_the_served_tools() 
     assert_eq!(reply["result"]["protocolVersion"], PROTOCOL_VERSION);
     let (status, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
     )
     .await;
@@ -123,7 +133,7 @@ async fn the_handshake_echoes_the_protocol_version_and_lists_the_served_tools() 
     assert_eq!(reply, Value::Null);
     let (_, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         rpc(2, "tools/list", &json!({})),
     )
     .await;
@@ -134,11 +144,24 @@ async fn the_handshake_echoes_the_protocol_version_and_lists_the_served_tools() 
         .map(|tool| tool["name"].as_str().unwrap())
         .collect();
     assert_eq!(names, ["broadcast", "ask", "complete_episode", "read"]);
-    let (_, reply) = post(server.port(), "/seat/lead", rpc(3, "nope", &json!({}))).await;
+    let (_, reply) = post(
+        server.port(),
+        &path_of(&server, "lead"),
+        rpc(3, "nope", &json!({})),
+    )
+    .await;
     assert_eq!(reply["error"]["code"], -32601);
-    assert_eq!(
-        server.endpoint("lead"),
-        format!("http://127.0.0.1:{}/seat/lead", server.port())
+    let endpoint = server.endpoint("lead");
+    let prefix = format!("http://127.0.0.1:{}/seat/lead/", server.port());
+    let capability = endpoint
+        .strip_prefix(&prefix)
+        .expect("the endpoint carries the seat's capability after its name");
+    assert_eq!(capability.len(), 32);
+    assert!(capability.chars().all(|c| c.is_ascii_hexdigit()));
+    assert_ne!(
+        server.endpoint("solver").rsplit('/').next().unwrap(),
+        capability,
+        "each seat holds its own"
     );
 }
 
@@ -148,7 +171,7 @@ async fn a_call_is_recorded_against_the_seat_that_dialled() {
     tools.register("lead", dispatch());
     let (_, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call(
             "complete_episode",
             &in_thread(&json!({ "message": "done" })),
@@ -178,7 +201,7 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
     let (tools, server) = stand_up().await;
     let (_, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call("complete_episode", &in_thread(&json!({ "message": "hi" }))),
     )
     .await;
@@ -188,7 +211,7 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
     tools.register("lead", dispatch());
     let (_, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call(
             "complete_episode",
             &json!({ "message": "hi", "chat": "marketing", "parent": "42" }),
@@ -203,7 +226,7 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
     );
     let (_, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call(
             "complete_episode",
             &json!({ "message": "hi", "chat": "engineering" }),
@@ -221,11 +244,14 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
 
     let (_, reply) = post(
         server.port(),
-        "/seat/johnny",
+        &path_of(&server, "johnny"),
         call("complete_episode", &in_thread(&json!({ "message": "hi" }))),
     )
     .await;
-    assert!(text(&reply).contains("no seat named `johnny`"));
+    assert_eq!(
+        reply["error"]["message"], "unknown endpoint",
+        "a seat the server does not serve has no capability, so no endpoint"
+    );
 }
 
 #[tokio::test]
@@ -235,14 +261,14 @@ async fn refusals_are_the_vocabularys_own_sentences() {
     let port = server.port();
     let (_, reply) = post(
         port,
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call("complete_episode", &on_desk(&json!({ "message": "  " }))),
     )
     .await;
     assert_eq!(text(&reply), "`message` must be a non-empty string");
     let (_, reply) = post(
         port,
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call("dm", &on_desk(&json!({ "message": "x", "to": ["solver"] }))),
     )
     .await;
@@ -253,7 +279,7 @@ async fn refusals_are_the_vocabularys_own_sentences() {
     );
     let (_, reply) = post(
         port,
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call(
             "ask",
             &on_desk(&json!({ "message": "?", "to": ["solver", "checker"] })),
@@ -266,7 +292,7 @@ async fn refusals_are_the_vocabularys_own_sentences() {
     );
     let (_, reply) = post(
         port,
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call("ask", &on_desk(&json!({ "message": "?", "to": "lead" }))),
     )
     .await;
@@ -276,7 +302,7 @@ async fn refusals_are_the_vocabularys_own_sentences() {
     );
     let (_, reply) = post(
         port,
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call("ask", &on_desk(&json!({ "message": "?", "to": "johnny" }))),
     )
     .await;
@@ -293,7 +319,7 @@ async fn an_ask_is_recorded_and_told_the_answer_comes_later() {
     tools.register("lead", desk_dispatch());
     let (_, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call(
             "ask",
             &on_desk(&json!({ "message": "is it tight?", "to": "solver" })),
@@ -325,7 +351,7 @@ async fn read_returns_the_window_the_host_refreshed_and_records_nothing() {
     tools.window("lead", vec!["one".into(), "two".into(), "three".into()]);
     let (_, reply) = post(
         server.port(),
-        "/seat/lead",
+        &path_of(&server, "lead"),
         call(
             "read",
             &json!({ "limit": 2, "chat": "engineering", "parent": null }),
@@ -354,7 +380,7 @@ async fn an_ask_inside_a_conversation_is_refused_with_what_to_do_instead() {
     tools.register("solver", dispatch());
     let (_, reply) = post(
         server.port(),
-        "/seat/solver",
+        &path_of(&server, "solver"),
         call("ask", &in_thread(&json!({ "message": "?", "to": "lead" }))),
     )
     .await;
@@ -363,7 +389,7 @@ async fn an_ask_inside_a_conversation_is_refused_with_what_to_do_instead() {
     assert!(tools.drain("solver").is_empty());
     let (_, reply) = post(
         server.port(),
-        "/seat/solver",
+        &path_of(&server, "solver"),
         call(
             "broadcast",
             &in_thread(&json!({ "message": "work for someone" })),
@@ -382,7 +408,7 @@ async fn a_refusal_is_drained_by_the_host_with_the_sentence_the_seat_read() {
     tools.register("solver", dispatch());
     let (_, reply) = post(
         server.port(),
-        "/seat/solver",
+        &path_of(&server, "solver"),
         call("ask", &in_thread(&json!({ "message": "?", "to": "lead" }))),
     )
     .await;
@@ -401,4 +427,80 @@ async fn a_refusal_is_drained_by_the_host_with_the_sentence_the_seat_read() {
         tools.drain("solver").is_empty(),
         "a refusal records no call"
     );
+}
+
+#[tokio::test]
+async fn an_endpoint_is_a_capability_and_a_wrong_one_learns_nothing() {
+    let (tools, server) = stand_up().await;
+    tools.register("lead", dispatch());
+    // The seat's name with someone else's capability, or none at all.
+    for path in [
+        format!(
+            "/seat/lead/{}",
+            path_of(&server, "solver").rsplit('/').next().unwrap()
+        ),
+        "/seat/lead/".to_owned(),
+        "/seat/lead".to_owned(),
+    ] {
+        let (status, reply) = post(server.port(), &path, rpc(1, "tools/list", &json!({}))).await;
+        assert_eq!(status, 200);
+        assert_eq!(reply["error"]["message"], "unknown endpoint");
+        assert!(
+            reply.get("result").is_none(),
+            "no tools are listed at {path}"
+        );
+        let (_, reply) = post(
+            server.port(),
+            &path,
+            call("complete_episode", &on_desk(&json!({ "message": "hi" }))),
+        )
+        .await;
+        assert_eq!(reply["error"]["message"], "unknown endpoint");
+        let shown = reply.to_string();
+        assert!(
+            !shown.contains("engineering") && !shown.contains("42"),
+            "the turn lead is in is not disclosed: {shown}"
+        );
+    }
+    assert!(tools.drain("lead").is_empty());
+    assert!(
+        tools.drain_refusals("lead").is_empty(),
+        "nothing reached the seat"
+    );
+    // With the capability, the same call is served.
+    let (_, reply) = post(
+        server.port(),
+        &path_of(&server, "lead"),
+        call("complete_episode", &in_thread(&json!({ "message": "hi" }))),
+    )
+    .await;
+    assert!(reply["result"].get("isError").is_none());
+    assert_eq!(tools.drain("lead").len(), 1);
+}
+
+/// Write raw bytes and report whether the server closed the connection.
+async fn is_closed_after(port: u16, bytes: &[u8]) -> bool {
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    stream.write_all(bytes).await.unwrap();
+    stream.flush().await.unwrap();
+    let mut sink = [0_u8; 64];
+    let read = tokio::time::timeout(std::time::Duration::from_secs(5), stream.read(&mut sink))
+        .await
+        .expect("the server answers or closes")
+        .unwrap_or(0);
+    read == 0
+}
+
+#[tokio::test]
+async fn an_oversized_head_or_body_closes_the_connection() {
+    let (_tools, server) = stand_up().await;
+    let path = path_of(&server, "lead");
+    let mut long_head = format!("POST {path} HTTP/1.1\r\nX-Pad: ");
+    long_head.push_str(&"a".repeat(9 * 1024));
+    assert!(is_closed_after(server.port(), long_head.as_bytes()).await);
+    let huge_body = format!("POST {path} HTTP/1.1\r\nContent-Length: 2000000\r\n\r\n");
+    assert!(is_closed_after(server.port(), huge_body.as_bytes()).await);
+    // A well-formed request on a fresh connection is still served.
+    let (status, _) = post(server.port(), &path, rpc(1, "initialize", &json!({}))).await;
+    assert_eq!(status, 200);
 }

@@ -7,7 +7,11 @@
 //! **The seat is the endpoint it dialled.** `/seat/<id>` is the whole of a
 //! caller's identity; nothing in a payload can change who is calling.
 
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+use std::hash::{BuildHasher, RandomState};
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde_json::{Value, json};
 use tinyhivemind::speech::{ToolCall, Utterance, UtteranceRejection, interpret};
@@ -22,11 +26,20 @@ use crate::{Error, Result};
 /// The MCP protocol version negotiated. Echoed exactly, or the client refuses.
 pub const PROTOCOL_VERSION: &str = "2025-11-25";
 
+/// A started request must finish within this; an idle connection may wait.
+const REQUEST_DEADLINE: Duration = Duration::from_secs(30);
+/// The most a request head may run to before the connection is closed.
+const MAX_HEAD_BYTES: usize = 8 * 1024;
+/// The most a body may declare before the connection is closed.
+const MAX_BODY_BYTES: usize = 1024 * 1024;
+
 /// A running server: the port a client dials, and the means to stop it.
 #[derive(Debug)]
 pub struct Server {
     port: u16,
     stop: Option<oneshot::Sender<()>>,
+    /// One capability per served seat, minted when the server bound.
+    capabilities: Arc<BTreeMap<String, String>>,
 }
 
 impl Server {
@@ -36,10 +49,20 @@ impl Server {
         self.port
     }
 
-    /// The endpoint one seat is given: `http://127.0.0.1:<port>/seat/<id>`.
+    /// The endpoint one seat is given:
+    /// `http://127.0.0.1:<port>/seat/<id>/<capability>`.
+    ///
+    /// The capability is minted when the server binds and is what makes the
+    /// endpoint an identity rather than a label: a process that can reach
+    /// loopback and read `tools/list` still cannot speak as a seat it was not
+    /// handed. A seat this server does not serve gets an endpoint it refuses.
     #[must_use]
     pub fn endpoint(&self, seat: &str) -> String {
-        format!("http://127.0.0.1:{}/seat/{seat}", self.port)
+        format!(
+            "http://127.0.0.1:{}/seat/{seat}/{}",
+            self.port,
+            self.capabilities.get(seat).map_or("", String::as_str)
+        )
     }
 
     /// Stop accepting connections. Open sessions finish their current call.
@@ -64,10 +87,17 @@ impl Drop for Server {
 ///
 /// Returns [`Error::Bind`] when loopback cannot be bound.
 pub async fn serve(tools: Arc<EpisodeTools>) -> Result<Server> {
+    serve_with(tools, REQUEST_DEADLINE).await
+}
+
+/// [`serve`], with the deadline a started request must finish within.
+pub(crate) async fn serve_with(tools: Arc<EpisodeTools>, deadline: Duration) -> Result<Server> {
     let listener = TcpListener::bind(("127.0.0.1", 0))
         .await
         .map_err(Error::Bind)?;
     let port = listener.local_addr().map_err(Error::Bind)?.port();
+    let capabilities = Arc::new(capabilities(&tools.seats()));
+    let served = Arc::clone(&capabilities);
     let (stop, mut stopped) = oneshot::channel();
     tokio::spawn(async move {
         loop {
@@ -76,8 +106,9 @@ pub async fn serve(tools: Arc<EpisodeTools>) -> Result<Server> {
                 accepted = listener.accept() => {
                     let Ok((stream, _)) = accepted else { continue };
                     let tools = Arc::clone(&tools);
+                    let served = Arc::clone(&served);
                     tokio::spawn(async move {
-                        let _ = session(stream, tools).await;
+                        let _ = session(stream, tools, served, deadline).await;
                     });
                 }
             }
@@ -86,24 +117,67 @@ pub async fn serve(tools: Arc<EpisodeTools>) -> Result<Server> {
     Ok(Server {
         port,
         stop: Some(stop),
+        capabilities,
     })
 }
 
+/// One unguessable capability per seat.
+///
+/// The keys behind `RandomState` are drawn from the operating system, so a
+/// token cannot be derived from a seat's name, from another seat's token, or
+/// from a previous server's. Two lanes make it 128 bits wide.
+fn capabilities(seats: &[String]) -> BTreeMap<String, String> {
+    let salt = RandomState::new();
+    seats
+        .iter()
+        .map(|seat| {
+            let mut token = String::with_capacity(32);
+            for lane in 0_u8..2 {
+                let _ = write!(token, "{:016x}", salt.hash_one((lane, seat.as_str())));
+            }
+            (seat.clone(), token)
+        })
+        .collect()
+}
+
+/// The seat a path speaks for, if it carries that seat's capability.
+fn seat_for(path: &str, capabilities: &BTreeMap<String, String>) -> Option<String> {
+    let rest = path.strip_prefix("/seat/")?;
+    let (seat, token) = rest.split_once('/')?;
+    (capabilities.get(seat)? == token).then(|| seat.to_owned())
+}
+
 /// One connection. The client keeps it alive across calls, so this loops.
-async fn session(mut stream: TcpStream, tools: Arc<EpisodeTools>) -> std::io::Result<()> {
+async fn session(
+    mut stream: TcpStream,
+    tools: Arc<EpisodeTools>,
+    capabilities: Arc<BTreeMap<String, String>>,
+    deadline: Duration,
+) -> std::io::Result<()> {
     let mut buffer = Vec::new();
     loop {
-        let Some((path, body, consumed)) = read_request(&mut stream, &mut buffer).await? else {
+        let Some((path, body, consumed)) = read_request(&mut stream, &mut buffer, deadline).await?
+        else {
             return Ok(());
         };
         buffer.drain(..consumed);
-        let seat = path.rsplit('/').next().unwrap_or_default().to_owned();
         let request: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
         let method = request
             .get("method")
             .and_then(Value::as_str)
             .unwrap_or_default();
         let id = request.get("id").cloned().unwrap_or(Value::Null);
+        // Without the seat's capability there is no seat, and nothing to
+        // learn: not the tools, not the turn a seat is in.
+        let Some(seat) = seat_for(&path, &capabilities) else {
+            let response = json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": { "code": -32001, "message": "unknown endpoint" },
+            });
+            write_response(&mut stream, Some(&response)).await?;
+            continue;
+        };
         let response = match method {
             "initialize" => Some(json!({
                 "jsonrpc": "2.0",
@@ -135,7 +209,8 @@ async fn session(mut stream: TcpStream, tools: Arc<EpisodeTools>) -> std::io::Re
     }
 }
 
-/// One `tools/call`: check the caller, check the turn, read the call, record it.
+/// One `tools/call` from an authenticated seat: check the turn, read the call,
+/// record it.
 fn call(tools: &EpisodeTools, seat: &str, request: &Value, id: &Value) -> Value {
     let params = request.get("params").cloned().unwrap_or(Value::Null);
     let name = params
@@ -151,9 +226,6 @@ fn call(tools: &EpisodeTools, seat: &str, request: &Value, id: &Value) -> Value 
         refusal(id, text)
     };
 
-    if !tools.knows(seat) {
-        return refuse(&format!("no seat named `{seat}` is served here"));
-    }
     let Some(dispatch) = tools.open_turn(seat) else {
         return refuse("no turn is open for you, so nothing you call now can be recorded");
     };
@@ -259,6 +331,7 @@ fn refusal(id: &Value, text: &str) -> Value {
 async fn read_request(
     stream: &mut TcpStream,
     buffer: &mut Vec<u8>,
+    deadline: Duration,
 ) -> std::io::Result<Option<(String, Vec<u8>, usize)>> {
     loop {
         if let Some(head_end) = headers_end(buffer) {
@@ -269,13 +342,28 @@ async fn read_request(
                 .and_then(|line| line.split_whitespace().nth(1))
                 .unwrap_or("/")
                 .to_owned();
-            let total = head_end + content_length(&head);
+            let length = content_length(&head);
+            if length > MAX_BODY_BYTES {
+                return Ok(None);
+            }
+            let total = head_end + length;
             if buffer.len() >= total {
                 return Ok(Some((path, buffer[head_end..total].to_vec(), total)));
             }
+        } else if buffer.len() > MAX_HEAD_BYTES {
+            return Ok(None);
         }
         let mut chunk = [0_u8; 4096];
-        let read = stream.read(&mut chunk).await?;
+        // An idle connection may wait as long as it likes; a request that has
+        // started must finish within the deadline, or the connection closes.
+        let read = if buffer.is_empty() {
+            stream.read(&mut chunk).await?
+        } else {
+            match tokio::time::timeout(deadline, stream.read(&mut chunk)).await {
+                Ok(read) => read?,
+                Err(_) => return Ok(None),
+            }
+        };
         if read == 0 {
             return Ok(None);
         }

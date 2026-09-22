@@ -74,3 +74,16 @@ rendering for that harness moves to its adapter crate and this server becomes
 optional for it. If every bound harness does, the crate is removed and this
 record is superseded. What would not reverse it: a seam that requires the
 harness to know the episode tools by name.
+
+## Amendments
+
+- **2026-09-22, four tools.** `post` is withheld as well as `dm`, by the sixth
+  live run's finding that a call with no consequence is a call a seat makes
+  instead of its work; see `docs/experiments/2026-09-22-live-through-the-crate.md`.
+  The served set is `broadcast`, `ask`, `complete_episode` and `read`, and
+  "the same five tools" above reads "four".
+- **2026-09-22, the endpoint is a capability.** `/seat/<id>` became
+  `/seat/<id>/<capability>`, the capability minted when the server binds and
+  handed to the seat by the host. A process that can reach loopback and read
+  `tools/list` cannot speak as a seat it was not handed, and learns nothing
+  about the turn one is in. The identity is still the endpoint.

@@ -237,3 +237,21 @@ fn a_payload_from_before_the_history_fails_to_decode() {
     });
     assert!(serde_json::from_value::<CompletionEpisodeState>(legacy).is_err());
 }
+
+#[test]
+fn a_replayed_completion_stays_idempotent_after_reassignment() {
+    let once = apply_completion(&opened(), "solver", Sequence(11)).expect("solver is assigned");
+    let again = apply_assignment(&once, ["solver"], Sequence(12)).expect("solver is idle");
+    // The durable medium redelivers the completion that closed the first
+    // assignment, after the second was opened. It closed nothing new.
+    let replayed = apply_completion(&again, "solver", Sequence(11))
+        .expect("a redelivered completion is idempotent whatever came after it");
+    assert_eq!(replayed, again);
+    assert!(
+        matches!(
+            apply_completion(&again, "solver", Sequence(12)),
+            Err(Error::StaleCompletionEvent { .. })
+        ),
+        "an event not later than the open assignment is still stale"
+    );
+}

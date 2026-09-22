@@ -23,8 +23,9 @@ Three things it is not, and each is a decision:
   `complete_episode`, `read`.
 
 **Identity is structural.** Each seat is given its own endpoint,
-`/seat/<agent_id>`, so the caller is known from the URL it dialled rather than
-from a field it filled in. Every call also names the `chat` and `parent`
+`/seat/<agent_id>/<capability>`, the capability minted when the server binds,
+so the caller is known from the URL it was handed rather than from a field it
+filled in -- and a process that merely reaches loopback cannot speak as a seat. Every call also names the `chat` and `parent`
 thread the host told the seat it is in, and the server checks both against
 the turn the host registered for that seat -- a confused model that names the
 wrong thread is refused, and two overlapping turns for one seat are told

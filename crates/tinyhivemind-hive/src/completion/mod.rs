@@ -234,17 +234,23 @@ pub fn apply_completion(
             agent_id: agent_id.to_owned(),
         });
     };
+    // Redelivery of an event already recorded, which a durable medium may do
+    // at any time -- including after the participant has been assigned again,
+    // so the whole history is checked rather than the record that happens to
+    // be last. Checked before the open test, because the record it names is
+    // closed precisely because this event closed it.
+    if participant
+        .assignments
+        .iter()
+        .any(|record| record.completed_at == Some(at))
+    {
+        return Ok(next);
+    }
     let Some(record) = participant.assignments.last_mut() else {
         return Err(Error::NoOpenAssignment {
             agent_id: agent_id.to_owned(),
         });
     };
-    // Redelivery of the very event already recorded, which a durable medium may
-    // do at any time. Checked before the open test, because the record it names
-    // is closed precisely because this event closed it.
-    if record.completed_at == Some(at) {
-        return Ok(next);
-    }
     if record.completed_at.is_some() {
         return Err(Error::NoOpenAssignment {
             agent_id: agent_id.to_owned(),
