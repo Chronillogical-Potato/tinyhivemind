@@ -219,6 +219,9 @@ struct Child {
     turns: u64,
     /// The last thing the seat asked said in it: the conclusion, cross-posted.
     last_by_askee: Option<String>,
+    /// Whether the seat asked has been told once that a reply without a tool
+    /// call reached nobody.
+    nudged: bool,
 }
 
 /// Where a turn is running, for the host's own bookkeeping.
@@ -651,13 +654,34 @@ async fn run() -> anyhow::Result<()> {
             let events = tools.drain(&seat_id);
             if events.is_empty() {
                 eprintln!("[no tool call] @{seat_id}{where_}");
+                // A seat asked a question that replies in prose has answered
+                // nobody, and nothing would wake it again. Once, it is told
+                // so and owed another turn; a second silence stands.
+                if let Lane::Thread(root) = lane
+                    && let Some(child) = children.get_mut(&root)
+                    && seat_id == child.askee
+                    && child.state.revision() == 0
+                    && !child.nudged
+                {
+                    child.nudged = true;
+                    journal.append(
+                        "desk",
+                        "your reply reached nobody: nothing outside a tool call is recorded. \
+                         Say it again with `post`, then `complete_episode` when you are done.",
+                        Some(root),
+                        None,
+                    );
+                    child.state.owe_turn(&seat_id);
+                    eprintln!("[nudged] @{seat_id} in thread {}", root.0);
+                }
             }
             for event in events {
                 let ToolCall::Speak(utterance) = event.call else {
                     continue;
                 };
                 match (lane, &utterance) {
-                    (Lane::Desk, _) | (Lane::Thread(_), Utterance::Broadcast { .. }) => {
+                    (Lane::Desk, _)
+                    | (Lane::Thread(_), Utterance::Broadcast { .. } | Utterance::Ask { .. }) => {
                         desk_events.push((seat_id.clone(), utterance));
                     }
                     (Lane::Thread(root), _) => {
@@ -675,13 +699,7 @@ async fn run() -> anyhow::Result<()> {
                 utterance,
                 Utterance::Post { .. } | Utterance::CompleteEpisode { .. }
             ) {
-                journal.append(
-                    "desk",
-                    "`ask` is not available inside a conversation. Answer with `post`, or \
-                     `complete_episode` to conclude your side.",
-                    Some(root),
-                    None,
-                );
+                // Only `dm` can reach here, and it is not served.
                 continue;
             }
             let sequence = journal.append(&seat_id, &describe(&utterance), Some(root), None);
@@ -753,6 +771,7 @@ async fn run() -> anyhow::Result<()> {
                                             state: child_state,
                                             turns: 0,
                                             last_by_askee: None,
+                                            nudged: false,
                                         },
                                     );
                                 }
@@ -907,7 +926,11 @@ async fn conclude(
         child.root.0,
         child.asker,
         child.askee,
-        if forced { " (out of turns)" } else { "" }
+        if forced {
+            " (nothing due, or out of turns)"
+        } else {
+            ""
+        }
     );
     let sequence = journal.append(
         &child.askee,

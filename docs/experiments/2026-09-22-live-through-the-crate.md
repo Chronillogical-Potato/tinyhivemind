@@ -182,6 +182,44 @@ that position by the refusal above.
 The seam held: every prompt in this run was the host's brief followed by
 `EpisodeBrief::render()`, and the standing contract was the tool specs.
 
+## The fifth run: both at once
+
+Same desk, with the desk-wake removed and in-thread broadcasts going to the
+desk. `16` turns, `13` waves, `2` routes, `4` conversations, and quiescence.
+
+**The two halves met.** `lead` asked all three specialists this time, each ask
+opened a thread, and `theory` and `researcher` answered in theirs with their
+facts (rows 5-9) -- `theory`'s is the fullest structural analysis any run
+produced. `lead` closed both, diagnosed, **broadcast, and it landed on
+`solver`**; `solver` stated the migration on the desk (row 20), the piece
+every earlier run reached late or not at all, and opened a thread back to
+`lead` to ask for code, which `lead` answered honestly (row 22). Handoff chain
+and conversations, in one episode.
+
+**Two defects, both the shape of run four's.**
+
+*A reply without a tool call stranded a thread.* `solver`'s first thread turn
+was 221 characters of prose and no call; nothing was recorded, so it was not
+owed another turn, `lead` was held out of a thread the askee had not spoken
+in, and the host closed it empty (row 16). The seat asked is now told once
+that its reply reached nobody and is owed one more turn -- a host call,
+`owe_turn`, since the seat has by then run and been shown everything.
+
+*A refused `ask` inside a thread produced a phantom one.* `solver` tried to
+ask `researcher` from inside its thread with `lead`, was refused (row 25),
+then said it had asked (rows 26-27) and completed "waiting" on an answer that
+could not come (row 31). The second time a refusal inside a thread has made a
+seat claim the call. There are now no refusals inside a conversation: an `ask`
+made there opens a new conversation on the desk, as a broadcast hands off
+there. ADR 0023 is amended to say so.
+
+*And one bundle.* `lead`'s broadcast carried both deliverables in one message
+(row 17), so routing placed both with `solver` and `checker` never ran. The
+`broadcast` description now says one piece of work per call.
+
+The root cause was complete for the first time -- library swap *and* the
+migration that never ran -- and neither deliverable was produced.
+
 ## What this changes
 
 Across three runs every defect was in what the host owed the seats, not in

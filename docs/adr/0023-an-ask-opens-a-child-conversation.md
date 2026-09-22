@@ -41,8 +41,12 @@ turn (D24), and the host assembles the whole conversation into that turn's
 context -- the seat's shared context across every channel it is in.
 
 `HostAction::DeliverDm` for an ask *is* the signal to open the child; there is
-no second action. A conversation may not open another (no nested asks) and
-may not broadcast; both are refused by the host to the seat that tried.
+no second action. An `ask` or a `broadcast` made *inside* a conversation is
+desk work -- it opens a new conversation on the desk, or hands work off there
+-- because two live runs showed that refusing a call inside a thread makes the
+seat claim it made the call anyway. Nothing a seat can call is refused inside
+a conversation; a conversation has no nesting because every conversation is a
+thread of the desk, keyed by the row that opened it.
 
 ## Consequences
 

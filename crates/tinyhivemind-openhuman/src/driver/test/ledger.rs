@@ -572,3 +572,22 @@ fn a_row_from_a_seat_not_yet_shown_its_assignment_does_not_count_as_running_for_
         "and its completion cannot close work it has not been shown",
     );
 }
+
+#[test]
+fn a_host_may_say_a_seat_is_owed_another_turn() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let state = driver.start(episode(&["one", "two"])).expect("state");
+    let mut ran = state.clone();
+    ran.turn_started("one");
+    ran.delivered("one", Sequence(0));
+    assert!(
+        !round_ids(&driver, &ran).contains(&"one".to_owned()),
+        "ran for what it holds and shown everything: not owed",
+    );
+    ran.owe_turn("one");
+    assert!(
+        round_ids(&driver, &ran).contains(&"one".to_owned()),
+        "the host said the turn did not count, so it is owed again",
+    );
+}

@@ -103,6 +103,17 @@ impl DriverState {
         }
     }
 
+    /// Record that a seat's last turn did not count: it is owed another for
+    /// the assignment it holds.
+    ///
+    /// The host's call for a turn that returned without saying anything the
+    /// episode could record -- a seat asked a question that replied in prose
+    /// and called no tool. Without it the seat has run and been shown
+    /// everything, so nothing would wake it again.
+    pub fn owe_turn(&mut self, agent_id: &str) {
+        self.seen.ran_for.remove(agent_id);
+    }
+
     /// Whether the episode is actually over.
     ///
     /// [`CompletionStep::Complete`] is necessary and not sufficient: between a

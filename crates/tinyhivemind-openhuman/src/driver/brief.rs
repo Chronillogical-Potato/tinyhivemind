@@ -198,8 +198,8 @@ impl EpisodeBrief {
         format!(
             "## A private conversation with @{other} (thread {})\n{}\n\n{role} Only the two of \
              you read this thread.\n\nEvery tool call must carry \"chat\": \"{}\" and \
-             \"parent\": \"{}\". `ask` is not available inside a conversation; a `broadcast` \
-             made here goes to the desk.",
+             \"parent\": \"{}\". An `ask` or a `broadcast` made here goes to the desk: it opens a \
+             new conversation, or hands work off, exactly as it would there.",
             root.0,
             rows_or_nothing(&self.new_rows),
             self.chat,

@@ -70,7 +70,8 @@ const SPECS: &[ToolSpec] = &[
         description: "Send work or a finding to whichever teammates are semantically best placed \
                       to take it. The host routes this message with one TypeSafe Choice over the \
                       currently eligible team; it is not a broadcast-to-all fan-out. Call this \
-                      when the right recipient is about the meaning, not a known @id.",
+                      when the right recipient is about the meaning, not a known @id. One piece \
+                      of work per call: two things for two seats are two calls.",
         parameters: &[ToolParameter {
             name: "message",
             description: Some(
