@@ -33,6 +33,14 @@ the current episode participants other than the author. The driver selects
 each author's fallback from those participants in deterministic scheduling
 order.
 
+Above the driver sits the `Conductor`: one episode as a host steps it, the
+desk and a child episode for every conversation an `ask` opens, with the
+rules between them -- conversations run first and conclude to the asker, a
+stalled seat or a silent askee is told once, what a wave said lands in the
+channel it belongs to, a refused completion is explained, walls end what
+will not. It appends nothing: it hands the host notes to append, commits to
+append and report the sequence of, and events to log.
+
 The host still owns the runtime and sessions, the transcript, durable append
 operations, and scheduling. See [`src/README.md`](src/README.md) for the
 source layout, and `examples/bench/` for the driver priced with no model.

@@ -58,8 +58,11 @@ corpus and paid campaign described in
 ## `conducted`: one loop, two runners
 
 `src/bin/conducted.rs` steps one completion-driven episode the way a host steps
-it: propose a round, run it, commit what it said, report delivery, repeat until
-quiescent. The journal, the lanes, the briefs and the driver are the host's.
+it: begin a wave, run the turns the `Conductor` proposes, record what each
+called, then append the notes and commits it hands back until the wave
+settles. The journal, the prompt and the log are the host's; the
+conversations, nudges, sorting, refusals and walls are the conductor's, in
+`tinyhivemind-driver`.
 How a seat's turn *runs* is behind one seam, `SeatRunner`, with two
 implementations the loop cannot tell apart:
 
