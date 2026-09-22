@@ -135,8 +135,10 @@ where
             settle(journal, &mut conductor, step).await?;
         }
         let turns = conductor.turns()?;
-        // One watermark for the wave: nothing is appended while its turns
-        // are prepared, so every seat is shown through the same row.
+        // One watermark for the wave, and every read bounded by it: the
+        // host's log may grow while the turns are prepared, and a row above
+        // the watermark shown now would be shown again next turn, since a
+        // seat is recorded as shown through the watermark and no further.
         let latest = latest(journal.log()).await?;
         let mut jobs: Vec<TurnJob> = Vec::with_capacity(turns.len());
         for turn in &turns {
@@ -144,10 +146,10 @@ where
                 thread_root: turn.thread(),
                 ..desk.clone()
             };
-            let rows = rows_above(journal.log(), &channel, &turn.seat, turn.since).await?;
+            let rows = rows_above(journal.log(), &channel, &turn.seat, turn.since, latest).await?;
             let window = match turn.thread() {
                 None => rows.clone(),
-                Some(_) => rows_above(journal.log(), &channel, &turn.seat, None).await?,
+                Some(_) => rows_above(journal.log(), &channel, &turn.seat, None, latest).await?,
             };
             runner.open(
                 &turn.seat,
@@ -169,7 +171,7 @@ where
                     thread_root: Some(root),
                     ..desk.clone()
                 };
-                let whole = rows_above(journal.log(), &thread, &turn.seat, None).await?;
+                let whole = rows_above(journal.log(), &thread, &turn.seat, None, latest).await?;
                 transcripts.insert(root, whole);
             }
             let brief = conductor.open_turn(turn, latest, rows, |root| {
@@ -269,20 +271,28 @@ async fn latest(log: &dyn SessionLog) -> Result<Option<Sequence>> {
     Ok(page.messages.first().map(|row| row.sequence))
 }
 
-/// The rows of `conversation` above `since` that `seat` may read, rendered,
-/// newest [`SESSION_WINDOW`] of them; every row for `None`.
+/// The rows of `conversation` above `since` and through `latest` that
+/// `seat` may read, rendered, newest [`SESSION_WINDOW`] of them: every row
+/// for a `since` of `None`, and none for a `latest` of `None`, the wave's
+/// watermark on a log that had no rows.
 async fn rows_above(
     log: &dyn SessionLog,
     conversation: &Conversation,
     seat: &str,
     since: Option<Sequence>,
+    latest: Option<Sequence>,
 ) -> Result<Vec<String>> {
+    let Some(latest) = latest else {
+        return Ok(Vec::new());
+    };
     let rows = project_session(
         log,
         &SessionQuery {
             conversation: conversation.clone(),
             viewer: Viewer::Agent { id: seat.into() },
-            before: None,
+            // Exclusive, so one above the watermark; nothing is above the
+            // last sequence, so that reads unbounded rather than one short.
+            before: latest.0.checked_add(1).map(Sequence),
             window: SESSION_WINDOW,
         },
     )
