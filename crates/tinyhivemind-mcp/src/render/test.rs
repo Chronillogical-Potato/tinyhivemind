@@ -15,17 +15,15 @@ fn names(seats: &[String]) -> Vec<String> {
 }
 
 #[test]
-fn serves_the_vocabulary_minus_dm_in_its_order() {
-    assert_eq!(
-        names(&[]),
-        ["post", "broadcast", "ask", "complete_episode", "read"]
-    );
+fn serves_the_vocabulary_minus_post_and_dm_in_its_order() {
+    assert_eq!(names(&[]), ["broadcast", "ask", "complete_episode", "read"]);
     assert!(!serves("dm"));
+    assert!(!serves("post"));
     assert!(serves("ask"));
     assert_eq!(
         tool_specs().len(),
-        names(&[]).len() + 1,
-        "exactly one tool is withheld"
+        names(&[]).len() + 2,
+        "exactly two tools are withheld"
     );
 }
 

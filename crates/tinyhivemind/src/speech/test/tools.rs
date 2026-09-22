@@ -110,8 +110,10 @@ fn speaking_is_described_as_the_only_way_to_be_heard() {
         .find(|spec| spec.name == "complete_episode")
         .expect("completion is served");
     assert!(
-        complete.description.contains("finished your assigned work"),
-        "a seat is told completion is about its own assignment",
+        complete
+            .description
+            .contains("that message is your finding"),
+        "a seat is told its completion message is how a fact reaches the desk",
     );
     assert!(tool_specs().iter().any(|spec| spec.name == "broadcast"));
     assert!(!tool_specs().iter().any(|spec| spec.name == "close"));

@@ -70,8 +70,8 @@ const SPECS: &[ToolSpec] = &[
         description: "Send work or a finding to whichever teammates are semantically best placed \
                       to take it. The host routes this message with one TypeSafe Choice over the \
                       currently eligible team; it is not a broadcast-to-all fan-out. Call this \
-                      when the right recipient is about the meaning, not a known @id. One piece \
-                      of work per call: two things for two seats are two calls.",
+                      when you hold work that belongs to another seat, whoever that turns out \
+                      to be. One piece of work per call: two things for two seats are two calls.",
         parameters: &[ToolParameter {
             name: "message",
             description: Some(
@@ -106,11 +106,12 @@ const SPECS: &[ToolSpec] = &[
         name: "ask",
         description: "Open a private conversation with one named seat about something you \
                       need from it. It runs on its own, not while you wait: say what you need, \
-                      then end your turn, and what the two of you concluded reaches you on a \
-                      later turn. You will not be able to finish until every conversation you \
-                      opened has concluded, so nothing you asked for can be lost. It is a \
-                      question, not a handoff — work that belongs to another seat is \
-                      `broadcast`. The seat you ask keeps whatever it was already doing.",
+                      then end your turn, and their answer reaches you on a later turn. You \
+                      will not be able to finish until every question you asked has been \
+                      answered, so nothing you asked for can be lost. If their answer raises \
+                      another question, ask again. It is a question, not a handoff — work that \
+                      belongs to another seat is `broadcast`. The seat you ask keeps whatever it \
+                      was already doing.",
         parameters: &[
             ToolParameter {
                 name: "to",
@@ -130,13 +131,17 @@ const SPECS: &[ToolSpec] = &[
     },
     ToolSpec {
         name: "complete_episode",
-        description: "Say one last thing and report that you have finished your assigned work in \
-                      this episode. Call this instead of `post` only when you have no open step. \
-                      The episode completes after every currently assigned agent has called it; \
-                      a later routed broadcast may assign new work and reopen that recipient.",
+        description: "Conclude your part with one message, and that message is your finding: \
+                      what you established, and why nothing is left open on your side. This is \
+                      how a fact reaches the desk. Call it when you have no open step -- or, when \
+                      a peer asked you something, as your answer. The episode completes after \
+                      every assigned seat has called it; a later routed broadcast may assign new \
+                      work and reopen a seat.",
         parameters: &[ToolParameter {
             name: "message",
-            description: Some("The result, and why nothing is left open."),
+            description: Some(
+                "Your finding, complete in itself: the desk reads this and nothing else you wrote.",
+            ),
             kind: ParameterKind::Text,
             required: true,
         }],

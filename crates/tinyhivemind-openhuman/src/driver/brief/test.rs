@@ -147,7 +147,7 @@ fn a_thread_brief_names_its_root_as_the_parent_and_says_which_side_the_seat_is_o
     assert_eq!(asker.parent(), Some("1".into()));
     let text = asker.render();
     assert!(text.contains("## A private conversation with @two (thread 1)\n@two: because"));
-    assert!(text.contains("You opened this conversation."));
+    assert!(text.contains("You opened this conversation"));
     assert!(text.contains("\"parent\": \"1\""));
     assert!(text.contains("An `ask` or a `broadcast` made here goes to the desk"));
     let answerer = EpisodeBrief::for_turn(

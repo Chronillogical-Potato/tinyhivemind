@@ -10,12 +10,15 @@
 use serde_json::{Map, Value, json};
 use tinyhivemind::speech::{CallArguments, ParameterKind, ToolSpec, tool_specs};
 
-/// The one vocabulary tool this server does not serve.
+/// The vocabulary tools this server does not serve.
 ///
-/// In a completion episode an `ask` is the private message that means
-/// something; offering `dm` beside it would give a seat two ways to say
-/// nearly the same thing.
-const UNSERVED: &[&str] = &["dm"];
+/// In a completion episode every call has a consequence: `ask` opens a
+/// question, `broadcast` hands work off, `complete_episode` concludes and its
+/// message is the finding. `post` is text with no consequence, and five live
+/// runs used it for status, for restating a finding the seat then completed
+/// with anyway, and for describing calls it had not made. `dm` beside `ask`
+/// is two ways to say nearly the same thing.
+const UNSERVED: &[&str] = &["dm", "post"];
 
 /// The specs this server serves, in the order a seat should meet them.
 pub(crate) fn served() -> impl Iterator<Item = &'static ToolSpec> {

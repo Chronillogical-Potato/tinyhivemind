@@ -3,8 +3,7 @@
 The room's tools, served over MCP, so an agent harness that cannot be handed a
 native tool can still move a completion episode.
 
-`tinyhivemind::speech` states what a seat may say -- `post`, `broadcast`,
-`ask`, `complete_episode`, `read` -- once, as data, and says a host "renders
+`tinyhivemind::speech` states what a seat may say once, as data, and says a host "renders
 `tool_specs` into its own tool language" and "maps its own wire onto
 `CallArguments`". This crate is that rendering for MCP, and nothing more:
 `tools/list` is `tool_specs()` as JSON Schema, `tools/call` is the wire mapped
@@ -20,7 +19,8 @@ Three things it is not, and each is a decision:
 - **It runs no turn.** An `ask` becomes an event the driver schedules; the
   server never holds an agent handle.
 - **It depends on no harness.** `tinyhivemind`, `tokio`, `serde_json`. Any
-  MCP-capable harness gets the same five tools.
+  MCP-capable harness gets the same four tools: `broadcast`, `ask`,
+  `complete_episode`, `read`.
 
 **Identity is structural.** Each seat is given its own endpoint,
 `/seat/<agent_id>`, so the caller is known from the URL it dialled rather than
@@ -36,6 +36,8 @@ this crate is the exception and what would end it. It is in neither list
 `.github/scripts/assert-pure.sh` guards, and it must stay out of every crate
 that is.
 
-`dm` is in the vocabulary and is not served: in a completion episode an `ask`
-is the private message that means something, and one way to say a thing is
-enough.
+`post` and `dm` are in the vocabulary and are not served. In a completion
+episode every call has a consequence -- a question opened, work handed off, a
+finding concluded -- and text with no consequence turned out, over five live
+runs, to be status, repetition, and the description of calls never made. A
+fact reaches the desk as a completion's message.

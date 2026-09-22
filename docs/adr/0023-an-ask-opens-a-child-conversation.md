@@ -28,8 +28,14 @@ asker with that conversation in its context. This record restores it.
 
 An `ask` opens a **child conversation**: a completion episode whose
 conversation is the parent desk with `thread_root` at the ask row, whose
-participants are the asker and the seat asked, run by the same driver to its
-own quiescence. A turn in it is registered as that thread, and every tool call
+participant is the seat asked -- the asker is recorded by the host, as D22
+had it -- run by the same driver to its own quiescence. One question, one
+answer: the seat asked concludes with `complete_episode`, whose message is
+the answer; if the answer raises another question, the asker asks again, and
+that is a new conversation. `post` is not served in an episode at all: a fact
+reaches the desk as a completion's message, work reaches a seat as a
+broadcast, a question reaches a seat as an ask, and nothing a seat can call is
+text without a consequence. A turn in it is registered as that thread, and every tool call
 in it names the thread as its `parent` -- which is what that argument on every
 tool exists for.
 

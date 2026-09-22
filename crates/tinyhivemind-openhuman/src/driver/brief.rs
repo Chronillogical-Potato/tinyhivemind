@@ -189,11 +189,11 @@ impl EpisodeBrief {
 
     fn render_thread(&self, root: Sequence, other: &str, opened_it: bool) -> String {
         let role = if opened_it {
-            "You opened this conversation. Say what you still need with `post`; when you have \
-             what you need, call `complete_episode` to conclude your side."
+            "You opened this conversation; their answer reaches you on the desk. There is \
+             nothing for you to do here."
         } else {
-            "A peer asked you this. Answer with `post`, from what you know; ask back with \
-             `post` if you must. When you have said what you can, call `complete_episode`."
+            "A peer asked you this. Answer with `complete_episode`: its message is your answer \
+             and reaches them. If you need something from them first, `ask` them back."
         };
         format!(
             "## A private conversation with @{other} (thread {})\n{}\n\n{role} Only the two of \

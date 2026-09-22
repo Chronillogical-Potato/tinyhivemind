@@ -118,10 +118,7 @@ async fn the_handshake_echoes_the_protocol_version_and_lists_the_served_tools() 
         .iter()
         .map(|tool| tool["name"].as_str().unwrap())
         .collect();
-    assert_eq!(
-        names,
-        ["post", "broadcast", "ask", "complete_episode", "read"]
-    );
+    assert_eq!(names, ["broadcast", "ask", "complete_episode", "read"]);
     let (_, reply) = post(server.port(), "/seat/lead", rpc(3, "nope", &json!({}))).await;
     assert_eq!(reply["error"]["code"], -32601);
     assert_eq!(
@@ -167,7 +164,7 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
     let (_, reply) = post(
         server.port(),
         "/seat/lead",
-        call("post", &in_thread(&json!({ "message": "hi" }))),
+        call("complete_episode", &in_thread(&json!({ "message": "hi" }))),
     )
     .await;
     assert_eq!(reply["result"]["isError"], true);
@@ -178,7 +175,7 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
         server.port(),
         "/seat/lead",
         call(
-            "post",
+            "complete_episode",
             &json!({ "message": "hi", "chat": "marketing", "parent": "42" }),
         ),
     )
@@ -192,7 +189,10 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
     let (_, reply) = post(
         server.port(),
         "/seat/lead",
-        call("post", &json!({ "message": "hi", "chat": "engineering" })),
+        call(
+            "complete_episode",
+            &json!({ "message": "hi", "chat": "engineering" }),
+        ),
     )
     .await;
     assert_eq!(
@@ -207,7 +207,7 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
     let (_, reply) = post(
         server.port(),
         "/seat/johnny",
-        call("post", &in_thread(&json!({ "message": "hi" }))),
+        call("complete_episode", &in_thread(&json!({ "message": "hi" }))),
     )
     .await;
     assert!(text(&reply).contains("no seat named `johnny`"));
@@ -221,7 +221,7 @@ async fn refusals_are_the_vocabularys_own_sentences() {
     let (_, reply) = post(
         port,
         "/seat/lead",
-        call("post", &in_thread(&json!({ "message": "  " }))),
+        call("complete_episode", &in_thread(&json!({ "message": "  " }))),
     )
     .await;
     assert_eq!(text(&reply), "`message` must be a non-empty string");

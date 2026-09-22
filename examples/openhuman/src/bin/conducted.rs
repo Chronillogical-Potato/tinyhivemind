@@ -209,8 +209,10 @@ fn render(row: &Row) -> String {
     format!("@{}: {}", row.author, row.body)
 }
 
-/// One open conversation: a thread of the desk, run as its own episode with
-/// the asker and the seat asked as its participants (ADR 0023).
+/// One open conversation: a thread of the desk, run as its own episode whose
+/// participant is the seat asked, with the asker recorded here (ADR 0023). One
+/// question, one answer: the seat asked concludes with `complete_episode`, and
+/// its message is the answer; a follow-up is a further ask.
 struct Child {
     root: Sequence,
     asker: String,
@@ -482,11 +484,6 @@ async fn run() -> anyhow::Result<()> {
                 .map(|pending| pending.hive_agent_id.to_owned())
                 .collect();
             for seat_id in seats {
-                // The asker's question is the thread's first row. Until the
-                // seat asked has said anything, the asker has nothing to add.
-                if child.state.revision() == 0 && seat_id == child.asker {
-                    continue;
-                }
                 if !taken.insert(seat_id.clone()) {
                     continue;
                 }
@@ -756,7 +753,7 @@ async fn run() -> anyhow::Result<()> {
                                                 thread_root: Some(sequence),
                                             },
                                             sequence,
-                                            [seat_id.as_str(), askee.as_str()],
+                                            [askee.as_str()],
                                         )?)?;
                                     println!(
                                         "[ask] @{seat_id} opened a conversation with @{askee} (thread {})",
