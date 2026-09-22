@@ -76,7 +76,9 @@ crates/
 │                       # one transport port; no HTTP client or async runtime
 ├── tinyhivemind-openhuman/ # OpenHuman agent bindings and the completion driver:
 │                       # who runs next, and what a committed row means
-└── tinyhivemind-mcp/      # the room's tools served over MCP; the one socket the
+├── tinyhivemind-tools/    # the episode's tools as a record a host drains:
+│                       # definitions, the call gate, the events. Pure.
+└── tinyhivemind-mcp/      # that record served over MCP; the one socket the
                         # repository opens, by ADR 0022
 docs/
 ├── specs/              # behavior and architecture specifications

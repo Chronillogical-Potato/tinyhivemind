@@ -5,7 +5,7 @@
 //! seat and reaches the room's tools over MCP, this runner builds a session
 //! one level down, with `OpenHumanSessionHost::builder()`, on every turn. The
 //! builder takes what a spec cannot: a tool belt, a policy gate, a memory, a
-//! prompt. The belt is `tinyhivemind-mcp`'s own tool definitions rendered as
+//! prompt. The belt is `tinyhivemind-tools`'s own tool definitions rendered as
 //! native tools, each of which calls `EpisodeTools::call` directly, so a seat
 //! here is refused and acknowledged in exactly the words an MCP seat is.
 //!
@@ -45,7 +45,7 @@ use std::sync::{Arc, Mutex};
 use openhuman_core::agent::harness::AgentDefinitionRegistry;
 use openhuman_core::config::Config;
 use openhuman_core::config::schema::ephemeral_route::{self, EphemeralRoute};
-use tinyhivemind_mcp::EpisodeTools;
+use tinyhivemind_tools::EpisodeTools;
 use tinyhivemind_openhuman::AgentBinding;
 
 use super::runner::{Lane, SeatRunner, TurnJob};
@@ -88,7 +88,7 @@ impl RawRunner {
     pub fn prepare(workspace: &Path, seats: &[(&str, &str)]) -> anyhow::Result<()> {
         let agents = workspace.join("agents");
         std::fs::create_dir_all(&agents)?;
-        let belt: Vec<String> = tinyhivemind_mcp::served_specs()
+        let belt: Vec<String> = tinyhivemind_tools::served_specs()
             .map(|spec| format!("{:?}", spec.name))
             .collect();
         for (id, role) in seats {

@@ -37,12 +37,12 @@ this crate is the exception and what would end it. It is in neither list
 `.github/scripts/assert-pure.sh` guards, and it must stay out of every crate
 that is.
 
-A harness that takes native tools does not need the wire. `EpisodeTools::call`
-is the whole of what `tools/call` does -- caller, turn, thread, `interpret`,
-the record -- with the server as HTTP and JSON-RPC framing around it, and
-`tool_definitions` renders the served specs as the definitions the server
-lists. A host wraps those in its own tool type and calls in-process; an MCP
-seat and a native seat are then refused and acknowledged in the same words.
+The record itself -- `EpisodeTools`, its `call`, and `tool_definitions` --
+lives in [`tinyhivemind-tools`](../tinyhivemind-tools/README.md), which opens
+nothing; this crate is JSON-RPC over HTTP around it. A harness that takes
+native tools wraps the definitions in its own tool type and calls in-process,
+and never links this crate; an MCP seat and a native seat are refused and
+acknowledged in the same words either way.
 
 `post` and `dm` are in the vocabulary and are not served. In a completion
 episode every call has a consequence -- a question opened, work handed off, a

@@ -2768,6 +2768,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tinyhivemind",
+ "tinyhivemind-tools",
  "tokio",
 ]
 
@@ -2784,6 +2785,14 @@ dependencies = [
  "tinyhivemind-embed",
  "tinyhivemind-hive",
  "tokio",
+]
+
+[[package]]
+name = "tinyhivemind-tools"
+version = "0.2.1"
+dependencies = [
+ "serde_json",
+ "tinyhivemind",
 ]
 
 [[package]]

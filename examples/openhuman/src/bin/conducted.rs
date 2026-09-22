@@ -1,7 +1,8 @@
 //! One completion-driven episode, conducted over real OpenHuman agents.
 //!
 //! The point of this binary is not the task. It is the shape of the host:
-//! the room's tools are served by `tinyhivemind-mcp`, the loop is
+//! the room's tools are `tinyhivemind-tools`' record, served over MCP by
+//! `tinyhivemind-mcp` where a seat needs the wire, the loop is
 //! `tinyhivemind-openhuman`'s driver stepped the way a host steps it --
 //! propose a round, run it, commit what it said, report delivery, repeat until
 //! quiescent -- and what is written here is only what a host owns: agents,
@@ -49,7 +50,7 @@ use tinyhivemind_embed::{
     RoutingPolicy, RoutingRequest, RoutingSource, route_message,
 };
 use tinyhivemind_hive::{CompletionEpisodeState, apply_completion};
-use tinyhivemind_mcp::{Dispatch, EpisodeTools};
+use tinyhivemind_tools::{Dispatch, EpisodeTools};
 use tinyhivemind_openhuman::{
     BoundAgent, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver, ConversationView,
     DriverState, EpisodeBrief, Error, HiveGraph, HostAction, OpenHumanHive, standing_contract,
@@ -475,7 +476,7 @@ impl Host {
         format!(
             "{DESK_PREAMBLE}\n\n{}",
             standing_contract(
-                tinyhivemind_mcp::served_specs(),
+                tinyhivemind_tools::served_specs(),
                 self.scenario.id,
                 kind.how_to_call()
             )

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tinyhivemind::Sequence;
-use tinyhivemind_mcp::{Dispatch, EpisodeTools, SeatEvent};
+use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent};
 use tinyhivemind_openhuman::{AgentBinding, BoundAgent};
 
 /// How long one agent turn may take before the episode gives up on it.

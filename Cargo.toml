@@ -47,6 +47,9 @@ tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
 # The room's tools served over MCP, for a harness that cannot be handed a native
 # tool. The one socket the repository opens -- see ADR 0022 -- and therefore a
 # separate, explicit dependency that no pure or runtime crate may take.
+# The episode's tools as a record a host drains, and their definitions. Opens
+# nothing; `tinyhivemind-mcp` is the wire over it.
+tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
 tinyhivemind-mcp = { path = "crates/tinyhivemind-mcp" }
 # Canonical OpenHuman agent handles for the first-class embedding adapter. The
 # adapter keeps default features off because it only binds already-built agents;

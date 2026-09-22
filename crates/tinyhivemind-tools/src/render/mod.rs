@@ -140,7 +140,11 @@ pub(crate) fn arguments(params: &Value) -> Arguments {
 /// The `arguments` object of a `tools/call`, whether the client sent it as an
 /// object or as a JSON-encoded string; the params themselves when it sent
 /// neither.
-pub(crate) fn raw_arguments(params: &Value) -> Value {
+///
+/// Public for the MCP server, which frames a `tools/call` over
+/// [`EpisodeTools::call`](crate::EpisodeTools::call) and hands it this.
+#[must_use]
+pub fn raw_arguments(params: &Value) -> Value {
     match params.get("arguments") {
         Some(Value::Object(map)) => Value::Object(map.clone()),
         Some(Value::String(text)) => serde_json::from_str(text).unwrap_or_else(|_| params.clone()),

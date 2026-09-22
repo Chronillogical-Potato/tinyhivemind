@@ -33,7 +33,11 @@ So the episode tools are served over MCP, and an MCP server is a socket.
 ## Decision
 
 One crate, `crates/tinyhivemind-mcp`, opens one loopback listener. It is the
-MCP rendering of `tinyhivemind::speech` and nothing more:
+MCP rendering of `tinyhivemind::speech` and nothing more. The rendering itself
+-- the tool definitions, the call gate, the record a host drains -- is
+`crates/tinyhivemind-tools`, which opens nothing and sits in the pure list;
+the socket crate is JSON-RPC framing over it, so a harness handed native tools
+takes the record without the wire and is refused in the same words:
 
 - `tools/list` is `tool_specs()` as JSON Schema, descriptions verbatim, `dm`
   withheld, plus `chat` and `parent` on every tool so a call names the turn it

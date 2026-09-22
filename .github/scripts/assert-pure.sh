@@ -19,7 +19,7 @@ set -euo pipefail
 # transcript the caller already holds, and every host obligation it needs is
 # already carried by `tinyhivemind`. See
 # docs/adr/0002-hive-episodes-are-sequential.md.
-pure_crates=("tinyhivemind-core" "tinyhivemind-hive")
+pure_crates=("tinyhivemind-core" "tinyhivemind-hive" "tinyhivemind-tools")
 
 # `tinyhivemind` (the session runtime) is exempt from `tokio`/`futures`/
 # `async-trait`, which it needs for its ports — but not from the rest. Its

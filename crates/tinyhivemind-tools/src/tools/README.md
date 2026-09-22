@@ -1,6 +1,6 @@
 # `tools`
 
-What the server remembers, per seat: the registered turn, the calls made
+What the record remembers, per seat: the registered turn, the calls made
 during it, and the read window the host last refreshed.
 
 | file | holds |

@@ -6,7 +6,7 @@ use openhuman_core::agent::tool_policy::{
     ToolCallContext, ToolPolicy, ToolPolicyDecision, ToolPolicyRequest,
 };
 use serde_json::json;
-use tinyhivemind_mcp::{Dispatch, EpisodeTools};
+use tinyhivemind_tools::{Dispatch, EpisodeTools};
 use tinytools::PermissionLevel;
 
 use super::policy::EpisodeGate;
@@ -17,7 +17,7 @@ fn the_belt_is_the_served_vocabulary_and_only_read_is_read_only() {
     let tools = Arc::new(EpisodeTools::new(["lead", "solver"]));
     let belt = tools::belt("lead", &tools);
     let names: Vec<&str> = belt.iter().map(|tool| tool.name()).collect();
-    let served: Vec<&str> = tinyhivemind_mcp::served_specs()
+    let served: Vec<&str> = tinyhivemind_tools::served_specs()
         .map(|spec| spec.name)
         .collect();
     assert_eq!(names, served);
