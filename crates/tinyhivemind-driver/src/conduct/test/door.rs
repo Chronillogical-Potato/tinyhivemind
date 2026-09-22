@@ -6,6 +6,7 @@ use super::support::{ClarifyRouter, Journal, complete, door, hive, policy, run, 
 use crate::conduct::{ConductPolicy, Conductor, starters};
 use crate::driver::BroadcastRouting;
 use crate::{CompletionDriver, Error};
+use tinyhivemind::Sequence;
 use tinyhivemind_embed::{Router, RoutingFallback, RoutingPlan, RoutingRequest};
 
 #[test]
@@ -45,6 +46,37 @@ fn the_door_starts_the_routed_seats_and_completes_the_rest() {
     assert_eq!(conductor.conversations(), 0);
     assert_eq!(journal.bodies(), vec!["the task", "COMPLETE: done"]);
     assert!(conductor.state().quiescent());
+}
+
+#[test]
+fn a_task_at_sequence_zero_opens_the_episode_and_is_new_to_the_starter() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    // A host numbering from zero: the task is row zero, so the passed-over
+    // seat is completed on row zero, which no completion event could land on.
+    let journal = Journal::numbered_from(0);
+    let entrance = door(&["one", "two"], &["one"], &journal);
+    assert_eq!(entrance.opened_at, Sequence(0));
+    let mut conductor =
+        Conductor::open(&driver, routing, ConductPolicy::default(), entrance).expect("opens");
+    let turns = conductor.turns().expect("turns");
+    assert_eq!(seats(&turns), vec![("one", None)]);
+    assert_eq!(
+        turns[0].since, None,
+        "shown nothing yet: row zero is above the watermark, not on it"
+    );
+    let first = wave(&mut conductor, &journal, &[("one", vec![complete("done")])]).expect("wave");
+    assert_eq!(first.turns.len(), 1);
+    assert!(conductor.finished());
+    assert_eq!(journal.bodies(), vec!["the task", "COMPLETE: done"]);
 }
 
 #[test]

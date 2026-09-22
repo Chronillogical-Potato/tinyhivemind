@@ -9,7 +9,8 @@ use tinyhivemind::{
 use crate::Result;
 
 /// What `seat` was shown in `conversation` up to and including `since`,
-/// newest `window` rows, as chronological `(role, content)` pairs.
+/// newest `window` rows, as chronological `(role, content)` pairs; nothing
+/// for a seat shown nothing yet.
 ///
 /// Projected as the seat, so a row it was not addressed on is withheld the
 /// same way it is everywhere else the host's log is read. The seat's own
@@ -27,15 +28,20 @@ pub(super) async fn history(
     log: &dyn SessionLog,
     conversation: Conversation,
     seat: &str,
-    since: Sequence,
+    since: Option<Sequence>,
     window: usize,
 ) -> Result<Vec<(String, String)>> {
     let query = SessionQuery {
         conversation,
         viewer: Viewer::Agent { id: seat.into() },
         // Exclusive, so one above `since`; nothing is above the last
-        // sequence, so that reads unbounded rather than one short.
-        before: (since.0 != u64::MAX).then(|| Sequence(since.0 + 1)),
+        // sequence, so that reads unbounded rather than one short; and
+        // nothing is below the first, so a seat shown nothing reads none.
+        before: match since {
+            None => Some(Sequence(0)),
+            Some(Sequence(u64::MAX)) => None,
+            Some(since) => Some(Sequence(since.0 + 1)),
+        },
         window,
     };
     let rows = project_session(log, &query).await?;

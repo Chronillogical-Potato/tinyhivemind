@@ -50,7 +50,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use tinyhivemind::speech::{ToolCall, Utterance};
 use tinyhivemind::{Conversation, Sequence};
 use tinyhivemind_embed::RoutingPlan;
-use tinyhivemind_hive::{CompletionEpisodeState, apply_completion};
+use tinyhivemind_hive::CompletionEpisodeState;
 
 use crate::driver::{BroadcastRouting, Channel, ConversationView, EpisodeBrief};
 use crate::{BoundAgent, CompletionDriver, DriverState, Error, Result};
@@ -168,18 +168,24 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         {
             return Err(Error::UnknownStarter { seat: seat.clone() });
         }
+        // Everyone is assigned at the task's row, and the passed-over seats
+        // are completed on that same row: set directly, because a completion
+        // applied as an event must land strictly above its assignment, and
+        // the task's row may be the log's first, at sequence zero.
         let mut episode = CompletionEpisodeState::opened(
             Conversation {
                 desk_id: door.chat.clone(),
                 desk_name: door.desk_name.clone(),
                 thread_root: None,
             },
-            Sequence(0),
+            door.opened_at,
             door.members.iter().map(String::as_str),
         )?;
-        for id in &door.members {
-            if !door.starters.contains(id) {
-                episode = apply_completion(&episode, id, door.opened_at)?;
+        for participant in &mut episode.participants {
+            if !door.starters.contains(&participant.agent_id) {
+                for record in &mut participant.assignments {
+                    record.completed_at = Some(door.opened_at);
+                }
             }
         }
         let state = driver.start(episode)?;
@@ -301,13 +307,16 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 if !taken.insert(seat.clone()) {
                     continue;
                 }
+                // The ask row is the first thing a seat is shown in the
+                // conversation it roots: a first turn there starts just
+                // below it, which for a root at zero is nowhere.
                 let since = child
                     .state
                     .seen()
                     .delivered_through
                     .get(&seat)
                     .copied()
-                    .unwrap_or(child.root);
+                    .or_else(|| child.root.0.checked_sub(1).map(Sequence));
                 turns.push(Turn {
                     channel: Channel::Thread {
                         root: child.root,
@@ -323,13 +332,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             if !taken.insert(seat.clone()) {
                 continue;
             }
-            let since = self
-                .state
-                .seen()
-                .delivered_through
-                .get(&seat)
-                .copied()
-                .unwrap_or(Sequence(0));
+            let since = self.state.seen().delivered_through.get(&seat).copied();
             turns.push(Turn {
                 seat,
                 channel: Channel::Desk,
@@ -356,21 +359,24 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     }
 
     /// Open a turn: record that the seat is shown everything through
-    /// `latest`, and that it ran for what it holds, and build its brief.
+    /// `latest` -- the log's newest row, or `None` for a log with none --
+    /// and that it ran for what it holds, and build its brief.
     /// `new_rows` are the rows above [`Turn::since`] in the turn's channel,
     /// rendered by the host; `transcript` is any thread of the desk, whole,
     /// for the conversations the seat is or was in.
     pub fn open_turn(
         &mut self,
         turn: &Turn,
-        latest: Sequence,
+        latest: Option<Sequence>,
         new_rows: Vec<String>,
         mut transcript: impl FnMut(Sequence) -> Vec<String>,
     ) -> EpisodeBrief {
         match turn.channel {
             Channel::Thread { root, .. } => {
                 if let Some(child) = self.children.get_mut(&root) {
-                    child.state.delivered(&turn.seat, latest);
+                    if let Some(latest) = latest {
+                        child.state.delivered(&turn.seat, latest);
+                    }
                     child.state.turn_started(&turn.seat);
                     child.turns += 1;
                     child.turned = true;
@@ -393,7 +399,9 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 )
             }
             Channel::Desk => {
-                self.state.delivered(&turn.seat, latest);
+                if let Some(latest) = latest {
+                    self.state.delivered(&turn.seat, latest);
+                }
                 self.state.turn_started(&turn.seat);
                 let views = self.views(&turn.seat, &mut transcript);
                 EpisodeBrief::for_turn(
@@ -406,6 +414,26 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 )
             }
         }
+    }
+
+    /// The conversations `seat` would be shown on its next desk turn, by
+    /// root: those concluded since it last spoke, and any still in progress.
+    /// A host that reads its log asynchronously fetches these transcripts
+    /// before [`open_turn`](Self::open_turn), which reads them by root.
+    #[must_use]
+    pub fn shown_conversations(&self, seat: &str) -> Vec<Sequence> {
+        let cursor = self.shown.get(seat).copied().unwrap_or(0);
+        self.concluded[cursor..]
+            .iter()
+            .filter(|done| done.involves(seat))
+            .map(|done| done.root)
+            .chain(
+                self.children
+                    .values()
+                    .filter(|child| child.involves(seat))
+                    .map(|child| child.root),
+            )
+            .collect()
     }
 
     /// The conversations a seat is shown on a desk turn: those concluded

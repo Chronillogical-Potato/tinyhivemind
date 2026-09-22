@@ -49,7 +49,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 # A turn has a wall; `tokio::time::timeout` is it. Both harnesses run on
 # tokio already.
-tokio = { workspace = true, features = ["sync", "time"] }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
 tinyhivemind.workspace = true
 # The record every call lands in, and the served definitions.
 tinyhivemind-tools.workspace = true
@@ -61,6 +61,8 @@ wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
+# The routing surfaces, for a test that builds its own hive.
+tinyhivemind-embed.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
 wiremock.workspace = true
 

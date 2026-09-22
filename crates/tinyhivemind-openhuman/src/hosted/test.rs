@@ -16,7 +16,7 @@ use tinyhivemind_tools::{Dispatch, EpisodeTools, served_specs};
 
 use super::EpisodeBelt;
 use super::seed::history;
-use crate::offline::MemoryLog;
+use crate::MemoryLog;
 
 fn desk(thread_root: Option<Sequence>) -> Conversation {
     Conversation {
@@ -47,7 +47,7 @@ fn journal() -> MemoryLog {
 #[tokio::test]
 async fn a_seat_is_seeded_with_what_it_was_shown_its_own_rows_as_its_turns() {
     let log = journal();
-    let seen = history(&log, desk(None), "one", Sequence(6), 30)
+    let seen = history(&log, desk(None), "one", Some(Sequence(6)), 30)
         .await
         .expect("reads");
     assert_eq!(
@@ -69,7 +69,7 @@ async fn a_seat_is_seeded_with_what_it_was_shown_its_own_rows_as_its_turns() {
 #[tokio::test]
 async fn a_row_the_seat_was_not_addressed_on_is_withheld() {
     let log = journal();
-    let seen = history(&log, desk(None), "three", Sequence(6), 30)
+    let seen = history(&log, desk(None), "three", Some(Sequence(6)), 30)
         .await
         .expect("reads");
     let text: Vec<&str> = seen.iter().map(|(_, content)| content.as_str()).collect();
@@ -88,11 +88,11 @@ async fn a_row_the_seat_was_not_addressed_on_is_withheld() {
 #[tokio::test]
 async fn nothing_above_the_watermark_is_seeded() {
     let log = journal();
-    let seen = history(&log, desk(None), "one", Sequence(2), 30)
+    let seen = history(&log, desk(None), "one", Some(Sequence(2)), 30)
         .await
         .expect("reads");
     assert_eq!(seen.len(), 2, "{seen:?}");
-    let none = history(&log, desk(None), "one", Sequence(0), 30)
+    let none = history(&log, desk(None), "one", None, 30)
         .await
         .expect("reads");
     assert!(none.is_empty(), "a first turn has no history");
@@ -101,7 +101,7 @@ async fn nothing_above_the_watermark_is_seeded() {
 #[tokio::test]
 async fn a_thread_turn_is_seeded_with_the_conversation_alone() {
     let log = journal();
-    let seen = history(&log, desk(Some(Sequence(3))), "two", Sequence(4), 30)
+    let seen = history(&log, desk(Some(Sequence(3))), "two", Some(Sequence(4)), 30)
         .await
         .expect("reads");
     assert_eq!(
@@ -129,14 +129,14 @@ async fn the_memory_log_pages_newest_first_and_says_when_it_is_done() {
         Some(Sequence(3)),
         "a thread row names its root"
     );
-    assert_eq!(log.latest(), Sequence(6));
+    assert_eq!(log.latest(), Some(Sequence(6)));
     assert_eq!(log.all().len(), 6);
     assert_eq!(log.thread(Sequence(3)).len(), 2);
     assert_eq!(
-        log.thread_since(Sequence(3), Sequence(3)),
+        log.thread_since(Sequence(3), Some(Sequence(3))),
         vec!["@two: port 8080"]
     );
-    let for_two = log.desk_since("two", Sequence(0));
+    let for_two = log.desk_since("two", None);
     assert!(for_two.iter().any(|row| row.contains("which port")));
     assert!(!for_two.iter().any(|row| row.contains("open work")));
     assert!(format!("{log:?}").contains("engineering"));

@@ -19,8 +19,10 @@ pub enum Error {
         /// The id.
         seat: String,
     },
-    /// A seat's definition was written and the registry did not load it.
-    #[error("seat `{seat}` did not register")]
+    /// A seat's definition was written and the registry did not load it:
+    /// the process registry is read once, so a seat written after that
+    /// first read is never seen.
+    #[error("seat `{seat}` did not register: the process registry was read before it was written")]
     SeatNotRegistered {
         /// The seat.
         seat: String,
@@ -41,9 +43,13 @@ pub enum Error {
     #[error(transparent)]
     Agent(#[from] openhuman_embed::AgentError),
     /// The host's log failed to read, or broke the port's contract, while a
-    /// turn was being seeded.
+    /// turn was being seeded or briefed.
     #[error(transparent)]
     Session(#[from] tinyhivemind::Error),
+    /// The conductor stopped the episode: a stalled desk, a wall, or a fold
+    /// error it could not explain to the seat.
+    #[error(transparent)]
+    Conduct(#[from] tinyhivemind_driver::Error),
     /// `OpenHuman` refused: booting as a library host, resolving the route,
     /// building or seeding a session, or running the turn.
     #[error(transparent)]

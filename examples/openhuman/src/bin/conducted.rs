@@ -35,34 +35,28 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use conducted::hosted::DeskHost;
+use conducted::hosted::{DESK_PREAMBLE, DeskHost, DeskJournal};
 use conducted::jev::LiveJev;
 use openhuman_embed::{Access, Provider, Runtime, RuntimeConfig, Workspace};
 use tinyhivemind::SESSION_WINDOW;
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
-use tinyhivemind::speech::Utterance;
 use tinyhivemind_driver::{
-    BoundHive, BroadcastRouting, CompletionDriver, ConductPolicy, Conductor, Door, Event,
-    HiveGraph, Refusal, Step, standing_contract,
+    BoundHive, BroadcastRouting, CompletionDriver, ConductPolicy, Door, HiveGraph,
+    standing_contract,
 };
 use tinyhivemind_embed::{
     ConversationKind, ConversationRef, RouteCandidate, Router, RouterFuture, RoutingPlan,
     RoutingPolicy, RoutingRequest, RoutingSource, route_message,
 };
-use tinyhivemind_openhuman::offline::MemoryLog;
 use tinyhivemind_openhuman::{
-    EmbedRunner, HostedRunner, Lane, LibraryHost, RawRunner, Route, RunnerKind, SeatRunner,
-    TurnJob, offline,
+    EmbedRunner, HostedRunner, Journal, LibraryHost, MemoryLog, RawRunner, Route, RunnerKind,
+    SeatRunner, offline, run_episode,
 };
-use tinyhivemind_tools::{Dispatch, EpisodeTools};
+use tinyhivemind_tools::EpisodeTools;
 use tinyhivemind_typesafe::JevRouter;
 
-/// What the host says about the desk, before the episode's own contract.
-const DESK_PREAMBLE: &str = "\
-You are one seat on a desk. You have no codebase, shell or filesystem -- only
-the desk's messages and your own judgement. Never ask for permission and never
-wait to be told to continue; nobody will answer.";
+
 
 /// A desk: who sits at it, what each seat privately knows, and the task.
 struct Scenario {
@@ -197,8 +191,6 @@ production snapshot taken after the deploy.",
     ],
 };
 
-/// How much of a reply that recorded nothing is shown in the log.
-const REPLY_SHOWN: usize = 600;
 const JEV_MODEL: &str = "jev-1.13.0";
 const OPENROUTER: &str = "https://openrouter.ai/api/v1";
 const WORKER_STACK_BYTES: usize = 16 * 1024 * 1024;
@@ -322,21 +314,22 @@ async fn run() -> anyhow::Result<()> {
         None => {
             println!("[runner] {}", kind.name());
             let journal = Arc::new(MemoryLog::new(desk_id));
+            let desk = host.journal(&journal, false);
             let report = match kind {
                 RunnerKind::Embed => {
                     let runtime = host.runtime().await?;
                     let runner = host.embed(&runtime, 0).await?;
-                    episode(runner, host.setup(kind, false), journal).await?
+                    episode(runner, host.setup(kind, false), journal, &desk).await?
                 }
                 RunnerKind::Raw => {
                     host.prepare_raw()?;
                     let runner = host.raw(0).await?;
-                    episode(runner, host.setup(kind, false), journal).await?
+                    episode(runner, host.setup(kind, false), journal, &desk).await?
                 }
                 RunnerKind::Hosted => {
                     host.prepare_raw()?;
-                    let runner = host.hosted(&journal).await?;
-                    episode(runner, host.setup(kind, false), journal).await?
+                    let (runner, desk) = host.hosted(&journal, false).await?;
+                    episode(runner, host.setup(kind, false), journal, &*desk).await?
                 }
             };
             let _ = report;
@@ -381,7 +374,6 @@ impl Host {
             kind,
             ids: self.ids.clone(),
             candidates: self.candidates.clone(),
-            briefs: self.briefs.clone(),
             live: self.live,
             quiet,
         }
@@ -451,10 +443,20 @@ impl Host {
         Ok(runner)
     }
 
+    /// This desk as a journal over `journal`, for every runner.
+    fn journal(&self, journal: &Arc<MemoryLog>, quiet: bool) -> DeskJournal {
+        DeskJournal::new(Arc::clone(journal), self.briefs.clone(), quiet)
+    }
+
     /// Seat the hosted runner over `journal`, which is also the log the
-    /// episode appends to. Its seats are registered by `prepare_raw`, the
-    /// same definitions the raw seats resolve.
-    async fn hosted(&self, journal: &Arc<MemoryLog>) -> anyhow::Result<HostedRunner<DeskHost>> {
+    /// episode appends to, and return the host it was seated on, which is
+    /// the episode's journal too. Its seats are registered by
+    /// `prepare_raw`, the same definitions the raw seats resolve.
+    async fn hosted(
+        &self,
+        journal: &Arc<MemoryLog>,
+        quiet: bool,
+    ) -> anyhow::Result<(HostedRunner<DeskHost>, Arc<DeskHost>)> {
         let library = LibraryHost::boot(
             &self.config,
             &self.backend_url,
@@ -468,15 +470,16 @@ impl Host {
             .iter()
             .map(|(id, brief)| (id.clone(), format!("{brief}\n\n{contract}")))
             .collect();
-        let host = Arc::new(DeskHost::new(Arc::clone(journal), library, prompts));
-        Ok(HostedRunner::seat(
-            host,
+        let host = Arc::new(DeskHost::new(self.journal(journal, quiet), library, prompts));
+        let runner = HostedRunner::seat(
+            Arc::clone(&host),
             Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
             &self.ids,
             self.scenario.id,
             self.scenario.name,
             SESSION_WINDOW,
-        )?)
+        )?;
+        Ok((runner, host))
     }
 }
 
@@ -519,18 +522,19 @@ async fn bench_runners(
         let runtime = &runtime;
         let run = move |index: u32| async move {
             let journal = Arc::new(MemoryLog::new(host.scenario.id));
+            let desk = host.journal(&journal, true);
             match kind {
                 RunnerKind::Embed => {
                     let runner = host.embed(runtime, index).await?;
-                    episode(runner, host.setup(kind, true), journal).await
+                    episode(runner, host.setup(kind, true), journal, &desk).await
                 }
                 RunnerKind::Raw => {
                     let runner = host.raw(index).await?;
-                    episode(runner, host.setup(kind, true), journal).await
+                    episode(runner, host.setup(kind, true), journal, &desk).await
                 }
                 RunnerKind::Hosted => {
-                    let runner = host.hosted(&journal).await?;
-                    episode(runner, host.setup(kind, true), journal).await
+                    let (runner, desk) = host.hosted(&journal, true).await?;
+                    episode(runner, host.setup(kind, true), journal, &*desk).await
                 }
             }
         };
@@ -615,7 +619,6 @@ struct Setup {
     kind: RunnerKind,
     ids: Vec<String>,
     candidates: Vec<RouteCandidate>,
-    briefs: BTreeMap<String, String>,
     live: bool,
     /// Skip the journal dump at the end: a bench prints one table instead.
     quiet: bool,
@@ -636,17 +639,17 @@ struct Report {
 /// only what a host owns: the journal, the prompt, running a turn, and the
 /// log. The rules -- conversations, nudges, what a wave said and where it
 /// goes, refusals, walls -- are the conductor's.
-async fn episode<R: SeatRunner>(
+async fn episode<R: SeatRunner, J: Journal>(
     runner: R,
     setup: Setup,
     journal: Arc<MemoryLog>,
+    desk: &J,
 ) -> anyhow::Result<Report> {
     let Setup {
         scenario,
         kind,
         ids,
         candidates,
-        briefs,
         live,
         quiet,
     } = setup;
@@ -724,7 +727,9 @@ async fn episode<R: SeatRunner>(
         roster_version: 1,
         thread_context: &[],
     };
-    let mut conductor = Conductor::open(
+    let outcome = run_episode(
+        desk,
+        &runner,
         &driver,
         routing,
         ConductPolicy::default(),
@@ -735,120 +740,22 @@ async fn episode<R: SeatRunner>(
             starters,
             opened_at,
         },
-    )?;
-
-    let settled: anyhow::Result<()> = 'episode: loop {
-        if conductor.finished() {
-            break Ok(());
-        }
-        for step in conductor.begin_wave() {
-            take(&journal, step);
-        }
-        let turns = match conductor.turns() {
-            Ok(turns) => turns,
-            Err(error) => break Err(error.into()),
-        };
-        let mut jobs: Vec<TurnJob> = Vec::new();
-        for turn in &turns {
-            let rows = match turn.thread() {
-                None => journal.desk_since(&turn.seat, turn.since),
-                Some(root) => journal.thread_since(root, turn.since),
-            };
-            runner.open(
-                &turn.seat,
-                match turn.thread() {
-                    None => rows.clone(),
-                    Some(root) => journal.thread(root),
-                },
-                Dispatch {
-                    chat: desk_id.into(),
-                    parent: turn.thread().map(|root| root.0.to_string()),
-                },
-            );
-            let brief =
-                conductor.open_turn(turn, journal.latest(), rows, |root| journal.thread(root));
-            // What the host owns first; what the episode knows after.
-            let prompt = format!(
-                "## The desk\n{DESK_PREAMBLE}\n\n## Who you are\n{}\n\n{}",
-                briefs[&turn.seat],
-                brief.render()
-            );
-            let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
-            jobs.push(runner.turn(turn.seat.clone(), lane, turn.since, prompt));
-        }
-        let outcomes = futures::future::join_all(jobs).await;
-        for (seat_id, lane, outcome) in outcomes {
-            let where_ = match lane {
-                Lane::Desk => String::new(),
-                Lane::Thread(root) => format!(" in thread {}", root.0),
-            };
-            match &outcome {
-                Some(Ok(reply)) => eprintln!(
-                    "[turn] @{seat_id}{where_} replied ({} chars)",
-                    reply.chars().count()
-                ),
-                Some(Err(error)) => eprintln!("[turn] @{seat_id}{where_} failed: {error}"),
-                None => eprintln!("[turn] @{seat_id}{where_} timed out"),
-            }
-            // Close the turn first: the record refuses a call on a closed
-            // turn, so nothing can land after this point is read.
-            let events = runner.close(&seat_id);
-            for refused in runner.tools().drain_refusals(&seat_id) {
-                eprintln!(
-                    "[refused] @{seat_id}{where_} `{}`: {}",
-                    refused.tool, refused.reason
-                );
-            }
-            if events.is_empty() {
-                eprintln!("[no tool call] @{seat_id}{where_}");
-                // What the seat wrote instead: the only trace of a refusal
-                // it read, or of a deliverable it typed rather than recorded.
-                if let Some(Ok(reply)) = &outcome {
-                    let shown: String = reply.chars().take(REPLY_SHOWN).collect();
-                    let cut = if reply.chars().count() > REPLY_SHOWN {
-                        " [...]"
-                    } else {
-                        ""
-                    };
-                    eprintln!("    {}{cut}", shown.replace('\n', "\n    "));
-                }
-            }
-            let turn = turns
-                .iter()
-                .find(|turn| turn.seat == seat_id)
-                .expect("every outcome is a turn that was proposed");
-            conductor.record(turn, events.into_iter().map(|event| event.call));
-        }
-        loop {
-            match conductor.step() {
-                Ok(None) => break,
-                Ok(Some(Step::Commit(commit))) => {
-                    let sequence = journal.append(
-                        &commit.author,
-                        &describe(&commit.utterance),
-                        commit.thread,
-                        commit.only_for.as_deref(),
-                    );
-                    if let Err(error) = conductor.committed(sequence).await {
-                        break 'episode Err(error.into());
-                    }
-                }
-                Ok(Some(step)) => take(&journal, step),
-                Err(error) => break 'episode Err(error.into()),
-            }
-        }
+    )
+    .await;
+    let report = match &outcome {
+        Ok(report) => *report,
+        Err(_) => tinyhivemind_openhuman::Report::default(),
     };
-
     println!(
         "turns {} | routes {} | waves {} | discharged {} | settled {} | conversations {}",
-        conductor.turns_run(),
+        report.turns,
         router
             .as_ref()
             .map_or(0, |r| r.calls.load(Ordering::SeqCst)),
-        conductor.waves(),
-        conductor.discharged(),
-        conductor.state().episode().settled(),
-        conductor.conversations()
+        report.waves,
+        report.discharged,
+        report.settled,
+        report.conversations
     );
     for row in journal.all().iter().filter(|_| !quiet) {
         let scope = match (row.thread, row.only_for.as_deref()) {
@@ -861,6 +768,7 @@ async fn episode<R: SeatRunner>(
             row.sequence.0, row.author, row.body
         );
     }
+    let settled: anyhow::Result<()> = outcome.map(|_| ()).map_err(Into::into);
     settled?;
     // Offline, the run is a proof and says so: the scripted seat's tool call
     // must have become a desk row -- natively through the belt, or over the
@@ -883,94 +791,12 @@ async fn episode<R: SeatRunner>(
         }
     }
     let report = Report {
-        turns: conductor.turns_run(),
-        waves: conductor.waves(),
+        turns: report.turns,
+        waves: report.waves,
         wall: started.elapsed(),
     };
-    drop(conductor);
     drop(runner);
     Ok(report)
-}
-
-/// A note the desk says, appended; an event, logged.
-fn take(journal: &MemoryLog, step: Step) {
-    match step {
-        Step::Note(note) => {
-            journal.append("desk", &note.body, note.thread, note.only_for.as_deref());
-        }
-        Step::Event(event) => log(&event),
-        Step::Commit(_) => unreachable!("a commit is appended and reported, not taken"),
-    }
-}
-
-/// The log line for what the episode did.
-fn log(event: &Event) {
-    match event {
-        Event::Nudged { seat, thread: None } => {
-            eprintln!("[nudged] @{seat} on the desk: stalled with open work");
-        }
-        Event::Nudged {
-            seat,
-            thread: Some(root),
-        } => eprintln!("[nudged] @{seat} in thread {}", root.0),
-        Event::Broadcast { seat, to, .. } => println!("[broadcast] @{seat} -> {}", to.join(", ")),
-        Event::Unplaced { seat, .. } => {
-            println!("[unplaced] @{seat}'s broadcast fits no seat; it keeps the work");
-        }
-        Event::CompletedByBroadcast { seat, .. } => {
-            eprintln!("[completed] @{seat} by its broadcast")
-        }
-        Event::Asked { seat, askee, root } => println!(
-            "[ask] @{seat} opened a conversation with @{askee} (thread {})",
-            root.0
-        ),
-        Event::Handoff { to, from, .. } => println!("[handoff] -> @{to} (queued from @{from})"),
-        Event::Refused {
-            seat, thread, why, ..
-        } => {
-            let where_ = thread.map_or(String::new(), |root| format!(" in thread {}", root.0));
-            let reason = match why {
-                Refusal::AwaitingReply { waiting_on } => {
-                    format!("may not complete: in conversation with {waiting_on:?}")
-                }
-                Refusal::Undelivered { assigned_at } => format!(
-                    "completed before seeing its assignment at {}",
-                    assigned_at.0
-                ),
-                Refusal::NotYetShown => "not yet shown".to_owned(),
-            };
-            eprintln!("[refused] @{seat}{where_}: {reason}");
-        }
-        Event::Discharged { seat, .. } => {
-            eprintln!("[refused] @{seat} has spent its broadcast budget; it keeps the work");
-        }
-        Event::Concluded {
-            root,
-            asker,
-            askee,
-            forced,
-            ..
-        } => println!(
-            "[concluded] thread {} between @{asker} and @{askee}{}",
-            root.0,
-            if *forced {
-                " (nothing due, or out of turns)"
-            } else {
-                ""
-            }
-        ),
-    }
-}
-
-/// How a row reads on the desk.
-fn describe(utterance: &Utterance) -> String {
-    match utterance {
-        Utterance::Post { message } => message.clone(),
-        Utterance::Broadcast { message } => format!("BROADCAST: {message}"),
-        Utterance::Ask { to, message } => format!("asks @{to}: {message}"),
-        Utterance::Dm { message, .. } => message.clone(),
-        Utterance::CompleteEpisode { message } => format!("COMPLETE: {message}"),
-    }
 }
 
 /// Nothing running but the one subsystem the episode's tools arrive through.

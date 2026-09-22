@@ -48,18 +48,18 @@ corpus and paid campaign described in
 | `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS completion-driven hive with stable OpenHuman sessions and live TypeSafe routing. |
 | `src/bin/deepswe_hive.rs` | Hermetic four-seat software-engineering hive over a caller-prepared disposable Git checkout. |
 | `src/bin/conducted.rs` | A live completion-driven episode: the loop stepped through the `Conductor`, any of the adapter's three runners, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline against the adapter's scripted model. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal. |
-| `src/bin/conducted/hosted.rs` | This example as an `EpisodeHost`: its journal is the log, a seat is a library session with the episode's belt, and the wrapper is the core context. The runners themselves live in `tinyhivemind-openhuman`. |
+| `src/bin/conducted/hosted.rs` | This example as a host: `DeskJournal`, its in-memory log with the prompt and the log lines, for every runner; and `DeskHost`, an `EpisodeHost` whose seats are library sessions with the episode's belt. The runners and the loop live in `tinyhivemind-openhuman`. |
 | `src/bin/conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`, bridged through the wire form. |
 | `deepswe-sandbox/` | Reproducible local Docker image used for agent shell and test execution. |
 
-## `conducted`: one loop, two runners
+## `conducted`: one loop, three runners
 
-`src/bin/conducted.rs` steps one completion-driven episode the way a host steps
-it: begin a wave, run the turns the `Conductor` proposes, record what each
-called, then append the notes and commits it hands back until the wave
-settles. The journal, the prompt and the log are the host's; the
-conversations, nudges, sorting, refusals and walls are the conductor's, in
-`tinyhivemind-driver`.
+`src/bin/conducted.rs` runs one completion-driven episode through
+`tinyhivemind_openhuman::run_episode`: it builds the hive, the driver, the
+door and a runner, and implements `Journal` over an in-memory log. The
+journal, the prompt and the log lines are the host's; the wave loop is the
+adapter's, and the conversations, nudges, sorting, refusals and walls are
+the conductor's, in `tinyhivemind-driver`.
 How a seat's turn *runs* is behind one seam, `SeatRunner`, with three
 implementations the loop cannot tell apart:
 

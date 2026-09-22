@@ -15,11 +15,12 @@ use tinyhivemind_driver::standing_contract;
 use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent, served_specs};
 
 use super::{Lane, RunnerKind, SeatRunner};
-use crate::offline::MemoryLog;
+use crate::MemoryLog;
 use crate::{
-    EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, LibraryHost, RawRunner, Route,
-    offline, register_seats,
+    EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Journal, LibraryHost,
+    RawRunner, Route, offline, register_seats,
 };
+use tinyhivemind_driver::{Commit, Note};
 
 /// A host with no agents of its own: its seats are library sessions, its
 /// log is in memory, and its wrapper is the core context a library session
@@ -36,11 +37,28 @@ struct TestHost {
     halt: AtomicBool,
 }
 
-impl EpisodeHost for TestHost {
+impl Journal for TestHost {
     fn log(&self) -> &dyn SessionLog {
         &self.log
     }
 
+    fn commit(&self, commit: &Commit) -> crate::Result<Sequence> {
+        Ok(self.log.append(
+            &commit.author,
+            commit.utterance.message(),
+            commit.thread,
+            commit.only_for.as_deref(),
+        ))
+    }
+
+    fn note(&self, note: &Note) -> crate::Result<()> {
+        self.log
+            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+        Ok(())
+    }
+}
+
+impl EpisodeHost for TestHost {
     fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> crate::Result<OpenHumanSessionHost> {
         let policy = belt.admit(None);
         self.library.session(seat, &self.prompt, belt.tools, policy)
@@ -108,7 +126,7 @@ fn each_runner_states_its_own_mechanics_and_nothing_else() {
 }
 
 /// One turn through the seam: open, run, close.
-async fn one_turn<R: SeatRunner>(runner: &R, since: Sequence) -> (String, Vec<SeatEvent>) {
+async fn one_turn<R: SeatRunner>(runner: &R, since: Option<Sequence>) -> (String, Vec<SeatEvent>) {
     let bindings = runner.bindings();
     assert_eq!(bindings.len(), 1);
     assert_eq!(bindings[0].hive_agent_id, "lead");
@@ -140,11 +158,28 @@ struct PlainHost {
     library: LibraryHost,
 }
 
-impl EpisodeHost for PlainHost {
+impl Journal for PlainHost {
     fn log(&self) -> &dyn SessionLog {
         &self.log
     }
 
+    fn commit(&self, commit: &Commit) -> crate::Result<Sequence> {
+        Ok(self.log.append(
+            &commit.author,
+            commit.utterance.message(),
+            commit.thread,
+            commit.only_for.as_deref(),
+        ))
+    }
+
+    fn note(&self, note: &Note) -> crate::Result<()> {
+        self.log
+            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+        Ok(())
+    }
+}
+
+impl EpisodeHost for PlainHost {
     fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> crate::Result<OpenHumanSessionHost> {
         let policy = belt.admit(None);
         self.library
@@ -155,7 +190,7 @@ impl EpisodeHost for PlainHost {
 /// A hosted seat on a host that keeps every default, run once on the desk
 /// and once in a thread it is not in: the defaults hold, the thread turn is
 /// seeded from the thread, and a call outside its thread is refused.
-async fn plain(library: LibraryHost, contract: &str) {
+async fn plain(library: LibraryHost) {
     let log = MemoryLog::new("engineering");
     log.append("operator", "state the root cause", None, None);
     let host = Arc::new(PlainHost { log, library });
@@ -168,7 +203,6 @@ async fn plain(library: LibraryHost, contract: &str) {
         SESSION_WINDOW,
     )
     .expect("hosted seats");
-    let _ = contract;
     let (reply, events) = one_turn(&runner, host.log.latest()).await;
     assert!(!reply.is_empty());
     assert_eq!(
@@ -188,7 +222,7 @@ async fn plain(library: LibraryHost, contract: &str) {
         .turn(
             "lead".into(),
             Lane::Thread(Sequence(1)),
-            Sequence(1),
+            Some(Sequence(1)),
             "In the thread.".into(),
         )
         .await;
@@ -250,7 +284,7 @@ fn one_completion(name: &str, events: &[SeatEvent]) {
 async fn again(raw: &RawRunner, host: &TestHost, hosted: &HostedRunner<TestHost>) {
     // A second raw turn is seeded with the first: what the seat said is what
     // it is shown, and the record starts empty again.
-    let (_, again) = one_turn(raw, Sequence(0)).await;
+    let (_, again) = one_turn(raw, None).await;
     assert_eq!(again.len(), 1);
     host.log.append("lead", "COMPLETE: done", None, None);
     let (_, again) = one_turn(hosted, host.log.latest()).await;
@@ -263,13 +297,12 @@ async fn again(raw: &RawRunner, host: &TestHost, hosted: &HostedRunner<TestHost>
 /// rather than seated as a ghost.
 async fn ghosts(embed: &EmbedRunner, raw: &RawRunner, hosted: &HostedRunner<TestHost>) {
     for outcome in [
-        raw.turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
-            .await,
+        raw.turn("ghost".into(), Lane::Desk, None, "?".into()).await,
         hosted
-            .turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
+            .turn("ghost".into(), Lane::Desk, None, "?".into())
             .await,
         embed
-            .turn("ghost".into(), Lane::Desk, Sequence(0), "?".into())
+            .turn("ghost".into(), Lane::Desk, None, "?".into())
             .await,
     ] {
         assert!(
@@ -331,7 +364,7 @@ async fn halts(host: &TestHost, hosted: &HostedRunner<TestHost>) {
         .turn(
             "lead".into(),
             Lane::Thread(Sequence(u64::MAX)),
-            Sequence(u64::MAX),
+            Some(Sequence(u64::MAX)),
             "Once more.".into(),
         )
         .await;
@@ -458,8 +491,8 @@ async fn both_runners() {
         .expect("the library boots");
     let (host, hosted) = hosted(library, &contract(RunnerKind::Hosted));
 
-    let (embed_reply, embed_events) = one_turn(&embed, Sequence(0)).await;
-    let (raw_reply, raw_events) = one_turn(&raw, Sequence(0)).await;
+    let (embed_reply, embed_events) = one_turn(&embed, None).await;
+    let (raw_reply, raw_events) = one_turn(&raw, None).await;
     // Seeded from the host's log: the operator's row is history, not brief.
     let (hosted_reply, hosted_events) = one_turn(&hosted, host.log.latest()).await;
     assert_eq!(
@@ -488,7 +521,7 @@ async fn both_runners() {
 
     again(&raw, &host, &hosted).await;
     ghosts(&embed, &raw, &hosted).await;
-    plain(host.library.clone(), &contract(RunnerKind::Hosted)).await;
+    plain(host.library.clone()).await;
     halts(&host, &hosted).await;
     metrics.reset();
     assert_eq!(metrics.snapshot().requests, 0);

@@ -126,12 +126,29 @@ impl Router for ClarifyRouter {
 pub(super) type Row = (Sequence, String, String, Option<Sequence>, Option<String>);
 
 /// The host: rows, and nothing else.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct Journal {
+    /// The sequence the first row is given.
+    first: u64,
     rows: Mutex<Vec<Row>>,
 }
 
+impl Default for Journal {
+    fn default() -> Self {
+        Self::numbered_from(1)
+    }
+}
+
 impl Journal {
+    /// A journal whose first row is given `first`: some hosts number from
+    /// zero.
+    pub(super) fn numbered_from(first: u64) -> Self {
+        Self {
+            first,
+            rows: Mutex::new(Vec::new()),
+        }
+    }
+
     pub(super) fn append(
         &self,
         author: &str,
@@ -140,17 +157,13 @@ impl Journal {
         only_for: Option<String>,
     ) -> Sequence {
         let mut rows = self.rows.lock().unwrap();
-        let sequence = Sequence(rows.last().map_or(0, |row| row.0.0) + 1);
+        let sequence = Sequence(rows.last().map_or(self.first, |row| row.0.0 + 1));
         rows.push((sequence, author.into(), body.into(), thread, only_for));
         sequence
     }
 
-    pub(super) fn latest(&self) -> Sequence {
-        self.rows
-            .lock()
-            .unwrap()
-            .last()
-            .map_or(Sequence(0), |row| row.0)
+    pub(super) fn latest(&self) -> Option<Sequence> {
+        self.rows.lock().unwrap().last().map(|row| row.0)
     }
 
     pub(super) fn thread(&self, root: Sequence) -> Vec<String> {
