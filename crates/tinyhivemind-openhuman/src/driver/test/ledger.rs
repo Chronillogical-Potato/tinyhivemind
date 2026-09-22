@@ -242,7 +242,7 @@ fn an_ask_holds_the_askers_completion_until_the_conversation_concludes() {
 }
 
 #[test]
-fn a_settled_seat_that_owes_an_answer_is_woken_for_it() {
+fn a_settled_seat_that_was_asked_is_not_woken_on_the_desk() {
     let hive = hive();
     let driver = CompletionDriver::new(&hive, 4).expect("driver");
     let router = FirstRouter::default();
@@ -250,18 +250,13 @@ fn a_settled_seat_that_owes_an_answer_is_woken_for_it() {
     let two_done = apply(&driver, &state, "two", 1, complete(), &router)
         .expect("two")
         .state;
-    assert_eq!(
-        round_ids(&driver, &two_done),
-        ["one"],
-        "settled seats are not woken"
-    );
     let asked = apply(&driver, &two_done, "one", 2, ask("two"), &router)
         .expect("ask")
         .state;
     assert_eq!(
         round_ids(&driver, &asked),
-        ["one", "two"],
-        "the seat asked is owed a turn for the conversation, after the pending ones",
+        ["one"],
+        "the question opened a conversation; that is where two answers, not the desk",
     );
     let answered = apply(&driver, &asked, "two", 3, concluded("one"), &router)
         .expect("cross-post")

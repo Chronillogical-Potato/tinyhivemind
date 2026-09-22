@@ -34,8 +34,10 @@ pub(super) fn broadcast_fallback<'state>(
         .next()
 }
 
-/// Pending seats owed a turn, in accepted order, then settled seats that owe
-/// an answer to a question asked of them.
+/// Pending seats owed a turn, in accepted order.
+///
+/// A settled seat that was asked something is not woken here: the question
+/// opened a conversation of its own (ADR 0023), and that is where it answers.
 pub(super) fn pending_ids_in_order(state: &DriverState, complete: bool) -> Vec<&str> {
     if complete {
         return Vec::new();
@@ -58,14 +60,9 @@ pub(super) fn pending_ids_in_order(state: &DriverState, complete: bool) -> Vec<&
         .pending_order
         .iter()
         .map(String::as_str)
-        .chain(participants.clone())
+        .chain(participants)
     {
         if pending.contains(id) && owed_a_turn(state, id) && scheduled.insert(id) {
-            ordered.push(id);
-        }
-    }
-    for id in participants {
-        if !pending.contains(id) && owes_an_answer(state, id) && scheduled.insert(id) {
             ordered.push(id);
         }
     }
@@ -102,15 +99,6 @@ fn owed_a_turn(state: &DriverState, agent_id: &str) -> bool {
             .delivered_through
             .get(agent_id)
             .is_none_or(|through| *through < state.freshness_floor)
-}
-
-/// Asked something after it was last shown anything, so it has not answered.
-fn owes_an_answer(state: &DriverState, agent_id: &str) -> bool {
-    let shown = state.seen.delivered_through.get(agent_id).copied();
-    state
-        .ledger
-        .asked_of(agent_id)
-        .any(|asked_at| shown.is_none_or(|through| through < asked_at))
 }
 
 pub(super) fn extend_pending_order(order: &mut Vec<String>, recipients: &[String]) {

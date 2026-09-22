@@ -128,13 +128,6 @@ impl Ledger {
         self.outstanding_asks.retain(|_, asked| !asked.is_empty());
     }
 
-    /// The open asks that name `agent_id` as the seat owing an answer.
-    pub(super) fn asked_of<'a>(&'a self, agent_id: &'a str) -> impl Iterator<Item = Sequence> + 'a {
-        self.outstanding_asks
-            .values()
-            .filter_map(move |asked| asked.get(agent_id).copied())
-    }
-
     /// Nothing queued and nothing awaited.
     #[must_use]
     pub fn is_drained(&self) -> bool {

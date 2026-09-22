@@ -149,7 +149,7 @@ fn a_thread_brief_names_its_root_as_the_parent_and_says_which_side_the_seat_is_o
     assert!(text.contains("## A private conversation with @two (thread 1)\n@two: because"));
     assert!(text.contains("You opened this conversation."));
     assert!(text.contains("\"parent\": \"1\""));
-    assert!(text.contains("`ask` and `broadcast` are not available inside a conversation"));
+    assert!(text.contains("`ask` is not available inside a conversation"));
     let answerer = EpisodeBrief::for_turn(
         &state,
         "engineering",

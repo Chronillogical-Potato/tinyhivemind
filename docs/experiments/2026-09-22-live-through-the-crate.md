@@ -144,6 +144,44 @@ is the right shape.
 wrote it; a fix went to the verifier; a compatibility question went to the
 structure specialist. Eight routes, one unplaced, and that one correctly.
 
+## The fourth run: conversations
+
+Same desk, with [ADR 0023](../adr/0023-an-ask-opens-a-child-conversation.md)
+-- an ask opens a conversation on a thread of the desk -- and the
+`EpisodeBrief` seam feeding every turn. `12` turns, `7` waves, `3`
+conversations, and quiescence. **And `routes 1`: no broadcast fired.** The
+root cause was found and neither deliverable was produced.
+
+**The conversations worked.** `lead` asked `researcher` and `theory`; each ask
+opened a thread; each was answered in it; `lead` followed up in each -- 378
+and 829 characters, a real exchange rather than the one-shot reply of the
+earlier runs -- and both concluded and cross-posted. `lead`'s desk turn while
+waiting called nothing. A thread with nothing left to say was closed in one
+turn (row 20).
+
+**Three things cost the outcome, two of them the host's.**
+
+*A settled seat that was asked was still woken on the desk.* The flat design's
+rule -- a seat owing an answer is owed a desk turn -- survived into the driver
+beside the conversations that replaced it. `theory` spent its desk turn on a
+generic six-item list (row 10); `researcher` spent its opening a pointless
+thread back to `lead` (row 12). Removed: the conversation is where a seat
+answers.
+
+*A broadcast inside a conversation was refused.* `lead` found the handoff work
+while talking to `theory`, tried to broadcast it there (row 17), and was told
+it could not. On its next desk turn it *described* the broadcast in prose (row
+25) rather than making it, and the episode ended with `solver` and `checker`
+never having run. A handoff found in a conversation is desk work; the host now
+commits it to the desk. Only `ask` stays barred inside a thread.
+
+*The model claimed a call it did not make.* Row 25 says "broadcast both work
+items"; the log shows no broadcast. That is the model's, and it was put in
+that position by the refusal above.
+
+The seam held: every prompt in this run was the host's brief followed by
+`EpisodeBrief::render()`, and the standing contract was the tool specs.
+
 ## What this changes
 
 Across three runs every defect was in what the host owed the seats, not in
