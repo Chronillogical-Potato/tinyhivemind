@@ -22,7 +22,8 @@
 //! Both land every call in the same record, so the driver drains identical
 //! events and a seat is refused and acknowledged in the same words either
 //! way. The bound handle differs -- [`EmbedSeat`] wraps the agent, [`RawSeat`]
-//! is the seat itself -- which is what [`BoundAgent`] is for.
+//! is the seat itself -- which is what [`BoundAgent`](tinyhivemind_driver::BoundAgent)
+//! is for.
 //!
 //! This is the one crate in the workspace that links a harness. A host that
 //! seats agents some other way does not link it; it implements `BoundAgent`

@@ -73,8 +73,31 @@ async fn one_turn<R: SeatRunner>(runner: &R) -> (String, Vec<SeatEvent>) {
 /// the record the same way, whichever road it took. One test rather than
 /// two because the runtime and the definition registry are process-wide, and
 /// the raw seats must be registered before the runtime boots.
-#[tokio::test(flavor = "multi_thread")]
-async fn both_runners_land_the_same_scripted_call_in_the_record() {
+///
+/// On its own thread with a wide stack: an `OpenHuman` turn is a deep
+/// composition of `async fn`s, and the two megabytes libtest gives a test
+/// thread overflow on Linux before the first reply lands.
+#[test]
+fn both_runners_land_the_same_scripted_call_in_the_record() {
+    std::thread::Builder::new()
+        .stack_size(WIDE_STACK)
+        .spawn(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .thread_stack_size(WIDE_STACK)
+                .build()
+                .expect("a runtime")
+                .block_on(both_runners());
+        })
+        .expect("a thread")
+        .join()
+        .expect("the proof ran");
+}
+
+/// Sixteen megabytes: what the example's host loop gives its workers.
+const WIDE_STACK: usize = 16 * 1024 * 1024;
+
+async fn both_runners() {
     let workspace = tempfile::tempdir().expect("a workspace");
     let metrics = Arc::new(offline::Metrics::default());
     let model = offline::model("engineering", Arc::clone(&metrics)).await;
