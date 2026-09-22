@@ -103,11 +103,55 @@ run for it, so it stays owed the turn.
 One row of noise: `solver` posted the single word "test" (row 15) -- a model
 trying the tool. Cheap, and worth nothing.
 
+## The third run
+
+Same desk. `15` turns, `8` waves, `8` routes, `11` assignments settled, `0`
+discharged, and **the episode reached quiescence on its own**: every seat
+settled, nothing queued, nothing awaited, well under the forty-turn wall.
+
+**Every ledger rule fired under a real model.** `lead` asked all three of
+`theory`, `solver` and `researcher` this time, waited one turn without calling
+anything (the new protocol line, working), and diagnosed from all three (row
+11) -- including `solver`'s migration, which run two had reached only after the
+fact. Its two broadcasts were placed with the right seats. `solver`'s fix went
+to `checker` for review while `checker` was busy: **the handoff was queued and
+handed over at `checker`'s completion** (rows 26, 31), twice. `checker` tried to
+complete while still waiting on `researcher` and **was refused and told so**
+(row 22), `researcher` answered (23), and `checker` completed (25). One of
+`checker`'s broadcasts -- its finished test -- fit no seat, and **it was told
+the work stays with it** (row 19) rather than left waiting.
+
+**The chain converged.** `solver → checker → solver → checker → theory`: a fix,
+an attack on the fix, a corrected fix, a second attack, and a structural note
+from `theory` on the corrected fix's compatibility assumption. Each handoff was
+a fresh assignment with a fresh budget, so the per-assignment cap could not
+have bounded it; what bounded it was that the seats ran out of things to say
+-- `checker`'s last row is "No new information" (32). The pathological chain
+the bounds exist for did not occur, and this is the first run in which it
+could have.
+
+**The content is the best of the three.** The desk produced a root cause with
+both halves (library swap, unrun migration), a fix with rehash-on-success, a
+three-case regression test (old hash accepted, wrong password on an old hash
+rejected, rehash on success), and two rounds of adversarial review that found
+a real defect in the first fix -- `update_stored_hash(user_id, ...)` inside a
+function that has no `user_id` -- and a second in the correction, a
+`ValueError` swallowed to `False`. The corrected fix returns
+`(verified, was_old_format)` and moves the rehash to the login handler, which
+is the right shape.
+
+**Routing was sensible every time.** Attacks on a fix went to the seat that
+wrote it; a fix went to the verifier; a compatibility question went to the
+structure specialist. Eight routes, one unplaced, and that one correctly.
+
 ## What this changes
 
-The loop, the crate, the driver and the ledger held under a real model and a
-real router in both runs; every defect was in what the host owed the seats,
-not in what the seats owed the episode. The brief in the turn prompt turned a
-desk that hunted for a diff into one that pooled four private facts, diagnosed
-correctly, and routed the fix and the test to the seats that own them. The
-next run is the one that should reach quiescence.
+Across three runs every defect was in what the host owed the seats, not in
+what the seats owed the episode, and each was one step from done. The brief in
+the turn prompt turned a desk that hunted for a diff into one that pooled four
+private facts; the mid-turn fix let it finish. The third run is the first live
+completion-driven episode to reach quiescence through the crate and the
+driver, and it did so while exercising the queue, the open-ask hold, the
+unplaced-broadcast notice, and a five-hop handoff chain that converged on its
+own. What is still unmeasured is the chain that does not converge: the budget
+and the discharge never engaged, here or in the benchmark.

@@ -25,7 +25,7 @@ does.
 
 | date | question | answer |
 | --- | --- | --- |
-| [2026-09-22](2026-09-22-live-through-the-crate.md) | Do the crate, the driver and the ledger hold under a real model and router? | Yes. With the brief in the turn prompt the seats pooled all four private facts, diagnosed correctly, and broadcast placed the fix and the test with the right seats; each run ended on a host bug one step from done |
+| [2026-09-22](2026-09-22-live-through-the-crate.md) | Do the crate, the driver and the ledger hold under a real model and router? | Yes. Three runs: the first hunted for a diff, the second pooled all four private facts, the third reached quiescence -- queue, open-ask hold and a five-hop handoff chain all fired live and converged |
 | [2026-09-22](2026-09-22-the-driver-under-the-benchmark.md) | Does the real completion driver cost what the prototype loop cost? | Within two percent on every column; the one wrong prediction was a host delivering after the turn instead of before |
 | [2026-09-01](2026-09-01-live-hidden-profile.md) | Does a live room beat a poll on a problem that has an answer? | The synthetic brief was not enough; a real problem was needed to tell them apart |
 | [2026-09-01](2026-09-01-refutation-and-grounds.md) | Do refutation and evidential grounds earn their place? | The arm was able to lose, and it lost |
