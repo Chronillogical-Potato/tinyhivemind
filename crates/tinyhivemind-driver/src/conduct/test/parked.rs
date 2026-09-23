@@ -314,3 +314,38 @@ fn a_snapshot_is_refused_only_while_the_host_holds_an_unreported_commit() {
     run(conductor.committed(sequence)).expect("committed");
     assert!(conductor.snapshot().is_some());
 }
+
+#[test]
+fn a_held_seat_keeps_the_episode_open_even_where_its_work_closed() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+    // One completes and parks in the same turn: its work is closed, so the
+    // desk is quiescent, but the host is still holding it.
+    wave_parking(
+        &mut conductor,
+        &journal,
+        &[("one", vec![complete("done")])],
+        &["one"],
+    )
+    .expect("wave");
+    assert_eq!(conductor.parked(), vec!["one".to_owned()]);
+    assert!(
+        !conductor.finished(),
+        "a held seat is not a finished one: the operator's answer needs a \
+         loop to come back to"
+    );
+    // Released, there is nothing left to hold and the episode is over.
+    conductor.resume_seat("one");
+    assert!(conductor.parked().is_empty());
+    assert!(conductor.finished());
+}

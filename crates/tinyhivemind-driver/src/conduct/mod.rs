@@ -276,7 +276,12 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     /// Over: the desk is quiescent and no conversation is open.
     #[must_use]
     pub fn finished(&self) -> bool {
-        self.state.quiescent() && self.children.is_empty()
+        // A parked seat is not a finished one, even where its work closed
+        // some other way -- a broadcast it made in the same turn spending
+        // the budget, say. Ending the episode there would strand whatever
+        // the host queued to hold it: the operator answers an approval that
+        // no longer has a loop to return to.
+        self.state.quiescent() && self.children.is_empty() && self.parked.is_empty()
     }
 
     /// The desk episode's state.

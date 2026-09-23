@@ -384,6 +384,13 @@ async fn wait_for_release<A: BoundAgent, J: Journal>(
     for seat in &released {
         conductor.resume_seat(seat);
     }
+    // Releasing the last held seat can be the thing that finishes the
+    // episode -- its work may have closed while it was held. Ask again only
+    // if there is still an episode to ask about; `turns` would read an
+    // empty wave with nothing parked as a stall.
+    if conductor.finished() {
+        return Ok(Vec::new());
+    }
     Ok(conductor.turns()?)
 }
 
