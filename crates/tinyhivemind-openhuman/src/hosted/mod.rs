@@ -81,6 +81,25 @@ pub trait EpisodeHost: Journal + 'static {
     /// admits by name and a host tool sharing a bare name would be admitted
     /// past the host's gate. The brief and the desk's notes name the served
     /// vocabulary, so a host that prefixes says so in its own prompt.
+    /// The seat's own standing prompt, for the turns that are not its first.
+    ///
+    /// A seat's session is cleared and reseeded from the host's log every
+    /// turn, and seeding brings the runtime session up before the turn runs.
+    /// A session that already has one is not *cold*, and only a cold turn
+    /// composes its system prompt -- so from a seat's second turn onward it
+    /// ran with the brief and nothing else: no role, no team, no company. It
+    /// still answered, which is why nothing complained; it simply was not
+    /// being itself.
+    ///
+    /// Returning the text here puts it back at the head of the seeded
+    /// history, where the turn reads it as the system message it would have
+    /// composed. `None` keeps the old behaviour for a host that has no
+    /// standing prompt to give.
+    fn persona(&self, seat: &str) -> Option<String> {
+        let _ = seat;
+        None
+    }
+
     fn tool_prefix(&self) -> String {
         String::new()
     }
@@ -296,8 +315,17 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                 let usage = Arc::clone(&usage);
                 let this_turn = Arc::clone(&this_turn);
                 async move {
-                    let history =
+                    let mut history =
                         seed::history(host.log(), conversation, &seat, since, window).await?;
+                    // At the head, so it lands where a composed prompt would.
+                    // Only when there is history to seed: with none, seeding
+                    // is skipped entirely and the turn is cold, which is the
+                    // one case that already renders the prompt itself.
+                    if !history.is_empty()
+                        && let Some(persona) = host.persona(&seat)
+                    {
+                        history.insert(0, ("system".to_owned(), persona));
+                    }
                     let mut session = session.lock().await;
                     // Clearing drops the runtime session, and with it the
                     // turn state, so the seed and the overrides go after it.
