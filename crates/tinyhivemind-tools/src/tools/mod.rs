@@ -61,6 +61,7 @@ pub struct EpisodeTools {
     inbox: Mutex<BTreeMap<String, Vec<SeatEvent>>>,
     refused: Mutex<BTreeMap<String, Vec<Refusal>>>,
     windows: Mutex<BTreeMap<String, Vec<String>>>,
+    awaiting: Mutex<BTreeMap<String, Vec<String>>>,
 }
 
 impl EpisodeTools {
@@ -80,6 +81,7 @@ impl EpisodeTools {
             inbox: Mutex::new(BTreeMap::new()),
             refused: Mutex::new(BTreeMap::new()),
             windows: Mutex::new(BTreeMap::new()),
+            awaiting: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -129,6 +131,30 @@ impl EpisodeTools {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .insert(seat.to_owned(), rows);
+    }
+
+    /// Replace the seats `seat` is waiting on an answer from.
+    ///
+    /// A snapshot the host refreshes before a turn, like
+    /// [`window`](Self::window), and for the same reason: the ledger that
+    /// knows this lives in the driver, and the server cannot call into it.
+    ///
+    /// What it buys is a refusal rather than a duplicate conversation --
+    /// see the `ask` arm of [`call`](Self::call).
+    pub fn awaiting(&self, seat: &str, seats: Vec<String>) {
+        self.awaiting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(seat.to_owned(), seats);
+    }
+
+    /// Whether `seat` has already asked `other` and is still waiting.
+    fn awaits(&self, seat: &str, other: &str) -> bool {
+        self.awaiting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(seat)
+            .is_some_and(|seats| seats.iter().any(|one| one == other))
     }
 
     pub(crate) fn recent(&self, seat: &str, limit: usize) -> Vec<String> {
@@ -246,6 +272,26 @@ impl EpisodeTools {
                         "{}. The desk is: {}",
                         UtteranceRejection::UnknownRecipient { id: to.clone() },
                         self.seats().join(", ")
+                    ));
+                }
+                // **One conversation per pair at a time.**
+                //
+                // A seat waiting on an answer is turned on the desk anyway --
+                // that turn is what keeps the episode live while the seat it
+                // asked is parked -- and the brief it gets is its own
+                // unanswered question, `complete_episode` refused until the
+                // conversation concludes, and "a reply that calls no tool
+                // records nothing". Every door shut but this one, so it asks
+                // again, and each repeat opens a *second* conversation with
+                // the same seat that must also be concluded. Observed on a
+                // hosted desk: one question re-issued verbatim, three
+                // conversations, three conclusions.
+                //
+                // Refusing is the same rule the thread turn already applies
+                // one line up, at the other end of the same wait.
+                if self.awaits(seat, to) {
+                    return Err(format!(
+                        "you already asked @{to} and are still waiting: their answer reaches                          you on a later turn, and asking again opens a second conversation                          with them rather than hurrying the first. Ask a different seat if                          someone else can help, or end your turn."
                     ));
                 }
                 format!(

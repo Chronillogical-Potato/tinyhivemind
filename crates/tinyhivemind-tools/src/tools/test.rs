@@ -163,3 +163,57 @@ fn an_in_process_read_returns_the_window_and_records_nothing() {
     assert_eq!(rows, "@lead: two");
     assert!(tools.drain("lead").is_empty(), "a read is not an event");
 }
+
+/// **A seat already waiting on another may not ask it again.**
+///
+/// The waiting seat is still turned on the desk -- that turn is what keeps
+/// the episode live while the seat it asked is parked -- and its brief is
+/// its own unanswered question, a completion refused until the conversation
+/// concludes, and "a reply that calls no tool records nothing". With every
+/// other door shut, `ask` is the one tool left, and each repeat opens a
+/// second conversation with the same seat rather than hurrying the first.
+#[test]
+fn a_second_ask_to_a_seat_already_being_waited_on_is_refused() {
+    let tools = EpisodeTools::new(["lead", "solver", "scribe"]);
+    tools.register("lead", dispatch());
+    let ask = |to: &str| {
+        args(serde_json::json!({
+            "message": "what constrains it?", "to": to,
+            "chat": "engineering", "parent": null
+        }))
+    };
+
+    // Nothing outstanding: the first ask is taken.
+    tools
+        .call("lead", "ask", &ask("solver"))
+        .expect("the first ask");
+    assert_eq!(tools.drain("lead").len(), 1);
+
+    // The host hands over what the ledger holds before the next turn.
+    tools.awaiting("lead", vec!["solver".to_owned()]);
+    let refusal = tools
+        .call("lead", "ask", &ask("solver"))
+        .expect_err("a second ask to the same seat");
+    assert!(
+        refusal.contains("already asked @solver"),
+        "the refusal names the seat and why: {refusal}"
+    );
+    assert!(
+        tools.drain("lead").is_empty(),
+        "a refused ask records nothing, so no second conversation opens"
+    );
+
+    // Another seat is still reachable: waiting on one is not waiting on all.
+    tools
+        .call("lead", "ask", &ask("scribe"))
+        .expect("a different seat");
+    assert_eq!(tools.drain("lead").len(), 1);
+
+    // And once the answer lands the host clears it, so the pair is reachable
+    // again -- a later episode may need the same two seats talking.
+    tools.awaiting("lead", Vec::new());
+    tools
+        .call("lead", "ask", &ask("solver"))
+        .expect("after it concluded");
+    assert_eq!(tools.drain("lead").len(), 1);
+}
