@@ -21,10 +21,9 @@ pub(super) struct Child {
     pub(super) last_by_askee: Option<String>,
     /// Whether the seat asked has been told once that it has not answered.
     pub(super) nudged: bool,
-    /// Whether the seat asked took a turn in this wave. Within-wave
-    /// bookkeeping: a snapshot is only taken between waves, where it is
-    /// false, so it is not carried across one.
-    #[serde(skip)]
+    /// Whether the seat asked took a turn in this wave. Carried across a
+    /// snapshot: a wave can be resumed mid-flight, and dropping this would
+    /// lose the nudge owed to a seat that was asked and said nothing.
     pub(super) turned: bool,
 }
 

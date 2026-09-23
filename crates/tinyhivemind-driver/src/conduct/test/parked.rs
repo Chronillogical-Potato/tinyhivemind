@@ -4,7 +4,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use super::support::{
-    Journal, ask, broadcast, complete, hive, policy, seats, two_seat, wave, wave_parking,
+    Journal, ask, broadcast, complete, hive, policy, run, seats, two_seat, wave, wave_parking,
 };
 use crate::conduct::{ConductPolicy, Conductor, Event};
 use crate::driver::BroadcastRouting;
@@ -266,7 +266,7 @@ fn a_snapshot_is_taken_between_waves_and_carries_the_episode_on() {
 }
 
 #[test]
-fn a_snapshot_is_refused_while_a_commit_is_in_flight() {
+fn a_snapshot_is_refused_only_while_the_host_holds_an_unreported_commit() {
     let hive = hive(&["one", "two"]);
     let driver = CompletionDriver::new(&hive, 4).expect("driver");
     let route_policy = policy(1);
@@ -291,11 +291,26 @@ fn a_snapshot_is_refused_while_a_commit_is_in_flight() {
         &turns[0],
         [tinyhivemind::speech::ToolCall::Speak(complete("done"))],
     );
-    // A commit is queued and the host has not been told its sequence.
+    // Mid-wave, before any commit leaves: the wave travels with the
+    // snapshot, so this is recordable.
+    let held = conductor
+        .snapshot()
+        .expect("a wave in progress is still recordable");
+    assert!(
+        !held.mid_wave_is_empty(),
+        "the snapshot carries what the wave has not committed yet"
+    );
+    // The host now holds a commit whose sequence it has not reported. The
+    // conductor cannot say whether that row landed, so it will not write a
+    // claim either way.
     let step = conductor.step().expect("a step");
     assert!(matches!(step, Some(crate::Step::Commit(_))));
     assert!(
         conductor.snapshot().is_none(),
-        "mid-wave there are rows the journal does not hold yet"
+        "a commit is out there and unreported"
     );
+    // Reported, and it is recordable again.
+    let sequence = journal.append("one", "COMPLETE: done", None, None);
+    run(conductor.committed(sequence)).expect("committed");
+    assert!(conductor.snapshot().is_some());
 }

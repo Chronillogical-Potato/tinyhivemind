@@ -80,13 +80,19 @@ pub trait Journal: Send + Sync {
         Vec::new()
     }
 
-    /// The episode paused where it can be resumed: every row it committed
-    /// is in the journal and nothing is in flight. The default keeps
+    /// The episode is exactly where this snapshot says. The default keeps
     /// nothing, and such a host loses a running episode to a restart.
     ///
-    /// Called once per wave, after the wave settles. A host stores the
-    /// snapshot beside its rows and hands it to
-    /// [`resume_episode`] on boot.
+    /// Called after **every committed row**, not once per wave: the row is
+    /// in the journal and the conductor has folded it, so the two agree.
+    /// A host stores the snapshot beside its rows -- ideally in the same
+    /// journal, so the ordering is the journal's own -- and hands the
+    /// newest one to [`resume_episode`] on boot.
+    ///
+    /// A crash between a row landing and this returning replays that one
+    /// row: the resumed conductor has not folded it, so the seat that wrote
+    /// it runs again. A host that cannot tolerate a duplicate row keys its
+    /// appends and drops one it has already written.
     ///
     /// # Errors
     ///
@@ -227,6 +233,10 @@ where
     J: Journal,
     R: SeatRunner,
 {
+    // A snapshot taken mid-wave comes back mid-wave: drain what it restored
+    // before proposing anything, because `begin_wave` resets the phase and
+    // would drop those steps on the floor.
+    settle_wave(journal, &mut conductor).await?;
     loop {
         if conductor.finished() {
             break;
@@ -271,11 +281,10 @@ where
                 }
             }
         }
-        while let Some(step) = conductor.step()? {
-            settle(journal, &mut conductor, step).await?;
-        }
-        // The wave settled: every row it produced is in the journal and
-        // nothing is in flight, which is the one point a snapshot is true.
+        settle_wave(journal, &mut conductor).await?;
+        // And once the wave is over, whether or not it committed anything:
+        // a wave that only parked a seat or nudged one moved state no row
+        // records, and a restart would otherwise lose it.
         if let Some(snapshot) = conductor.snapshot() {
             journal.checkpoint(&snapshot)?;
         }
@@ -287,6 +296,26 @@ where
         conversations: conductor.conversations(),
         settled: conductor.state().episode().settled(),
     })
+}
+
+/// Take every step the wave has left, checkpointing after each committed
+/// row so a crash replays at most that one row.
+async fn settle_wave<A: BoundAgent, J: Journal>(
+    journal: &J,
+    conductor: &mut Conductor<'_, A>,
+) -> Result<()> {
+    while let Some(step) = conductor.step()? {
+        let committed = matches!(step, Step::Commit(_));
+        settle(journal, conductor, step).await?;
+        // After a commit the row is in the journal and the conductor has
+        // folded it, so the snapshot and the journal agree. A note or an
+        // event moves nothing a resume would double-count, so neither is
+        // worth a write.
+        if committed && let Some(snapshot) = conductor.snapshot() {
+            journal.checkpoint(&snapshot)?;
+        }
+    }
+    Ok(())
 }
 
 /// One step taken: a commit appended and its sequence reported, a note

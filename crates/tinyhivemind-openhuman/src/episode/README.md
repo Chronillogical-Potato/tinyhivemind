@@ -21,10 +21,17 @@ has nothing to run and seats are parked, the loop asks `released`, which is
 where a host blocks on its own approval queue; a host that releases nobody
 ends the episode with `Error::Parked` rather than spinning.
 
-`checkpoint` is handed a `ConductorState` once per wave, after the wave
-settles, and `resume_episode` carries an episode on from one: the same
-conversations open, the same seats held. A host that keeps nothing loses a
-running episode to a restart.
+`checkpoint` is handed a `ConductorState` after every committed row, and
+again at the end of each wave so a wave that only parked or nudged a seat
+is durable too. `resume_episode` carries an episode on from the newest one:
+the same conversations open, the same seats held, and a wave that was in
+progress resumed mid-wave. A host that keeps nothing loses a running
+episode to a restart.
+
+The residual window is one row: a crash between a row landing and
+`checkpoint` returning leaves the journal ahead of the snapshot, so the
+seat that wrote that row runs again. A host that cannot tolerate a
+duplicate keys its appends and drops one it has already written.
 
 `channels` names every conversation the seat is in that this episode does
 not run. Their newest rows are read through `gather_elsewhere`, bounded by

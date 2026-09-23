@@ -116,10 +116,12 @@ pub fn starters(plan: &RoutingPlan, fallback: &str) -> Vec<String> {
 /// folds it, the conversations open and concluded, and what each seat has
 /// been shown, nudged for, or held on.
 ///
-/// Taken between waves and nowhere else. Mid-wave a conductor holds rows the
-/// host has not appended yet and a commit whose sequence it has not been
-/// told; a snapshot there would either lose those rows or duplicate them on
-/// resume, so [`Conductor::snapshot`] answers `None` until the wave settles.
+/// Carries the wave in progress too, so a snapshot is exact rather than
+/// per-wave: a host checkpoints after every committed row, and a crash
+/// replays at most the one row whose sequence had not been reported yet.
+/// The only point a snapshot cannot be taken is while the host holds a
+/// commit it has not reported -- the conductor does not know whether that
+/// row landed -- and [`Conductor::snapshot`] answers `None` there.
 ///
 /// The driver, the routing and the policy are **not** here. They are the
 /// host's to supply again on resume, exactly as they were on open: a router
@@ -150,6 +152,24 @@ pub struct ConductorState {
     waves: u64,
     /// Seats completed with their work for a spent broadcast budget.
     discharged: u64,
+    /// The wave in progress: what has been said and not yet committed, and
+    /// the steps the host has not taken. Empty between waves.
+    wave: Wave,
+}
+
+impl ConductorState {
+    /// Whether this snapshot was taken between waves, with nothing said and
+    /// nothing left for the host to do.
+    ///
+    /// A host does not need this -- [`resume_episode`] drains whatever the
+    /// wave holds either way -- but it is the difference between a restart
+    /// that lost a whole wave and one that lost a row.
+    ///
+    /// [`resume_episode`]: https://docs.rs/tinyhivemind-openhuman
+    #[must_use]
+    pub fn mid_wave_is_empty(&self) -> bool {
+        self.wave.is_idle()
+    }
 }
 
 /// The desk episode, its conversations, and the rules between them.
@@ -400,15 +420,21 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         Ok(turns)
     }
 
-    /// Everything needed to rebuild this conductor, or `None` mid-wave.
+    /// Everything needed to rebuild this conductor, or `None` while the
+    /// host holds a commit it has not reported.
     ///
-    /// A host checkpoints where the loop already pauses: after
-    /// [`step`](Self::step) has returned `None` and before the next wave
-    /// begins. Anywhere else there are rows in flight, and the snapshot
-    /// would be a lie about what the journal holds.
+    /// A host checkpoints after every committed row. The wave in progress
+    /// travels with the snapshot, so a crash replays at most that one row:
+    /// the conductor comes back mid-wave with the same seats having spoken
+    /// and the same steps still to take.
+    ///
+    /// `None` means the host is holding a commit whose sequence it has not
+    /// reported through [`committed`](Self::committed). The conductor cannot
+    /// say whether that row reached the journal, so it will not write down a
+    /// claim either way; the caller reports the sequence and asks again.
     #[must_use]
     pub fn snapshot(&self) -> Option<ConductorState> {
-        if !self.wave.settled() {
+        if !self.wave.recordable() {
             return None;
         }
         Some(ConductorState {
@@ -427,6 +453,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             turns: self.turns,
             waves: self.waves,
             discharged: self.discharged,
+            wave: self.wave.clone(),
         })
     }
 
@@ -434,8 +461,11 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     /// host supplies again.
     ///
     /// The episode carries on where it paused: the same conversations are
-    /// open, the same seats are held, and a seat already nudged for its
-    /// assignment is not nudged again for it.
+    /// open, the same seats are held, a seat already nudged for its
+    /// assignment is not nudged again for it, and a wave that was in
+    /// progress resumes mid-wave. A caller drains
+    /// [`step`](Self::step) before proposing a new wave, or the restored
+    /// steps are dropped.
     ///
     /// # Errors
     ///
@@ -463,7 +493,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             turns: snapshot.turns,
             waves: snapshot.waves,
             discharged: snapshot.discharged,
-            wave: Wave::default(),
+            wave: snapshot.wave,
         })
     }
 
