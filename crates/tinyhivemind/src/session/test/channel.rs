@@ -201,3 +201,178 @@ async fn channel_projection_stops_reading_once_the_window_is_met() {
     );
     assert_eq!(log.call_count(), 1);
 }
+
+/// One row of a private exchange, authored by `id` and addressed to `members`.
+fn confided(
+    sequence: u64,
+    id: &str,
+    members: &[&str],
+    parent: Option<u64>,
+    content: &str,
+) -> LogMessage {
+    LogMessage {
+        parent: parent.map(Sequence),
+        author: SessionAuthor::Agent {
+            id: id.into(),
+            label: id.into(),
+        },
+        audience: tinyhivemind_core::aside::Audience::Aside {
+            members: members.iter().map(|member| (*member).to_owned()).collect(),
+        },
+        ..message(sequence, Some("engineering"), parent, content)
+    }
+}
+
+fn seat(id: &str) -> SessionQuery {
+    SessionQuery {
+        viewer: tinyhivemind_core::aside::Viewer::Agent { id: id.into() },
+        ..query(30)
+    }
+}
+
+/// **A party to a confided thread reads the whole of it.**
+///
+/// Root-and-first-reply is written for the reader of a busy desk. Applied to
+/// a seat that is *in* the conversation it withholds that seat's own exchange
+/// from it: the question, the first line of the answer, and nothing else. A
+/// runner that keeps its context between turns does not notice -- the whole
+/// exchange reached it once in its brief -- but one that rebuilds a seat's
+/// history from the log every turn has only this projection, and the rest of
+/// the conversation is simply gone.
+#[tokio::test]
+async fn a_party_to_a_confided_thread_reads_every_reply() {
+    // A fresh log per viewer: `FakeLog` replays its pages once.
+    let exchange = || {
+        FakeLog::new(vec![page(
+            vec![
+                confided(5, "grace", &["ada"], Some(2), "and the second half"),
+                confided(4, "grace", &["ada"], Some(2), "the first half"),
+                confided(
+                    2,
+                    "ada",
+                    &["grace"],
+                    None,
+                    "between us: what constrains it?",
+                ),
+            ],
+            None,
+        )])
+    };
+
+    for party in ["ada", "grace"] {
+        let log = exchange();
+        let history = project_session(&log, &seat(party)).await.expect("projects");
+        assert_eq!(
+            history
+                .iter()
+                .map(|item| item.content.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "between us: what constrains it?",
+                "the first half",
+                "and the second half"
+            ],
+            "{party} is in this conversation and reads all of it"
+        );
+    }
+}
+
+/// And nobody else does. A third seat reads the opening it was never part of
+/// as a stub, exactly as before: widening the rule for a party must not widen
+/// it for a stranger.
+#[tokio::test]
+async fn a_seat_outside_a_confided_thread_still_reads_none_of_it() {
+    let rows = vec![
+        confided(5, "grace", &["ada"], Some(2), "and the second half"),
+        confided(4, "grace", &["ada"], Some(2), "the first half"),
+        confided(
+            2,
+            "ada",
+            &["grace"],
+            None,
+            "between us: what constrains it?",
+        ),
+    ];
+    let log = FakeLog::new(vec![page(rows, None)]);
+    let history = project_session(&log, &seat("linus"))
+        .await
+        .expect("projects");
+    assert!(
+        history.iter().all(|item| item.readable().is_none()),
+        "content reached a seat outside the conversation: {history:?}"
+    );
+}
+
+/// **An ordinary desk thread is unchanged.** Every viewer is admitted to a
+/// desk row, so a rule keyed on admission alone would keep every reply for
+/// everyone -- one level flattened, which is the leak this narrowing exists
+/// to close. The exception is keyed on the root being an aside, so a desk
+/// thread still gives up its root and one reply.
+#[tokio::test]
+async fn an_open_desk_thread_still_gives_up_only_its_first_reply() {
+    let log = FakeLog::new(vec![page(
+        vec![
+            message(5, Some("engineering"), Some(2), "second reply"),
+            message(4, Some("engineering"), Some(2), "first reply"),
+            message(2, Some("engineering"), None, "channel"),
+        ],
+        None,
+    )]);
+    let history = project_session(&log, &seat("ada")).await.expect("projects");
+    assert_eq!(
+        history
+            .iter()
+            .map(|item| item.content.as_str())
+            .collect::<Vec<_>>(),
+        vec!["channel", "first reply"]
+    );
+}
+
+/// **A confided thread survives a window smaller than itself.**
+///
+/// The walk runs newest-first, so every reply is met before its root. Counting
+/// a reply against its own audience -- rather than banking it until the root
+/// says whether it is kept -- stops the scan on the replies alone. Narrowing
+/// then finds no root for them, drops all of them, and the seat is handed an
+/// empty history: the exact failure the confided-thread exception exists to
+/// prevent, reintroduced by the bookkeeping meant to bound it.
+///
+/// Both review lanes on #75 caught this; the case is pinned here so it cannot
+/// come back.
+#[tokio::test]
+async fn a_confided_thread_is_not_lost_to_a_window_smaller_than_itself() {
+    let mut rows = vec![];
+    for sequence in (3..=8).rev() {
+        rows.push(confided(
+            sequence,
+            "grace",
+            &["ada"],
+            Some(2),
+            &format!("reply {sequence}"),
+        ));
+    }
+    rows.push(confided(2, "ada", &["grace"], None, "between us"));
+    let log = FakeLog::new(vec![page(rows, None)]);
+
+    // A window of two, against a root and six replies.
+    let history = project_session(
+        &log,
+        &SessionQuery {
+            viewer: tinyhivemind_core::aside::Viewer::Agent { id: "ada".into() },
+            ..query(2)
+        },
+    )
+    .await
+    .expect("projects");
+
+    let read: Vec<&str> = history.iter().filter_map(|item| item.readable()).collect();
+    assert!(
+        read.contains(&"between us"),
+        "the scan stopped before the root and narrowing dropped the thread: {read:?}"
+    );
+    assert_eq!(
+        read.len(),
+        7,
+        "the thread arrives whole, not in pieces: {read:?}"
+    );
+}

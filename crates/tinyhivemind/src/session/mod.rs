@@ -12,7 +12,7 @@ pub use types::{
 
 use crate::{Error, Result};
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     error::Error as StdError,
     future::Future,
     pin::Pin,
@@ -105,6 +105,20 @@ pub(crate) fn admits(message: &LogMessage, viewer: &Viewer) -> bool {
     message
         .audience
         .admits(viewer, author_agent_id(&message.author))
+}
+
+/// Whether a row confides a thread to `viewer`: an [`Audience::Aside`] that
+/// admits them, read by a seat.
+///
+/// Only a seat. An operator is admitted to every row by construction, so
+/// treating them as a party would hand them every interior of every private
+/// exchange at channel level -- a change to what the open desk reads, which
+/// is not what this is for. What this is for is a seat that rebuilds its own
+/// history from the log and would otherwise lose its own conversation.
+pub(crate) fn confidable(audience: &Audience, author: &SessionAuthor, viewer: &Viewer) -> bool {
+    matches!(viewer, Viewer::Agent { .. })
+        && matches!(audience, Audience::Aside { .. })
+        && audience.admits(viewer, author_agent_id(author))
 }
 
 /// Narrow an already-projected transcript to what one viewer may read.
@@ -427,12 +441,16 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
     let mut seen = Vec::new();
     let mut candidates: Vec<Candidate> = Vec::new();
     // Survivors, counted newest-first while the parent of an older row is still
-    // unknown: every non-empty root survives, and every distinct parent
-    // contributes at most one promoted reply. A parent that turns out to be a
-    // reply, or to sit outside the scan, is counted here and dropped below, so
-    // this over-estimates and the walk can stop a little early — never late.
-    let mut roots = BTreeSet::new();
+    // unknown: every non-empty root survives, every distinct parent contributes
+    // a promoted reply, and a thread confided to this viewer contributes all of
+    // its replies. A parent that turns out to be a reply, or to sit outside the
+    // scan, is counted here and dropped below, so this over-estimates and the
+    // walk can stop a little early — never late.
     let mut answered = BTreeSet::new();
+    // Replies beyond their root's first, by root, until the root says whether
+    // they are kept. Spent when a confided root arrives; dropped otherwise.
+    let mut banked: BTreeMap<Sequence, usize> = BTreeMap::new();
+    let mut survivors = 0_usize;
     let mut window_met = false;
 
     while scanned < SCAN_LIMIT && !window_met {
@@ -461,10 +479,40 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
                 continue;
             }
             match message.parent {
-                None => roots.insert(message.sequence),
-                Some(parent) => answered.insert(parent),
-            };
-            if roots.len() + answered.len() >= query.window {
+                None => {
+                    survivors += 1;
+                    // The root decides, so the replies banked under it are
+                    // counted here rather than where they were seen. This is
+                    // the *only* place the decision can be made: narrowing
+                    // retains a reply when the **root** is confided, and a
+                    // newest-first walk meets every reply before its root.
+                    //
+                    // Counting a reply on its own audience instead gets both
+                    // directions wrong. An aside root with desk-visible
+                    // replies undercounts, and the projection then runs past
+                    // `window`. Worse, admitted replies of a root still
+                    // beyond the scan overcount, the walk stops before
+                    // reaching that root, and narrowing -- finding no root --
+                    // drops every one of them, handing the seat the empty
+                    // history this whole exception exists to prevent.
+                    if confidable(&message.audience, &message.author, &query.viewer) {
+                        survivors += banked.remove(&message.sequence).unwrap_or(0);
+                    }
+                }
+                Some(parent) => {
+                    // One promoted reply per root, whoever is reading. Any
+                    // further reply is banked against its root and counts only
+                    // if that root turns out to be confided; a root that never
+                    // arrives leaves its bank unspent, which is exactly what
+                    // narrowing does with those replies.
+                    if answered.insert(parent) {
+                        survivors += 1;
+                    } else {
+                        *banked.entry(parent).or_default() += 1;
+                    }
+                }
+            }
+            if survivors >= query.window {
                 window_met = true;
                 break;
             }
@@ -492,15 +540,60 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
     // Every survivor was counted by the estimate above, and the walk stops the
     // moment that estimate reaches the window, so the window needs no second
     // enforcement here — and enforcing it would have to trim the newest end.
-    debug_assert!(projected.len() <= query.window);
+    //
+    // One thread may carry the result past the window: a thread confided to
+    // this seat is delivered whole, and its replies are all counted at once,
+    // when the walk reaches the root that admits them. Trimming to the window
+    // there would cut the thread rather than shorten the page — and cutting
+    // it at the oldest end takes the root, leaving replies narrowing would
+    // then drop. A page slightly over is the coherent answer; a thread in
+    // pieces is not.
+    debug_assert!(
+        projected.len() <= query.window || projected.iter().any(|(_, thread)| thread.is_some()),
+        "over the window with no thread to account for it: {} > {}",
+        projected.len(),
+        query.window
+    );
     Ok((projected, settlements))
 }
 
-/// Keep every root and each root's first reply, from a chronological slice.
+/// Keep every root and each root's first reply, from a chronological slice --
+/// and the whole of a confided thread, for the viewer it was confided to.
 ///
 /// A reply whose parent is itself a reply is a thread interior and never
 /// promoted; a reply whose parent fell outside the scan cannot be shown to be a
 /// root and is dropped rather than flattened into the channel.
+///
+/// # The exception, and why it is this narrow
+///
+/// "Roots and first replies" is written for the reader of a busy desk: it
+/// keeps a thread legible without handing over the interior of a conversation
+/// that is not theirs. Applied to a **party** of that conversation it does
+/// something else -- it withholds their own exchange from them, keeping the
+/// question they asked and the first line of the answer, and dropping the
+/// rest.
+///
+/// That is invisible to a runner that holds its context between turns: the
+/// exchange reached it once in [`EpisodeBrief::conversations`][brief] and it
+/// still has it. A runner that rebuilds a seat's history from the log every
+/// turn has only this projection, so the rest of the conversation is gone --
+/// measured against a hosted desk, where seats retained nothing of their own
+/// conversations at all.
+///
+/// So a root that is an [`Audience::Aside`] naming this seat is *confided* to
+/// it, and it reads every reply under it ([`confidable`]). The scope is
+/// deliberate, and each part of it closes something:
+///
+/// - only an aside, never an ordinary desk thread. Keeping every reply of one
+///   of those is "one level flattened", which the spec calls the pre-A leak
+///   with extra steps -- and every viewer is admitted to a desk row, so the
+///   exception would have no edge at all.
+/// - only a party. A third seat still reads the opening and a stub, exactly
+///   as before.
+/// - only a seat. An operator is admitted to everything, so counting them a
+///   party would put every private interior on the open desk.
+///
+/// [brief]: https://docs.rs/tinyhivemind-driver
 fn narrow_to_roots_and_first_replies(
     candidates: Vec<Candidate>,
     viewer: &Viewer,
@@ -508,6 +601,14 @@ fn narrow_to_roots_and_first_replies(
     let roots: BTreeSet<Sequence> = candidates
         .iter()
         .filter(|candidate| candidate.parent.is_none())
+        .map(|candidate| candidate.sequence)
+        .collect();
+    // The threads confided to this seat: an aside root names its parties, and
+    // a party reads the whole of what it opened.
+    let confided: BTreeSet<Sequence> = candidates
+        .iter()
+        .filter(|candidate| candidate.parent.is_none())
+        .filter(|candidate| confidable(&candidate.audience, &candidate.author, viewer))
         .map(|candidate| candidate.sequence)
         .collect();
     // A parentless row that something replies to opens a thread of its own;
@@ -527,7 +628,15 @@ fn narrow_to_roots_and_first_replies(
         }
         let keep = match candidate.parent {
             None => true,
-            Some(parent) => roots.contains(&parent) && promoted.insert(parent),
+            // `insert` first and unconditionally: it is what records that this
+            // root has spent its promotion, and a confided thread must not
+            // leave that unspent for a later, unconfided reader of the same
+            // slice.
+            Some(parent) if roots.contains(&parent) => {
+                let first = promoted.insert(parent);
+                first || confided.contains(&parent)
+            }
+            Some(_) => false,
         };
         if keep {
             // A promoted reply's identity is the root it hangs under; a root
