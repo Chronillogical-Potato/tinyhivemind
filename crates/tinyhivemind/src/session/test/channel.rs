@@ -327,3 +327,52 @@ async fn an_open_desk_thread_still_gives_up_only_its_first_reply() {
         vec!["channel", "first reply"]
     );
 }
+
+/// **A confided thread survives a window smaller than itself.**
+///
+/// The walk runs newest-first, so every reply is met before its root. Counting
+/// a reply against its own audience -- rather than banking it until the root
+/// says whether it is kept -- stops the scan on the replies alone. Narrowing
+/// then finds no root for them, drops all of them, and the seat is handed an
+/// empty history: the exact failure the confided-thread exception exists to
+/// prevent, reintroduced by the bookkeeping meant to bound it.
+///
+/// Both review lanes on #75 caught this; the case is pinned here so it cannot
+/// come back.
+#[tokio::test]
+async fn a_confided_thread_is_not_lost_to_a_window_smaller_than_itself() {
+    let mut rows = vec![];
+    for sequence in (3..=8).rev() {
+        rows.push(confided(
+            sequence,
+            "grace",
+            &["ada"],
+            Some(2),
+            &format!("reply {sequence}"),
+        ));
+    }
+    rows.push(confided(2, "ada", &["grace"], None, "between us"));
+    let log = FakeLog::new(vec![page(rows, None)]);
+
+    // A window of two, against a root and six replies.
+    let history = project_session(
+        &log,
+        &SessionQuery {
+            viewer: tinyhivemind_core::aside::Viewer::Agent { id: "ada".into() },
+            ..query(2)
+        },
+    )
+    .await
+    .expect("projects");
+
+    let read: Vec<&str> = history.iter().filter_map(|item| item.readable()).collect();
+    assert!(
+        read.contains(&"between us"),
+        "the scan stopped before the root and narrowing dropped the thread: {read:?}"
+    );
+    assert_eq!(
+        read.len(),
+        7,
+        "the thread arrives whole, not in pieces: {read:?}"
+    );
+}

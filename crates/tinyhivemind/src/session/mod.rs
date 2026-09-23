@@ -12,7 +12,7 @@ pub use types::{
 
 use crate::{Error, Result};
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     error::Error as StdError,
     future::Future,
     pin::Pin,
@@ -447,6 +447,9 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
     // scan, is counted here and dropped below, so this over-estimates and the
     // walk can stop a little early — never late.
     let mut answered = BTreeSet::new();
+    // Replies beyond their root's first, by root, until the root says whether
+    // they are kept. Spent when a confided root arrives; dropped otherwise.
+    let mut banked: BTreeMap<Sequence, usize> = BTreeMap::new();
     let mut survivors = 0_usize;
     let mut window_met = false;
 
@@ -476,17 +479,36 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
                 continue;
             }
             match message.parent {
-                None => survivors += 1,
+                None => {
+                    survivors += 1;
+                    // The root decides, so the replies banked under it are
+                    // counted here rather than where they were seen. This is
+                    // the *only* place the decision can be made: narrowing
+                    // retains a reply when the **root** is confided, and a
+                    // newest-first walk meets every reply before its root.
+                    //
+                    // Counting a reply on its own audience instead gets both
+                    // directions wrong. An aside root with desk-visible
+                    // replies undercounts, and the projection then runs past
+                    // `window`. Worse, admitted replies of a root still
+                    // beyond the scan overcount, the walk stops before
+                    // reaching that root, and narrowing -- finding no root --
+                    // drops every one of them, handing the seat the empty
+                    // history this whole exception exists to prevent.
+                    if confidable(&message.audience, &message.author, &query.viewer) {
+                        survivors += banked.remove(&message.sequence).unwrap_or(0);
+                    }
+                }
                 Some(parent) => {
-                    // A reply survives as its root's first, or as one line of a
-                    // thread confided to this viewer. Which of the two cannot be
-                    // decided here -- the walk runs newest-first, so the root is
-                    // still ahead -- so a reply this viewer may read is counted
-                    // either way. That over-counts, in the direction this
-                    // estimate is already allowed to be wrong.
-                    let first = answered.insert(parent);
-                    if first || confidable(&message.audience, &message.author, &query.viewer) {
+                    // One promoted reply per root, whoever is reading. Any
+                    // further reply is banked against its root and counts only
+                    // if that root turns out to be confided; a root that never
+                    // arrives leaves its bank unspent, which is exactly what
+                    // narrowing does with those replies.
+                    if answered.insert(parent) {
                         survivors += 1;
+                    } else {
+                        *banked.entry(parent).or_default() += 1;
                     }
                 }
             }
@@ -518,7 +540,20 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
     // Every survivor was counted by the estimate above, and the walk stops the
     // moment that estimate reaches the window, so the window needs no second
     // enforcement here — and enforcing it would have to trim the newest end.
-    debug_assert!(projected.len() <= query.window);
+    //
+    // One thread may carry the result past the window: a thread confided to
+    // this seat is delivered whole, and its replies are all counted at once,
+    // when the walk reaches the root that admits them. Trimming to the window
+    // there would cut the thread rather than shorten the page — and cutting
+    // it at the oldest end takes the root, leaving replies narrowing would
+    // then drop. A page slightly over is the coherent answer; a thread in
+    // pieces is not.
+    debug_assert!(
+        projected.len() <= query.window || projected.iter().any(|(_, thread)| thread.is_some()),
+        "over the window with no thread to account for it: {} > {}",
+        projected.len(),
+        query.window
+    );
     Ok((projected, settlements))
 }
 
