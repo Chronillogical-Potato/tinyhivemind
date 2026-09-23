@@ -81,6 +81,10 @@ pub trait EpisodeHost: Journal + 'static {
     /// admits by name and a host tool sharing a bare name would be admitted
     /// past the host's gate. The brief and the desk's notes name the served
     /// vocabulary, so a host that prefixes says so in its own prompt.
+    fn tool_prefix(&self) -> String {
+        String::new()
+    }
+
     /// The seat's own standing prompt, for the turns that are not its first.
     ///
     /// A seat's session is cleared and reseeded from the host's log every
@@ -98,10 +102,6 @@ pub trait EpisodeHost: Journal + 'static {
     fn persona(&self, seat: &str) -> Option<String> {
         let _ = seat;
         None
-    }
-
-    fn tool_prefix(&self) -> String {
-        String::new()
     }
 
     /// After a turn ran, with its usage when the session reported any. The
