@@ -107,6 +107,20 @@ pub(crate) fn admits(message: &LogMessage, viewer: &Viewer) -> bool {
         .admits(viewer, author_agent_id(&message.author))
 }
 
+/// Whether a row confides a thread to `viewer`: an [`Audience::Aside`] that
+/// admits them, read by a seat.
+///
+/// Only a seat. An operator is admitted to every row by construction, so
+/// treating them as a party would hand them every interior of every private
+/// exchange at channel level -- a change to what the open desk reads, which
+/// is not what this is for. What this is for is a seat that rebuilds its own
+/// history from the log and would otherwise lose its own conversation.
+pub(crate) fn confidable(audience: &Audience, author: &SessionAuthor, viewer: &Viewer) -> bool {
+    matches!(viewer, Viewer::Agent { .. })
+        && matches!(audience, Audience::Aside { .. })
+        && audience.admits(viewer, author_agent_id(author))
+}
+
 /// Narrow an already-projected transcript to what one viewer may read.
 ///
 /// Elides every row the viewer is not admitted to and collapses each run of
@@ -427,12 +441,13 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
     let mut seen = Vec::new();
     let mut candidates: Vec<Candidate> = Vec::new();
     // Survivors, counted newest-first while the parent of an older row is still
-    // unknown: every non-empty root survives, and every distinct parent
-    // contributes at most one promoted reply. A parent that turns out to be a
-    // reply, or to sit outside the scan, is counted here and dropped below, so
-    // this over-estimates and the walk can stop a little early — never late.
-    let mut roots = BTreeSet::new();
+    // unknown: every non-empty root survives, every distinct parent contributes
+    // a promoted reply, and a thread confided to this viewer contributes all of
+    // its replies. A parent that turns out to be a reply, or to sit outside the
+    // scan, is counted here and dropped below, so this over-estimates and the
+    // walk can stop a little early — never late.
     let mut answered = BTreeSet::new();
+    let mut survivors = 0_usize;
     let mut window_met = false;
 
     while scanned < SCAN_LIMIT && !window_met {
@@ -461,10 +476,21 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
                 continue;
             }
             match message.parent {
-                None => roots.insert(message.sequence),
-                Some(parent) => answered.insert(parent),
-            };
-            if roots.len() + answered.len() >= query.window {
+                None => survivors += 1,
+                Some(parent) => {
+                    // A reply survives as its root's first, or as one line of a
+                    // thread confided to this viewer. Which of the two cannot be
+                    // decided here -- the walk runs newest-first, so the root is
+                    // still ahead -- so a reply this viewer may read is counted
+                    // either way. That over-counts, in the direction this
+                    // estimate is already allowed to be wrong.
+                    let first = answered.insert(parent);
+                    if first || confidable(&message.audience, &message.author, &query.viewer) {
+                        survivors += 1;
+                    }
+                }
+            }
+            if survivors >= query.window {
                 window_met = true;
                 break;
             }
@@ -496,11 +522,43 @@ async fn project_channel(log: &(dyn SessionLog + '_), query: &SessionQuery) -> R
     Ok((projected, settlements))
 }
 
-/// Keep every root and each root's first reply, from a chronological slice.
+/// Keep every root and each root's first reply, from a chronological slice --
+/// and the whole of a confided thread, for the viewer it was confided to.
 ///
 /// A reply whose parent is itself a reply is a thread interior and never
 /// promoted; a reply whose parent fell outside the scan cannot be shown to be a
 /// root and is dropped rather than flattened into the channel.
+///
+/// # The exception, and why it is this narrow
+///
+/// "Roots and first replies" is written for the reader of a busy desk: it
+/// keeps a thread legible without handing over the interior of a conversation
+/// that is not theirs. Applied to a **party** of that conversation it does
+/// something else -- it withholds their own exchange from them, keeping the
+/// question they asked and the first line of the answer, and dropping the
+/// rest.
+///
+/// That is invisible to a runner that holds its context between turns: the
+/// exchange reached it once in [`EpisodeBrief::conversations`][brief] and it
+/// still has it. A runner that rebuilds a seat's history from the log every
+/// turn has only this projection, so the rest of the conversation is gone --
+/// measured against a hosted desk, where seats retained nothing of their own
+/// conversations at all.
+///
+/// So a root that is an [`Audience::Aside`] naming this seat is *confided* to
+/// it, and it reads every reply under it ([`confidable`]). The scope is
+/// deliberate, and each part of it closes something:
+///
+/// - only an aside, never an ordinary desk thread. Keeping every reply of one
+///   of those is "one level flattened", which the spec calls the pre-A leak
+///   with extra steps -- and every viewer is admitted to a desk row, so the
+///   exception would have no edge at all.
+/// - only a party. A third seat still reads the opening and a stub, exactly
+///   as before.
+/// - only a seat. An operator is admitted to everything, so counting them a
+///   party would put every private interior on the open desk.
+///
+/// [brief]: https://docs.rs/tinyhivemind-driver
 fn narrow_to_roots_and_first_replies(
     candidates: Vec<Candidate>,
     viewer: &Viewer,
@@ -508,6 +566,14 @@ fn narrow_to_roots_and_first_replies(
     let roots: BTreeSet<Sequence> = candidates
         .iter()
         .filter(|candidate| candidate.parent.is_none())
+        .map(|candidate| candidate.sequence)
+        .collect();
+    // The threads confided to this seat: an aside root names its parties, and
+    // a party reads the whole of what it opened.
+    let confided: BTreeSet<Sequence> = candidates
+        .iter()
+        .filter(|candidate| candidate.parent.is_none())
+        .filter(|candidate| confidable(&candidate.audience, &candidate.author, viewer))
         .map(|candidate| candidate.sequence)
         .collect();
     // A parentless row that something replies to opens a thread of its own;
@@ -527,7 +593,15 @@ fn narrow_to_roots_and_first_replies(
         }
         let keep = match candidate.parent {
             None => true,
-            Some(parent) => roots.contains(&parent) && promoted.insert(parent),
+            // `insert` first and unconditionally: it is what records that this
+            // root has spent its promotion, and a confided thread must not
+            // leave that unspent for a later, unconfided reader of the same
+            // slice.
+            Some(parent) if roots.contains(&parent) => {
+                let first = promoted.insert(parent);
+                first || confided.contains(&parent)
+            }
+            Some(_) => false,
         };
         if keep {
             // A promoted reply's identity is the root it hangs under; a root
