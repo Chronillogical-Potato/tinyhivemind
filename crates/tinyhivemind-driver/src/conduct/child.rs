@@ -1,5 +1,6 @@
 //! One open conversation: a thread of the desk, run as its own episode.
 
+use serde::{Deserialize, Serialize};
 use tinyhivemind::Sequence;
 
 use crate::driver::{ConversationView, DriverState};
@@ -8,7 +9,7 @@ use crate::driver::{ConversationView, DriverState};
 /// with the asker recorded here (ADR 0023). One question, one answer: the
 /// seat asked concludes with `complete_episode`, and its message is the
 /// answer; a follow-up is a further ask.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub(super) struct Child {
     pub(super) root: Sequence,
     pub(super) asker: String,
@@ -20,7 +21,9 @@ pub(super) struct Child {
     pub(super) last_by_askee: Option<String>,
     /// Whether the seat asked has been told once that it has not answered.
     pub(super) nudged: bool,
-    /// Whether the seat asked took a turn in this wave.
+    /// Whether the seat asked took a turn in this wave. Carried across a
+    /// snapshot: a wave can be resumed mid-flight, and dropping this would
+    /// lose the nudge owed to a seat that was asked and said nothing.
     pub(super) turned: bool,
 }
 
@@ -82,7 +85,7 @@ impl Child {
 
 /// A conversation that concluded, kept for the context of the seats that had
 /// it: shown whole once to each, on its next desk turn.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(super) struct Concluded {
     pub(super) root: Sequence,
     pub(super) asker: String,

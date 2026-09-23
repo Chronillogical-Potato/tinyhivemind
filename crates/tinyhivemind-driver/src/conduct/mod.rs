@@ -47,6 +47,8 @@ mod wave;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde::{Deserialize, Serialize};
+
 use tinyhivemind::speech::{ToolCall, Utterance};
 use tinyhivemind::{Conversation, Sequence};
 use tinyhivemind_embed::RoutingPlan;
@@ -107,6 +109,66 @@ pub fn starters(plan: &RoutingPlan, fallback: &str) -> Vec<String> {
             .chain(invited_ids.iter().cloned())
             .collect(),
         RoutingPlan::Clarify { .. } => vec![fallback.to_owned()],
+    }
+}
+
+/// Everything a conductor needs to be rebuilt: the episode as the driver
+/// folds it, the conversations open and concluded, and what each seat has
+/// been shown, nudged for, or held on.
+///
+/// Carries the wave in progress too, so a snapshot is exact rather than
+/// per-wave: a host checkpoints after every committed row, and a crash
+/// replays at most the one row whose sequence had not been reported yet.
+/// The only point a snapshot cannot be taken is while the host holds a
+/// commit it has not reported -- the conductor does not know whether that
+/// row landed -- and [`Conductor::snapshot`] answers `None` there.
+///
+/// The driver, the routing and the policy are **not** here. They are the
+/// host's to supply again on resume, exactly as they were on open: a router
+/// is a live object, and a policy the operator changed between restarts
+/// should be the new one.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ConductorState {
+    /// The desk's id, as every tool call names it.
+    pub chat: String,
+    /// The desk's display name.
+    pub desk_name: String,
+    /// The episode the driver folds.
+    pub state: DriverState,
+    /// The conversations still open, by their ask row.
+    children: Vec<(Sequence, Child)>,
+    /// The conversations that concluded, oldest first.
+    concluded: Vec<Concluded>,
+    /// How many concluded conversations each seat has been shown.
+    shown: BTreeMap<String, usize>,
+    /// The assignment each seat was last nudged for on the desk.
+    desk_nudged: BTreeMap<String, Sequence>,
+    /// Seats held on the host, by the thread they parked in.
+    parked: BTreeMap<String, Option<Sequence>>,
+    /// Turns run so far.
+    turns: u64,
+    /// Waves proposed so far.
+    waves: u64,
+    /// Seats completed with their work for a spent broadcast budget.
+    discharged: u64,
+    /// The wave in progress: what has been said and not yet committed, and
+    /// the steps the host has not taken. Empty between waves.
+    wave: Wave,
+}
+
+impl ConductorState {
+    /// Whether this snapshot was taken between waves, with nothing said and
+    /// nothing left for the host to do.
+    ///
+    /// A host does not need this -- [`resume_episode`] drains whatever the
+    /// wave holds either way -- but it is the difference between a restart
+    /// that lost a whole wave and one that lost a row.
+    ///
+    /// [`resume_episode`]: https://docs.rs/tinyhivemind-openhuman
+    #[must_use]
+    pub fn mid_wave_is_empty(&self) -> bool {
+        self.wave.is_idle()
     }
 }
 
@@ -214,7 +276,12 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     /// Over: the desk is quiescent and no conversation is open.
     #[must_use]
     pub fn finished(&self) -> bool {
-        self.state.quiescent() && self.children.is_empty()
+        // A parked seat is not a finished one, even where its work closed
+        // some other way -- a broadcast it made in the same turn spending
+        // the budget, say. Ending the episode there would strand whatever
+        // the host queued to hold it: the operator answers an approval that
+        // no longer has a loop to return to.
+        self.state.quiescent() && self.children.is_empty() && self.parked.is_empty()
     }
 
     /// The desk episode's state.
@@ -356,6 +423,134 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         // conversation concludes for it.
         self.wave.begin(turns.is_empty() && self.parked.is_empty());
         Ok(turns)
+    }
+
+    /// Everything needed to rebuild this conductor, or `None` while the
+    /// host holds a commit it has not reported.
+    ///
+    /// A host checkpoints after every committed row. The wave in progress
+    /// travels with the snapshot, so a crash replays at most that one row:
+    /// the conductor comes back mid-wave with the same seats having spoken
+    /// and the same steps still to take.
+    ///
+    /// `None` means the host is holding a commit whose sequence it has not
+    /// reported through [`committed`](Self::committed). The conductor cannot
+    /// say whether that row reached the journal, so it will not write down a
+    /// claim either way; the caller reports the sequence and asks again.
+    #[must_use]
+    pub fn snapshot(&self) -> Option<ConductorState> {
+        if !self.wave.recordable() {
+            return None;
+        }
+        Some(ConductorState {
+            chat: self.chat.clone(),
+            desk_name: self.desk_name.clone(),
+            state: self.state.clone(),
+            children: self
+                .children
+                .iter()
+                .map(|(root, child)| (*root, child.clone()))
+                .collect(),
+            concluded: self.concluded.clone(),
+            shown: self.shown.clone(),
+            desk_nudged: self.desk_nudged.clone(),
+            parked: self.parked.clone(),
+            turns: self.turns,
+            waves: self.waves,
+            discharged: self.discharged,
+            wave: self.wave.clone(),
+        })
+    }
+
+    /// Rebuild a conductor from a snapshot, on a driver and a routing the
+    /// host supplies again.
+    ///
+    /// The episode carries on where it paused: the same conversations are
+    /// open, the same seats are held, a seat already nudged for its
+    /// assignment is not nudged again for it, and a wave that was in
+    /// progress resumes mid-wave. A caller drains
+    /// [`step`](Self::step) before proposing a new wave, or the restored
+    /// steps are dropped.
+    ///
+    /// # Errors
+    ///
+    /// The driver refusing the episode or any of its conversations -- a
+    /// state naming a seat or a desk this hive does not have -- and
+    /// [`Error::InconsistentSnapshot`] for a snapshot that disagrees with
+    /// itself: a conversation filed under the wrong root, a cursor past the
+    /// conversations it points into, or a seat held that this desk does not
+    /// seat.
+    pub fn resume(
+        driver: &'a CompletionDriver<'a, A>,
+        routing: BroadcastRouting<'a>,
+        policy: ConductPolicy,
+        snapshot: ConductorState,
+    ) -> Result<Self> {
+        let state = driver.resume(snapshot.state)?;
+        // A snapshot is the host's file, not the conductor's memory: every
+        // part of it is validated here rather than trusted, because the
+        // alternative is an episode that resumes and then misbehaves waves
+        // later with nothing left to say why.
+        let mut children = BTreeMap::new();
+        for (root, mut child) in snapshot.children {
+            if root != child.root {
+                return Err(Error::InconsistentSnapshot {
+                    reason: format!(
+                        "a conversation filed under {} calls itself {}",
+                        root.0, child.root.0
+                    ),
+                });
+            }
+            // The same validation the desk episode gets: the conversation
+            // names this desk, and its two seats are seats of this hive.
+            child.state = driver.resume(child.state)?;
+            children.insert(root, child);
+        }
+        // A cursor into the concluded list, for a seat that has been shown
+        // some of them. Past the end it would panic the first time that
+        // seat is briefed.
+        for (seat, cursor) in &snapshot.shown {
+            if *cursor > snapshot.concluded.len() {
+                return Err(Error::InconsistentSnapshot {
+                    reason: format!(
+                        "@{seat} has been shown {cursor} conversations of {}",
+                        snapshot.concluded.len()
+                    ),
+                });
+            }
+        }
+        // A seat held on the host that this desk does not seat would be held
+        // for ever: it is never proposed, and nothing can release it into a
+        // wave.
+        for seat in snapshot.parked.keys() {
+            if !state
+                .episode()
+                .participants
+                .iter()
+                .any(|participant| &participant.agent_id == seat)
+            {
+                return Err(Error::InconsistentSnapshot {
+                    reason: format!("@{seat} is held but is not seated at this desk"),
+                });
+            }
+        }
+        Ok(Self {
+            driver,
+            routing,
+            chat: snapshot.chat,
+            desk_name: snapshot.desk_name,
+            policy,
+            state,
+            children,
+            concluded: snapshot.concluded,
+            shown: snapshot.shown,
+            desk_nudged: snapshot.desk_nudged,
+            parked: snapshot.parked,
+            turns: snapshot.turns,
+            waves: snapshot.waves,
+            discharged: snapshot.discharged,
+            wave: snapshot.wave,
+        })
     }
 
     /// The seats held on the host, in seat order. An empty wave with any of

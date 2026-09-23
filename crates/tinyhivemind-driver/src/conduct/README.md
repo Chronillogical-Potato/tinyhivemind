@@ -30,7 +30,19 @@ The rules, each with the decision it comes from:
   conversation waits with it rather than concluding for want of a turn.
   Nothing due with a seat parked is a wait, not a stall; `parked` says who,
   and `resume_seat` puts the seat back in the next wave, owed a turn where
-  it parked. `Event::Parked` and `Event::Resumed` mark both.
+  it parked. `Event::Parked` and `Event::Resumed` mark both. A held seat
+  also keeps `finished` false even where its own work closed some other way,
+  because ending the episode there would strand whatever the host queued to
+  hold it: the operator answers an approval with no loop to return to.
+- **Checkpointing**: `snapshot` carries the wave in progress as well as the
+  episode, so a host checkpoints after **every committed row** rather than
+  once per wave, and a crash replays at most the one row whose sequence had
+  not been reported yet. It answers `None` only while the host holds a
+  commit it has not reported through `committed`: the conductor cannot say
+  whether that row landed, so it writes no claim either way. `resume`
+  rebuilds from a snapshot on a driver and a routing the host supplies
+  again, and a caller drains `step` before proposing a new wave -- a
+  restored wave is dropped otherwise, because `begin_wave` resets the phase.
 - **Sorting**: a broadcast or an ask made inside a conversation is desk
   work; only a post or a completion is a row of the conversation.
 - **Refusals**: a completion the ledger refuses is explained to the seat on

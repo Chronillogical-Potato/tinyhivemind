@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
 use tinyhivemind::{Conversation, Sequence, SessionFuture, SessionLog};
+use tinyhivemind_driver::ConductorState;
 use tinyhivemind_driver::{
     AgentBinding, BoundAgent, BoundHive, Commit, Door, EpisodeBrief, Event, HiveGraph, Note,
 };
@@ -146,6 +147,8 @@ pub(super) struct TestJournal {
     pub(super) release: Mutex<VecDeque<Vec<String>>>,
     /// Every set of parked seats the loop asked about.
     pub(super) asked: Mutex<Vec<Vec<String>>>,
+    /// Every snapshot the loop handed over, in order.
+    pub(super) checkpoints: Mutex<Vec<ConductorState>>,
 }
 
 impl TestJournal {
@@ -162,6 +165,7 @@ impl TestJournal {
             channels: Mutex::new(Vec::new()),
             release: Mutex::new(VecDeque::new()),
             asked: Mutex::new(Vec::new()),
+            checkpoints: Mutex::new(Vec::new()),
         }
     }
 
@@ -176,6 +180,14 @@ impl TestJournal {
 impl Journal for TestJournal {
     fn log(&self) -> &dyn SessionLog {
         &self.log
+    }
+
+    fn checkpoint(&self, state: &ConductorState) -> Result<()> {
+        self.checkpoints
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(state.clone());
+        Ok(())
     }
 
     fn channels(&self, _seat: &str) -> Vec<Conversation> {

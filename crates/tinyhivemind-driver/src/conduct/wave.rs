@@ -10,6 +10,8 @@
 
 use std::collections::VecDeque;
 
+use serde::{Deserialize, Serialize};
+
 use tinyhivemind::Sequence;
 use tinyhivemind::speech::Utterance;
 use tinyhivemind_hive::CompletionEpisodeState;
@@ -22,7 +24,8 @@ use tinyhivemind::Conversation;
 
 use crate::{BoundAgent, Error, Result};
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 enum Phase {
     /// No wave in progress.
     #[default]
@@ -40,7 +43,8 @@ enum Phase {
 }
 
 /// One wave's bookkeeping.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub(super) struct Wave {
     phase: Phase,
     /// Nothing was due: every open conversation concludes without an answer.
@@ -59,6 +63,28 @@ pub(super) struct Wave {
 }
 
 impl Wave {
+    /// Whether this wave can be written down truthfully.
+    ///
+    /// Everything here is the conductor's own: a queued step or commit has
+    /// not reached the host, so a snapshot carrying it is recoverable by
+    /// re-issuing it. The one exception is `outstanding` -- a commit the
+    /// host holds and has not reported the sequence of. The conductor does
+    /// not know whether that row landed, so it is the one point a snapshot
+    /// cannot describe the journal, and the caller waits for the report.
+    /// Nothing said, nothing queued, nothing out: between waves.
+    pub(super) fn is_idle(&self) -> bool {
+        matches!(self.phase, Phase::Idle)
+            && self.thread.is_empty()
+            && self.desk.is_empty()
+            && self.steps.is_empty()
+            && self.commits.is_empty()
+            && self.outstanding.is_none()
+    }
+
+    pub(super) fn recordable(&self) -> bool {
+        self.outstanding.is_none()
+    }
+
     pub(super) fn begin(&mut self, nothing_due: bool) {
         self.phase = Phase::Threads;
         self.force_conclusions = nothing_due;

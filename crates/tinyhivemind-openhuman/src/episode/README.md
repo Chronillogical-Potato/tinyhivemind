@@ -9,17 +9,29 @@ conductor's.
 
 `Journal` is what a host implements: its `SessionLog`, `commit` and `note`
 to append the conductor's rows and return the sequence a commit was given,
-and five optional hooks -- `event` to show what the episode did, `compose`
+and six optional hooks -- `event` to show what the episode did, `compose`
 to put its own context in front of the brief, `turn_done` to see a turn's
 reply, refusals and recorded calls, `channels` to name the seat's other
-conversations, and `released` to say which parked seats the host has
-settled. `Report` is what an episode came to.
+conversations, `released` to say which parked seats the host has settled,
+and `checkpoint` to keep the snapshot a restart resumes from. `Report` is what an episode came to.
 
 A turn that comes back `TurnResult::Parked` is recorded with whatever it
 called and then held: the conductor stops proposing that seat. When a wave
 has nothing to run and seats are parked, the loop asks `released`, which is
 where a host blocks on its own approval queue; a host that releases nobody
 ends the episode with `Error::Parked` rather than spinning.
+
+`checkpoint` is handed a `ConductorState` after every committed row, and
+again at the end of each wave so a wave that only parked or nudged a seat
+is durable too. `resume_episode` carries an episode on from the newest one:
+the same conversations open, the same seats held, and a wave that was in
+progress resumed mid-wave. A host that keeps nothing loses a running
+episode to a restart.
+
+The residual window is one row: a crash between a row landing and
+`checkpoint` returning leaves the journal ahead of the snapshot, so the
+seat that wrote that row runs again. A host that cannot tolerate a
+duplicate keys its appends and drops one it has already written.
 
 `channels` names every conversation the seat is in that this episode does
 not run. Their newest rows are read through `gather_elsewhere`, bounded by

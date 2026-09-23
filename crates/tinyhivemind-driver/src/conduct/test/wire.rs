@@ -246,3 +246,80 @@ fn every_event_and_refusal_survives_the_wire() {
         json!({"kind": "not_yet_shown"})
     );
 }
+
+#[test]
+fn a_conductor_snapshot_names_every_field_a_restart_reads_back() {
+    let hive = super::support::hive(&["one", "two"]);
+    let driver = crate::CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = super::support::policy(1);
+    let routing = crate::driver::BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = super::support::Journal::default();
+    let mut conductor =
+        super::support::two_seat(&driver, routing, crate::ConductPolicy::default(), &journal);
+    // A conversation open and a seat held: the two pieces of state a
+    // restart most needs, so both are on the wire.
+    super::support::wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![super::support::ask("two", "which port?")])],
+    )
+    .expect("wave");
+    let snapshot = conductor.snapshot().expect("recordable");
+    let wire = serde_json::to_value(&snapshot).expect("serializes");
+    let object = wire.as_object().expect("an object");
+
+    // The spelling a stored snapshot is read back by. Renaming any of these
+    // orphans every snapshot written by the build before it, which is the
+    // failure the whole checkpoint exists to prevent.
+    let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "chat",
+            "children",
+            "concluded",
+            "desk_name",
+            "desk_nudged",
+            "discharged",
+            "parked",
+            "shown",
+            "state",
+            "turns",
+            "wave",
+            "waves",
+        ]
+    );
+    assert_eq!(object["chat"], json!("engineering"));
+
+    // A conversation on the wire is its root paired with its record: the
+    // key is the root a host files it under, and `resume` refuses a pair
+    // whose two halves disagree.
+    let pair = &wire["children"][0];
+    let child = &pair[1];
+    assert_eq!(
+        pair[0], child["root"],
+        "the key a conversation is filed under is its own root"
+    );
+    for field in [
+        "root", "asker", "askee", "state", "turns", "nudged", "turned",
+    ] {
+        assert!(
+            child.get(field).is_some(),
+            "a conversation must carry `{field}`: {child}"
+        );
+    }
+    assert_eq!(child["asker"], json!("one"));
+    assert_eq!(child["askee"], json!("two"));
+
+    // And it decodes back to the same thing.
+    let back: crate::ConductorState = serde_json::from_value(wire).expect("deserializes");
+    assert_eq!(back.chat, snapshot.chat);
+    assert_eq!(back.mid_wave_is_empty(), snapshot.mid_wave_is_empty());
+}

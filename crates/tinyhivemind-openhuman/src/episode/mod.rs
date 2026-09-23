@@ -28,8 +28,8 @@ use tinyhivemind::{
     SessionMessage, SessionQuery, gather_elsewhere, project_session,
 };
 use tinyhivemind_driver::{
-    BoundAgent, BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Conductor, Door,
-    ElsewhereView, EpisodeBrief, Event, Note, Step, Turn,
+    BoundAgent, BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Conductor,
+    ConductorState, Door, ElsewhereView, EpisodeBrief, Event, Note, Step, Turn,
 };
 use tinyhivemind_tools::{Dispatch, Refusal};
 
@@ -78,6 +78,29 @@ pub trait Journal: Send + Sync {
     fn channels(&self, seat: &str) -> Vec<Conversation> {
         let _ = seat;
         Vec::new()
+    }
+
+    /// The episode is exactly where this snapshot says. The default keeps
+    /// nothing, and such a host loses a running episode to a restart.
+    ///
+    /// Called after **every committed row**, not once per wave: the row is
+    /// in the journal and the conductor has folded it, so the two agree.
+    /// A host stores the snapshot beside its rows -- ideally in the same
+    /// journal, so the ordering is the journal's own -- and hands the
+    /// newest one to [`resume_episode`] on boot.
+    ///
+    /// A crash between a row landing and this returning replays that one
+    /// row: the resumed conductor has not folded it, so the seat that wrote
+    /// it runs again. A host that cannot tolerate a duplicate row keys its
+    /// appends and drops one it has already written.
+    ///
+    /// # Errors
+    ///
+    /// The host failing to store it, which ends the episode: an episode
+    /// that cannot be checkpointed is one a restart would lose silently.
+    fn checkpoint(&self, state: &ConductorState) -> Result<()> {
+        let _ = state;
+        Ok(())
     }
 
     /// Nothing is due and these seats are parked: the seats the host has
@@ -161,7 +184,59 @@ where
         desk_name: door.desk_name.clone(),
         thread_root: None,
     };
-    let mut conductor = Conductor::open(driver, routing, policy, door)?;
+    let conductor = Conductor::open(driver, routing, policy, door)?;
+    drive(journal, runner, conductor, desk).await
+}
+
+/// Carry on an episode from a snapshot the host stored.
+///
+/// The same loop as [`run_episode`], opened from
+/// [`Conductor::resume`](tinyhivemind_driver::Conductor::resume) rather than
+/// from a door: the same conversations are open, the same seats are held,
+/// and the rows already committed are already in the host's journal.
+///
+/// # Errors
+///
+/// Whatever [`run_episode`] errors on, plus the driver refusing the snapshot
+/// -- one naming a seat or a desk this hive does not have.
+pub async fn resume_episode<A, J, R>(
+    journal: &J,
+    runner: &R,
+    driver: &CompletionDriver<'_, A>,
+    routing: BroadcastRouting<'_>,
+    policy: ConductPolicy,
+    snapshot: ConductorState,
+) -> Result<Report>
+where
+    A: BoundAgent,
+    J: Journal,
+    R: SeatRunner,
+{
+    let desk = Conversation {
+        desk_id: snapshot.chat.clone(),
+        desk_name: snapshot.desk_name.clone(),
+        thread_root: None,
+    };
+    let conductor = Conductor::resume(driver, routing, policy, snapshot)?;
+    drive(journal, runner, conductor, desk).await
+}
+
+/// The loop itself, however the conductor was opened.
+async fn drive<A, J, R>(
+    journal: &J,
+    runner: &R,
+    mut conductor: Conductor<'_, A>,
+    desk: Conversation,
+) -> Result<Report>
+where
+    A: BoundAgent,
+    J: Journal,
+    R: SeatRunner,
+{
+    // A snapshot taken mid-wave comes back mid-wave: drain what it restored
+    // before proposing anything, because `begin_wave` resets the phase and
+    // would drop those steps on the floor.
+    settle_wave(journal, &mut conductor).await?;
     loop {
         if conductor.finished() {
             break;
@@ -206,8 +281,12 @@ where
                 }
             }
         }
-        while let Some(step) = conductor.step()? {
-            settle(journal, &mut conductor, step).await?;
+        settle_wave(journal, &mut conductor).await?;
+        // And once the wave is over, whether or not it committed anything:
+        // a wave that only parked a seat or nudged one moved state no row
+        // records, and a restart would otherwise lose it.
+        if let Some(snapshot) = conductor.snapshot() {
+            journal.checkpoint(&snapshot)?;
         }
     }
     Ok(Report {
@@ -217,6 +296,26 @@ where
         conversations: conductor.conversations(),
         settled: conductor.state().episode().settled(),
     })
+}
+
+/// Take every step the wave has left, checkpointing after each committed
+/// row so a crash replays at most that one row.
+async fn settle_wave<A: BoundAgent, J: Journal>(
+    journal: &J,
+    conductor: &mut Conductor<'_, A>,
+) -> Result<()> {
+    while let Some(step) = conductor.step()? {
+        let committed = matches!(step, Step::Commit(_));
+        settle(journal, conductor, step).await?;
+        // After a commit the row is in the journal and the conductor has
+        // folded it, so the snapshot and the journal agree. A note or an
+        // event moves nothing a resume would double-count, so neither is
+        // worth a write.
+        if committed && let Some(snapshot) = conductor.snapshot() {
+            journal.checkpoint(&snapshot)?;
+        }
+    }
+    Ok(())
 }
 
 /// One step taken: a commit appended and its sequence reported, a note
@@ -284,6 +383,13 @@ async fn wait_for_release<A: BoundAgent, J: Journal>(
     }
     for seat in &released {
         conductor.resume_seat(seat);
+    }
+    // Releasing the last held seat can be the thing that finishes the
+    // episode -- its work may have closed while it was held. Ask again only
+    // if there is still an episode to ask about; `turns` would read an
+    // empty wave with nothing parked as a stall.
+    if conductor.finished() {
+        return Ok(Vec::new());
     }
     Ok(conductor.turns()?)
 }

@@ -156,6 +156,19 @@ pub enum Error {
         /// Number of committed receipts represented by the state.
         receipt_count: usize,
     },
+    /// A restored conversation disagrees with the snapshot that carries it:
+    /// its key is not its root, its seats are not the two it names, or a
+    /// cursor points past what it points into.
+    ///
+    /// A snapshot is host-stored data, so it is validated on the way in
+    /// rather than trusted: the alternative is an episode that resumes and
+    /// then panics or misbehaves several waves later, where the cause is
+    /// unrecoverable.
+    #[error("restored episode state is inconsistent: {reason}")]
+    InconsistentSnapshot {
+        /// What disagreed.
+        reason: String,
+    },
     /// A serialized freshness floor disagrees with its episode and receipts.
     #[error("driver freshness floor {stored} does not match derived floor {derived}")]
     InvalidFreshnessFloor {
