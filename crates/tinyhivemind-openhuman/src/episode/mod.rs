@@ -443,6 +443,11 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
         transcripts.get(&root).cloned().unwrap_or_default()
     });
     brief.elsewhere = elsewhere(journal, &turn.seat, &channel, latest).await?;
+    // The seats this one is still waiting on, for the record to refuse a
+    // second ask to the same seat. The ledger that knows this is the
+    // driver's, and the record cannot read it, so it is handed over per turn
+    // exactly as the `read` window is.
+    runner.tools().awaiting(&turn.seat, brief.awaiting.clone());
     let prompt = journal.compose(&turn.seat, &brief);
     let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
     Ok(runner.turn(turn.seat.clone(), lane, turn.since, prompt))
