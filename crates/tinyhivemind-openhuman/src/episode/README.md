@@ -21,6 +21,11 @@ has nothing to run and seats are parked, the loop asks `released`, which is
 where a host blocks on its own approval queue; a host that releases nobody
 ends the episode with `Error::Parked` rather than spinning.
 
+`checkpoint` is handed a `ConductorState` once per wave, after the wave
+settles, and `resume_episode` carries an episode on from one: the same
+conversations open, the same seats held. A host that keeps nothing loses a
+running episode to a restart.
+
 `channels` names every conversation the seat is in that this episode does
 not run. Their newest rows are read through `gather_elsewhere`, bounded by
 the same wave watermark as every other read, and carried in

@@ -8,7 +8,9 @@ use std::sync::atomic::AtomicBool;
 use tinyhivemind::Sequence;
 use tinyhivemind_driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Door};
 
-use super::super::run_episode;
+use super::super::{resume_episode, run_episode};
+use serde_json::json;
+
 use super::support::{GrowingLog, ScriptRunner, TestJournal, complete, door, hive, policy, run};
 use crate::journal::MemoryLog;
 
@@ -105,4 +107,63 @@ fn a_row_the_host_appends_above_the_wave_watermark_is_shown_once_and_later() {
     assert!(!prompts[0].2.contains("one more thing"), "{}", prompts[0].2);
     assert!(prompts[1].2.contains("one more thing"), "{}", prompts[1].2);
     assert_eq!(runner.since(), vec![None, Some(opened_at)]);
+}
+
+#[test]
+fn an_episode_is_checkpointed_every_wave_and_carries_on_from_one() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy();
+    let routing = || BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = TestJournal::new();
+    // One parks on its first turn; with nobody released the episode ends
+    // parked, leaving a checkpoint behind with the seat still held.
+    let runner = ScriptRunner::new(&["one", "two"], &[("one", vec![vec![("park", json!({}))]])]);
+    let entrance = door(&journal, &["one", "two"], &["one"]);
+    let stopped = run(run_episode(
+        &journal,
+        &runner,
+        &driver,
+        routing(),
+        ConductPolicy::default(),
+        entrance,
+    ));
+    assert!(stopped.is_err(), "{stopped:?}");
+    let snapshot = journal
+        .checkpoints
+        .lock()
+        .unwrap()
+        .last()
+        .cloned()
+        .expect("a wave settled before the episode stopped");
+    assert_eq!(snapshot.chat, "engineering");
+
+    // A fresh process: the same journal, a new runner, resumed from the
+    // snapshot. The seat is still held, and released it completes.
+    let after = ScriptRunner::new(
+        &["one", "two"],
+        &[("one", vec![vec![complete("approved", None)]])],
+    );
+    let report = run(resume_episode(
+        &journal,
+        &after,
+        &driver,
+        routing(),
+        ConductPolicy::default(),
+        snapshot,
+    ));
+    // Nobody released it, so it stops parked again rather than silently
+    // starting over: the hold survived the restart, which is the point.
+    assert!(report.is_err(), "{report:?}");
+    assert!(
+        after.prompts().is_empty(),
+        "a held seat is not proposed on resume: {:?}",
+        after.prompts()
+    );
 }

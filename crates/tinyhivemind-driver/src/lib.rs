@@ -78,7 +78,8 @@ pub mod graph;
 mod test_support;
 
 pub use conduct::{
-    Commit, ConductPolicy, Conductor, Door, Event, Note, Refusal, Step, Turn, starters,
+    Commit, ConductPolicy, Conductor, ConductorState, Door, Event, Note, Refusal, Step, Turn,
+    starters,
 };
 pub use driver::{
     AssignmentSpend, BroadcastRouting, Channel, CommittedUtterance, CompletionDriver,

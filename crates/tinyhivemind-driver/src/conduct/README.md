@@ -31,6 +31,11 @@ The rules, each with the decision it comes from:
   Nothing due with a seat parked is a wait, not a stall; `parked` says who,
   and `resume_seat` puts the seat back in the next wave, owed a turn where
   it parked. `Event::Parked` and `Event::Resumed` mark both.
+- **Checkpointing**: `snapshot` answers `Some` only between waves -- every
+  row committed, nothing in flight, no commit outstanding -- and `resume`
+  rebuilds a conductor from one, on a driver and a routing the host supplies
+  again. Mid-wave it answers `None`: a snapshot there would either lose the
+  rows the host has not appended or duplicate them on resume.
 - **Sorting**: a broadcast or an ask made inside a conversation is desk
   work; only a post or a completion is a row of the conversation.
 - **Refusals**: a completion the ledger refuses is explained to the seat on

@@ -28,8 +28,8 @@ use tinyhivemind::{
     SessionMessage, SessionQuery, gather_elsewhere, project_session,
 };
 use tinyhivemind_driver::{
-    BoundAgent, BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Conductor, Door,
-    ElsewhereView, EpisodeBrief, Event, Note, Step, Turn,
+    BoundAgent, BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Conductor,
+    ConductorState, Door, ElsewhereView, EpisodeBrief, Event, Note, Step, Turn,
 };
 use tinyhivemind_tools::{Dispatch, Refusal};
 
@@ -78,6 +78,23 @@ pub trait Journal: Send + Sync {
     fn channels(&self, seat: &str) -> Vec<Conversation> {
         let _ = seat;
         Vec::new()
+    }
+
+    /// The episode paused where it can be resumed: every row it committed
+    /// is in the journal and nothing is in flight. The default keeps
+    /// nothing, and such a host loses a running episode to a restart.
+    ///
+    /// Called once per wave, after the wave settles. A host stores the
+    /// snapshot beside its rows and hands it to
+    /// [`resume_episode`] on boot.
+    ///
+    /// # Errors
+    ///
+    /// The host failing to store it, which ends the episode: an episode
+    /// that cannot be checkpointed is one a restart would lose silently.
+    fn checkpoint(&self, state: &ConductorState) -> Result<()> {
+        let _ = state;
+        Ok(())
     }
 
     /// Nothing is due and these seats are parked: the seats the host has
@@ -161,7 +178,55 @@ where
         desk_name: door.desk_name.clone(),
         thread_root: None,
     };
-    let mut conductor = Conductor::open(driver, routing, policy, door)?;
+    let conductor = Conductor::open(driver, routing, policy, door)?;
+    drive(journal, runner, conductor, desk).await
+}
+
+/// Carry on an episode from a snapshot the host stored.
+///
+/// The same loop as [`run_episode`], opened from
+/// [`Conductor::resume`](tinyhivemind_driver::Conductor::resume) rather than
+/// from a door: the same conversations are open, the same seats are held,
+/// and the rows already committed are already in the host's journal.
+///
+/// # Errors
+///
+/// Whatever [`run_episode`] errors on, plus the driver refusing the snapshot
+/// -- one naming a seat or a desk this hive does not have.
+pub async fn resume_episode<A, J, R>(
+    journal: &J,
+    runner: &R,
+    driver: &CompletionDriver<'_, A>,
+    routing: BroadcastRouting<'_>,
+    policy: ConductPolicy,
+    snapshot: ConductorState,
+) -> Result<Report>
+where
+    A: BoundAgent,
+    J: Journal,
+    R: SeatRunner,
+{
+    let desk = Conversation {
+        desk_id: snapshot.chat.clone(),
+        desk_name: snapshot.desk_name.clone(),
+        thread_root: None,
+    };
+    let conductor = Conductor::resume(driver, routing, policy, snapshot)?;
+    drive(journal, runner, conductor, desk).await
+}
+
+/// The loop itself, however the conductor was opened.
+async fn drive<A, J, R>(
+    journal: &J,
+    runner: &R,
+    mut conductor: Conductor<'_, A>,
+    desk: Conversation,
+) -> Result<Report>
+where
+    A: BoundAgent,
+    J: Journal,
+    R: SeatRunner,
+{
     loop {
         if conductor.finished() {
             break;
@@ -208,6 +273,11 @@ where
         }
         while let Some(step) = conductor.step()? {
             settle(journal, &mut conductor, step).await?;
+        }
+        // The wave settled: every row it produced is in the journal and
+        // nothing is in flight, which is the one point a snapshot is true.
+        if let Some(snapshot) = conductor.snapshot() {
+            journal.checkpoint(&snapshot)?;
         }
     }
     Ok(Report {

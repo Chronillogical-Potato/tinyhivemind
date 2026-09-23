@@ -200,3 +200,102 @@ fn what_a_seat_said_before_it_parked_is_recorded() {
     );
     assert_eq!(conductor.parked(), vec!["one".to_owned()]);
 }
+
+#[test]
+fn a_snapshot_is_taken_between_waves_and_carries_the_episode_on() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+    // One asks two, and two parks: a conversation open and a seat held is
+    // the most state a snapshot has to carry.
+    wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![ask("two", "may I ship?")])],
+    )
+    .expect("wave");
+    wave_parking(&mut conductor, &journal, &[], &["two"]).expect("wave");
+    let root = Sequence(2);
+    let snapshot = conductor.snapshot().expect("the wave settled");
+    assert_eq!(snapshot.chat, "engineering");
+    assert_eq!(conductor.parked(), vec!["two".to_owned()]);
+    let turns_before = conductor.turns_run();
+
+    // Through the wire and back, onto a driver the host supplies again.
+    let wire = serde_json::to_string(&snapshot).expect("serializes");
+    let restored: crate::ConductorState = serde_json::from_str(&wire).expect("deserializes");
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let mut resumed =
+        Conductor::resume(&driver, routing, ConductPolicy::default(), restored).expect("resumes");
+    assert_eq!(resumed.turns_run(), turns_before, "the count carries");
+    assert_eq!(
+        resumed.parked(),
+        vec!["two".to_owned()],
+        "the held seat is still held"
+    );
+    // Released, it answers in the conversation that was open before the
+    // restart, and the episode concludes it.
+    resumed.resume_seat("two");
+    let answered = wave(
+        &mut resumed,
+        &journal,
+        &[("two", vec![complete("ship it")])],
+    )
+    .expect("wave");
+    assert_eq!(seats(&answered.turns)[0], ("two", Some(root)));
+    assert_eq!(
+        resumed.conversations(),
+        1,
+        "the conversation survived the restart and concluded"
+    );
+}
+
+#[test]
+fn a_snapshot_is_refused_while_a_commit_is_in_flight() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+    assert!(
+        conductor.snapshot().is_some(),
+        "a fresh conductor is between waves"
+    );
+    for step in conductor.begin_wave() {
+        let _ = step;
+    }
+    let turns = conductor.turns().expect("turns");
+    conductor.record(
+        &turns[0],
+        [tinyhivemind::speech::ToolCall::Speak(complete("done"))],
+    );
+    // A commit is queued and the host has not been told its sequence.
+    let step = conductor.step().expect("a step");
+    assert!(matches!(step, Some(crate::Step::Commit(_))));
+    assert!(
+        conductor.snapshot().is_none(),
+        "mid-wave there are rows the journal does not hold yet"
+    );
+}

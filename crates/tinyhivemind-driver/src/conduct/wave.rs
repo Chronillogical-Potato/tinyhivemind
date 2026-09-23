@@ -59,6 +59,16 @@ pub(super) struct Wave {
 }
 
 impl Wave {
+    /// Nothing is in flight: no step queued, no commit queued, no commit
+    /// outstanding, and the phase machine is idle. The one point a snapshot
+    /// describes the journal truthfully.
+    pub(super) fn settled(&self) -> bool {
+        matches!(self.phase, Phase::Idle)
+            && self.steps.is_empty()
+            && self.commits.is_empty()
+            && self.outstanding.is_none()
+    }
+
     pub(super) fn begin(&mut self, nothing_due: bool) {
         self.phase = Phase::Threads;
         self.force_conclusions = nothing_due;

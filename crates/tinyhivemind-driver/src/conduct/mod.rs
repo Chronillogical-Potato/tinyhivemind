@@ -47,6 +47,8 @@ mod wave;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde::{Deserialize, Serialize};
+
 use tinyhivemind::speech::{ToolCall, Utterance};
 use tinyhivemind::{Conversation, Sequence};
 use tinyhivemind_embed::RoutingPlan;
@@ -108,6 +110,46 @@ pub fn starters(plan: &RoutingPlan, fallback: &str) -> Vec<String> {
             .collect(),
         RoutingPlan::Clarify { .. } => vec![fallback.to_owned()],
     }
+}
+
+/// Everything a conductor needs to be rebuilt: the episode as the driver
+/// folds it, the conversations open and concluded, and what each seat has
+/// been shown, nudged for, or held on.
+///
+/// Taken between waves and nowhere else. Mid-wave a conductor holds rows the
+/// host has not appended yet and a commit whose sequence it has not been
+/// told; a snapshot there would either lose those rows or duplicate them on
+/// resume, so [`Conductor::snapshot`] answers `None` until the wave settles.
+///
+/// The driver, the routing and the policy are **not** here. They are the
+/// host's to supply again on resume, exactly as they were on open: a router
+/// is a live object, and a policy the operator changed between restarts
+/// should be the new one.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ConductorState {
+    /// The desk's id, as every tool call names it.
+    pub chat: String,
+    /// The desk's display name.
+    pub desk_name: String,
+    /// The episode the driver folds.
+    pub state: DriverState,
+    /// The conversations still open, by their ask row.
+    children: Vec<(Sequence, Child)>,
+    /// The conversations that concluded, oldest first.
+    concluded: Vec<Concluded>,
+    /// How many concluded conversations each seat has been shown.
+    shown: BTreeMap<String, usize>,
+    /// The assignment each seat was last nudged for on the desk.
+    desk_nudged: BTreeMap<String, Sequence>,
+    /// Seats held on the host, by the thread they parked in.
+    parked: BTreeMap<String, Option<Sequence>>,
+    /// Turns run so far.
+    turns: u64,
+    /// Waves proposed so far.
+    waves: u64,
+    /// Seats completed with their work for a spent broadcast budget.
+    discharged: u64,
 }
 
 /// The desk episode, its conversations, and the rules between them.
@@ -356,6 +398,73 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         // conversation concludes for it.
         self.wave.begin(turns.is_empty() && self.parked.is_empty());
         Ok(turns)
+    }
+
+    /// Everything needed to rebuild this conductor, or `None` mid-wave.
+    ///
+    /// A host checkpoints where the loop already pauses: after
+    /// [`step`](Self::step) has returned `None` and before the next wave
+    /// begins. Anywhere else there are rows in flight, and the snapshot
+    /// would be a lie about what the journal holds.
+    #[must_use]
+    pub fn snapshot(&self) -> Option<ConductorState> {
+        if !self.wave.settled() {
+            return None;
+        }
+        Some(ConductorState {
+            chat: self.chat.clone(),
+            desk_name: self.desk_name.clone(),
+            state: self.state.clone(),
+            children: self
+                .children
+                .iter()
+                .map(|(root, child)| (*root, child.clone()))
+                .collect(),
+            concluded: self.concluded.clone(),
+            shown: self.shown.clone(),
+            desk_nudged: self.desk_nudged.clone(),
+            parked: self.parked.clone(),
+            turns: self.turns,
+            waves: self.waves,
+            discharged: self.discharged,
+        })
+    }
+
+    /// Rebuild a conductor from a snapshot, on a driver and a routing the
+    /// host supplies again.
+    ///
+    /// The episode carries on where it paused: the same conversations are
+    /// open, the same seats are held, and a seat already nudged for its
+    /// assignment is not nudged again for it.
+    ///
+    /// # Errors
+    ///
+    /// The driver refusing the episode -- a state naming a seat or a desk
+    /// this hive does not have.
+    pub fn resume(
+        driver: &'a CompletionDriver<'a, A>,
+        routing: BroadcastRouting<'a>,
+        policy: ConductPolicy,
+        snapshot: ConductorState,
+    ) -> Result<Self> {
+        let state = driver.resume(snapshot.state)?;
+        Ok(Self {
+            driver,
+            routing,
+            chat: snapshot.chat,
+            desk_name: snapshot.desk_name,
+            policy,
+            state,
+            children: snapshot.children.into_iter().collect(),
+            concluded: snapshot.concluded,
+            shown: snapshot.shown,
+            desk_nudged: snapshot.desk_nudged,
+            parked: snapshot.parked,
+            turns: snapshot.turns,
+            waves: snapshot.waves,
+            discharged: snapshot.discharged,
+            wave: Wave::default(),
+        })
     }
 
     /// The seats held on the host, in seat order. An empty wave with any of
