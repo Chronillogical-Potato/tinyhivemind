@@ -8,7 +8,9 @@ use super::support::{
 };
 use crate::conduct::{ConductPolicy, Conductor, Event};
 use crate::driver::BroadcastRouting;
+use crate::test_support::Seat;
 use crate::{CompletionDriver, Error};
+use serde_json::{Value, json};
 use tinyhivemind::Sequence;
 
 #[test]
@@ -348,4 +350,80 @@ fn a_held_seat_keeps_the_episode_open_even_where_its_work_closed() {
     conductor.resume_seat("one");
     assert!(conductor.parked().is_empty());
     assert!(conductor.finished());
+}
+
+/// A snapshot with one conversation open and one seat held, as a value a
+/// test can bend before handing it back.
+fn snapshot_with_a_conversation(journal: &Journal, conductor: &mut Conductor<'_, Seat>) -> Value {
+    wave(
+        conductor,
+        journal,
+        &[("one", vec![ask("two", "which port?")])],
+    )
+    .expect("wave");
+    serde_json::to_value(conductor.snapshot().expect("recordable")).expect("serializes")
+}
+
+#[test]
+fn a_snapshot_that_disagrees_with_itself_is_refused_rather_than_resumed() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = || BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing(), ConductPolicy::default(), &journal);
+    let good = snapshot_with_a_conversation(&journal, &mut conductor);
+    // The unbent snapshot resumes, so each refusal below is about the bend.
+    let restored: crate::ConductorState =
+        serde_json::from_value(good.clone()).expect("deserializes");
+    assert!(Conductor::resume(&driver, routing(), ConductPolicy::default(), restored).is_ok());
+
+    // A conversation filed under a root it does not call its own.
+    let mut bent = good.clone();
+    bent["children"][0][0] = json!(99);
+    let restored: crate::ConductorState = serde_json::from_value(bent).expect("deserializes");
+    let refused = Conductor::resume(&driver, routing(), ConductPolicy::default(), restored);
+    assert!(
+        matches!(&refused, Err(Error::InconsistentSnapshot { reason }) if reason.contains("99")),
+        "{refused:?}"
+    );
+
+    // A cursor past the conversations it points into: shown_conversations
+    // would index off the end of the list the first time that seat spoke.
+    let mut bent = good.clone();
+    bent["shown"] = json!({ "one": 7 });
+    let restored: crate::ConductorState = serde_json::from_value(bent).expect("deserializes");
+    let refused = Conductor::resume(&driver, routing(), ConductPolicy::default(), restored);
+    assert!(
+        matches!(&refused, Err(Error::InconsistentSnapshot { reason }) if reason.contains("@one")),
+        "{refused:?}"
+    );
+
+    // A seat held that this desk does not seat: nothing could ever release
+    // it into a wave.
+    let mut bent = good.clone();
+    bent["parked"] = json!({ "nobody": null });
+    let restored: crate::ConductorState = serde_json::from_value(bent).expect("deserializes");
+    let refused = Conductor::resume(&driver, routing(), ConductPolicy::default(), restored);
+    assert!(
+        matches!(&refused, Err(Error::InconsistentSnapshot { reason }) if reason.contains("nobody")),
+        "{refused:?}"
+    );
+
+    // A conversation whose own state names another desk is refused by the
+    // driver, exactly as the desk episode's state would be.
+    let mut bent = good;
+    bent["children"][0][1]["state"]["episode"]["conversation"]["desk_id"] = json!("marketing");
+    let restored: crate::ConductorState = serde_json::from_value(bent).expect("deserializes");
+    let refused = Conductor::resume(&driver, routing(), ConductPolicy::default(), restored);
+    assert!(
+        matches!(&refused, Err(Error::OutOfHiveEpisode { .. })),
+        "{refused:?}"
+    );
 }

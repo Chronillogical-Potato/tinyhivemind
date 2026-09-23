@@ -9,11 +9,11 @@ conductor's.
 
 `Journal` is what a host implements: its `SessionLog`, `commit` and `note`
 to append the conductor's rows and return the sequence a commit was given,
-and five optional hooks -- `event` to show what the episode did, `compose`
+and six optional hooks -- `event` to show what the episode did, `compose`
 to put its own context in front of the brief, `turn_done` to see a turn's
 reply, refusals and recorded calls, `channels` to name the seat's other
-conversations, and `released` to say which parked seats the host has
-settled. `Report` is what an episode came to.
+conversations, `released` to say which parked seats the host has settled,
+and `checkpoint` to keep the snapshot a restart resumes from. `Report` is what an episode came to.
 
 A turn that comes back `TurnResult::Parked` is recorded with whatever it
 called and then held: the conductor stops proposing that seat. When a wave

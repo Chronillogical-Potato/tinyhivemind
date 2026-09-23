@@ -474,8 +474,12 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     ///
     /// # Errors
     ///
-    /// The driver refusing the episode -- a state naming a seat or a desk
-    /// this hive does not have.
+    /// The driver refusing the episode or any of its conversations -- a
+    /// state naming a seat or a desk this hive does not have -- and
+    /// [`Error::InconsistentSnapshot`] for a snapshot that disagrees with
+    /// itself: a conversation filed under the wrong root, a cursor past the
+    /// conversations it points into, or a seat held that this desk does not
+    /// seat.
     pub fn resume(
         driver: &'a CompletionDriver<'a, A>,
         routing: BroadcastRouting<'a>,
@@ -483,6 +487,53 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         snapshot: ConductorState,
     ) -> Result<Self> {
         let state = driver.resume(snapshot.state)?;
+        // A snapshot is the host's file, not the conductor's memory: every
+        // part of it is validated here rather than trusted, because the
+        // alternative is an episode that resumes and then misbehaves waves
+        // later with nothing left to say why.
+        let mut children = BTreeMap::new();
+        for (root, mut child) in snapshot.children {
+            if root != child.root {
+                return Err(Error::InconsistentSnapshot {
+                    reason: format!(
+                        "a conversation filed under {} calls itself {}",
+                        root.0, child.root.0
+                    ),
+                });
+            }
+            // The same validation the desk episode gets: the conversation
+            // names this desk, and its two seats are seats of this hive.
+            child.state = driver.resume(child.state)?;
+            children.insert(root, child);
+        }
+        // A cursor into the concluded list, for a seat that has been shown
+        // some of them. Past the end it would panic the first time that
+        // seat is briefed.
+        for (seat, cursor) in &snapshot.shown {
+            if *cursor > snapshot.concluded.len() {
+                return Err(Error::InconsistentSnapshot {
+                    reason: format!(
+                        "@{seat} has been shown {cursor} conversations of {}",
+                        snapshot.concluded.len()
+                    ),
+                });
+            }
+        }
+        // A seat held on the host that this desk does not seat would be held
+        // for ever: it is never proposed, and nothing can release it into a
+        // wave.
+        for seat in snapshot.parked.keys() {
+            if !state
+                .episode()
+                .participants
+                .iter()
+                .any(|participant| &participant.agent_id == seat)
+            {
+                return Err(Error::InconsistentSnapshot {
+                    reason: format!("@{seat} is held but is not seated at this desk"),
+                });
+            }
+        }
         Ok(Self {
             driver,
             routing,
@@ -490,7 +541,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             desk_name: snapshot.desk_name,
             policy,
             state,
-            children: snapshot.children.into_iter().collect(),
+            children,
             concluded: snapshot.concluded,
             shown: snapshot.shown,
             desk_nudged: snapshot.desk_nudged,

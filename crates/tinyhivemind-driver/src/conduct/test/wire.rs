@@ -298,9 +298,15 @@ fn a_conductor_snapshot_names_every_field_a_restart_reads_back() {
     );
     assert_eq!(object["chat"], json!("engineering"));
 
-    // A conversation on the wire is its root paired with its record, and
-    // the record spells out both seats and the nudge it may still owe.
-    let child = &wire["children"][0][1];
+    // A conversation on the wire is its root paired with its record: the
+    // key is the root a host files it under, and `resume` refuses a pair
+    // whose two halves disagree.
+    let pair = &wire["children"][0];
+    let child = &pair[1];
+    assert_eq!(
+        pair[0], child["root"],
+        "the key a conversation is filed under is its own root"
+    );
     for field in [
         "root", "asker", "askee", "state", "turns", "nudged", "turned",
     ] {
