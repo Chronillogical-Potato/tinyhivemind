@@ -52,6 +52,17 @@ allow-wildcard-paths = true
 # remains subject to every ban check.
 skip = [
     { name = "openhuman", version = "0.63.29" },
+    # `tinyjuice` is vendored inside OpenHuman and arrived with the pin bump
+    # that follows `main`. Its manifest carries no `publish = false`, so
+    # `allow-wildcard-paths` does not reach it -- cargo-deny reads a published
+    # crate's internal `{ path = "crates/tinyjuice-bus" }` as a wildcard even
+    # though nothing resolves through a range: the tree is revision-pinned and
+    # `assert-openhuman-pin.sh` holds it to the recorded submodule.
+    #
+    # Same narrowness as the entry above: this skips one package's
+    # manifest-level wildcard finding, and its dependency tree stays subject to
+    # every other ban.
+    { name = "tinyjuice", version = "0.3.1" },
 ]
 # Crates that must never enter the dependency graph.
 deny = []
