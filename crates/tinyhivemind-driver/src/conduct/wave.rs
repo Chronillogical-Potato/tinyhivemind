@@ -199,9 +199,8 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             if child.turned && !child.is_over(wall) && !child.nudged {
                 child.nudged = true;
                 self.wave.steps.push_back(Step::Note(Note {
-                    body: "the seat that asked you is waiting: answer with `complete_episode`, \
-                           and its message is your answer. If you need another seat first, say \
-                           so in that answer."
+                    body: "the teammate who asked you is waiting for your answer. Finish your \
+                           part with it; if you need someone else first, say so in that answer."
                         .to_owned(),
                     thread: Some(child.root),
                     only_for: None,
@@ -351,9 +350,8 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             Err(Error::AwaitingReply { waiting_on, .. }) => {
                 self.wave.note(
                     format!(
-                        "your completion was refused: your conversation with {} has not \
-                         concluded. Its outcome reaches you on a later turn; complete after it \
-                         does.",
+                        "you can't finish yet: your conversation with {} is still open. Its \
+                         answer reaches you on a later turn; finish after it does.",
                         waiting_on.join(", ")
                     ),
                     None,
@@ -368,11 +366,8 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             }
             Err(Error::UndeliveredAssignment { assigned_at, .. }) => {
                 self.wave.note(
-                    format!(
-                        "you were handed new work at sequence {} while you were speaking; it is \
-                         in your next messages. Your completion applied to nothing.",
-                        assigned_at.0
-                    ),
+                    "new work reached you while you were answering; it is in your next \
+                     messages. What you just sent did not finish it.",
                     None,
                     Some(&seat),
                 );
@@ -436,7 +431,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                         origin: handoff.origin,
                     });
                     self.wave.note(
-                        format!("handoff from @{}: {}", handoff.from, handoff.body),
+                        format!("{} handed this to you: {}", handoff.from, handoff.body),
                         None,
                         Some(&agent_id),
                     );
@@ -455,8 +450,8 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 at: said.sequence,
             });
             self.wave.note(
-                "nobody on this desk can take that; the work stays with you. Do what you can \
-                 with what the desk holds, or complete with what you have.",
+                "nobody on this desk can take that, so it stays with you. Do what you can \
+                 with what the desk holds, or finish with what you have.",
                 None,
                 Some(&said.seat),
             );

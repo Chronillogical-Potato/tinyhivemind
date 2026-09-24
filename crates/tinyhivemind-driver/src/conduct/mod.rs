@@ -349,9 +349,9 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 thread: None,
             }));
             steps.push(Step::Note(Note {
-                body: "you hold open work and nothing new has arrived. Call `complete_episode` \
-                       with what you have, or `broadcast` the part that is another seat's. A \
-                       reply without a tool call records nothing."
+                body: "you still have open work and nothing new has come in. Finish your part \
+                       with what you have, or hand the part that belongs to a teammate over to \
+                       them. Only a tool call is recorded."
                     .to_owned(),
                 thread: None,
                 only_for: Some(seat.clone()),
