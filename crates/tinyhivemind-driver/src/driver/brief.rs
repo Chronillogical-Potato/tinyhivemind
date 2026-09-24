@@ -179,7 +179,8 @@ impl EpisodeBrief {
                     format_args!(
                         "Your assignment was made at sequence {}. Record your part with \
                          `complete_episode`: its message is your finding. Hand what is another \
-                         seat's on with `broadcast`. A reply that calls no tool records nothing.",
+                         seat's on with `broadcast`. A reply that calls no tool records nothing. \
+                         {READER}",
                         at.0
                     ),
                 );
@@ -226,11 +227,16 @@ impl EpisodeBrief {
              and reaches them. If you need another seat first, say so in that answer, and the \
              seat that asked you will ask them."
         };
+        let reader = if opened_it {
+            String::new()
+        } else {
+            format!(" {READER}")
+        };
         format!(
             "## A private conversation with @{other} (thread {})\n{}{}\n\n{role} Only the two of \
              you read this thread.\n\nEvery tool call must carry \"chat\": \"{}\" and \
              \"parent\": \"{}\". `ask` is not available inside a conversation. A `broadcast` made here \
-             hands work off on the desk, exactly as it would there.",
+             hands work off on the desk, exactly as it would there.{reader}",
             root.0,
             rows_or_nothing(&self.new_rows),
             self.render_elsewhere(),
@@ -269,6 +275,10 @@ impl EpisodeBrief {
         out
     }
 }
+
+/// How a recorded message should read, since a person reads it too.
+const READER: &str = "A person reads what you record: lead with the result in plain words, keep \
+                      it short, and refer to teammates by name.";
 
 fn rows_or_nothing(rows: &[String]) -> String {
     if rows.is_empty() {
@@ -329,7 +339,7 @@ pub fn standing_contract<'a>(
     out.push_str(
         "\n\nIf you are waiting on a conversation and nothing new bears on your work, end \
          your turn without calling any tool. Keep your reply brief -- the tool message is \
-         what the desk reads.",
+         what a person and the desk read.",
     );
     out
 }

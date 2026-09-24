@@ -249,3 +249,48 @@ fn elsewhere_is_rendered_as_context_on_the_desk_and_in_a_thread_and_absent_when_
     assert!(text.find("@one: ?").expect("rows") < text.find("### Legal (legal)").expect("section"));
     assert!(text.contains("A peer asked you this"));
 }
+
+#[test]
+fn a_seat_that_records_something_is_told_a_person_reads_it() {
+    let (_hive, state) = state_with_an_ask();
+    let desk = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "one",
+        Channel::Desk,
+        Vec::new(),
+        Vec::new(),
+    );
+    assert!(desk.render().contains("A person reads what you record"));
+    let answerer = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "two",
+        Channel::Thread {
+            root: Sequence(1),
+            other: "one".into(),
+            opened_it: false,
+        },
+        Vec::new(),
+        Vec::new(),
+    );
+    assert!(answerer.render().contains("A person reads what you record"));
+    let asker = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "one",
+        Channel::Thread {
+            root: Sequence(1),
+            other: "two".into(),
+            opened_it: true,
+        },
+        Vec::new(),
+        Vec::new(),
+    );
+    assert!(
+        !asker.render().contains("A person reads what you record"),
+        "a seat with nothing to do in the thread is not told how to write"
+    );
+    let contract = standing_contract(tool_specs(), "engineering", "Call it.");
+    assert!(contract.contains("what a person and the desk read"));
+}
