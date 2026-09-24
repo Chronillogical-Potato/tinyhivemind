@@ -11,6 +11,8 @@
 //! Nothing here reads storage. The host passes the rows a seat may see and
 //! the conversations it was part of; the brief adds only what the state holds.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use tinyhivemind::Sequence;
 use tinyhivemind::speech::ToolSpec;
@@ -78,6 +80,9 @@ pub struct EpisodeBrief {
     /// the newest rows of each, read as the seat, through the wave's
     /// watermark. Context, not work: nothing in it is addressed here.
     pub elsewhere: Vec<ElsewhereView>,
+    /// What a person calls the seats this brief mentions, by id. A seat
+    /// missing here is written as `@id`.
+    pub names: BTreeMap<String, String>,
 }
 
 /// The newest rows of one conversation the seat is in that is not this
@@ -122,7 +127,29 @@ impl EpisodeBrief {
             new_rows,
             conversations,
             elsewhere: Vec::new(),
+            names: BTreeMap::new(),
         }
+    }
+
+    /// Name every seat the brief mentions -- the other side of a thread or
+    /// a conversation, and the seats it waits on -- with `name`.
+    pub fn name_seats(&mut self, name: impl Fn(&str) -> String) {
+        let mut seats: Vec<&str> = self.awaiting.iter().map(String::as_str).collect();
+        seats.extend(self.conversations.iter().map(|view| view.other.as_str()));
+        if let Channel::Thread { other, .. } = &self.channel {
+            seats.push(other);
+        }
+        let named: BTreeMap<String, String> = seats
+            .into_iter()
+            .map(|seat| (seat.to_owned(), name(seat)))
+            .collect();
+        self.names.extend(named);
+    }
+
+    /// How the brief writes `seat`: its name, or `@id` when it has none.
+    #[must_use]
+    pub fn speaker(&self, seat: &str) -> String {
+        speaker(seat, self.names.get(seat).map_or(seat, String::as_str))
     }
 
     /// The `parent` every tool call in this turn must name: the thread root,
@@ -155,7 +182,7 @@ impl EpisodeBrief {
             .conversations
             .iter()
             .filter(|view| view.concluded)
-            .map(render_conversation)
+            .map(|view| self.render_conversation(view))
             .collect();
         if !concluded.is_empty() {
             out.push_str("\n\n## Conversations you had since you last spoke\n");
@@ -165,7 +192,7 @@ impl EpisodeBrief {
             .conversations
             .iter()
             .filter(|view| !view.concluded)
-            .map(render_conversation)
+            .map(|view| self.render_conversation(view))
             .collect();
         if !open.is_empty() {
             out.push_str("\n\n## Conversations still in progress\n");
@@ -194,8 +221,12 @@ impl EpisodeBrief {
             let _ = std::fmt::Write::write_fmt(
                 &mut out,
                 format_args!(
-                    " You cannot complete until your conversation with @{} concludes.",
-                    self.awaiting.join(", @")
+                    " You cannot complete until your conversation with {} concludes.",
+                    self.awaiting
+                        .iter()
+                        .map(|seat| self.speaker(seat))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
             );
         }
@@ -233,10 +264,11 @@ impl EpisodeBrief {
             format!(" {READER}")
         };
         format!(
-            "## A private conversation with @{other} (thread {})\n{}{}\n\n{role} Only the two of \
+            "## A private conversation with {} (thread {})\n{}{}\n\n{role} Only the two of \
              you read this thread.\n\nEvery tool call must carry \"chat\": \"{}\" and \
              \"parent\": \"{}\". `ask` is not available inside a conversation. A `broadcast` made here \
              hands work off on the desk, exactly as it would there.{reader}",
+            self.speaker(other),
             root.0,
             rows_or_nothing(&self.new_rows),
             self.render_elsewhere(),
@@ -288,18 +320,32 @@ fn rows_or_nothing(rows: &[String]) -> String {
     }
 }
 
-fn render_conversation(view: &ConversationView) -> String {
-    format!(
-        "### With @{} (thread {}){}\n{}",
-        view.other,
-        view.root.0,
-        if view.concluded {
-            ""
-        } else {
-            " -- in progress"
-        },
-        rows_or_nothing(&view.transcript)
-    )
+impl EpisodeBrief {
+    fn render_conversation(&self, view: &ConversationView) -> String {
+        format!(
+            "### With {} (thread {}){}\n{}",
+            self.speaker(&view.other),
+            view.root.0,
+            if view.concluded {
+                ""
+            } else {
+                " -- in progress"
+            },
+            rows_or_nothing(&view.transcript)
+        )
+    }
+}
+
+/// How a row or a heading writes a seat: `name` when the host gave one
+/// that differs from the id, otherwise `@id`.
+#[must_use]
+pub fn speaker(id: &str, name: &str) -> String {
+    let name = name.trim();
+    if name.is_empty() || name == id {
+        format!("@{id}")
+    } else {
+        name.to_owned()
+    }
 }
 
 /// The standing contract: how a turn is recorded, and what each served tool

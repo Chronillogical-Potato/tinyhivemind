@@ -5,7 +5,7 @@
 use tinyhivemind::Sequence;
 use tinyhivemind::speech::{Utterance, tool_specs};
 
-use super::{Channel, ConversationView, ElsewhereView, EpisodeBrief, standing_contract};
+use super::{Channel, ConversationView, ElsewhereView, EpisodeBrief, speaker, standing_contract};
 use crate::driver::test::{committed, episode, hive};
 use crate::driver::{CompletionDriver, DriverState};
 
@@ -293,4 +293,63 @@ fn a_seat_that_records_something_is_told_a_person_reads_it() {
     );
     let contract = standing_contract(tool_specs(), "engineering", "Call it.");
     assert!(contract.contains("what a person and the desk read"));
+}
+
+#[test]
+fn a_seat_is_written_by_its_name_when_it_has_one_and_by_its_id_otherwise() {
+    assert_eq!(speaker("two", "Tess"), "Tess");
+    assert_eq!(speaker("two", "two"), "@two");
+    assert_eq!(speaker("two", "  "), "@two");
+}
+
+#[test]
+fn a_named_brief_writes_its_conversations_and_waits_by_name() {
+    let (_hive, state) = state_with_an_ask();
+    let name = |seat: &str| match seat {
+        "two" => "Tess".to_owned(),
+        other => other.to_owned(),
+    };
+    let mut desk = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "one",
+        Channel::Desk,
+        Vec::new(),
+        vec![ConversationView {
+            root: Sequence(1),
+            other: "two".into(),
+            opened_it: true,
+            transcript: vec!["Tess: because".into()],
+            concluded: false,
+        }],
+    );
+    desk.name_seats(name);
+    let text = desk.render();
+    assert!(
+        text.contains("### With Tess (thread 1) -- in progress"),
+        "{text}"
+    );
+    assert!(
+        text.contains("your conversation with Tess concludes"),
+        "{text}"
+    );
+    assert!(!text.contains("@two"), "{text}");
+    let mut thread = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "one",
+        Channel::Thread {
+            root: Sequence(1),
+            other: "two".into(),
+            opened_it: true,
+        },
+        Vec::new(),
+        Vec::new(),
+    );
+    thread.name_seats(name);
+    assert!(
+        thread
+            .render()
+            .contains("## A private conversation with Tess (thread 1)")
+    );
 }
