@@ -29,7 +29,7 @@ use tinyhivemind::{
 };
 use tinyhivemind_driver::{
     BoundAgent, BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Conductor,
-    ConductorState, Door, ElsewhereView, EpisodeBrief, Event, Note, Step, Turn,
+    ConductorState, Door, ElsewhereView, EpisodeBrief, Event, Note, Step, Turn, speaker,
 };
 use tinyhivemind_tools::{Dispatch, Refusal};
 
@@ -418,13 +418,17 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
         ..desk.clone()
     };
     let log = journal.log();
+    let names = |seat: &str| journal.display_name(seat);
     // Marked only on the desk, where a confided row sits beside the room's
     // own and is otherwise indistinguishable from it.
     let on_desk = channel.thread_root.is_none();
-    let rows = rows_above(log, &channel, &turn.seat, turn.since, latest, on_desk).await?;
+    let rows = rows_above(
+        log, &channel, &turn.seat, turn.since, latest, on_desk, &names,
+    )
+    .await?;
     let window = match turn.thread() {
         None => rows.clone(),
-        Some(_) => rows_above(log, &channel, &turn.seat, None, latest, on_desk).await?,
+        Some(_) => rows_above(log, &channel, &turn.seat, None, latest, on_desk, &names).await?,
     };
     runner.open(
         &turn.seat,
@@ -468,14 +472,14 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
         // Read in the desk's own spelling, marks and all: this asks whether
         // `rows` already holds these lines, and the same row rendered two
         // ways would never match itself.
-        let fresh = rows_above(log, &thread, &turn.seat, turn.since, latest, true).await?;
+        let fresh = rows_above(log, &thread, &turn.seat, turn.since, latest, true, &names).await?;
         if fresh.iter().all(|row| rows.contains(row)) {
             carried.insert(root);
             continue;
         }
         transcripts.insert(
             root,
-            rows_above(log, &thread, &turn.seat, None, latest, false).await?,
+            rows_above(log, &thread, &turn.seat, None, latest, false, &names).await?,
         );
     }
     let mut brief = conductor.open_turn(turn, latest, rows, |root| {
@@ -497,6 +501,7 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
         .conversations
         .retain(|view| !(view.concluded && carried.contains(&view.root)));
     brief.elsewhere = elsewhere(journal, &turn.seat, &channel, latest).await?;
+    brief.name_seats(names);
     // The seats this one is still waiting on, for the record to refuse a
     // second ask to the same seat. The ledger that knows this is the
     // driver's, and the record cannot read it, so it is handed over per turn
@@ -547,7 +552,7 @@ async fn elsewhere<J: Journal>(
             rows: found
                 .rows
                 .iter()
-                .filter_map(|row| render(row, false))
+                .filter_map(|row| render(row, false, &|seat| journal.display_name(seat)))
                 .collect(),
         })
         .collect())
@@ -573,6 +578,7 @@ async fn rows_above(
     since: Option<Sequence>,
     latest: Option<Sequence>,
     mark_aside: bool,
+    names: &(dyn Fn(&str) -> String + Sync),
 ) -> Result<Vec<String>> {
     let Some(latest) = latest else {
         return Ok(Vec::new());
@@ -592,11 +598,12 @@ async fn rows_above(
     Ok(rows
         .iter()
         .filter(|row| since.is_none_or(|since| row.sequence > since))
-        .filter_map(|row| render(row, mark_aside))
+        .filter_map(|row| render(row, mark_aside, names))
         .collect())
 }
 
-/// `@author: content`, or nothing for a row the seat may not read.
+/// `author: content`, or nothing for a row the seat may not read. A seat is
+/// written by the name `names` gives it, or as `@id` without one.
 ///
 /// `mark_aside` says whether a row narrower than its conversation should say
 /// so. On the desk it must: a thread confided to this seat is read there
@@ -604,15 +611,21 @@ async fn rows_above(
 /// tell what it may repeat in the open from what was said to it in private.
 /// Inside a conversation it must not -- every row there is private, the
 /// brief's own heading says so, and marking each line repeats it.
-fn render(row: &SessionMessage, mark_aside: bool) -> Option<String> {
+fn render(
+    row: &SessionMessage,
+    mark_aside: bool,
+    names: &(dyn Fn(&str) -> String + Sync),
+) -> Option<String> {
     let content = row.readable()?;
     let author = match &row.author {
-        SessionAuthor::Operator => "operator",
-        SessionAuthor::Agent { id, .. } => id,
-        SessionAuthor::Person { label, .. } | SessionAuthor::System { label, .. } => label,
+        SessionAuthor::Operator => "@operator".to_owned(),
+        SessionAuthor::Agent { id, .. } => speaker(id, &names(id)),
+        SessionAuthor::Person { label, .. } | SessionAuthor::System { label, .. } => {
+            format!("@{label}")
+        }
     };
     if mark_aside && matches!(row.audience, tinyhivemind::aside::Audience::Aside { .. }) {
-        return Some(format!("@{author} (privately): {content}"));
+        return Some(format!("{author} (privately): {content}"));
     }
-    Some(format!("@{author}: {content}"))
+    Some(format!("{author}: {content}"))
 }

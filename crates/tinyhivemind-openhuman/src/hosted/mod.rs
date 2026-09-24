@@ -316,7 +316,10 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                 let this_turn = Arc::clone(&this_turn);
                 async move {
                     let mut history =
-                        seed::history(host.log(), conversation, &seat, since, window).await?;
+                        seed::history(host.log(), conversation, &seat, since, window, &|id| {
+                            host.display_name(id)
+                        })
+                        .await?;
                     // At the head, so it lands where a composed prompt would.
                     // Only when there is history to seed: with none, seeding
                     // is skipped entirely and the turn is cold, which is the

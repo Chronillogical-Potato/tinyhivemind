@@ -26,6 +26,18 @@ fn desk(thread_root: Option<Sequence>) -> Conversation {
     }
 }
 
+fn by_id(id: &str) -> String {
+    id.to_owned()
+}
+
+fn named(id: &str) -> String {
+    match id {
+        "two" => "Tess".to_owned(),
+        "three" => "Theo".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
 /// The task, a desk post, an ask from one to two and its answer in the
 /// thread, a note to one alone, and a desk post from three.
 fn journal() -> MemoryLog {
@@ -47,7 +59,7 @@ fn journal() -> MemoryLog {
 #[tokio::test]
 async fn a_seat_is_seeded_with_what_it_was_shown_its_own_rows_as_its_turns() {
     let log = journal();
-    let seen = history(&log, desk(None), "one", Some(Sequence(6)), 30)
+    let seen = history(&log, desk(None), "one", Some(Sequence(6)), 30, &by_id)
         .await
         .expect("reads");
     assert_eq!(
@@ -75,7 +87,7 @@ async fn a_seat_is_seeded_with_what_it_was_shown_its_own_rows_as_its_turns() {
 #[tokio::test]
 async fn a_row_the_seat_was_not_addressed_on_is_withheld() {
     let log = journal();
-    let seen = history(&log, desk(None), "three", Some(Sequence(6)), 30)
+    let seen = history(&log, desk(None), "three", Some(Sequence(6)), 30, &by_id)
         .await
         .expect("reads");
     let text: Vec<&str> = seen.iter().map(|(_, content)| content.as_str()).collect();
@@ -94,11 +106,11 @@ async fn a_row_the_seat_was_not_addressed_on_is_withheld() {
 #[tokio::test]
 async fn nothing_above_the_watermark_is_seeded() {
     let log = journal();
-    let seen = history(&log, desk(None), "one", Some(Sequence(2)), 30)
+    let seen = history(&log, desk(None), "one", Some(Sequence(2)), 30, &by_id)
         .await
         .expect("reads");
     assert_eq!(seen.len(), 2, "{seen:?}");
-    let none = history(&log, desk(None), "one", None, 30)
+    let none = history(&log, desk(None), "one", None, 30, &by_id)
         .await
         .expect("reads");
     assert!(none.is_empty(), "a first turn has no history");
@@ -107,15 +119,55 @@ async fn nothing_above_the_watermark_is_seeded() {
 #[tokio::test]
 async fn a_thread_turn_is_seeded_with_the_conversation_alone() {
     let log = journal();
-    let seen = history(&log, desk(Some(Sequence(3))), "two", Some(Sequence(4)), 30)
-        .await
-        .expect("reads");
+    let seen = history(
+        &log,
+        desk(Some(Sequence(3))),
+        "two",
+        Some(Sequence(4)),
+        30,
+        &by_id,
+    )
+    .await
+    .expect("reads");
     assert_eq!(
         seen,
         vec![
             ("user".into(), "@one: asks @two: which port?".into()),
             ("assistant".into(), "port 8080".into()),
         ]
+    );
+}
+
+#[tokio::test]
+async fn a_named_seat_is_seeded_by_its_name_and_an_unnamed_one_by_its_label() {
+    let log = journal();
+    let seen = history(&log, desk(None), "one", Some(Sequence(6)), 30, &named)
+        .await
+        .expect("reads");
+    assert_eq!(
+        seen.last(),
+        Some(&("user".into(), "Theo: the cache is stale".into()))
+    );
+    assert_eq!(
+        seen[0],
+        (
+            "user".into(),
+            "@operator: the login flow rejects valid credentials".into()
+        )
+    );
+    let thread = history(
+        &log,
+        desk(Some(Sequence(3))),
+        "two",
+        Some(Sequence(4)),
+        30,
+        &named,
+    )
+    .await
+    .expect("reads");
+    assert_eq!(
+        thread[0],
+        ("user".into(), "@one: asks @two: which port?".into())
     );
 }
 

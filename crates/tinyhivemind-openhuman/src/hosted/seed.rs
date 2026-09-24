@@ -14,7 +14,8 @@ use crate::Result;
 ///
 /// Projected as the seat, so a row it was not addressed on is withheld the
 /// same way it is everywhere else the host's log is read. The seat's own
-/// rows are its turns; everyone else's are attributed messages to it.
+/// rows are its turns; everyone else's are attributed messages to it, a
+/// seat by the name `names` gives it and otherwise by its label.
 ///
 /// Nothing above `since` is read. The rows above it are the turn's new rows,
 /// which reach the seat in its brief, so between the two it sees every row
@@ -30,6 +31,7 @@ pub(super) async fn history(
     seat: &str,
     since: Option<Sequence>,
     window: usize,
+    names: &(dyn Fn(&str) -> String + Sync),
 ) -> Result<Vec<(String, String)>> {
     let query = SessionQuery {
         conversation,
@@ -54,30 +56,44 @@ pub(super) async fn history(
     let rows = project_session(log, &query).await?;
     Ok(rows
         .iter()
-        .filter_map(|row| turn(row, seat, mark_aside))
+        .filter_map(|row| turn(row, seat, mark_aside, names))
         .collect())
 }
 
 /// One row as the seat's model reads it, or `None` for a row withheld from
 /// it.
-fn turn(row: &SessionMessage, seat: &str, mark_aside: bool) -> Option<(String, String)> {
+fn turn(
+    row: &SessionMessage,
+    seat: &str,
+    mark_aside: bool,
+    names: &(dyn Fn(&str) -> String + Sync),
+) -> Option<(String, String)> {
     let content = row.readable()?;
     // The seat's own rows are its turns, and a model needs no telling that
     // it spoke in confidence; only what reaches it from someone else does.
     let confided =
         mark_aside && matches!(row.audience, tinyhivemind::aside::Audience::Aside { .. });
-    let said = |label: &str| {
+    let said = |author: &str| {
         if confided {
-            format!("@{label} (privately): {content}")
+            format!("{author} (privately): {content}")
         } else {
-            format!("@{label}: {content}")
+            format!("{author}: {content}")
         }
     };
     Some(match &row.author {
         SessionAuthor::Agent { id, .. } if id == seat => ("assistant".into(), content.into()),
-        SessionAuthor::Agent { label, .. }
-        | SessionAuthor::Person { label, .. }
-        | SessionAuthor::System { label, .. } => ("user".into(), said(label)),
-        SessionAuthor::Operator => ("user".into(), said("operator")),
+        SessionAuthor::Agent { id, label } => {
+            let name = names(id);
+            let author = if name.trim().is_empty() || name == *id {
+                format!("@{label}")
+            } else {
+                name
+            };
+            ("user".into(), said(&author))
+        }
+        SessionAuthor::Person { label, .. } | SessionAuthor::System { label, .. } => {
+            ("user".into(), said(&format!("@{label}")))
+        }
+        SessionAuthor::Operator => ("user".into(), said("@operator")),
     })
 }
