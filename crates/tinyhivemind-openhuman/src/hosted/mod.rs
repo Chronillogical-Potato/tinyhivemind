@@ -402,21 +402,38 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                     // history in its place, and keeps the durable transcript
                     // from being reloaded over it. The journal is the only
                     // history a seat has, and this is how it becomes the turn's.
-                    let outcome = tokio::time::timeout(
+                    // Metered through the callback, not the outcome.
+                    //
+                    // A `TurnOutcome` is built on the success path only, so a
+                    // turn that ran, called tools and then failed would report
+                    // no spend at all -- undercounting exactly the turns that
+                    // cost the most. `meter` fires after the turn settles and
+                    // before its error is returned, so the hook below sees the
+                    // spend either way.
+                    let metered: Arc<Mutex<Option<LastTurnUsage>>> =
+                        Arc::new(Mutex::new(None));
+                    let sink = Arc::clone(&metered);
+                    let settled = tokio::time::timeout(
                         TURN_TIMEOUT,
                         agent
                             .turn(&prompt)
                             .session(session_id.clone())
                             .seed(history)
+                            .meter(move |usage| {
+                                *sink.lock().unwrap_or_else(PoisonError::into_inner) = usage;
+                            })
                             .send(),
                     )
                     .await
-                    .map_err(|_| Error::TimedOut { seat: seat.clone() })?
-                    .map_err(|error| Error::Harness(anyhow::anyhow!(error.to_string())))?;
-                    let reply = outcome.reply;
-                    // This turn's usage, or none: a turn that reported nothing
-                    // must not be metered as the one before it.
-                    let last = outcome.usage;
+                    .map_err(|_| Error::TimedOut { seat: seat.clone() })?;
+                    // Read before the error is raised, for the same reason.
+                    let last = metered
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .take();
+                    let reply = settled
+                        .map_err(|error| Error::Harness(anyhow::anyhow!(error.to_string())))?
+                        .reply;
                     let mut metered = usage.lock().unwrap_or_else(PoisonError::into_inner);
                     match &last {
                         Some(last) => metered.insert(seat.clone(), last.clone()),
