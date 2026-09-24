@@ -409,10 +409,13 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
         ..desk.clone()
     };
     let log = journal.log();
-    let rows = rows_above(log, &channel, &turn.seat, turn.since, latest).await?;
+    // Marked only on the desk, where a confided row sits beside the room's
+    // own and is otherwise indistinguishable from it.
+    let on_desk = channel.thread_root.is_none();
+    let rows = rows_above(log, &channel, &turn.seat, turn.since, latest, on_desk).await?;
     let window = match turn.thread() {
         None => rows.clone(),
-        Some(_) => rows_above(log, &channel, &turn.seat, None, latest).await?,
+        Some(_) => rows_above(log, &channel, &turn.seat, None, latest, on_desk).await?,
     };
     runner.open(
         &turn.seat,
@@ -425,6 +428,13 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
     // Only a desk turn is shown its conversations, so only a desk turn
     // reads them.
     let mut transcripts = std::collections::BTreeMap::new();
+    // Conversations this turn's desk read already carries, whose views are
+    // dropped below. Held rather than simply skipped: the conductor builds a
+    // view for every conversation it means to show, and one with no
+    // transcript renders as "(nothing new)" -- a heading promising an
+    // exchange and delivering none, which is worse than the copy it set out
+    // to remove.
+    let mut carried = std::collections::BTreeSet::new();
     let shown = match turn.thread() {
         None => conductor.shown_conversations(&turn.seat),
         Some(_) => Vec::new(),
@@ -434,14 +444,49 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
             thread_root: Some(root),
             ..desk.clone()
         };
+        // **A conversation the desk read already carried is not sent twice.**
+        //
+        // A thread confided to this seat is promoted into its channel-level
+        // read, so the rows are in `rows` above -- in the desk's own order,
+        // marked private. Handing the same rows over again as a
+        // `ConversationView` is the same paragraph twice in one prompt, and
+        // for a host that keeps its prompts it is twice forever.
+        //
+        // Decided per conversation, against what this turn is actually
+        // shown, rather than by a policy flag: a host whose rows carry no
+        // audience promotes only the first reply, its later rows are missing
+        // from `rows`, and it keeps the view it has always had.
+        // Read in the desk's own spelling, marks and all: this asks whether
+        // `rows` already holds these lines, and the same row rendered two
+        // ways would never match itself.
+        let fresh = rows_above(log, &thread, &turn.seat, turn.since, latest, true).await?;
+        if fresh.iter().all(|row| rows.contains(row)) {
+            carried.insert(root);
+            continue;
+        }
         transcripts.insert(
             root,
-            rows_above(log, &thread, &turn.seat, None, latest).await?,
+            rows_above(log, &thread, &turn.seat, None, latest, false).await?,
         );
     }
     let mut brief = conductor.open_turn(turn, latest, rows, |root| {
         transcripts.get(&root).cloned().unwrap_or_default()
     });
+    // **Only a concluded conversation's block is a duplicate.**
+    //
+    // A conversation still running carries something its rows cannot: that
+    // it is still running. The lines read the same either way, and the
+    // heading is the only thing that says the seat is still waiting on an
+    // answer -- drop it and a seat reads the exchange inline, takes it for
+    // finished, and tries to complete. That was measured: a live run with
+    // this suppression applied to open conversations refused five calls to
+    // one run's one, `@checker` completing early twice.
+    //
+    // For a concluded one the cursor has moved either way, which is right:
+    // the seat was shown it, in its desk read rather than in a block.
+    brief
+        .conversations
+        .retain(|view| !(view.concluded && carried.contains(&view.root)));
     brief.elsewhere = elsewhere(journal, &turn.seat, &channel, latest).await?;
     // The seats this one is still waiting on, for the record to refuse a
     // second ask to the same seat. The ledger that knows this is the
@@ -488,7 +533,13 @@ async fn elsewhere<J: Journal>(
             chat: found.conversation.desk_id,
             name: found.conversation.desk_name,
             thread_root: found.conversation.thread_root,
-            rows: found.rows.iter().filter_map(render).collect(),
+            // Another desk's rows, as context. Not marked: this seat reads
+            // them as that desk's, under that desk's own heading.
+            rows: found
+                .rows
+                .iter()
+                .filter_map(|row| render(row, false))
+                .collect(),
         })
         .collect())
 }
@@ -512,6 +563,7 @@ async fn rows_above(
     seat: &str,
     since: Option<Sequence>,
     latest: Option<Sequence>,
+    mark_aside: bool,
 ) -> Result<Vec<String>> {
     let Some(latest) = latest else {
         return Ok(Vec::new());
@@ -531,17 +583,27 @@ async fn rows_above(
     Ok(rows
         .iter()
         .filter(|row| since.is_none_or(|since| row.sequence > since))
-        .filter_map(render)
+        .filter_map(|row| render(row, mark_aside))
         .collect())
 }
 
 /// `@author: content`, or nothing for a row the seat may not read.
-fn render(row: &SessionMessage) -> Option<String> {
+///
+/// `mark_aside` says whether a row narrower than its conversation should say
+/// so. On the desk it must: a thread confided to this seat is read there
+/// alongside the room's own rows, and rendered the same way a seat cannot
+/// tell what it may repeat in the open from what was said to it in private.
+/// Inside a conversation it must not -- every row there is private, the
+/// brief's own heading says so, and marking each line repeats it.
+fn render(row: &SessionMessage, mark_aside: bool) -> Option<String> {
     let content = row.readable()?;
     let author = match &row.author {
         SessionAuthor::Operator => "operator",
         SessionAuthor::Agent { id, .. } => id,
         SessionAuthor::Person { label, .. } | SessionAuthor::System { label, .. } => label,
     };
+    if mark_aside && matches!(row.audience, tinyhivemind::aside::Audience::Aside { .. }) {
+        return Some(format!("@{author} (privately): {content}"));
+    }
     Some(format!("@{author}: {content}"))
 }
