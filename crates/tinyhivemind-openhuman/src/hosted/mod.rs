@@ -410,8 +410,7 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                     // cost the most. `meter` fires after the turn settles and
                     // before its error is returned, so the hook below sees the
                     // spend either way.
-                    let metered: Arc<Mutex<Option<LastTurnUsage>>> =
-                        Arc::new(Mutex::new(None));
+                    let metered: Arc<Mutex<Option<LastTurnUsage>>> = Arc::new(Mutex::new(None));
                     let sink = Arc::clone(&metered);
                     let settled = tokio::time::timeout(
                         TURN_TIMEOUT,

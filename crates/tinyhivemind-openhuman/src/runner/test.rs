@@ -15,11 +15,11 @@ use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent, served_specs};
 
 use super::{Lane, RunnerKind, SeatRunner};
 use crate::MemoryLog;
-use openhuman_embed::Agent;
 use crate::{
-    Disposition, EmbedRunner, EpisodeHost, HostedRunner, HostedTurn, Journal,
-    EpisodeBeltSource, LibraryHost, RawRunner, Route, TurnResult, offline, register_seats,
+    Disposition, EmbedRunner, EpisodeBeltSource, EpisodeHost, HostedRunner, HostedTurn, Journal,
+    LibraryHost, RawRunner, Route, TurnResult, offline, register_seats,
 };
+use openhuman_embed::Agent;
 use tinyhivemind_driver::{Commit, Note};
 
 /// A host with no agents of its own: its seats are library sessions, its
