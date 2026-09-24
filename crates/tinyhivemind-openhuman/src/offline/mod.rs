@@ -224,6 +224,22 @@ pub async fn model(chat: &str, metrics: Arc<Metrics>) -> MockServer {
 #[must_use]
 pub fn config() -> RuntimeConfig {
     let mut config = RuntimeConfig::default();
+    // The scripted route answers with **native** structured tool calls, so the
+    // seat has to be reading them that way.
+    //
+    // OpenHuman's own default for this moved -- `"auto"` (native where the
+    // provider supports it) to `"python"` (calls parsed out of prose against
+    // Python signatures) -- and a runner that inherited it stopped seeing the
+    // script's calls as calls at all. Nothing errored: the reply came back,
+    // the record stayed empty, and the only symptom was a seat that had
+    // apparently chosen to say nothing.
+    //
+    // `LibraryHost::session` already pins `NativeDialect` for the raw and
+    // hosted seats, which is why they were unaffected and the embed seat was
+    // not. This is that same pin, for the runner that builds its agent from
+    // configuration instead of a session builder. A harness that scripts one
+    // dialect names it rather than inheriting whichever is current.
+    config.agent.tool_dispatcher = "auto".into();
     config.local_ai.runtime_enabled = false;
     config.runtime_python.enabled = false;
     config.memory_tree.spacy_enabled = false;

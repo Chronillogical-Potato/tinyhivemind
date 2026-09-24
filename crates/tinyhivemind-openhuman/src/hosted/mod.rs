@@ -39,7 +39,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use openhuman_core::agent::tinyagents::host::LastTurnUsage;
 use openhuman_core::agent::tool_policy::ToolPolicy;
-use openhuman_core::agent::{OpenHumanSessionHost, TurnOverrides};
+use openhuman_embed::Agent;
 use tinyhivemind::{Conversation, Sequence};
 use tinyhivemind_driver::{AgentBinding, BoundAgent};
 use tinyhivemind_tools::EpisodeTools;
@@ -56,16 +56,40 @@ pub type HostedTurn<'a> = Pin<Box<dyn Future<Output = Result<String>> + Send + '
 
 /// What a host gives the hosted runner, beside the [`Journal`] it is.
 pub trait EpisodeHost: Journal + 'static {
-    /// Build the session `seat` runs on, with `belt` on it.
+    /// The agent `seat` runs on, with `belt` reachable from it.
     ///
-    /// The host builds the agent it would build anyway, adds `belt.tools` to
-    /// its belt, and gates it with [`EpisodeBelt::admit`] over its own
-    /// policy. The session is reused for every turn of the episode.
+    /// The host returns the agent it would return anyway -- the same handle
+    /// its pool holds, not a second one built for the episode. What the
+    /// episode adds is `belt`: its tools, its advertised names, and
+    /// [`EpisodeBelt::admit`] over the host's own policy.
+    ///
+    /// # Why a handle rather than a session
+    ///
+    /// A session fixes its belt when it is built, so a host used to build one
+    /// session per seat per episode and the runner reused it. An `AgentSpec`
+    /// composes its belt per turn instead, which means the episode's tools can
+    /// reach the host's existing agent rather than a copy of it -- and a
+    /// teammate stops existing twice, once as the pool's handle and once as
+    /// the episode's session.
+    ///
+    /// The host keys `belt` by [`seat_session`](Self::seat_session) so its own
+    /// per-turn belt can answer with the episode's tools for those turns and
+    /// its ordinary ones otherwise.
     ///
     /// # Errors
     ///
-    /// Whatever stops the host building the seat.
-    fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> Result<OpenHumanSessionHost>;
+    /// Whatever stops the host seating the agent.
+    fn build_seat(&self, seat: &str, belt: EpisodeBeltSource) -> Result<Agent>;
+
+    /// The conversation id every turn of this seat runs under.
+    ///
+    /// One id for the whole episode, minted by the host because the host is
+    /// what has to recognise it: it is the key its per-turn belt looks up to
+    /// know this turn is the episode's. The runner only passes it back.
+    ///
+    /// It must not collide with a conversation the host runs outside the
+    /// episode, or that conversation's belt answers here.
+    fn seat_session(&self, seat: &str) -> String;
 
     /// Wrap one turn. The default runs it as it is.
     fn wrap_turn<'a>(&'a self, seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
@@ -149,6 +173,45 @@ impl std::fmt::Debug for EpisodeBelt {
     }
 }
 
+/// What builds a seat's [`EpisodeBelt`], as often as a host needs one.
+///
+/// A belt is `Vec<Box<dyn Tool>>` and a `Box<dyn Tool>` is not `Clone`, so a
+/// belt can be handed over once. An `AgentSpec` composes its belt **per turn**
+/// from a factory that is `Fn`, not `FnOnce` -- so a host cannot close over a
+/// belt it was given, only over what makes one. This is that.
+///
+/// Cheap to hold and to call: the tools are rebuilt from the episode's own
+/// [`EpisodeTools`], which is shared.
+#[derive(Clone)]
+pub struct EpisodeBeltSource {
+    seat: String,
+    tools: Arc<EpisodeTools>,
+    prefix: String,
+}
+
+impl std::fmt::Debug for EpisodeBeltSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EpisodeBeltSource")
+            .field("seat", &self.seat)
+            .field("prefix", &self.prefix)
+            .finish_non_exhaustive()
+    }
+}
+
+impl EpisodeBeltSource {
+    /// A belt for this seat, built fresh.
+    #[must_use]
+    pub fn belt(&self) -> EpisodeBelt {
+        EpisodeBelt::new(&self.seat, &self.tools, &self.prefix)
+    }
+
+    /// The seat this source belongs to.
+    #[must_use]
+    pub fn seat(&self) -> &str {
+        &self.seat
+    }
+}
+
 impl EpisodeBelt {
     fn new(seat: &str, tools: &Arc<EpisodeTools>, prefix: &str) -> Self {
         let tools = belt_with_prefix(seat, tools, prefix);
@@ -175,7 +238,7 @@ impl EpisodeBelt {
 #[derive(Clone)]
 pub struct HostedSeat {
     id: String,
-    session: Arc<tokio::sync::Mutex<OpenHumanSessionHost>>,
+    agent: Agent,
 }
 
 impl BoundAgent for HostedSeat {
@@ -232,13 +295,17 @@ impl<H: EpisodeHost> HostedRunner<H> {
     ) -> Result<Self> {
         let mut built = BTreeMap::new();
         for id in seats {
-            let belt = EpisodeBelt::new(id, &tools, &host.tool_prefix());
-            let session = host.build_seat(id, belt)?;
+            let belt = EpisodeBeltSource {
+                seat: id.clone(),
+                tools: Arc::clone(&tools),
+                prefix: host.tool_prefix(),
+            };
+            let agent = host.build_seat(id, belt)?;
             built.insert(
                 id.clone(),
                 HostedSeat {
                     id: id.clone(),
-                    session: Arc::new(tokio::sync::Mutex::new(session)),
+                    agent,
                 },
             );
         }
@@ -285,9 +352,10 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
     /// and run the brief, inside the host's wrapper.
     fn turn(&self, seat: String, lane: Lane, since: Option<Sequence>, prompt: String) -> TurnJob {
         let host = Arc::clone(&self.host);
-        let Some(session) = self.seats.get(&seat).map(|held| Arc::clone(&held.session)) else {
+        let Some(agent) = self.seats.get(&seat).map(|held| held.agent.clone()) else {
             return unseated(seat, lane);
         };
+        let session_id = self.host.seat_session(&seat);
         let usage = Arc::clone(&self.usage);
         // Whatever the turn before left under this seat is not this turn's:
         // a turn that fails before the session reports anything is metered
@@ -318,30 +386,37 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                     let mut history =
                         seed::history(host.log(), conversation, &seat, since, window).await?;
                     // At the head, so it lands where a composed prompt would.
+                    // A seeded turn is not cold and composes no system prompt,
+                    // so without this the seat runs on the brief alone.
+                    //
                     // Only when there is history to seed: with none, seeding
-                    // is skipped entirely and the turn is cold, which is the
-                    // one case that already renders the prompt itself.
+                    // is skipped and the turn is cold, which is the one case
+                    // that renders the prompt itself.
                     if !history.is_empty()
                         && let Some(persona) = host.persona(&seat)
                     {
                         history.insert(0, ("system".to_owned(), persona));
                     }
-                    let mut session = session.lock().await;
-                    // Clearing drops the runtime session, and with it the
-                    // turn state, so the seed and the overrides go after it.
-                    session.clear_history();
-                    session.seed_resume_from_messages(history, &prompt)?;
-                    session.set_next_turn_overrides(TurnOverrides {
-                        suppress_transcript_autoload: true,
-                        ..TurnOverrides::default()
-                    });
-                    let reply = tokio::time::timeout(TURN_TIMEOUT, session.turn(&prompt))
-                        .await
-                        .map_err(|_| Error::TimedOut { seat: seat.clone() })?
-                        .map_err(Error::Harness)?;
-                    // This turn's usage, or none: a turn the session reported
-                    // nothing for must not be metered as the one before it.
-                    let last = session.last_turn_usage();
+                    // `seed` is the whole of what the five calls here used to
+                    // do: it drops whatever the session composed, puts this
+                    // history in its place, and keeps the durable transcript
+                    // from being reloaded over it. The journal is the only
+                    // history a seat has, and this is how it becomes the turn's.
+                    let outcome = tokio::time::timeout(
+                        TURN_TIMEOUT,
+                        agent
+                            .turn(&prompt)
+                            .session(session_id.clone())
+                            .seed(history)
+                            .send(),
+                    )
+                    .await
+                    .map_err(|_| Error::TimedOut { seat: seat.clone() })?
+                    .map_err(|error| Error::Harness(anyhow::anyhow!(error.to_string())))?;
+                    let reply = outcome.reply;
+                    // This turn's usage, or none: a turn that reported nothing
+                    // must not be metered as the one before it.
+                    let last = outcome.usage;
                     let mut metered = usage.lock().unwrap_or_else(PoisonError::into_inner);
                     match &last {
                         Some(last) => metered.insert(seat.clone(), last.clone()),

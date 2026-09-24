@@ -6,7 +6,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use openhuman_core::agent::OpenHumanSessionHost;
 use openhuman_core::agent::tinyagents::host::LastTurnUsage;
 use openhuman_embed::{Access, Provider, Runtime, Workspace};
 use tinyhivemind::speech::{ToolCall, Utterance};
@@ -16,9 +15,10 @@ use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent, served_specs};
 
 use super::{Lane, RunnerKind, SeatRunner};
 use crate::MemoryLog;
+use openhuman_embed::Agent;
 use crate::{
-    Disposition, EmbedRunner, EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Journal,
-    LibraryHost, RawRunner, Route, TurnResult, offline, register_seats,
+    Disposition, EmbedRunner, EpisodeHost, HostedRunner, HostedTurn, Journal,
+    EpisodeBeltSource, LibraryHost, RawRunner, Route, TurnResult, offline, register_seats,
 };
 use tinyhivemind_driver::{Commit, Note};
 
@@ -28,6 +28,10 @@ use tinyhivemind_driver::{Commit, Note};
 struct TestHost {
     log: MemoryLog,
     library: LibraryHost,
+    /// Seats are `AgentSpec` agents now, so the host holds the runtime it
+    /// registers them on -- the same one the other runners in this test use,
+    /// because a process has exactly one.
+    runtime: Arc<Runtime>,
     prompt: String,
     wrapped: AtomicUsize,
     /// Turns the hook saw, and whether any came with usage.
@@ -61,9 +65,12 @@ impl Journal for TestHost {
 }
 
 impl EpisodeHost for TestHost {
-    fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> crate::Result<OpenHumanSessionHost> {
-        let policy = belt.admit(None);
-        self.library.session(seat, &self.prompt, belt.tools, policy)
+    fn build_seat(&self, seat: &str, belt: EpisodeBeltSource) -> crate::Result<Agent> {
+        seat_agent(&self.runtime, seat, &self.prompt, belt)
+    }
+
+    fn seat_session(&self, seat: &str) -> String {
+        format!("episode:engineering:{seat}")
     }
 
     fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
@@ -158,7 +165,7 @@ async fn one_turn<R: SeatRunner>(runner: &R, since: Option<Sequence>) -> (String
 /// installed, which is what a host with a booted core of its own has.
 struct PlainHost {
     log: MemoryLog,
-    library: LibraryHost,
+    runtime: Arc<Runtime>,
 }
 
 impl Journal for PlainHost {
@@ -183,20 +190,60 @@ impl Journal for PlainHost {
 }
 
 impl EpisodeHost for PlainHost {
-    fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> crate::Result<OpenHumanSessionHost> {
-        let policy = belt.admit(None);
-        self.library
-            .session(seat, "You lead the desk.", belt.tools, policy)
+    fn build_seat(&self, seat: &str, belt: EpisodeBeltSource) -> crate::Result<Agent> {
+        seat_agent(&self.runtime, seat, "You lead the desk.", belt)
     }
+
+    fn seat_session(&self, seat: &str) -> String {
+        format!("episode:engineering:{seat}")
+    }
+}
+
+/// A number no other seating in this process has used.
+fn seating() -> usize {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    NEXT.fetch_add(1, Ordering::SeqCst)
+}
+
+/// One seat, as an `AgentSpec` whose belt is the episode's, rebuilt per turn.
+///
+/// This is the shape a real host uses: the belt is not handed over once and
+/// held, it is made again for every turn out of the source, because that is
+/// what `AgentSpec::tools` asks for and what lets one agent serve an episode
+/// and its ordinary work without existing twice.
+fn seat_agent(
+    runtime: &Runtime,
+    seat: &str,
+    prompt: &str,
+    belt: EpisodeBeltSource,
+) -> crate::Result<Agent> {
+    Ok(runtime.agent(
+        // Not the bare seat id. A runtime id is unique per process, and this
+        // one is taken twice over: `register_seats` registered `lead` for the
+        // raw runner, and both hosted hosts in this file seat a `lead` of
+        // their own. The hive still knows the seat as `lead` -- that is the
+        // binding's id, not the runtime's, and only the latter has to be
+        // unique here.
+        openhuman_embed::AgentSpec::new(format!("{seat}-hosted-{}", seating()))
+            .system_prompt(prompt.to_owned())
+            .tools(move |_turn| {
+                let belt = belt.belt();
+                let policy = belt.admit(None);
+                openhuman_embed::HostTurnTools::advertised(belt.tools).with_policy(policy)
+            }),
+    )?)
 }
 
 /// A hosted seat on a host that keeps every default, run once on the desk
 /// and once in a thread it is not in: the defaults hold, the thread turn is
 /// seeded from the thread, and a call outside its thread is refused.
-async fn plain(library: LibraryHost) {
+async fn plain(runtime: &Arc<Runtime>) {
     let log = MemoryLog::new("engineering");
     log.append("operator", "state the root cause", None, None);
-    let host = Arc::new(PlainHost { log, library });
+    let host = Arc::new(PlainHost {
+        log,
+        runtime: Arc::clone(runtime),
+    });
     let runner = HostedRunner::seat(
         Arc::clone(&host),
         Arc::new(EpisodeTools::new(["lead"])),
@@ -239,13 +286,18 @@ async fn plain(library: LibraryHost) {
 }
 
 /// A hosted runner over a test host whose log already holds the task.
-fn hosted(library: LibraryHost, contract: &str) -> (Arc<TestHost>, HostedRunner<TestHost>) {
+fn hosted(
+    library: LibraryHost,
+    runtime: &Arc<Runtime>,
+    contract: &str,
+) -> (Arc<TestHost>, HostedRunner<TestHost>) {
     assert!(format!("{library:?}").contains(offline::MODEL));
     let log = MemoryLog::new("engineering");
     log.append("operator", "state the root cause", None, None);
     let host = Arc::new(TestHost {
         log,
         library,
+        runtime: Arc::clone(runtime),
         prompt: format!("You lead the desk.\n\n{contract}"),
         wrapped: AtomicUsize::new(0),
         after: AtomicUsize::new(0),
@@ -460,7 +512,7 @@ async fn both_runners() {
         .collect();
     register_seats(workspace.path(), &[("lead", "You lead the desk.")], &named)
         .expect("seats register");
-    let runtime = runtime(&config, &backend, &route, workspace.path()).await;
+    let runtime = Arc::new(runtime(&config, &backend, &route, workspace.path()).await);
     let embed = EmbedRunner::seat(
         &runtime,
         Arc::new(EpisodeTools::new(["lead"])),
@@ -493,7 +545,7 @@ async fn both_runners() {
     let library = LibraryHost::boot(&config, &backend.uri(), &route, workspace.path())
         .await
         .expect("the library boots");
-    let (host, hosted) = hosted(library, &contract(RunnerKind::Hosted));
+    let (host, hosted) = hosted(library, &runtime, &contract(RunnerKind::Hosted));
 
     let (embed_reply, embed_events) = one_turn(&embed, None).await;
     let (raw_reply, raw_events) = one_turn(&raw, None).await;
@@ -525,7 +577,7 @@ async fn both_runners() {
 
     again(&raw, &host, &hosted).await;
     ghosts(&embed, &raw, &hosted).await;
-    plain(host.library.clone()).await;
+    plain(&runtime).await;
     halts(&host, &hosted).await;
     metrics.reset();
     assert_eq!(metrics.snapshot().requests, 0);

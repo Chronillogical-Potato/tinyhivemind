@@ -73,10 +73,10 @@ tinyhivemind-mcp = { path = "crates/tinyhivemind-mcp" }
 # host writes the same four lines against its own. `tinytools` is pinned at
 # the commit OpenHuman's own tree vendors, which is what makes the unification
 # exact; `.github/scripts/assert-openhuman-pin.sh` checks all three revs.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "1ecf1b0bc4bc4d80b0f56f1e01e47d2c0f981c5b", default-features = false }
-openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "1ecf1b0bc4bc4d80b0f56f1e01e47d2c0f981c5b", default-features = false }
-tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "9ae1d44de00863bfff5e3549063d14d57db15c21" }
-tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "9ae1d44de00863bfff5e3549063d14d57db15c21" }
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "a301d99829e6a35318860b17d809239f883889cd", default-features = false }
+openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "a301d99829e6a35318860b17d809239f883889cd", default-features = false }
+tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "b47ccd1a58ec1bb0de51f8a732261bda701bbab6" }
+tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "b47ccd1a58ec1bb0de51f8a732261bda701bbab6" }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.

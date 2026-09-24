@@ -45,18 +45,20 @@
 //!
 //! ```no_run
 //! use std::sync::Arc;
-//! use openhuman_core::agent::OpenHumanSessionHost;
+//! use openhuman_embed::{Agent, AgentSpec, HostTurnTools, Runtime};
 //! use tinyhivemind::{SESSION_WINDOW, Sequence, SessionLog};
 //! use tinyhivemind_driver::{Commit, Note};
 //! use tinyhivemind_openhuman::MemoryLog;
 //! use tinyhivemind_openhuman::{
-//!     EpisodeBelt, EpisodeHost, HostedRunner, HostedTurn, Journal, Lane, LibraryHost, SeatRunner,
+//!     EpisodeBeltSource, EpisodeHost, HostedRunner, HostedTurn, Journal, Lane, LibraryHost,
+//!     SeatRunner,
 //! };
 //! use tinyhivemind_tools::{Dispatch, EpisodeTools};
 //!
 //! struct Desk {
 //!     log: MemoryLog,
 //!     library: LibraryHost,
+//!     runtime: Arc<Runtime>,
 //! }
 //!
 //! // The journal: a real host reads and appends its own; this one is in memory.
@@ -79,12 +81,24 @@
 //!     fn build_seat(
 //!         &self,
 //!         seat: &str,
-//!         belt: EpisodeBelt,
-//!     ) -> tinyhivemind_openhuman::Result<OpenHumanSessionHost> {
-//!         // A real host builds the agent it always builds, adds `belt.tools`,
-//!         // and passes its own gate here instead of `None`.
-//!         let gate = belt.admit(None);
-//!         self.library.session(seat, "You lead the desk.", belt.tools, gate)
+//!         belt: EpisodeBeltSource,
+//!     ) -> tinyhivemind_openhuman::Result<Agent> {
+//!         // A real host returns the agent it already holds. The belt is a
+//!         // source, not a belt, because `AgentSpec::tools` composes one per
+//!         // turn -- and a real host passes its own gate instead of `None`.
+//!         Ok(self.runtime.agent(
+//!             AgentSpec::new(seat)
+//!                 .system_prompt("You lead the desk.")
+//!                 .tools(move |_turn| {
+//!                     let belt = belt.belt();
+//!                     let gate = belt.admit(None);
+//!                     HostTurnTools::advertised(belt.tools).with_policy(gate)
+//!                 }),
+//!         )?)
+//!     }
+//!
+//!     fn seat_session(&self, seat: &str) -> String {
+//!         format!("episode:engineering:{seat}")
 //!     }
 //!
 //!     fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
@@ -126,7 +140,9 @@ pub mod runner;
 pub use embed::{EmbedRunner, EmbedSeat};
 pub use episode::{Journal, Released, Report, resume_episode, run_episode};
 pub use error::{Error, Result};
-pub use hosted::{Disposition, EpisodeBelt, EpisodeHost, HostedRunner, HostedSeat, HostedTurn};
+pub use hosted::{
+    Disposition, EpisodeBelt, EpisodeBeltSource, EpisodeHost, HostedRunner, HostedSeat, HostedTurn,
+};
 pub use journal::MemoryLog;
 pub use raw::{LibraryHost, RawRunner, RawSeat, Route, register_seats};
 pub use runner::{Lane, RunnerKind, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult};
