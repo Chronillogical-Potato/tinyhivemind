@@ -123,7 +123,7 @@ fn an_in_process_call_is_refused_where_the_wire_would_refuse_it() {
             &args(serde_json::json!({"message": "x", "chat": "elsewhere"})),
         )
         .expect_err("wrong chat");
-    assert!(refusal.contains("name exactly those"));
+    assert!(refusal.contains("\"chat\": \"engineering\" and \"parent\": null"));
     // A tool the vocabulary has but this server does not serve.
     assert!(tools.call("lead", "dm", &good("solver")).is_err());
     // Asking oneself, and asking a stranger.
@@ -131,7 +131,7 @@ fn an_in_process_call_is_refused_where_the_wire_would_refuse_it() {
     let refusal = tools
         .call("lead", "ask", &good("ghost"))
         .expect_err("unknown recipient");
-    assert!(refusal.contains("The desk is: lead, solver"));
+    assert!(refusal.contains("You can ask: lead, solver"));
     // Nothing above was recorded.
     assert!(tools.drain("lead").is_empty());
     // Inside a conversation, `ask` is refused and `complete_episode` is the answer.
@@ -195,7 +195,7 @@ fn a_second_ask_to_a_seat_already_being_waited_on_is_refused() {
         .call("lead", "ask", &ask("solver"))
         .expect_err("a second ask to the same seat");
     assert!(
-        refusal.contains("already asked @solver"),
+        refusal.contains("already asked solver"),
         "the refusal names the seat and why: {refusal}"
     );
     assert!(
@@ -216,4 +216,96 @@ fn a_second_ask_to_a_seat_already_being_waited_on_is_refused() {
         .call("lead", "ask", &ask("solver"))
         .expect("after it concluded");
     assert_eq!(tools.drain("lead").len(), 1);
+}
+
+#[test]
+fn a_named_seat_is_called_by_its_name_in_what_the_caller_reads_back() {
+    let tools = EpisodeTools::new(["lead", "solver", "scribe"]);
+    tools.name_seats([("solver", "Tess"), ("ghost", "Nobody"), ("scribe", " ")]);
+    assert_eq!(tools.display_name("solver"), "Tess");
+    assert_eq!(
+        tools.display_name("scribe"),
+        "scribe",
+        "a blank name is none"
+    );
+    assert_eq!(
+        tools.display_name("ghost"),
+        "ghost",
+        "an unserved seat is not named"
+    );
+    tools.register("lead", dispatch());
+    let ask = |to: &str| {
+        args(serde_json::json!({
+            "message": "what constrains it?", "to": to,
+            "chat": "engineering", "parent": null
+        }))
+    };
+    let receipt = tools.call("lead", "ask", &ask("solver")).expect("asked");
+    assert!(
+        receipt.starts_with("your question to Tess is sent."),
+        "{receipt}"
+    );
+    assert!(!receipt.contains("@solver"), "{receipt}");
+    let refusal = tools
+        .call("lead", "ask", &ask("ghost"))
+        .expect_err("unknown recipient");
+    assert!(
+        refusal.contains("You can ask: lead, scribe, Tess (id `solver`)"),
+        "{refusal}"
+    );
+    tools.awaiting("lead", vec!["solver".to_owned()]);
+    let refusal = tools
+        .call("lead", "ask", &ask("solver"))
+        .expect_err("already waiting");
+    assert!(refusal.contains("already asked Tess"), "{refusal}");
+}
+
+#[test]
+fn an_unnamed_seat_is_called_by_its_id() {
+    let tools = EpisodeTools::new(["lead", "solver"]);
+    assert_eq!(tools.display_name("solver"), "solver");
+    tools.register("lead", dispatch());
+    let receipt = tools
+        .call(
+            "lead",
+            "ask",
+            &args(serde_json::json!({
+                "message": "?", "to": "solver", "chat": "engineering", "parent": null
+            })),
+        )
+        .expect("asked");
+    assert!(
+        receipt.starts_with("your question to solver is sent."),
+        "{receipt}"
+    );
+}
+
+#[test]
+fn the_record_describes_named_recipients_beside_the_ids_a_call_carries() {
+    let tools = EpisodeTools::new(["lead", "solver"]);
+    let bare = tools.tool_definitions();
+    tools.name_seats([("solver", "Tess")]);
+    let named = tools.tool_definitions();
+    let to = |definitions: &[serde_json::Value]| {
+        definitions
+            .iter()
+            .find(|tool| tool["name"] == "ask")
+            .expect("ask is served")["inputSchema"]["properties"]["to"]
+            .clone()
+    };
+    assert_eq!(to(&named)["enum"], serde_json::json!(["lead", "solver"]));
+    let description = to(&named)["description"]
+        .as_str()
+        .expect("described")
+        .to_owned();
+    assert!(
+        description.ends_with("On this desk: lead, Tess (id `solver`)."),
+        "{description}"
+    );
+    assert!(
+        !to(&bare)["description"]
+            .as_str()
+            .expect("described")
+            .contains("On this desk")
+    );
 }

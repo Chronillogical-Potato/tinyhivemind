@@ -220,7 +220,7 @@ async fn a_seat_with_no_open_turn_or_the_wrong_thread_is_refused() {
     .await;
     assert_eq!(reply["result"]["isError"], true);
     assert!(
-        text(&reply).contains("chat `engineering` with parent `42`"),
+        text(&reply).contains("\"chat\": \"engineering\" and \"parent\": \"42\""),
         "{}",
         text(&reply)
     );
@@ -308,7 +308,7 @@ async fn refusals_are_the_vocabularys_own_sentences() {
     .await;
     assert_eq!(
         text(&reply),
-        "`to` names @johnny, who is not an active seat on this desk. The desk is: checker, lead, solver"
+        "`to` names @johnny, who is not an active seat on this desk. You can ask: checker, lead, solver"
     );
     assert!(tools.drain("lead").is_empty());
 }
@@ -326,7 +326,7 @@ async fn an_ask_is_recorded_and_told_the_answer_comes_later() {
         ),
     )
     .await;
-    assert!(text(&reply).starts_with("asked @solver."));
+    assert!(text(&reply).starts_with("your question to solver is sent."));
     assert!(text(&reply).contains("later turn"));
     let events = tools.drain("lead");
     assert_eq!(
