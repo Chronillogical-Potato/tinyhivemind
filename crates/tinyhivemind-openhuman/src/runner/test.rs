@@ -58,6 +58,13 @@ impl Journal for TestHost {
             .append("desk", &note.body, note.thread, note.only_for.as_deref());
         Ok(())
     }
+
+    fn display_name(&self, seat: &str) -> String {
+        match seat {
+            "lead" => "Lena".to_owned(),
+            other => other.to_owned(),
+        }
+    }
 }
 
 impl EpisodeHost for TestHost {
@@ -206,6 +213,11 @@ async fn plain(library: LibraryHost) {
         SESSION_WINDOW,
     )
     .expect("hosted seats");
+    assert_eq!(
+        runner.tools().display_name("lead"),
+        "lead",
+        "a host that names nobody leaves the record's seats by id"
+    );
     let (reply, events) = one_turn(&runner, host.log.latest()).await;
     assert!(!reply.is_empty());
     assert_eq!(
@@ -263,6 +275,11 @@ fn hosted(library: LibraryHost, contract: &str) -> (Arc<TestHost>, HostedRunner<
     )
     .expect("hosted seats");
     assert!(format!("{runner:?}").contains("lead"));
+    assert_eq!(
+        runner.tools().display_name("lead"),
+        "Lena",
+        "the record is named by the host before any seat is built"
+    );
     assert!(format!("{:?}", runner.bindings()[0].agent).contains("lead"));
     (host, runner)
 }

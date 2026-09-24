@@ -230,6 +230,7 @@ impl<H: EpisodeHost> HostedRunner<H> {
         desk_name: &str,
         window: usize,
     ) -> Result<Self> {
+        tools.name_seats(seats.iter().map(|id| (id.clone(), host.display_name(id))));
         let mut built = BTreeMap::new();
         for id in seats {
             let belt = EpisodeBelt::new(id, &tools, &host.tool_prefix());
