@@ -1483,7 +1483,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openhuman"
-version = "0.63.31"
+version = "0.63.32"
 dependencies = [
  "aes-gcm",
  "aho-corasick",
@@ -1578,7 +1578,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-embed"
-version = "0.63.31"
+version = "0.63.32"
 dependencies = [
  "anyhow",
  "log",
@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-rpc"
-version = "0.63.31"
+version = "0.63.32"
 dependencies = [
  "serde",
  "serde_json",
@@ -2635,6 +2635,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rusqlite",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -2692,6 +2693,7 @@ version = "2.1.2"
 dependencies = [
  "async-trait",
  "chrono",
+ "serde_json",
  "thiserror",
  "tinyagents-harness",
  "tinyagents-session",
