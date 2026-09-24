@@ -444,12 +444,20 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                     )
                     .await;
                     // Recorded before either error is raised, which is the
-                    // whole point of metering through the callback. `meter`
-                    // fires as the turn settles, so the spend is in the sink
-                    // whether the turn came back or failed -- but a `?` above
-                    // this would carry it out of the function and hand
-                    // `after_turn` a `None` for a turn that called tools and
-                    // then died, which is the undercount this replaces.
+                    // whole point of metering through the callback: `meter`
+                    // fires as the turn settles, either way, and a `?` above
+                    // these writes would carry what it caught out of the
+                    // function. Two things then go wrong at once -- the hook
+                    // is handed `None`, and the seat's entry in the usage map
+                    // is left reading the *previous* turn's spend.
+                    //
+                    // What the sink actually holds for a turn that died is
+                    // `None` today: OpenHuman records `last_turn_usage` after
+                    // the turn's durable commit, so a turn that failed before
+                    // one was never counted. That is a gap one layer down,
+                    // not here; this end is correct either way, and the stale
+                    // entry it clears is a real number a host would have
+                    // billed twice.
                     let last = metered
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)

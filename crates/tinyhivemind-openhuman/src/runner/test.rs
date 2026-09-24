@@ -297,6 +297,68 @@ async fn plain(runtime: &Arc<Runtime>) {
     assert_eq!(runner.tools().drain_refusals("lead").len(), 1);
 }
 
+/// A failed turn reports what the session counted, and leaves no stale
+/// number behind under its seat.
+///
+/// The fault lands on the second request -- the one carrying the tool's
+/// receipt -- so the turn has already called a tool and been answered once
+/// by the time it dies. Metering rides a callback rather than the outcome
+/// so that this turn is read before its error is raised; the callback is
+/// only worth having if nothing between it and the hook drops what it
+/// caught, and before this the two writes sat *below* the `?` that carries
+/// the error out.
+///
+/// What the callback carries here is `None`, and that is upstream's answer
+/// rather than a dropped value: `last_turn_usage` is recorded after the
+/// turn's durable commit, so a turn that dies before one never counted. The
+/// assertion that matters is therefore the other half -- the seat's entry
+/// is *cleared*, not left reading the previous turn's spend, which is what
+/// an early return used to leave behind. Should a failing turn ever arrive
+/// carrying usage, it now reaches the hook instead of the floor.
+async fn spent(faults: &offline::Faults, host: &TestHost, hosted: &HostedRunner<TestHost>) {
+    host.halt.store(false, Ordering::SeqCst);
+    host.park.store(false, Ordering::SeqCst);
+    // The hook flips this back on when it is handed usage, so clearing it
+    // first makes the assertion about *this* turn rather than an earlier one.
+    host.metered.store(false, Ordering::SeqCst);
+    let before = host.after.load(Ordering::SeqCst);
+    faults.fail_the_receipt(true);
+    hosted.open(
+        "lead",
+        Vec::new(),
+        Dispatch {
+            chat: "engineering".into(),
+            parent: None,
+        },
+    );
+    let (_, _, failed) = hosted
+        .turn(
+            "lead".into(),
+            Lane::Desk,
+            host.log.latest(),
+            "Once more.".into(),
+        )
+        .await;
+    faults.fail_the_receipt(false);
+    assert!(matches!(failed, TurnResult::Failed(_)), "{failed:?}");
+    assert_eq!(
+        host.after.load(Ordering::SeqCst),
+        before + 1,
+        "the hook ran for the failed turn"
+    );
+    assert!(
+        !host.metered.load(Ordering::SeqCst),
+        "with nothing to meter: the session counts a turn at its commit, and \
+         this one did not reach one"
+    );
+    assert!(
+        hosted.usage("lead").is_none(),
+        "and the seat's entry is cleared rather than still reading the \
+         previous turn's spend"
+    );
+    hosted.close("lead");
+}
+
 /// A hosted runner over a test host whose log already holds the task.
 fn hosted(
     library: LibraryHost,
@@ -501,7 +563,9 @@ const WIDE_STACK: usize = 16 * 1024 * 1024;
 async fn both_runners() {
     let workspace = tempfile::tempdir().expect("a workspace");
     let metrics = Arc::new(offline::Metrics::default());
-    let model = offline::model("engineering", Arc::clone(&metrics)).await;
+    let faults = Arc::new(offline::Faults::default());
+    let model =
+        offline::model_with_faults("engineering", Arc::clone(&metrics), Arc::clone(&faults)).await;
     let backend = offline::backend().await;
     let route = Route {
         endpoint: format!("{}/v1", model.uri()),
@@ -591,6 +655,7 @@ async fn both_runners() {
     ghosts(&embed, &raw, &hosted).await;
     plain(&runtime).await;
     halts(&host, &hosted).await;
+    spent(&faults, &host, &hosted).await;
     metrics.reset();
     assert_eq!(metrics.snapshot().requests, 0);
 }

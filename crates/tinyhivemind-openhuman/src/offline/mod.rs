@@ -23,6 +23,7 @@
 mod test;
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -136,9 +137,28 @@ fn dialect(body: &Value) -> Dialect {
     }
 }
 
+/// Faults the scripted model injects on request.
+///
+/// A turn that fails before it ran proves nothing about metering: there is
+/// no spend to keep. The interesting turn is the one that called a tool,
+/// was charged for it, and *then* died -- so the fault has to land on the
+/// second request, the one carrying the tool's receipt.
+#[derive(Debug, Default)]
+pub struct Faults {
+    receipt: AtomicBool,
+}
+
+impl Faults {
+    /// Answer the next receipt-bearing request with a server error, or stop.
+    pub fn fail_the_receipt(&self, on: bool) {
+        self.receipt.store(on, Ordering::SeqCst);
+    }
+}
+
 struct ScriptedModel {
     chat: String,
     metrics: Arc<Metrics>,
+    faults: Arc<Faults>,
 }
 
 impl Respond for ScriptedModel {
@@ -152,6 +172,9 @@ impl Respond for ScriptedModel {
         });
         self.metrics
             .saw_request(request.body.len(), receipt.is_some());
+        if receipt.is_some() && self.faults.receipt.load(Ordering::SeqCst) {
+            return ResponseTemplate::new(500).set_body_string("scripted fault");
+        }
         let arguments = json!({
             "message": COMPLETION,
             "chat": self.chat,
@@ -206,12 +229,22 @@ impl Respond for ScriptedModel {
 /// The scripted model, bound on loopback, completing into `chat` and
 /// reporting into `metrics`.
 pub async fn model(chat: &str, metrics: Arc<Metrics>) -> MockServer {
+    model_with_faults(chat, metrics, Arc::new(Faults::default())).await
+}
+
+/// The same scripted model, over a [`Faults`] switch the caller keeps.
+pub async fn model_with_faults(
+    chat: &str,
+    metrics: Arc<Metrics>,
+    faults: Arc<Faults>,
+) -> MockServer {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/chat/completions"))
         .respond_with(ScriptedModel {
             chat: chat.to_owned(),
             metrics,
+            faults,
         })
         .mount(&server)
         .await;
