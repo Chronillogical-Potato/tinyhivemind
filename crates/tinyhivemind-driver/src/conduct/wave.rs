@@ -236,11 +236,24 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 author: child.askee.clone(),
                 utterance: Utterance::Dm {
                     to: vec![child.asker.clone()],
-                    message: format!(
-                        "concluded our conversation (thread {}): {}",
-                        root.0,
-                        child.outcome(forced)
-                    ),
+                    // The row is the ledger's release, not a copy of the
+                    // answer: what was said is already the asker's to read
+                    // (`Child::outcome`).
+                    // The row is the ledger's release, not a copy of the
+                    // answer: the asker reads what was said in its own desk
+                    // read, marked private, and a restatement here put the
+                    // same paragraph in front of one seat three times. Only
+                    // a forced close adds anything, because that is the one
+                    // ending the rows do not show.
+                    message: if forced {
+                        format!(
+                            "concluded our conversation (thread {}): the conversation did not \
+                             conclude in time; take what was said and proceed",
+                            root.0
+                        )
+                    } else {
+                        format!("concluded our conversation (thread {}).", root.0)
+                    },
                 },
                 thread: None,
                 only_for: Some(child.asker.clone()),
@@ -290,7 +303,6 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         };
         let seat = committed.author_id.clone();
         let at = committed.sequence;
-        let said = committed.utterance.message().to_owned();
         match self
             .driver
             .apply_committed(&child.state, committed, None)
@@ -298,10 +310,6 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         {
             Ok(transition) => {
                 child.state = transition.state;
-                // The answer is what the fold accepted, not what was tried.
-                if seat == child.askee {
-                    child.last_by_askee = Some(said);
-                }
             }
             Err(Error::UndeliveredAssignment { .. }) => self.wave.event(Event::Refused {
                 seat,
