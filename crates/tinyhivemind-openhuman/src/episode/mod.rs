@@ -62,6 +62,15 @@ pub trait Journal: Send + Sync {
     /// The journal refusing the row.
     fn note(&self, note: &Note) -> Result<()>;
 
+    /// What a person calls `seat`: the name its rows, its conversations and
+    /// the tools' replies use for it. The default is the id itself.
+    ///
+    /// Only what a seat reads as prose takes the name. Tool arguments still
+    /// carry the id, and the tools' descriptions pair the two.
+    fn display_name(&self, seat: &str) -> String {
+        seat.to_owned()
+    }
+
     /// Something the episode did, to show or not. The default shows nothing.
     fn event(&self, event: &Event) {
         let _ = event;

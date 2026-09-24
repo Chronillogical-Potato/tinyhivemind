@@ -5,7 +5,7 @@
 use serde_json::json;
 use tinyhivemind_driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Door};
 
-use super::super::run_episode;
+use super::super::{Journal, run_episode};
 use super::support::{BareJournal, ScriptRunner, complete, hive, policy, run};
 use crate::journal::MemoryLog;
 
@@ -60,4 +60,10 @@ fn a_journal_that_keeps_the_defaults_is_briefed_as_the_episode_words_it() {
     );
     assert_eq!(prompts.len(), 2, "the panicked turn was run again");
     assert!(journal.0.all().iter().any(|row| row.body == "done"));
+}
+
+#[test]
+fn a_journal_that_names_nobody_calls_a_seat_by_its_id() {
+    let journal = BareJournal(MemoryLog::new("engineering"));
+    assert_eq!(journal.display_name("one"), "one");
 }
