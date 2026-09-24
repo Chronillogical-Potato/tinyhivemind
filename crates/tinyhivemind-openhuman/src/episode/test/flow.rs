@@ -108,11 +108,37 @@ fn the_journal_saw_each_turn(journal: &TestJournal, runner: &ScriptRunner) {
         .expect("two ran");
     assert_eq!(*lane, Lane::Thread(Sequence(2)));
     assert!(thread_prompt.contains("which port?"), "{thread_prompt}");
-    let shown = journal.shown.lock().unwrap();
+    // **The asker reads the answer, and reads it once.**
+    //
+    // It arrives in the desk read -- the reply under the ask, promoted to
+    // channel level for the seat the thread was confided to, and marked
+    // there as private so the asker cannot mistake it for something said in
+    // the open. Because the desk read already carries it, no
+    // `ConversationView` is built for that conversation: the same lines
+    // under a heading of their own would be the second copy.
+    let desk_prompts: Vec<&String> = prompts
+        .iter()
+        .filter(|(seat, lane, _)| seat == "one" && *lane == Lane::Desk)
+        .map(|(_, _, prompt)| prompt)
+        .collect();
+    let carried: Vec<&&String> = desk_prompts
+        .iter()
+        .filter(|prompt| prompt.contains("port 8080"))
+        .collect();
+    assert_eq!(
+        carried.len(),
+        1,
+        "the answer reaches the asker's desk turn exactly once: {desk_prompts:?}"
+    );
     assert!(
-        shown
-            .iter()
-            .any(|(seat, conversations)| seat == "one" && *conversations == 1)
+        carried[0].contains("@two (privately): port 8080"),
+        "and says it was confided, not said on the desk: {}",
+        carried[0]
+    );
+    assert!(
+        !carried[0].contains("## Conversations you had since you last spoke"),
+        "no second copy under a heading of its own: {}",
+        carried[0]
     );
     // Every turn came back to the journal with what it recorded.
     let turns = journal.turns.lock().unwrap();

@@ -59,7 +59,13 @@ async fn a_seat_is_seeded_with_what_it_was_shown_its_own_rows_as_its_turns() {
     );
     assert_eq!(seen[1], ("assistant".into(), "looking into it".into()));
     assert!(seen.contains(&("assistant".into(), "asks @two: which port?".into())));
-    assert!(seen.contains(&("user".into(), "@desk: you hold open work".into())));
+    // Addressed to this seat alone, so it is seeded as private -- the same
+    // spelling the brief gives it. A seat that cannot tell a note meant for
+    // it from one the room also read will answer as though everyone saw it.
+    assert!(seen.contains(&(
+        "user".into(),
+        "@desk (privately): you hold open work".into()
+    )));
     assert_eq!(
         seen.last(),
         Some(&("user".into(), "@three: the cache is stale".into()))

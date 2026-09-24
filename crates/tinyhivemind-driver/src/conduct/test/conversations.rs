@@ -67,11 +67,16 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
             if *at == root && asker == "one" && askee == "two"
     ));
     assert_eq!(conductor.conversations(), 1);
+    // The private row says the conversation ended, and does not carry the
+    // answer again: "port 8080" is the first reply under the ask, which the
+    // asker reads at channel level, and it is in the transcript the asker is
+    // handed once below. Restating it here was the same paragraph three
+    // times in one prompt.
     let to_asker = journal.private_to("one");
     assert_eq!(
         to_asker,
-        vec!["concluded our conversation (thread 2): port 8080"],
-        "the answer reaches the asker as a private row"
+        vec!["concluded our conversation (thread 2)."],
+        "the asker is told it concluded, not told the answer twice"
     );
 
     // The asker is released: it runs on the desk, is shown the whole

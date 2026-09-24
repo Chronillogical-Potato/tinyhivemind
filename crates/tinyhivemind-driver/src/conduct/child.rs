@@ -17,8 +17,6 @@ pub(super) struct Child {
     pub(super) state: DriverState,
     /// Turns taken in it so far.
     pub(super) turns: u64,
-    /// The last thing the seat asked said in it: the conclusion, cross-posted.
-    pub(super) last_by_askee: Option<String>,
     /// Whether the seat asked has been told once that it has not answered.
     pub(super) nudged: bool,
     /// Whether the seat asked took a turn in this wave. Carried across a
@@ -35,7 +33,6 @@ impl Child {
             askee: to.to_owned(),
             state,
             turns: 0,
-            last_by_askee: None,
             nudged: false,
             turned: false,
         }
@@ -58,17 +55,6 @@ impl Child {
     /// Over: the seat asked completed, or the wall was reached.
     pub(super) fn is_over(&self, wall: u64) -> bool {
         self.state.quiescent() || self.turns >= wall
-    }
-
-    /// What reaches the asker when it concludes.
-    pub(super) fn outcome(&self, forced: bool) -> String {
-        if forced {
-            "the conversation did not conclude in time; take what was said and proceed".to_owned()
-        } else {
-            self.last_by_askee
-                .clone()
-                .unwrap_or_else(|| "concluded".to_owned())
-        }
     }
 
     /// How `seat` sees it, with the transcript the host holds.

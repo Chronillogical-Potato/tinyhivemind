@@ -44,19 +44,40 @@ pub(super) async fn history(
         },
         window,
     };
+    // Marked only for a desk seed, and for the same reason the brief marks
+    // its rows: on the desk a row confided to this seat sits beside the
+    // room's own. Inside a conversation every row is private and the turn
+    // knows it. Without this a hosted seat reads one row two ways -- marked
+    // while it is new, bare once it is remembered -- and the durable copy is
+    // the bare one.
+    let mark_aside = query.conversation.thread_root.is_none();
     let rows = project_session(log, &query).await?;
-    Ok(rows.iter().filter_map(|row| turn(row, seat)).collect())
+    Ok(rows
+        .iter()
+        .filter_map(|row| turn(row, seat, mark_aside))
+        .collect())
 }
 
 /// One row as the seat's model reads it, or `None` for a row withheld from
 /// it.
-fn turn(row: &SessionMessage, seat: &str) -> Option<(String, String)> {
+fn turn(row: &SessionMessage, seat: &str, mark_aside: bool) -> Option<(String, String)> {
     let content = row.readable()?;
+    // The seat's own rows are its turns, and a model needs no telling that
+    // it spoke in confidence; only what reaches it from someone else does.
+    let confided =
+        mark_aside && matches!(row.audience, tinyhivemind::aside::Audience::Aside { .. });
+    let said = |label: &str| {
+        if confided {
+            format!("@{label} (privately): {content}")
+        } else {
+            format!("@{label}: {content}")
+        }
+    };
     Some(match &row.author {
         SessionAuthor::Agent { id, .. } if id == seat => ("assistant".into(), content.into()),
         SessionAuthor::Agent { label, .. }
         | SessionAuthor::Person { label, .. }
-        | SessionAuthor::System { label, .. } => ("user".into(), format!("@{label}: {content}")),
-        SessionAuthor::Operator => ("user".into(), format!("@operator: {content}")),
+        | SessionAuthor::System { label, .. } => ("user".into(), said(label)),
+        SessionAuthor::Operator => ("user".into(), said("operator")),
     })
 }
