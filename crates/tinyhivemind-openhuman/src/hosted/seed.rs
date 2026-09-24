@@ -81,3 +81,26 @@ fn turn(row: &SessionMessage, seat: &str, mark_aside: bool) -> Option<(String, S
         SessionAuthor::Operator => ("user".into(), said("operator")),
     })
 }
+
+/// Puts the seat's standing prompt at the head of what it was shown.
+///
+/// Every turn, including a seat's first. A cold turn composes the
+/// definition's own system prompt *and* takes a seed -- the host runtime's
+/// seeding branch matches `seed: Some(..)`, which an empty vector satisfies,
+/// and what it clears is the conversation rather than the composed prompt --
+/// so the two do not compete and there is nothing to guard against.
+///
+/// Guarding on a non-empty history, as this once did, withheld the persona
+/// from the only turn with no other way to learn who it is. A seat asked a
+/// question answers on its first turn and is never seen again, and what a
+/// host says here is often which side of the conversation that seat is on.
+#[must_use]
+pub(super) fn with_persona(
+    mut history: Vec<(String, String)>,
+    persona: Option<String>,
+) -> Vec<(String, String)> {
+    if let Some(persona) = persona {
+        history.insert(0, ("system".to_owned(), persona));
+    }
+    history
+}

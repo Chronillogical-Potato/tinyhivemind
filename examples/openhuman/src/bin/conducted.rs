@@ -470,7 +470,16 @@ impl Host {
             .iter()
             .map(|(id, brief)| (id.clone(), format!("{brief}\n\n{contract}")))
             .collect();
-        let host = Arc::new(DeskHost::new(self.journal(journal, quiet), library, prompts));
+        // The hosted runner seats `AgentSpec` agents, so it needs a runtime.
+        // Safe to boot one here: `RunnerKind::from_env` picks a single runner
+        // per process, so the embed path is not also holding the slot.
+        let runtime = Arc::new(self.runtime().await?);
+        let host = Arc::new(DeskHost::new(
+            self.journal(journal, quiet),
+            library,
+            runtime,
+            prompts,
+        ));
         let runner = HostedRunner::seat(
             Arc::clone(&host),
             Arc::new(EpisodeTools::new(self.ids.iter().cloned())),

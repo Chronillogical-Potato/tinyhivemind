@@ -9,12 +9,13 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use openhuman_core::agent::OpenHumanSessionHost;
+use openhuman_embed::{Agent, AgentSpec, HostTurnTools, Runtime};
 use tinyhivemind::speech::Utterance;
 use tinyhivemind::{Sequence, SessionLog};
 use tinyhivemind_driver::{Commit, EpisodeBrief, Event, Note, Refusal};
 use tinyhivemind_openhuman::{
-    EpisodeBelt, EpisodeHost, HostedTurn, Journal, Lane, LibraryHost, MemoryLog, TurnResult,
+    EpisodeBeltSource, EpisodeHost, HostedTurn, Journal, Lane, LibraryHost, MemoryLog,
+    TurnResult,
 };
 
 /// What the host says about the desk, before the episode's own contract.
@@ -201,6 +202,9 @@ impl Journal for DeskJournal {
 pub struct DeskHost {
     journal: DeskJournal,
     library: LibraryHost,
+    /// The runtime its seats are registered on. A seat is an `AgentSpec`
+    /// agent now, not a session built around the episode's belt.
+    runtime: Arc<Runtime>,
     /// Each seat's standing prompt: its brief and the contract.
     prompts: BTreeMap<String, String>,
 }
@@ -209,11 +213,13 @@ impl DeskHost {
     pub fn new(
         journal: DeskJournal,
         library: LibraryHost,
+        runtime: Arc<Runtime>,
         prompts: BTreeMap<String, String>,
     ) -> Self {
         Self {
             journal,
             library,
+            runtime,
             prompts,
         }
     }
@@ -257,13 +263,27 @@ impl EpisodeHost for DeskHost {
     fn build_seat(
         &self,
         seat: &str,
-        belt: EpisodeBelt,
-    ) -> tinyhivemind_openhuman::Result<OpenHumanSessionHost> {
-        // No tools of its own, so no gate of its own: the episode's tools
-        // are admitted and everything else is denied.
-        let gate = belt.admit(None);
-        self.library
-            .session(seat, &self.prompts[seat], belt.tools, gate)
+        belt: EpisodeBeltSource,
+    ) -> tinyhivemind_openhuman::Result<Agent> {
+        let prompt = self.prompts[seat].clone();
+        Ok(self.runtime.agent(
+            AgentSpec::new(seat)
+                .system_prompt(prompt)
+                // Rebuilt every turn out of the source, because that is what
+                // `AgentSpec::tools` asks for -- and what lets one agent serve
+                // an episode and its ordinary work without existing twice.
+                .tools(move |_turn| {
+                    let belt = belt.belt();
+                    // No tools of its own, so no gate of its own: the
+                    // episode's tools are admitted and everything else denied.
+                    let gate = belt.admit(None);
+                    HostTurnTools::advertised(belt.tools).with_policy(gate)
+                }),
+        )?)
+    }
+
+    fn seat_session(&self, seat: &str) -> String {
+        format!("episode:conducted:{seat}")
     }
 
     fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {

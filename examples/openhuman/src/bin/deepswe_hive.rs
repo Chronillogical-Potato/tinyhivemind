@@ -581,6 +581,19 @@ fn role(id: &str) -> &'static str {
 
 fn offline_config() -> RuntimeConfig {
     let mut config = RuntimeConfig::default();
+    // The scripted route answers with native tool calls, so the seats have to
+    // be reading them that way.
+    //
+    // OpenHuman's own default for this moved -- `"auto"` (native where the
+    // provider supports it) to `"python"` (calls parsed out of prose against
+    // Python signatures) -- and a harness that inherited it stopped seeing the
+    // script's calls as calls. Nothing errored: each seat "emitted zero hive
+    // actions", retried to its attempt cap, and the run failed as though the
+    // model had gone quiet.
+    //
+    // A harness that scripts one dialect names it rather than inheriting
+    // whichever is current.
+    config.agent.tool_dispatcher = "auto".into();
     config.local_ai.runtime_enabled = false;
     config.runtime_python.enabled = false;
     config.memory_tree.spacy_enabled = false;

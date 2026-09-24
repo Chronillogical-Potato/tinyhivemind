@@ -516,6 +516,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs-sys"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1474,7 +1483,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openhuman"
-version = "0.63.29"
+version = "0.63.32"
 dependencies = [
  "aes-gcm",
  "aho-corasick",
@@ -1489,7 +1498,7 @@ dependencies = [
  "chrono-tz",
  "cron",
  "directories",
- "dirs",
+ "dirs 6.0.0",
  "dotenvy",
  "ed25519-dalek",
  "flate2",
@@ -1539,6 +1548,7 @@ dependencies = [
  "tinyinference-local",
  "tinyinference-providers",
  "tinyinference-voice",
+ "tinyjuice",
  "tinyjuice-bus",
  "tinymcp",
  "tinymcp-bus",
@@ -1547,8 +1557,8 @@ dependencies = [
  "tinymemory-sources",
  "tinyruntime-bus",
  "tinyskills",
- "tinytools",
- "tinytools-agent",
+ "tinytools 0.4.1",
+ "tinytools-agent 0.4.1",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
@@ -1568,7 +1578,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-embed"
-version = "0.63.29"
+version = "0.63.32"
 dependencies = [
  "anyhow",
  "log",
@@ -1584,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "openhuman-rpc"
-version = "0.63.29"
+version = "0.63.32"
 dependencies = [
  "serde",
  "serde_json",
@@ -2606,7 +2616,7 @@ dependencies = [
  "serde_json",
  "tinyagents-harness",
  "tinyinference-llm",
- "tinytools",
+ "tinytools 0.4.1",
  "tokio",
  "tracing",
 ]
@@ -2619,12 +2629,13 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
- "dirs",
+ "dirs 6.0.0",
  "flate2",
  "futures",
  "regex",
  "reqwest",
  "rusqlite",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -2633,8 +2644,8 @@ dependencies = [
  "tinyagents-definition",
  "tinyinference-embeddings",
  "tinyinference-llm",
- "tinytools",
- "tinytools-agent",
+ "tinytools 0.4.1",
+ "tinytools-agent 0.4.1",
  "tokio",
  "tracing",
  "uuid",
@@ -2657,7 +2668,7 @@ dependencies = [
  "tinyagents-runtime",
  "tinyagents-session",
  "tinyinference-llm",
- "tinytools",
+ "tinytools 0.4.1",
  "tokio",
  "uuid",
 ]
@@ -2673,7 +2684,7 @@ dependencies = [
  "tinyagents-definition",
  "tinyagents-harness",
  "tinyinference-llm",
- "tinytools",
+ "tinytools 0.4.1",
 ]
 
 [[package]]
@@ -2682,12 +2693,14 @@ version = "2.1.2"
 dependencies = [
  "async-trait",
  "chrono",
+ "serde_json",
  "thiserror",
  "tinyagents-harness",
  "tinyagents-session",
  "tinyinference-llm",
- "tinytools",
+ "tinytools 0.4.1",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2768,7 +2781,7 @@ dependencies = [
  "thiserror",
  "tinyhivemind-core",
  "tinyinference-llm",
- "tinytools",
+ "tinytools 0.4.1",
  "tokio",
 ]
 
@@ -2847,8 +2860,8 @@ dependencies = [
  "tinyhivemind-embed",
  "tinyhivemind-mcp",
  "tinyhivemind-tools",
- "tinytools",
- "tinytools-agent",
+ "tinytools 0.4.1",
+ "tinytools-agent 0.4.1",
  "tokio",
  "wiremock",
 ]
@@ -2912,7 +2925,7 @@ dependencies = [
  "sha2 0.11.0",
  "thiserror",
  "tinyinference-core",
- "tinytools-agent",
+ "tinytools-agent 0.3.0",
  "tokio",
  "tracing",
 ]
@@ -2987,19 +3000,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyjuice"
+version = "0.3.1"
+dependencies = [
+ "async-trait",
+ "dirs 7.0.0",
+ "hex",
+ "log",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror",
+ "tinyjuice-bus",
+ "tokio",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
 name = "tinyjuice-bus"
-version = "0.2.5"
+version = "0.3.1"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "tinymcp"
 version = "0.3.2"
 dependencies = [
- "anyhow",
  "base64 0.23.1",
- "dirs",
+ "dirs 7.0.0",
  "futures-util",
  "parking_lot",
  "reqwest",
@@ -3105,6 +3138,17 @@ dependencies = [
 [[package]]
 name = "tinytools"
 version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71#a5d04a7f3af0abc1dd748f87f94871b36ae9fe71"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "tinytools"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3115,11 +3159,22 @@ dependencies = [
 [[package]]
 name = "tinytools-agent"
 version = "0.3.0"
+source = "git+https://github.com/tinyhumansai/tinytools?rev=a5d04a7f3af0abc1dd748f87f94871b36ae9fe71#a5d04a7f3af0abc1dd748f87f94871b36ae9fe71"
 dependencies = [
  "regex",
  "serde",
  "serde_json",
- "tinytools",
+ "tinytools 0.3.0",
+]
+
+[[package]]
+name = "tinytools-agent"
+version = "0.4.1"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "tinytools 0.4.1",
 ]
 
 [[package]]
@@ -3400,6 +3455,18 @@ name = "unicode-ident"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
+
+[[package]]
+name = "unicode-width"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "universal-hash"
