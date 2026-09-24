@@ -69,8 +69,14 @@ impl EpisodeHost for TestHost {
         seat_agent(&self.runtime, seat, &self.prompt, belt)
     }
 
+    /// Namespaced per host, not just per seat. Both hosts in this file seat a
+    /// `lead` on the one runtime a process has, so a bare
+    /// `episode:engineering:lead` would name the *same* session for two
+    /// scenarios with separate logs. Every turn seeds, which clears whatever
+    /// the session held -- but relying on that to keep two tests apart makes
+    /// them order-dependent for no gain.
     fn seat_session(&self, seat: &str) -> String {
-        format!("episode:engineering:{seat}")
+        format!("episode:engineering:test:{seat}")
     }
 
     fn wrap_turn<'a>(&'a self, _seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
@@ -194,8 +200,14 @@ impl EpisodeHost for PlainHost {
         seat_agent(&self.runtime, seat, "You lead the desk.", belt)
     }
 
+    /// Namespaced per host, not just per seat. Both hosts in this file seat a
+    /// `lead` on the one runtime a process has, so a bare
+    /// `episode:engineering:lead` would name the *same* session for two
+    /// scenarios with separate logs. Every turn seeds, which clears whatever
+    /// the session held -- but relying on that to keep two tests apart makes
+    /// them order-dependent for no gain.
     fn seat_session(&self, seat: &str) -> String {
-        format!("episode:engineering:{seat}")
+        format!("episode:engineering:plain:{seat}")
     }
 }
 
