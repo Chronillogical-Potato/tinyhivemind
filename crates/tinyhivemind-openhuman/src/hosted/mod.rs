@@ -109,7 +109,7 @@ pub trait EpisodeHost: Journal + 'static {
         String::new()
     }
 
-    /// The seat's own standing prompt, for the turns that are not its first.
+    /// The seat's own standing prompt, for every turn it runs.
     ///
     /// A seat's session is cleared and reseeded from the host's log every
     /// turn, and seeding brings the runtime session up before the turn runs.
@@ -123,6 +123,13 @@ pub trait EpisodeHost: Journal + 'static {
     /// history, where the turn reads it as the system message it would have
     /// composed. `None` keeps the old behaviour for a host that has no
     /// standing prompt to give.
+    ///
+    /// This is asked on a seat's **first** turn too. A cold turn composes its
+    /// own prompt and takes the seed as well, so the two do not compete --
+    /// and the first turn is the one a host most needs to reach, because what
+    /// it says here is often *which side of a conversation this seat is on*.
+    /// A seat that is asked a question answers on turn one and is never seen
+    /// again; told nothing, it answers as though the room were its own.
     fn persona(&self, seat: &str) -> Option<String> {
         let _ = seat;
         None
@@ -383,20 +390,32 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                 let usage = Arc::clone(&usage);
                 let this_turn = Arc::clone(&this_turn);
                 async move {
-                    let mut history =
+                    let history =
                         seed::history(host.log(), conversation, &seat, since, window).await?;
-                    // At the head, so it lands where a composed prompt would.
-                    // A seeded turn is not cold and composes no system prompt,
-                    // so without this the seat runs on the brief alone.
+                    // At the head, so it lands where a composed prompt would,
+                    // and on **every** turn -- including a seat's first.
                     //
-                    // Only when there is history to seed: with none, seeding
-                    // is skipped and the turn is cold, which is the one case
-                    // that renders the prompt itself.
-                    if !history.is_empty()
-                        && let Some(persona) = host.persona(&seat)
-                    {
-                        history.insert(0, ("system".to_owned(), persona));
-                    }
+                    // This used to be guarded on `!history.is_empty()`, on the
+                    // reasoning that a turn with nothing to seed "is cold, and
+                    // that is the one case that renders the prompt itself". The
+                    // premise is right and the conclusion does not follow. The
+                    // host runtime matches `seed: Some(seed)`, which an empty
+                    // vector satisfies, so the seeding branch runs either way;
+                    // and what it runs is `clear_history`, which drops the
+                    // conversation, not the definition's composed prompt. So a
+                    // cold turn renders that prompt *and* would take a seed --
+                    // it was simply never given one.
+                    //
+                    // What the guard actually did was withhold the persona from
+                    // the only turn that has no other way to learn who it is. A
+                    // host tells a seat here that it is a guest in someone
+                    // else's conversation, and what it may do about that; a
+                    // seat asked a question answers it on turn one and is never
+                    // seen again, so under the guard it was told neither. Live:
+                    // a teammate asked to take ownership of a piece of work
+                    // replied that the *asker* owned it, having no idea which
+                    // side of the conversation it was on.
+                    let history = seed::with_persona(history, host.persona(&seat));
                     // `seed` is the whole of what the five calls here used to
                     // do: it drops whatever the session composed, puts this
                     // history in its place, and keeps the durable transcript
