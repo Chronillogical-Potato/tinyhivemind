@@ -9,7 +9,9 @@ conductor's.
 
 `Journal` is what a host implements: its `SessionLog`, `commit` and `note`
 to append the conductor's rows and return the sequence a commit was given,
-and six optional hooks -- `event` to show what the episode did, `compose`
+and seven optional hooks -- `display_name` to say what a person calls a
+seat, which rows, briefs and the tools' replies use in place of `@id`,
+`event` to show what the episode did, `compose`
 to put its own context in front of the brief, `turn_done` to see a turn's
 reply, refusals and recorded calls, `channels` to name the seat's other
 conversations, `released` to say which parked seats the host has settled,
