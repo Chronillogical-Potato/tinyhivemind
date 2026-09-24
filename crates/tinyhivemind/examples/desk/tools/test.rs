@@ -60,7 +60,7 @@ fn a_schema_states_the_shape_and_the_requirement_of_every_argument() {
                 "to": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Seat ids, without the @.",
+                    "description": "Seat ids, not names, without the @.",
                 },
                 "message": { "type": "string" },
             },
