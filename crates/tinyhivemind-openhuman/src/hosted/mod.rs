@@ -442,23 +442,29 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                             })
                             .send(),
                     )
-                    .await
-                    .map_err(|_| Error::TimedOut { seat: seat.clone() })?;
-                    // Read before the error is raised, for the same reason.
+                    .await;
+                    // Recorded before either error is raised, which is the
+                    // whole point of metering through the callback. `meter`
+                    // fires as the turn settles, so the spend is in the sink
+                    // whether the turn came back or failed -- but a `?` above
+                    // this would carry it out of the function and hand
+                    // `after_turn` a `None` for a turn that called tools and
+                    // then died, which is the undercount this replaces.
                     let last = metered
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
                         .take();
+                    let mut spend = usage.lock().unwrap_or_else(PoisonError::into_inner);
+                    match &last {
+                        Some(last) => spend.insert(seat.clone(), last.clone()),
+                        None => spend.remove(&seat),
+                    };
+                    drop(spend);
+                    *this_turn.lock().unwrap_or_else(PoisonError::into_inner) = last;
                     let reply = settled
+                        .map_err(|_| Error::TimedOut { seat: seat.clone() })?
                         .map_err(|error| Error::Harness(anyhow::anyhow!(error.to_string())))?
                         .reply;
-                    let mut metered = usage.lock().unwrap_or_else(PoisonError::into_inner);
-                    match &last {
-                        Some(last) => metered.insert(seat.clone(), last.clone()),
-                        None => metered.remove(&seat),
-                    };
-                    drop(metered);
-                    *this_turn.lock().unwrap_or_else(PoisonError::into_inner) = last;
                     Ok(reply)
                 }
             };
