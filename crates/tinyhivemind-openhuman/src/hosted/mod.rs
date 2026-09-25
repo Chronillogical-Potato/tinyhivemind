@@ -391,15 +391,11 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                 let usage = Arc::clone(&usage);
                 let this_turn = Arc::clone(&this_turn);
                 async move {
-                    let history = seed::history(
-                        host.log(),
-                        conversation,
-                        &seat,
-                        since,
-                        window,
-                        &|id| host.display_name(id),
-                    )
-                    .await?;
+                    let history =
+                        seed::history(host.log(), conversation, &seat, since, window, &|id| {
+                            host.display_name(id)
+                        })
+                        .await?;
                     // At the head, so it lands where a composed prompt would,
                     // and on **every** turn -- including a seat's first.
                     //
