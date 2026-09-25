@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::Value;
-use tinyhivemind_tools::{EpisodeTools, tool_definitions};
+use tinyhivemind_tools::EpisodeTools;
 use tinytools::{PermissionLevel, Tool, ToolResult};
 
 /// The served tools, bound to one seat.
@@ -33,7 +33,8 @@ pub(crate) fn belt_with_prefix(
     tools: &Arc<EpisodeTools>,
     prefix: &str,
 ) -> Vec<Box<dyn Tool>> {
-    tool_definitions(&tools.seats())
+    tools
+        .tool_definitions()
         .into_iter()
         .map(|definition| {
             let served = text(&definition, "name");

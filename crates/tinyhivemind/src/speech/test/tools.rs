@@ -118,3 +118,47 @@ fn speaking_is_described_as_the_only_way_to_be_heard() {
     assert!(tool_specs().iter().any(|spec| spec.name == "broadcast"));
     assert!(!tool_specs().iter().any(|spec| spec.name == "close"));
 }
+
+#[test]
+fn what_a_seat_commits_is_described_as_read_by_a_person() {
+    for name in ["post", "broadcast", "complete_episode"] {
+        let spec = tool_specs()
+            .iter()
+            .find(|spec| spec.name == name)
+            .expect("the tool is served");
+        assert!(
+            spec.description.contains("A person reads this"),
+            "`{name}` says a person reads what it carries",
+        );
+        assert!(
+            spec.description.contains("by name"),
+            "`{name}` asks for teammates by name",
+        );
+    }
+    let complete = tool_specs()
+        .iter()
+        .find(|spec| spec.name == "complete_episode")
+        .expect("completion is served");
+    let message = complete
+        .parameters
+        .iter()
+        .find(|parameter| parameter.name == "message")
+        .and_then(|parameter| parameter.description)
+        .expect("the finding is described");
+    assert!(message.contains("for a person"));
+    assert!(!message.contains("nothing else you wrote"));
+}
+
+#[test]
+fn a_recipient_is_named_by_id_not_by_display_name() {
+    for name in ["ask", "dm"] {
+        let to = tool_specs()
+            .iter()
+            .find(|spec| spec.name == name)
+            .and_then(|spec| spec.parameters.iter().find(|p| p.name == "to"))
+            .and_then(|parameter| parameter.description)
+            .expect("the recipient is described");
+        assert!(to.contains("id"), "`{name}` asks for an id");
+        assert!(to.contains("name"), "`{name}` says a name is not an id");
+    }
+}

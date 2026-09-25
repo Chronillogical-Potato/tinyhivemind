@@ -17,7 +17,7 @@ use std::sync::{Mutex, PoisonError};
 use serde_json::Value;
 use tinyhivemind::speech::{ToolCall, Utterance, UtteranceRejection, interpret};
 
-use crate::render::{parse_arguments, serves};
+use crate::render::{named_definitions, parse_arguments, serves};
 
 /// The thread a registered turn is in, as the host told the seat.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,6 +62,7 @@ pub struct EpisodeTools {
     refused: Mutex<BTreeMap<String, Vec<Refusal>>>,
     windows: Mutex<BTreeMap<String, Vec<String>>>,
     awaiting: Mutex<BTreeMap<String, Vec<String>>>,
+    names: Mutex<BTreeMap<String, String>>,
 }
 
 impl EpisodeTools {
@@ -82,6 +83,60 @@ impl EpisodeTools {
             refused: Mutex::new(BTreeMap::new()),
             windows: Mutex::new(BTreeMap::new()),
             awaiting: Mutex::new(BTreeMap::new()),
+            names: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    /// Give the served seats the names a person calls them by. A seat this
+    /// server does not serve is ignored, and a seat left unnamed keeps its
+    /// id.
+    pub fn name_seats<I, K, V>(&self, names: I)
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        let mut held = self.names.lock().unwrap_or_else(PoisonError::into_inner);
+        for (seat, name) in names {
+            let seat = seat.into();
+            let name = name.into();
+            if self.seats.contains(&seat) && !name.trim().is_empty() {
+                held.insert(seat, name);
+            }
+        }
+    }
+
+    /// What a person calls `seat`: its name, or its id when it has none.
+    #[must_use]
+    pub fn display_name(&self, seat: &str) -> String {
+        self.names
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(seat)
+            .cloned()
+            .unwrap_or_else(|| seat.to_owned())
+    }
+
+    /// The served tools as MCP tool definitions, with `ask`'s recipients
+    /// described by name beside the ids a call must carry.
+    #[must_use]
+    pub fn tool_definitions(&self) -> Vec<Value> {
+        let seats: Vec<(String, String)> = self
+            .seats
+            .iter()
+            .map(|seat| (seat.clone(), self.display_name(seat)))
+            .collect();
+        named_definitions(&seats)
+    }
+
+    /// `Name (id)` for a named seat, the bare id otherwise: how a reply
+    /// lists the seats a call may name.
+    fn with_id(&self, seat: &str) -> String {
+        let name = self.display_name(seat);
+        if name == seat {
+            seat.to_owned()
+        } else {
+            format!("{name} (id `{seat}`)")
         }
     }
 
@@ -245,15 +300,18 @@ impl EpisodeTools {
             let parent = dispatch
                 .parent
                 .as_deref()
-                .map_or_else(|| "null".to_owned(), |parent| format!("`{parent}`"));
+                .map_or_else(|| "null".to_owned(), |parent| format!("\"{parent}\""));
             return Err(format!(
-                "this turn is in chat `{}` with parent {parent}; name exactly those",
+                "every call in this turn carries \"chat\": \"{}\" and \"parent\": {parent}, \
+                 exactly as your brief gave them",
                 dispatch.chat
             ));
         }
         if dispatch.parent.is_some() && name == "ask" {
             return Err(
-                "inside a conversation you answer the seat that asked you: call `complete_episode`,                  and its message is your answer. If you need another seat first, say so in that                  answer, and the seat that asked you will ask them."
+                "inside a conversation you answer the seat that asked you: call \
+                 `complete_episode`, and its message is your answer. If you need another seat \
+                 first, say so in that answer, and the seat that asked you will ask them."
                     .into(),
             );
         }
@@ -268,10 +326,12 @@ impl EpisodeTools {
                     return Err(UtteranceRejection::SelfRecipient.to_string());
                 }
                 if !self.knows(to) {
+                    let seats: Vec<String> =
+                        self.seats.iter().map(|seat| self.with_id(seat)).collect();
                     return Err(format!(
-                        "{}. The desk is: {}",
+                        "{}. You can ask: {}",
                         UtteranceRejection::UnknownRecipient { id: to.clone() },
-                        self.seats().join(", ")
+                        seats.join(", ")
                     ));
                 }
                 // **One conversation per pair at a time.**
@@ -291,12 +351,18 @@ impl EpisodeTools {
                 // one line up, at the other end of the same wait.
                 if self.awaits(seat, to) {
                     return Err(format!(
-                        "you already asked @{to} and are still waiting: their answer reaches                          you on a later turn, and asking again opens a second conversation                          with them rather than hurrying the first. Ask a different seat if                          someone else can help, or end your turn."
+                        "you already asked {} and are still waiting: their answer reaches you \
+                         on a later turn, and asking again opens a second conversation with \
+                         them rather than hurrying the first. Ask someone else if they can \
+                         help, or end your turn.",
+                        self.display_name(to)
                     ));
                 }
                 format!(
-                    "asked @{to}. The answer reaches you on a later turn; you cannot finish \
-                     until it does, so end your turn when you have asked everything."
+                    "your question to {} is sent. Their answer reaches you on a later turn; you \
+                     cannot finish until it does, so end your turn when you have asked \
+                     everything.",
+                    self.display_name(to)
                 )
             }
             ToolCall::Speak(Utterance::Post { .. }) => "posted to the desk".to_owned(),

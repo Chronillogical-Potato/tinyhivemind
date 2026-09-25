@@ -50,10 +50,21 @@ pub(crate) fn serves(name: &str) -> bool {
 /// tool language instead of re-stating the schema.
 #[must_use]
 pub fn tool_definitions(seats: &[String]) -> Vec<Value> {
+    let seats: Vec<(String, String)> = seats
+        .iter()
+        .map(|seat| (seat.clone(), seat.clone()))
+        .collect();
+    named_definitions(&seats)
+}
+
+/// [`tool_definitions`] over `(id, name)` pairs: the recipient enumeration
+/// is the ids, and where any seat has a name of its own the recipient's
+/// description pairs each name with its id.
+pub(crate) fn named_definitions(seats: &[(String, String)]) -> Vec<Value> {
     served().map(|spec| definition(spec, seats)).collect()
 }
 
-fn definition(spec: &ToolSpec, seats: &[String]) -> Value {
+fn definition(spec: &ToolSpec, seats: &[(String, String)]) -> Value {
     let mut properties = Map::new();
     let mut required = Vec::new();
     for parameter in spec.parameters {
@@ -71,7 +82,16 @@ fn definition(spec: &ToolSpec, seats: &[String]) -> Value {
             schema["description"] = Value::String(description.to_owned());
         }
         if spec.name == "ask" && parameter.name == "to" {
-            schema["enum"] = Value::Array(seats.iter().cloned().map(Value::String).collect());
+            schema["enum"] = Value::Array(
+                seats
+                    .iter()
+                    .map(|(id, _)| Value::String(id.clone()))
+                    .collect(),
+            );
+            if let Some(roster) = roster(seats) {
+                let base = parameter.description.unwrap_or_default();
+                schema["description"] = Value::String(format!("{base} {roster}"));
+            }
         }
         properties.insert(parameter.name.to_owned(), schema);
         if parameter.required {
@@ -102,6 +122,25 @@ fn definition(spec: &ToolSpec, seats: &[String]) -> Value {
             "required": required,
         },
     })
+}
+
+/// Each seat by its name and id, or by its id alone when it has no name;
+/// `None` when no seat has a name of its own.
+fn roster(seats: &[(String, String)]) -> Option<String> {
+    if seats.iter().all(|(id, name)| id == name) {
+        return None;
+    }
+    let listed: Vec<String> = seats
+        .iter()
+        .map(|(id, name)| {
+            if id == name {
+                id.clone()
+            } else {
+                format!("{name} (id `{id}`)")
+            }
+        })
+        .collect();
+    Some(format!("On this desk: {}.", listed.join(", ")))
 }
 
 /// The arguments of one call, owned, in the shapes the specs declare.

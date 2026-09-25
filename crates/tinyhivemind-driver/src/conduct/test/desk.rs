@@ -34,7 +34,12 @@ fn a_stalled_desk_seat_is_nudged_once_per_assignment_and_then_the_episode_stalls
         [Event::Nudged { seat, thread: None }] if seat == "one"
     ));
     assert_eq!(seats(&nudged.turns), vec![("one", None)]);
-    assert!(journal.private_to("one")[0].contains("you hold open work"));
+    let note = &journal.private_to("one")[0];
+    assert!(note.contains("you still have open work"));
+    assert!(
+        !note.contains('`'),
+        "a note a person may read names no tool: {note}"
+    );
     // Silent again, for the same assignment: no second nudge, nothing due.
     let stalled = wave(&mut conductor, &journal, &[]);
     assert!(
@@ -124,7 +129,7 @@ fn a_placed_broadcast_completes_its_author_and_a_busy_recipient_gets_it_as_a_han
         "{:?}",
         handed.events
     );
-    assert!(journal.private_to("two")[0].contains("handoff from @one"));
+    assert!(journal.private_to("two")[0].contains("one handed this to you"));
     assert!(!conductor.finished());
     // A completion before it is shown the handoff is refused and explained;
     // the host shows nothing new by opening the turn at a stale watermark.

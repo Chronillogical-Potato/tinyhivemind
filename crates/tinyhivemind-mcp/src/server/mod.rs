@@ -19,7 +19,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 
 use crate::{Error, Result};
-use tinyhivemind_tools::{EpisodeTools, raw_arguments, tool_definitions};
+use tinyhivemind_tools::{EpisodeTools, raw_arguments};
 
 /// The MCP protocol version negotiated. Echoed exactly, or the client refuses.
 pub const PROTOCOL_VERSION: &str = "2025-11-25";
@@ -194,7 +194,7 @@ async fn session(
             "tools/list" => Some(json!({
                 "jsonrpc": "2.0",
                 "id": id,
-                "result": { "tools": tool_definitions(&tools.seats()) },
+                "result": { "tools": tools.tool_definitions() },
             })),
             "tools/call" => Some(call(&tools, &seat, &request, &id)),
             other => Some(json!({

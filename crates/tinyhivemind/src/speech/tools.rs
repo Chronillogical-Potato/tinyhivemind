@@ -54,13 +54,17 @@ const SPECS: &[ToolSpec] = &[
     ToolSpec {
         name: "post",
         description: "State one thing to the whole desk: a fact you hold, a finding, or your \
-                      answer to a question a peer asked you. Nobody is assigned anything by it. \
-                      If what you found is work that belongs to another seat, that is \
-                      `broadcast`, not this. Text you write outside a tool call is your own \
-                      thinking and reaches nobody.",
+                      answer to a question a peer asked you. A person reads this in the chat, \
+                      and so does the desk: lead with the point in plain words, keep it short, \
+                      and refer to teammates by name. Nobody is assigned anything by it. If what \
+                      you found is work that belongs to another seat, that is `broadcast`, not \
+                      this. Text you write outside a tool call is your own thinking and reaches \
+                      nobody.",
         parameters: &[ToolParameter {
             name: "message",
-            description: Some("The fact, plainly. Not a request, and not a handoff."),
+            description: Some(
+                "The fact, plainly, for a person to read. Not a request, and not a handoff.",
+            ),
             kind: ParameterKind::Text,
             required: true,
         }],
@@ -72,13 +76,16 @@ const SPECS: &[ToolSpec] = &[
                       currently eligible team; it is not a broadcast-to-all fan-out. Call this \
                       when you hold work that belongs to another seat, whoever that turns out \
                       to be. One piece of work per call: two things for two seats are two calls. \
-                      Handing work off is a finding: unless you are waiting on a question you \
-                      asked, it completes your part, and you need not call `complete_episode` \
-                      after it.",
+                      A person reads this in the chat, and so does the teammate who takes it: \
+                      say plainly what needs doing and why, keep it short, and refer to \
+                      teammates by name. Handing work off is a finding: unless you are waiting \
+                      on a question you asked, it completes your part, and you need not call \
+                      `complete_episode` after it.",
         parameters: &[ToolParameter {
             name: "message",
             description: Some(
-                "The self-contained work, finding, or request another agent should take up.",
+                "The work, finding, or request, self-contained and in plain words: a person \
+                 reads it, and so does the teammate who takes it up.",
             ),
             kind: ParameterKind::Text,
             required: true,
@@ -88,12 +95,12 @@ const SPECS: &[ToolSpec] = &[
         name: "dm",
         description: "Say one thing to named peers instead of the whole desk. Use it to settle a \
                       disagreement without spending the room's attention; the room is told the \
-                      exchange happened and not what it said. It still costs your one message \
-                      for the turn.",
+                      exchange happened and not what it said. A person can still read it, so \
+                      write it plainly. It still costs your one message for the turn.",
         parameters: &[
             ToolParameter {
                 name: "to",
-                description: Some("Seat ids, without the @."),
+                description: Some("Seat ids, not names, without the @."),
                 kind: ParameterKind::TextList,
                 required: true,
             },
@@ -115,18 +122,18 @@ const SPECS: &[ToolSpec] = &[
                       one turn; each ask is its own conversation. If an answer raises another \
                       question, ask again. It is a question, not a handoff — work that \
                       belongs to another seat is `broadcast`. The seat you ask keeps whatever it \
-                      was already doing.",
+                      was already doing. A person can read the question, so write it plainly.",
         parameters: &[
             ToolParameter {
                 name: "to",
-                description: Some("The seat to ask, by id, without the @."),
+                description: Some("The seat to ask, by id rather than name, without the @."),
                 kind: ParameterKind::Text,
                 required: true,
             },
             ToolParameter {
                 name: "message",
                 description: Some(
-                    "What you need from them, self-contained: the question and why it matters to your work.",
+                    "What you need from them, self-contained and in plain words: the question and why it matters to your work.",
                 ),
                 kind: ParameterKind::Text,
                 required: true,
@@ -137,14 +144,17 @@ const SPECS: &[ToolSpec] = &[
         name: "complete_episode",
         description: "Conclude your part with one message, and that message is your finding: \
                       what you established, and why nothing is left open on your side. This is \
-                      how a fact reaches the desk. Call it when you have no open step -- or, when \
-                      a peer asked you something, as your answer. The episode completes after \
-                      every assigned seat has called it; a later routed broadcast may assign new \
-                      work and reopen a seat.",
+                      how a fact reaches the desk. A person reads this in the chat, and so does \
+                      the desk: lead with the result in plain words, keep it short, include \
+                      only what the reader needs to act on, and refer to teammates by name. Call \
+                      it when you have no open step -- or, when a peer asked you something, as \
+                      your answer. The episode completes after every assigned seat has called \
+                      it; a later routed broadcast may assign new work and reopen a seat.",
         parameters: &[ToolParameter {
             name: "message",
             description: Some(
-                "Your finding, complete in itself: the desk reads this and nothing else you wrote.",
+                "Your finding, complete in itself and written for a person: the result first, \
+                 in plain words, then only what the reader needs to act on.",
             ),
             kind: ParameterKind::Text,
             required: true,

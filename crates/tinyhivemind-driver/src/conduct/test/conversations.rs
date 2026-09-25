@@ -140,7 +140,7 @@ fn a_completion_while_a_conversation_is_open_is_refused_and_explained() {
         journal
             .private_to("one")
             .iter()
-            .any(|body| body.contains("your completion was refused")),
+            .any(|body| body.contains("you can't finish yet")),
         "{:?}",
         journal.bodies()
     );
