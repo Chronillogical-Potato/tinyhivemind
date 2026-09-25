@@ -1,10 +1,13 @@
-//! The embed runner: `openhuman-embed` agents, tools over MCP.
+//! The embed runner: `openhuman-embed` agents, with the room's tools on
+//! their belt.
 //!
 //! This is the runner the live episodes in `docs/experiments/` were recorded
-//! with. A seat is an `AgentSpec` on the runtime, and reaches the room's
-//! tools through `OpenHuman`'s three MCP dispatchers against
-//! `tinyhivemind-mcp`'s server -- the only road `AgentSpec` offers for a tool
-//! the runtime did not ship.
+//! with. A seat is an `AgentSpec` on the runtime, and there are two roads to
+//! the same tools: [`EmbedRunner::seat`] hands them to the spec itself
+//! through `AgentSpec::tools`, which is the default, and
+//! [`EmbedRunner::seat_over_mcp`] reaches them through `OpenHuman`'s three
+//! MCP dispatchers against `tinyhivemind-mcp`'s server. The second was the
+//! only road before a spec could carry a belt of its own.
 //!
 //! A seat keeps one session for the whole episode and **seeds** it every turn
 //! from the host's journal, as [`hosted`](crate::hosted) does: the rows it may

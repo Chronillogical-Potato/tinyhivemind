@@ -377,6 +377,27 @@ fn a_withheld_tool_is_not_offered_not_contracted_and_not_served() {
         )
         .expect_err("a withheld tool is not served");
     assert_eq!(refusal, "unknown tool ask_teammates");
+
+    // And inside a conversation too. The asking tools are refused there for
+    // a reason of their own, and a seat told *that* about a tool its contract
+    // never carried would be told it called the right thing in the wrong
+    // place.
+    tools.register("solver", {
+        let mut dispatch = dispatch();
+        dispatch.parent = Some("7".into());
+        dispatch
+    });
+    let refusal = tools
+        .call(
+            "solver",
+            "ask_teammates",
+            &args(serde_json::json!({
+                "message": "both of you?", "to": ["lead", "scribe"],
+                "chat": "engineering", "parent": "7"
+            })),
+        )
+        .expect_err("still not served");
+    assert_eq!(refusal, "unknown tool ask_teammates");
     assert!(
         tools.drain("lead").is_empty(),
         "and nothing it would have opened was recorded"

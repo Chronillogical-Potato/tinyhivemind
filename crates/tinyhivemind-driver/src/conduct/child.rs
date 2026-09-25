@@ -13,7 +13,7 @@ use crate::driver::{ConversationView, DriverState};
 /// seats asked read each other and each concludes with `complete_episode`,
 /// whose message is its answer. It is over when every one of them has, and a
 /// follow-up is a further ask.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub(super) struct Child {
     pub(super) root: Sequence,
     pub(super) asker: String,
@@ -105,7 +105,90 @@ impl Child {
 pub(super) struct Concluded {
     pub(super) root: Sequence,
     pub(super) asker: String,
+    /// The seats asked. A snapshot from before a conversation could hold a
+    /// group wrote one `askee`, which reads here as a group of one.
+    #[serde(alias = "askee", deserialize_with = "one_or_many")]
     pub(super) askees: Vec<String>,
+}
+
+/// One seat or several: what `askee` was, and what `askees` is.
+fn one_or_many<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Vec<String>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Seats {
+        One(String),
+        Many(Vec<String>),
+    }
+    Ok(match Seats::deserialize(deserializer)? {
+        Seats::One(seat) => vec![seat],
+        Seats::Many(seats) => seats,
+    })
+}
+
+/// A set of seats, or the flag that stood for one before a conversation
+/// could hold a group: `true` meant its single askee, `false` meant nobody.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Marked {
+    Seats(BTreeSet<String>),
+    Whoever(bool),
+}
+
+impl Marked {
+    fn over(self, askees: &[String]) -> BTreeSet<String> {
+        match self {
+            Self::Seats(seats) => seats,
+            Self::Whoever(true) => askees.iter().cloned().collect(),
+            Self::Whoever(false) => BTreeSet::new(),
+        }
+    }
+}
+
+/// A conversation as a snapshot holds it, in either shape.
+///
+/// The fields a snapshot written before ADR 0026 carried -- one `askee`, and
+/// `nudged`/`turned` as flags over that one seat -- are read here and mapped
+/// forward, so a host resuming an episode in flight across this change
+/// recovers it rather than failing to decode the conductor it checkpointed.
+#[derive(Deserialize)]
+struct Snapshotted {
+    root: Sequence,
+    asker: String,
+    #[serde(alias = "askee", deserialize_with = "one_or_many")]
+    askees: Vec<String>,
+    state: DriverState,
+    #[serde(default)]
+    turns: u64,
+    #[serde(default = "nobody")]
+    nudged: Marked,
+    #[serde(default = "nobody")]
+    turned: Marked,
+    #[serde(default)]
+    answered: BTreeSet<String>,
+}
+
+const fn nobody() -> Marked {
+    Marked::Seats(BTreeSet::new())
+}
+
+impl<'de> Deserialize<'de> for Child {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let held = Snapshotted::deserialize(deserializer)?;
+        Ok(Self {
+            root: held.root,
+            asker: held.asker,
+            nudged: held.nudged.over(&held.askees),
+            turned: held.turned.over(&held.askees),
+            askees: held.askees,
+            state: held.state,
+            turns: held.turns,
+            answered: held.answered,
+        })
+    }
 }
 
 impl Concluded {

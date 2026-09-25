@@ -332,8 +332,15 @@ pub fn check_recipients(
     speaker_id: &str,
     roster: &Roster<'_>,
 ) -> std::result::Result<(), UtteranceRejection> {
-    let to: &[String] = match utterance {
-        Utterance::Dm { to, .. } | Utterance::Ask { to, .. } => to,
+    // A `dm` to a group that happens to include its author reaches the rest
+    // of them, so only a message that reaches nobody else is refused. A
+    // question is different: an asker in its own conversation is a seat
+    // waiting on itself, and the conversation cannot conclude until it
+    // answers a question it asked. The tool gate says the same thing at the
+    // door; this is the algebra saying it too, for a host that calls in.
+    let (to, self_is_fatal): (&[String], bool) = match utterance {
+        Utterance::Dm { to, .. } => (to, false),
+        Utterance::Ask { to, .. } => (to, true),
         _ => return Ok(()),
     };
     for id in to {
@@ -341,7 +348,12 @@ pub fn check_recipients(
             return Err(UtteranceRejection::UnknownRecipient { id: id.clone() });
         }
     }
-    if to.iter().all(|id| id == speaker_id) {
+    let names_itself = if self_is_fatal {
+        to.iter().any(|id| id == speaker_id)
+    } else {
+        to.iter().all(|id| id == speaker_id)
+    };
+    if names_itself {
         return Err(UtteranceRejection::SelfRecipient);
     }
     Ok(())

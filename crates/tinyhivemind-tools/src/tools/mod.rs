@@ -358,6 +358,14 @@ impl EpisodeTools {
                 dispatch.chat
             ));
         }
+        // Whether the tool exists here comes first. A host that withheld
+        // `ask_teammates` has a seat whose contract never mentioned it, and
+        // telling that seat to answer with `complete_episode` instead would
+        // describe a tool it was never offered as one it called in the wrong
+        // place.
+        if !serves(name) || self.withheld.contains(name) {
+            return Err(unknown_tool(name));
+        }
         if dispatch.parent.is_some() && (name == "ask" || name == "ask_teammates") {
             return Err(
                 "inside a conversation you answer the seat that asked you: call \
@@ -365,9 +373,6 @@ impl EpisodeTools {
                  first, say so in that answer, and the seat that asked you will ask them."
                     .into(),
             );
-        }
-        if !serves(name) || self.withheld.contains(name) {
-            return Err(unknown_tool(name));
         }
         let call = interpret(name, &args.call()).map_err(|rejection| rejection.to_string())?;
         let acknowledgement = match &call {

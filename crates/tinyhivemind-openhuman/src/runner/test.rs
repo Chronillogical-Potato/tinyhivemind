@@ -136,7 +136,7 @@ fn the_runner_is_named_by_the_environment_and_defaults_to_embed() {
     assert_eq!(
         from_env.map_err(|error| error.to_string()),
         RunnerKind::parse(value.as_deref()).map_err(|other| format!(
-            "TINYHIVEMIND_RUNNER must be `embed`, `raw` or `hosted`, not `{other}`"
+            "TINYHIVEMIND_RUNNER must be `embed`, `embed-mcp`, `raw` or `hosted`, not `{other}`"
         ))
     );
 }
