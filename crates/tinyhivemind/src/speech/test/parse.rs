@@ -163,14 +163,14 @@ fn an_ask_names_one_seat_and_keeps_its_question() {
     assert_eq!(
         utterance,
         Utterance::Ask {
-            to: "checker".into(),
+            to: vec!["checker".into()],
             message: "is the depth bound tight?".into(),
         },
     );
-    assert_eq!(utterance.asks(), Some("checker"));
+    assert_eq!(utterance.asks(), ["checker".to_string()]);
     assert!(!utterance.completes_episode(), "asking is not finishing");
     assert!(!utterance.broadcasting());
-    assert_eq!(post("anything").asks(), None, "only an ask asks");
+    assert!(post("anything").asks().is_empty(), "only an ask asks");
 }
 
 #[test]
@@ -193,19 +193,86 @@ fn refuses_an_ask_that_names_nobody() {
 }
 
 #[test]
-fn refuses_an_ask_that_names_more_than_one_seat() {
-    let to = ["checker".to_string(), "theory".to_string()];
+fn ask_teammates_names_a_group_and_keeps_them_in_order() {
+    let to = ["@checker".to_string(), "theory".to_string()];
     assert_eq!(
         interpret(
-            "ask",
+            "ask_teammates",
             &CallArguments {
                 message: Some("which of you?"),
                 to: &to,
                 ..Default::default()
             }
         ),
+        Ok(ToolCall::Speak(Utterance::Ask {
+            to: vec!["checker".into(), "theory".into()],
+            message: "which of you?".into(),
+        })),
+        "a group question is the same utterance, with the group in it",
+    );
+}
+
+#[test]
+fn each_asking_tool_refuses_the_others_arity_and_names_it() {
+    let two = ["checker".to_string(), "theory".to_string()];
+    assert_eq!(
+        interpret(
+            "ask",
+            &CallArguments {
+                message: Some("both of you?"),
+                to: &two,
+                ..Default::default()
+            }
+        ),
         Err(UtteranceRejection::OneRecipient { count: 2 }),
-        "a question has one addressee; two is a dm, not an ask",
+        "`ask` is one seat, and the refusal says which tool takes two",
+    );
+    let one = ["checker".to_string()];
+    assert_eq!(
+        interpret(
+            "ask_teammates",
+            &CallArguments {
+                message: Some("just you?"),
+                to: &one,
+                ..Default::default()
+            }
+        ),
+        Err(UtteranceRejection::NotAGroup),
+        "a room of one is a pair, and the refusal says so",
+    );
+    for tool in ["ask", "ask_teammates"] {
+        assert_eq!(
+            interpret(
+                tool,
+                &CallArguments {
+                    message: Some("anyone?"),
+                    to: &[],
+                    ..Default::default()
+                }
+            ),
+            Err(UtteranceRejection::NoRecipients),
+            "{tool}",
+        );
+    }
+}
+
+#[test]
+fn an_ask_naming_a_seat_twice_asks_it_once() {
+    let to = ["checker".to_string(), "@checker".to_string()];
+    assert_eq!(
+        interpret(
+            "ask",
+            &CallArguments {
+                message: Some("twice?"),
+                to: &to,
+                ..Default::default()
+            }
+        ),
+        Ok(ToolCall::Speak(Utterance::Ask {
+            to: vec!["checker".into()],
+            message: "twice?".into(),
+        })),
+        "a seat named twice is one seat in the conversation",
     );
 }
 
@@ -214,7 +281,7 @@ fn refuses_an_ask_to_a_seat_the_roster_does_not_hold() {
     let members = members();
     let roster = Roster::new(&members, &[], &[]);
     let utterance = Utterance::Ask {
-        to: "johnny".into(),
+        to: vec!["johnny".into()],
         message: "are you there?".into(),
     };
     assert_eq!(
@@ -230,7 +297,7 @@ fn refuses_an_ask_a_seat_addressed_to_itself() {
     let members = members();
     let roster = Roster::new(&members, &[], &[]);
     let alone = Utterance::Ask {
-        to: "solver".into(),
+        to: vec!["solver".into()],
         message: "what do I think?".into(),
     };
     assert_eq!(
@@ -238,10 +305,21 @@ fn refuses_an_ask_a_seat_addressed_to_itself() {
         Err(UtteranceRejection::SelfRecipient),
     );
     let peer = Utterance::Ask {
-        to: "checker".into(),
+        to: vec!["checker".into()],
         message: "what do you think?".into(),
     };
     assert_eq!(check_recipients(&peer, "solver", &roster), Ok(()));
+    let group = Utterance::Ask {
+        to: vec!["checker".into(), "johnny".into()],
+        message: "what do you two think?".into(),
+    };
+    assert_eq!(
+        check_recipients(&group, "solver", &roster),
+        Err(UtteranceRejection::UnknownRecipient {
+            id: "johnny".into()
+        }),
+        "a group ask is refused whole where one of the seats is a stranger",
+    );
 }
 
 #[test]
@@ -281,10 +359,6 @@ fn a_rejection_reads_as_a_sentence_the_seat_can_act_on() {
     assert_eq!(
         UtteranceRejection::SelfRecipient.to_string(),
         "`to` names you; a message to yourself reaches nobody else",
-    );
-    assert_eq!(
-        UtteranceRejection::OneRecipient { count: 3 }.to_string(),
-        "`to` must name exactly one seat to ask; 3 were named",
     );
 }
 
@@ -374,10 +448,14 @@ fn the_wire_form_is_what_a_host_writes_and_reads_back() {
         ),
         (
             Utterance::Ask {
-                to: "checker".into(),
+                to: vec!["checker".into(), "theory".into()],
                 message: "is it tight?".into(),
             },
-            serde_json::json!({ "kind": "ask", "to": "checker", "message": "is it tight?" }),
+            serde_json::json!({
+                "kind": "ask",
+                "to": ["checker", "theory"],
+                "message": "is it tight?",
+            }),
         ),
         (
             Utterance::CompleteEpisode {

@@ -114,16 +114,28 @@ pub fn interpret(
             }
             Ok(ToolCall::Speak(Utterance::Dm { to, message }))
         }
+        // Two doors, one utterance. `ask` is one seat and `ask_teammates` is
+        // the room; what comes out is the same `Ask`, because below the tools
+        // a conversation of one and a conversation of four differ only in how
+        // many seats are in it. Each door refuses the other's arity and says
+        // which tool takes it, since a seat that names two in `ask` wanted a
+        // room and a seat that names one in `ask_teammates` wanted a pair.
         "ask" => {
             let message = text(arguments, "message")?;
-            let mut to = recipients(arguments.to);
+            let to = recipients(arguments.to);
             match to.len() {
                 0 => Err(UtteranceRejection::NoRecipients),
-                1 => Ok(ToolCall::Speak(Utterance::Ask {
-                    to: to.remove(0),
-                    message,
-                })),
+                1 => Ok(ToolCall::Speak(Utterance::Ask { to, message })),
                 count => Err(UtteranceRejection::OneRecipient { count }),
+            }
+        }
+        "ask_teammates" => {
+            let message = text(arguments, "message")?;
+            let to = recipients(arguments.to);
+            match to.len() {
+                0 => Err(UtteranceRejection::NoRecipients),
+                1 => Err(UtteranceRejection::NotAGroup),
+                _ => Ok(ToolCall::Speak(Utterance::Ask { to, message })),
             }
         }
         "read" => Ok(ToolCall::Read {
@@ -229,8 +241,7 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
     let written = resolve(&content, None, &author, request.roster, request.desks);
 
     let addressed = match request.utterance {
-        Utterance::Dm { to, .. } => targets(to),
-        Utterance::Ask { to, .. } => targets(std::slice::from_ref(to)),
+        Utterance::Dm { to, .. } | Utterance::Ask { to, .. } => targets(to),
         _ => Vec::new(),
     };
     // A `dm` addresses its recipients whether or not its text also names them.
@@ -250,7 +261,7 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
             closing: request.utterance.closing(),
             completes_episode: request.utterance.completes_episode(),
             broadcasting: request.utterance.broadcasting(),
-            asks: request.utterance.asks().map(str::to_owned),
+            asks: request.utterance.asks().to_vec(),
             refusal: None,
         });
     }
@@ -297,7 +308,7 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
         closing: request.utterance.closing(),
         completes_episode: request.utterance.completes_episode(),
         broadcasting: request.utterance.broadcasting(),
-        asks: request.utterance.asks().map(str::to_owned),
+        asks: request.utterance.asks().to_vec(),
         refusal,
     })
 }
@@ -321,9 +332,15 @@ pub fn check_recipients(
     speaker_id: &str,
     roster: &Roster<'_>,
 ) -> std::result::Result<(), UtteranceRejection> {
-    let to: &[String] = match utterance {
-        Utterance::Dm { to, .. } => to,
-        Utterance::Ask { to, .. } => std::slice::from_ref(to),
+    // A `dm` to a group that happens to include its author reaches the rest
+    // of them, so only a message that reaches nobody else is refused. A
+    // question is different: an asker in its own conversation is a seat
+    // waiting on itself, and the conversation cannot conclude until it
+    // answers a question it asked. The tool gate says the same thing at the
+    // door; this is the algebra saying it too, for a host that calls in.
+    let (to, self_is_fatal): (&[String], bool) = match utterance {
+        Utterance::Dm { to, .. } => (to, false),
+        Utterance::Ask { to, .. } => (to, true),
         _ => return Ok(()),
     };
     for id in to {
@@ -331,7 +348,12 @@ pub fn check_recipients(
             return Err(UtteranceRejection::UnknownRecipient { id: id.clone() });
         }
     }
-    if to.iter().all(|id| id == speaker_id) {
+    let names_itself = if self_is_fatal {
+        to.iter().any(|id| id == speaker_id)
+    } else {
+        to.iter().all(|id| id == speaker_id)
+    };
+    if names_itself {
         return Err(UtteranceRejection::SelfRecipient);
     }
     Ok(())
@@ -353,8 +375,7 @@ pub fn addressed_peers(
     desks: &DeskSet<'_>,
 ) -> Vec<String> {
     let mentions = match utterance {
-        Utterance::Dm { to, .. } => targets(to),
-        Utterance::Ask { to, .. } => targets(std::slice::from_ref(to)),
+        Utterance::Dm { to, .. } | Utterance::Ask { to, .. } => targets(to),
         other => {
             let author = MentionAuthor::Agent {
                 id: speaker_id.to_string(),

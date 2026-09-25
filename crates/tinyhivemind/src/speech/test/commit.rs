@@ -189,7 +189,7 @@ fn an_ask_is_private_to_the_seat_it_asks_and_records_whom() {
         "a question is between the asker and the asked",
     );
     assert_eq!(agents(&committed), vec!["checker"]);
-    assert_eq!(committed.asks.as_deref(), Some("checker"));
+    assert_eq!(committed.asks, ["checker".to_string()]);
     assert_eq!(committed.refusal, None);
     assert!(!committed.completes_episode, "asking is not finishing");
     assert!(!committed.broadcasting);
@@ -198,8 +198,8 @@ fn an_ask_is_private_to_the_seat_it_asks_and_records_whom() {
 
 #[test]
 fn a_post_asks_nobody() {
-    assert_eq!(commit("solver", &post("still working")).asks, None);
-    assert_eq!(commit("solver", &dm(&["checker"], "fyi")).asks, None);
+    assert!(commit("solver", &post("still working")).asks.is_empty());
+    assert!(commit("solver", &dm(&["checker"], "fyi")).asks.is_empty());
 }
 
 #[test]
@@ -218,8 +218,8 @@ fn an_ask_the_policy_refuses_is_a_desk_row_that_still_records_whom_it_asked() {
     assert_eq!(committed.audience, Audience::Desk, "fails toward the room");
     assert!(committed.refusal.is_some(), "and says why");
     assert_eq!(
-        committed.asks.as_deref(),
-        Some("checker"),
+        committed.asks,
+        ["checker".to_string()],
         "the obligation survives the refusal: the host still waits on checker",
     );
 }

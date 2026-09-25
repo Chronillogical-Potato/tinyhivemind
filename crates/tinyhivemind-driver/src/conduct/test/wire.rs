@@ -2,10 +2,13 @@
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+use std::collections::BTreeSet;
+
 use serde_json::{Value, json};
 use tinyhivemind::Sequence;
 use tinyhivemind::speech::Utterance;
 
+use crate::conduct::child::Child;
 use crate::conduct::steps::Kind;
 use crate::conduct::{Commit, Event, Note, Refusal, Step, Turn};
 use crate::driver::Channel;
@@ -38,7 +41,7 @@ fn a_turn_names_its_seat_channel_and_watermark() {
         seat: "two".into(),
         channel: Channel::Thread {
             root: Sequence(4),
-            other: "one".into(),
+            others: vec!["one".into()],
             opened_it: false,
         },
         since: Some(Sequence(4)),
@@ -48,7 +51,7 @@ fn a_turn_names_its_seat_channel_and_watermark() {
         wire,
         json!({
             "seat": "two",
-            "channel": {"kind": "thread", "root": 4, "other": "one", "opened_it": false},
+            "channel": {"kind": "thread", "root": 4, "others": ["one"], "opened_it": false},
             "since": 4
         })
     );
@@ -97,7 +100,7 @@ fn a_commit_carries_its_conversation_and_an_opaque_purpose() {
             message: "three should check the logs".into(),
         },
         thread: None,
-        only_for: None,
+        only_for: Vec::new(),
         conversation: Some(Sequence(4)),
         kind: Kind::Desk,
     };
@@ -109,7 +112,7 @@ fn a_commit_carries_its_conversation_and_an_opaque_purpose() {
             "author": "two",
             "utterance": {"kind": "broadcast", "message": "three should check the logs"},
             "thread": null,
-            "only_for": null,
+            "only_for": [],
             "conversation": 4,
             "purpose": {"kind": "desk"}
         })
@@ -133,7 +136,7 @@ fn a_commit_carries_its_conversation_and_an_opaque_purpose() {
                 message: "done".into(),
             },
             thread: Some(Sequence(4)),
-            only_for: None,
+            only_for: Vec::new(),
             conversation: Some(Sequence(4)),
             kind,
         });
@@ -144,12 +147,18 @@ fn a_commit_carries_its_conversation_and_an_opaque_purpose() {
 fn an_event_is_tagged_by_kind_inside_its_step() {
     let asked = Step::Event(Event::Asked {
         seat: "one".into(),
-        askee: "two".into(),
+        askees: vec!["two".into(), "three".into()],
         root: Sequence(4),
     });
     assert_eq!(
         serde_json::to_value(&asked).expect("serializes"),
-        json!({"step": "event", "kind": "asked", "seat": "one", "askee": "two", "root": 4})
+        json!({
+            "step": "event",
+            "kind": "asked",
+            "seat": "one",
+            "askees": ["two", "three"],
+            "root": 4,
+        })
     );
     let refused = Event::Refused {
         seat: "one".into(),
@@ -203,7 +212,7 @@ fn every_event_and_refusal_survives_the_wire() {
         },
         Event::Asked {
             seat: "one".into(),
-            askee: "two".into(),
+            askees: vec!["two".into()],
             root: Sequence(4),
         },
         Event::Handoff {
@@ -232,7 +241,7 @@ fn every_event_and_refusal_survives_the_wire() {
         Event::Concluded {
             root: Sequence(4),
             asker: "one".into(),
-            askee: "two".into(),
+            askees: vec!["two".into()],
             forced: false,
             at: Sequence(8),
         },
@@ -245,6 +254,74 @@ fn every_event_and_refusal_survives_the_wire() {
         serde_json::to_value(Refusal::NotYetShown).expect("serializes"),
         json!({"kind": "not_yet_shown"})
     );
+}
+
+/// **A snapshot written before a conversation could hold a group still
+/// resumes.**
+///
+/// It carried one `askee`, and `nudged`/`turned` as flags over that one
+/// seat. A host checkpoints after every committed row, so an episode in
+/// flight across this change has one of these on disk; failing to decode it
+/// would lose the episode the checkpoint exists to save.
+#[test]
+fn a_conversation_snapshotted_before_groups_reads_forward() {
+    let hive = super::support::hive(&["one", "two"]);
+    let driver = crate::CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = super::support::policy(1);
+    let routing = crate::driver::BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = super::support::Journal::default();
+    let mut conductor =
+        super::support::two_seat(&driver, routing, crate::ConductPolicy::default(), &journal);
+    super::support::wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![super::support::ask("two", "which port?")])],
+    )
+    .expect("wave");
+    let snapshot = conductor.snapshot().expect("recordable");
+    let wire = serde_json::to_value(&snapshot).expect("serializes");
+
+    // Rewrite the one conversation into the shape the build before this one
+    // wrote, and read it back.
+    let mut child = wire["children"][0][1].clone();
+    let held = child.as_object_mut().expect("a conversation");
+    let askee = held["askees"][0].clone();
+    held.remove("askees");
+    held.remove("answered");
+    held.insert("askee".into(), askee);
+    held.insert("nudged".into(), json!(true));
+    held.insert("turned".into(), json!(false));
+
+    let older: Child = serde_json::from_value(child).expect("an older conversation reads");
+    assert_eq!(
+        older.askees,
+        ["two".to_string()],
+        "one askee is a group of one"
+    );
+    assert_eq!(
+        older.nudged,
+        ["two".to_string()].into_iter().collect::<BTreeSet<_>>(),
+        "the flag stood for that seat, and now names it"
+    );
+    assert!(older.turned.is_empty(), "and `false` stood for nobody");
+    assert!(
+        older.answered.is_empty(),
+        "a conversation snapshotted then had carried nothing back yet"
+    );
+
+    // And the shape written today reads as itself.
+    let current = serde_json::to_value(&older).expect("serializes");
+    assert_eq!(current["askees"], json!(["two"]));
+    assert_eq!(current["nudged"], json!(["two"]));
+    let again: Child = serde_json::from_value(current).expect("round trips");
+    assert_eq!(again.askees, older.askees);
+    assert_eq!(again.nudged, older.nudged);
 }
 
 #[test]
@@ -308,7 +385,7 @@ fn a_conductor_snapshot_names_every_field_a_restart_reads_back() {
         "the key a conversation is filed under is its own root"
     );
     for field in [
-        "root", "asker", "askee", "state", "turns", "nudged", "turned",
+        "root", "asker", "askees", "state", "turns", "nudged", "turned", "answered",
     ] {
         assert!(
             child.get(field).is_some(),
@@ -316,7 +393,7 @@ fn a_conductor_snapshot_names_every_field_a_restart_reads_back() {
         );
     }
     assert_eq!(child["asker"], json!("one"));
-    assert_eq!(child["askee"], json!("two"));
+    assert_eq!(child["askees"], json!(["two"]));
 
     // And it decodes back to the same thing.
     let back: crate::ConductorState = serde_json::from_value(wire).expect("deserializes");

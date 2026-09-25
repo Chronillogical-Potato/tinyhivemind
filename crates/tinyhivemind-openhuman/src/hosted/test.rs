@@ -15,8 +15,8 @@ use tinyhivemind::{Conversation, Sequence, SessionLog};
 use tinyhivemind_tools::{Dispatch, EpisodeTools, served_specs};
 
 use super::EpisodeBelt;
-use super::seed::{history, with_persona};
 use crate::MemoryLog;
+use crate::seed::{history, with_persona};
 
 fn desk(thread_root: Option<Sequence>) -> Conversation {
     Conversation {
@@ -46,13 +46,13 @@ fn journal() -> MemoryLog {
         "operator",
         "the login flow rejects valid credentials",
         None,
-        None,
+        &[],
     );
-    log.append("one", "looking into it", None, None);
-    let root = log.append("one", "asks @two: which port?", None, Some("two"));
-    log.append("two", "port 8080", Some(root), None);
-    log.append("desk", "you hold open work", None, Some("one"));
-    log.append("three", "the cache is stale", None, None);
+    log.append("one", "looking into it", None, &[]);
+    let root = log.append("one", "asks @two: which port?", None, &["two".to_string()]);
+    log.append("two", "port 8080", Some(root), &[]);
+    log.append("desk", "you hold open work", None, &["one".to_string()]);
+    log.append("three", "the cache is stale", None, &[]);
     log
 }
 

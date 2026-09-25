@@ -218,6 +218,87 @@ fn a_second_ask_to_a_seat_already_being_waited_on_is_refused() {
     assert_eq!(tools.drain("lead").len(), 1);
 }
 
+/// **A group ask is one conversation, and is refused whole.**
+///
+/// The seats named go into one room together, so the acknowledgement says so
+/// -- a seat that thinks it opened three conversations will wait for three
+/// answers. And an ask that names a seat already being waited on is refused
+/// entire, rather than quietly asking the rest: the seat dropped is usually
+/// the one the question was about.
+#[test]
+fn ask_teammates_names_a_group_and_is_refused_whole_if_one_of_them_is_held() {
+    let tools = EpisodeTools::new(["lead", "solver", "scribe"]);
+    tools.register("lead", dispatch());
+    let ask = |to: serde_json::Value| {
+        args(serde_json::json!({
+            "message": "does this hold for both of you?", "to": to,
+            "chat": "engineering", "parent": null
+        }))
+    };
+
+    let receipt = tools
+        .call(
+            "lead",
+            "ask_teammates",
+            &ask(serde_json::json!(["solver", "scribe"])),
+        )
+        .expect("a group ask");
+    assert!(
+        receipt.starts_with("your question to solver and scribe is sent:"),
+        "the acknowledgement names everyone asked: {receipt}"
+    );
+    assert!(
+        receipt.contains("one conversation together"),
+        "and says it is one conversation, not one each: {receipt}"
+    );
+    assert!(
+        receipt.contains("once every one of them has answered"),
+        "and what releases the asker: {receipt}"
+    );
+    assert_eq!(tools.drain("lead").len(), 1, "one ask, one event");
+
+    // One of the two is already being waited on: the whole ask is refused,
+    // and the seat that was free is not asked behind the asker's back.
+    tools.awaiting("lead", vec!["scribe".to_owned()]);
+    let refusal = tools
+        .call(
+            "lead",
+            "ask_teammates",
+            &ask(serde_json::json!(["solver", "scribe"])),
+        )
+        .expect_err("one of them is held");
+    assert!(refusal.contains("already asked scribe"), "{refusal}");
+    assert!(
+        tools.drain("lead").is_empty(),
+        "a refused group ask records nothing"
+    );
+
+    // A stranger in the group is refused the same way, and named.
+    tools.awaiting("lead", Vec::new());
+    let refusal = tools
+        .call(
+            "lead",
+            "ask_teammates",
+            &ask(serde_json::json!(["solver", "ghost"])),
+        )
+        .expect_err("a stranger in the group");
+    assert!(refusal.contains("@ghost"), "{refusal}");
+    assert!(
+        refusal.contains("You can ask: lead, scribe, solver"),
+        "{refusal}"
+    );
+
+    // And a group that names the caller is refused: it cannot ask itself.
+    let refusal = tools
+        .call(
+            "lead",
+            "ask_teammates",
+            &ask(serde_json::json!(["solver", "lead"])),
+        )
+        .expect_err("the caller is in the group");
+    assert!(refusal.contains("names you"), "{refusal}");
+}
+
 #[test]
 fn a_named_seat_is_called_by_its_name_in_what_the_caller_reads_back() {
     let tools = EpisodeTools::new(["lead", "solver", "scribe"]);
@@ -258,6 +339,82 @@ fn a_named_seat_is_called_by_its_name_in_what_the_caller_reads_back() {
         .call("lead", "ask", &ask("solver"))
         .expect_err("already waiting");
     assert!(refusal.contains("already asked Tess"), "{refusal}");
+}
+
+/// **A host may decline a tool its own model cannot file.**
+///
+/// The vocabulary is otherwise the same everywhere, which is what makes a
+/// seat's contract portable. `ask_teammates` opens a conversation with
+/// several seats in it, and a host that stores a conversation as a pair
+/// cannot represent one -- so it withholds the tool rather than filing the
+/// conversation as something it is not.
+#[test]
+fn a_withheld_tool_is_not_offered_not_contracted_and_not_served() {
+    let tools = EpisodeTools::new(["lead", "solver", "scribe"]).withhold(["ask_teammates"]);
+    tools.register("lead", dispatch());
+
+    let offered: Vec<String> = tools
+        .tool_definitions()
+        .into_iter()
+        .filter_map(|tool| tool["name"].as_str().map(str::to_owned))
+        .collect();
+    assert!(offered.contains(&"ask".to_owned()), "{offered:?}");
+    assert!(
+        !offered.contains(&"ask_teammates".to_owned()),
+        "{offered:?}"
+    );
+    let contracted: Vec<&str> = tools.specs().map(|spec| spec.name).collect();
+    assert_eq!(contracted, ["broadcast", "ask", "complete_episode", "read"]);
+
+    let refusal = tools
+        .call(
+            "lead",
+            "ask_teammates",
+            &args(serde_json::json!({
+                "message": "both of you?", "to": ["solver", "scribe"],
+                "chat": "engineering", "parent": null
+            })),
+        )
+        .expect_err("a withheld tool is not served");
+    assert_eq!(refusal, "unknown tool ask_teammates");
+
+    // And inside a conversation too. The asking tools are refused there for
+    // a reason of their own, and a seat told *that* about a tool its contract
+    // never carried would be told it called the right thing in the wrong
+    // place.
+    tools.register("solver", {
+        let mut dispatch = dispatch();
+        dispatch.parent = Some("7".into());
+        dispatch
+    });
+    let refusal = tools
+        .call(
+            "solver",
+            "ask_teammates",
+            &args(serde_json::json!({
+                "message": "both of you?", "to": ["lead", "scribe"],
+                "chat": "engineering", "parent": "7"
+            })),
+        )
+        .expect_err("still not served");
+    assert_eq!(refusal, "unknown tool ask_teammates");
+    assert!(
+        tools.drain("lead").is_empty(),
+        "and nothing it would have opened was recorded"
+    );
+
+    // What the host does serve still works.
+    tools
+        .call(
+            "lead",
+            "ask",
+            &args(serde_json::json!({
+                "message": "you?", "to": "solver",
+                "chat": "engineering", "parent": null
+            })),
+        )
+        .expect("ask is served");
+    assert_eq!(tools.drain("lead").len(), 1);
 }
 
 #[test]

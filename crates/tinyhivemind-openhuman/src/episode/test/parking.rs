@@ -116,7 +116,7 @@ fn the_seats_other_conversations_reach_its_brief_as_context() {
     // episode's own is skipped, marketing is not.
     journal
         .log
-        .append_to("marketing", "three", "launch is friday", None, None);
+        .append_to("marketing", "three", "launch is friday", None, &[]);
     *journal.channels.lock().unwrap() = vec![
         Conversation {
             desk_id: "engineering".into(),

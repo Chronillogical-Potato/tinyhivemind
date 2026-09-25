@@ -96,9 +96,10 @@ pub(crate) fn invoke(name: &str, arguments: &Value, serving: &Serving) -> Result
                     "your aside was refused ({reason}) and the message goes to the whole desk \
                      instead; say it as you would in the open, or post it and move on"
                 ),
-                (Utterance::Ask { to, .. }, None) => {
-                    format!("asked @{to}; the answer reaches you on a later turn")
-                }
+                (Utterance::Ask { to, .. }, None) => format!(
+                    "asked @{}; the answer reaches you on a later turn",
+                    to.join(", @")
+                ),
                 (Utterance::Ask { .. }, Some(reason)) => format!(
                     "your question could not be kept private ({reason}) and goes to the whole \
                      desk instead; the seat you asked will still see it"

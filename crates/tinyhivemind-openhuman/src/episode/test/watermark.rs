@@ -82,7 +82,7 @@ fn a_row_the_host_appends_above_the_wave_watermark_is_shown_once_and_later() {
     };
     let opened_at = journal
         .inner
-        .append("operator", "state the root cause", None, None);
+        .append("operator", "state the root cause", None, &[]);
     let runner = ScriptRunner::new(
         &["one", "two"],
         &[("one", vec![vec![], vec![complete("done", None)]])],

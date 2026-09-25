@@ -100,8 +100,12 @@ fn post() -> Utterance {
 }
 
 fn ask(to: &str) -> Utterance {
+    group_ask(&[to])
+}
+
+fn group_ask(to: &[&str]) -> Utterance {
     Utterance::Ask {
-        to: to.into(),
+        to: to.iter().map(|seat| (*seat).to_string()).collect(),
         message: "is it tight?".into(),
     }
 }
@@ -240,6 +244,58 @@ fn an_ask_holds_the_askers_completion_until_the_conversation_concludes() {
         "the private message to the asker is the conclusion",
     );
     apply(&driver, &concluded_now, "one", 5, complete(), &router).expect("now it may finish");
+}
+
+#[test]
+fn a_group_ask_holds_the_asker_until_every_seat_in_it_has_answered() {
+    let hive = hive();
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let router = FirstRouter::default();
+    let state = driver
+        .start(episode(&["one", "two", "three"]))
+        .expect("state");
+    let asked = apply(
+        &driver,
+        &state,
+        "one",
+        1,
+        group_ask(&["two", "three"]),
+        &router,
+    )
+    .expect("ask")
+    .state;
+    assert_eq!(
+        asked
+            .ledger()
+            .awaiting("one")
+            .map(|waiting| waiting.keys().cloned().collect::<Vec<_>>()),
+        Some(vec!["three".into(), "two".into()]),
+        "one ask, one entry per seat it named",
+    );
+    assert!(
+        asked
+            .ledger()
+            .awaiting("one")
+            .is_some_and(|waiting| waiting.values().all(|at| *at == Sequence(1))),
+        "every entry is rooted at the same ask row: it is one conversation",
+    );
+
+    // The first of them answers; the asker is still held by the other.
+    let half = apply(&driver, &asked, "two", 2, concluded("one"), &router)
+        .expect("the first part")
+        .state;
+    let refused = apply(&driver, &half, "one", 3, complete(), &router);
+    assert!(
+        matches!(&refused, Err(Error::AwaitingReply { agent_id, waiting_on })
+            if agent_id == "one" && waiting_on == &["three".to_string()]),
+        "{refused:?}",
+    );
+
+    let whole = apply(&driver, &half, "three", 4, concluded("one"), &router)
+        .expect("the second part")
+        .state;
+    assert!(whole.ledger().awaiting("one").is_none());
+    apply(&driver, &whole, "one", 5, complete(), &router).expect("now it may finish");
 }
 
 #[test]

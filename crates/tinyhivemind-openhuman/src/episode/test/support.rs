@@ -216,13 +216,13 @@ impl Journal for TestJournal {
             &commit.author,
             commit.utterance.message(),
             commit.thread,
-            commit.only_for.as_deref(),
+            &commit.only_for,
         ))
     }
 
     fn note(&self, note: &Note) -> Result<()> {
         self.log
-            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+            .append("desk", &note.body, note.thread, note.only_for.as_slice());
         Ok(())
     }
 
@@ -309,7 +309,7 @@ pub(super) fn hive(ids: &[&str]) -> BoundHive<Seat> {
 pub(super) fn door(journal: &TestJournal, ids: &[&str], starters: &[&str]) -> Door {
     let opened_at = journal
         .log
-        .append("operator", "state the root cause", None, None);
+        .append("operator", "state the root cause", None, &[]);
     Door {
         chat: "engineering".into(),
         desk_name: "Engineering".into(),
@@ -360,13 +360,13 @@ impl Journal for BareJournal {
             &commit.author,
             commit.utterance.message(),
             commit.thread,
-            commit.only_for.as_deref(),
+            &commit.only_for,
         ))
     }
 
     fn note(&self, note: &Note) -> Result<()> {
         self.0
-            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+            .append("desk", &note.body, note.thread, note.only_for.as_slice());
         Ok(())
     }
 }
@@ -384,7 +384,7 @@ impl SessionLog for GrowingLog {
         Box::pin(async move {
             let page = page.await?;
             if before.is_none() && limit == 1 && self.late.swap(false, Ordering::SeqCst) {
-                self.inner.append("operator", "one more thing", None, None);
+                self.inner.append("operator", "one more thing", None, &[]);
             }
             Ok(page)
         })
@@ -401,13 +401,13 @@ impl Journal for GrowingLog {
             &commit.author,
             commit.utterance.message(),
             commit.thread,
-            commit.only_for.as_deref(),
+            &commit.only_for,
         ))
     }
 
     fn note(&self, note: &Note) -> Result<()> {
         self.inner
-            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+            .append("desk", &note.body, note.thread, note.only_for.as_slice());
         Ok(())
     }
 }

@@ -312,7 +312,7 @@ fn a_snapshot_is_refused_only_while_the_host_holds_an_unreported_commit() {
         "a commit is out there and unreported"
     );
     // Reported, and it is recordable again.
-    let sequence = journal.append("one", "COMPLETE: done", None, None);
+    let sequence = journal.append("one", "COMPLETE: done", None, Vec::new());
     run(conductor.committed(sequence)).expect("committed");
     assert!(conductor.snapshot().is_some());
 }

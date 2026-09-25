@@ -67,15 +67,20 @@ struct Scenario {
     /// `(seat id, role, what it alone knows)`: a hidden profile, so no seat
     /// can answer alone and the tools are necessary rather than available.
     seats: &'static [(&'static str, &'static str, &'static str)],
+    /// How many seats the door may start. Four lets routing open the desk
+    /// wide; one is a desk of one, whose single seat has to reach its
+    /// teammates itself.
+    door_width: usize,
 }
 
-/// Which desk runs: `CONDUCTED_DESK=login` (default) or `triage`.
+/// Which desk runs: `CONDUCTED_DESK=login` (default), `triage` or `launch`.
 fn scenario_from_env() -> anyhow::Result<&'static Scenario> {
     match std::env::var("CONDUCTED_DESK").as_deref() {
         Err(_) | Ok("login") => Ok(&LOGIN),
         Ok("triage") => Ok(&TRIAGE),
+        Ok("launch") => Ok(&LAUNCH),
         Ok(other) => Err(anyhow::anyhow!(
-            "CONDUCTED_DESK={other}: known desks are `login` and `triage`"
+            "CONDUCTED_DESK={other}: known desks are `login`, `triage` and `launch`"
         )),
     }
 }
@@ -131,6 +136,7 @@ this failure shape.",
 its changelog says old hashes are not readable. Nobody else knows this.",
         ),
     ],
+    door_width: 4,
 };
 
 /// Built to fire what the login desk never did: a dispatcher whose only job
@@ -189,6 +195,65 @@ user has a non-null `region`, and the fixtures were regenerated from a \
 production snapshot taken after the deploy.",
         ),
     ],
+    door_width: 4,
+};
+
+/// A desk of one: the door starts a single seat, and everything it needs is
+/// held by teammates it can only reach with `ask`. Two of those facts are in
+/// tension with each other, so the seats holding them have to be in the same
+/// conversation to settle it -- which is what an `ask` naming a group is for
+/// (ADR 0026).
+static LAUNCH: Scenario = Scenario {
+    id: "launch",
+    name: "Launch",
+    description: "One seat owns the call; every fact it needs belongs to someone else.",
+    task: "Do we ship the new region to all customers on Friday, or not? You own \
+this call and you are the only seat assigned to it -- nobody else will answer \
+on the desk unless you ask them. You hold no facts of your own, and you are \
+not told who holds which: your teammates hold conditions that may contradict \
+each other, and a yes that only some of them agree with is not a yes. Say the \
+decision plainly, and the condition it rests on.",
+    seats: &[
+        (
+            "owner",
+            "You own the launch decision and you are accountable for it. You do \
+no engineering and you hold no facts: everything you need belongs to a \
+teammate. Decide only once what you were told actually holds together, and \
+state the decision with the condition it depends on.",
+            "You know no facts of your own. You cannot answer without the others.",
+        ),
+        (
+            "infra",
+            "You own capacity and deploys. Say what the infrastructure can \
+actually take, and what it would cost in time to change that.",
+            "You alone know: the new region is provisioned for 40% of peak, and \
+scaling it up takes six days from the day it is ordered. Nobody else knows \
+the capacity number.",
+        ),
+        (
+            "security",
+            "You own the security sign-off. Say what you can and cannot sign, \
+and under what condition.",
+            "You alone know: the pen-test left one unresolved high finding. You \
+can waive it for Friday only if traffic stays in the OLD region; you cannot \
+waive it for the new one. Nobody else knows the waiver has a condition.",
+        ),
+        (
+            "data",
+            "You own the traffic numbers. Say what the load actually looks like.",
+            "You alone know: Friday peak is three times a weekday average, and \
+the last two Fridays set records. Nobody else has the multiplier.",
+        ),
+        (
+            "support",
+            "You own the customer relationship. Say what customers have been \
+promised and what they would see.",
+            "You alone know: 200 enterprise accounts were told Friday in \
+writing, and a slip needs 48 hours' notice to them. Nobody else knows a \
+promise went out.",
+        ),
+    ],
+    door_width: 1,
 };
 
 const JEV_MODEL: &str = "jev-1.13.0";
@@ -314,17 +379,17 @@ async fn run() -> anyhow::Result<()> {
         None => {
             println!("[runner] {}", kind.name());
             let journal = Arc::new(MemoryLog::new(desk_id));
-            let desk = host.journal(&journal, false);
+            let desk = Arc::new(host.journal(&journal, false));
             let report = match kind {
-                RunnerKind::Embed => {
+                RunnerKind::Embed | RunnerKind::EmbedMcp => {
                     let runtime = host.runtime().await?;
-                    let runner = host.embed(&runtime, 0).await?;
-                    episode(runner, host.setup(kind, false), journal, &desk).await?
+                    let runner = host.embed(kind, Arc::clone(&desk), &runtime, 0).await?;
+                    episode(runner, host.setup(kind, false), journal, &*desk).await?
                 }
                 RunnerKind::Raw => {
                     host.prepare_raw()?;
                     let runner = host.raw(0).await?;
-                    episode(runner, host.setup(kind, false), journal, &desk).await?
+                    episode(runner, host.setup(kind, false), journal, &*desk).await?
                 }
                 RunnerKind::Hosted => {
                     host.prepare_raw()?;
@@ -358,14 +423,25 @@ impl Host {
     /// The standing contract for `kind`: the vocabulary's words for exactly
     /// the served tools, plus the runner's one sentence on the mechanics.
     fn contract(&self, kind: RunnerKind) -> String {
+        // From the record's own `specs()`, not the crate-wide list: a host
+        // that withholds a tool must not describe it in the contract it hands
+        // its seats. This desk withholds nothing, and says so by asking the
+        // same object the seats are served from.
+        let tools = self.tools();
         format!(
             "{DESK_PREAMBLE}\n\n{}",
             standing_contract(
-                tinyhivemind_tools::served_specs(),
+                tools.specs(),
                 self.scenario.id,
+                &self.ids,
                 kind.how_to_call()
             )
         )
+    }
+
+    /// The record this desk's seats call into: every seat, every tool.
+    fn tools(&self) -> Arc<EpisodeTools> {
+        Arc::new(EpisodeTools::new(self.ids.iter().cloned()))
     }
 
     fn setup(&self, kind: RunnerKind, quiet: bool) -> Setup {
@@ -404,16 +480,49 @@ impl Host {
 
     /// Seat the embed runner for one episode. `episode` keeps agent ids
     /// unique across a bench's episodes on the one runtime.
-    async fn embed(&self, runtime: &Runtime, episode: u32) -> anyhow::Result<EmbedRunner> {
-        EmbedRunner::seat(
-            runtime,
-            Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
+    async fn embed(
+        &self,
+        kind: RunnerKind,
+        desk: Arc<DeskJournal>,
+        runtime: &Runtime,
+        episode: u32,
+    ) -> anyhow::Result<EmbedRunner> {
+        let (journal, tools, briefs, contract) = (
+            desk,
+            self.tools(),
             &self.briefs,
-            &self.contract(RunnerKind::Embed),
-            &format!("{}-{episode}", self.run_id),
-        )
-        .await
-        .map_err(Into::into)
+            self.contract(kind),
+        );
+        let (desk_id, desk_name) = (self.scenario.id, self.scenario.name);
+        let run_id = format!("{}-{episode}", self.run_id);
+        let seated = match kind {
+            RunnerKind::EmbedMcp => {
+                EmbedRunner::seat_over_mcp(
+                    journal,
+                    runtime,
+                    tools,
+                    briefs,
+                    &contract,
+                    desk_id,
+                    desk_name,
+                    tinyhivemind::SESSION_WINDOW,
+                    &run_id,
+                )
+                .await
+            }
+            _ => EmbedRunner::seat(
+                journal,
+                runtime,
+                tools,
+                briefs,
+                &contract,
+                desk_id,
+                desk_name,
+                tinyhivemind::SESSION_WINDOW,
+                &run_id,
+            ),
+        };
+        seated.map_err(Into::into)
     }
 
     /// A raw seat is resolved by the hosted turn against the process
@@ -430,7 +539,7 @@ impl Host {
 
     async fn raw(&self, _episode: u32) -> anyhow::Result<RawRunner> {
         let runner = RawRunner::seat(
-            Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
+            self.tools(),
             &self.briefs,
             &self.contract(RunnerKind::Raw),
             &self.config,
@@ -482,7 +591,7 @@ impl Host {
         ));
         let runner = HostedRunner::seat(
             Arc::clone(&host),
-            Arc::new(EpisodeTools::new(self.ids.iter().cloned())),
+            self.tools(),
             &self.ids,
             self.scenario.id,
             self.scenario.name,
@@ -521,7 +630,12 @@ async fn bench_runners(
     let runtime = host.runtime().await?;
     let order: Vec<RunnerKind> = std::iter::once(first)
         .chain(
-            [RunnerKind::Embed, RunnerKind::Raw, RunnerKind::Hosted]
+            [
+                RunnerKind::Embed,
+                RunnerKind::EmbedMcp,
+                RunnerKind::Raw,
+                RunnerKind::Hosted,
+            ]
                 .into_iter()
                 .filter(|kind| *kind != first),
         )
@@ -531,15 +645,15 @@ async fn bench_runners(
         let runtime = &runtime;
         let run = move |index: u32| async move {
             let journal = Arc::new(MemoryLog::new(host.scenario.id));
-            let desk = host.journal(&journal, true);
+            let desk = Arc::new(host.journal(&journal, true));
             match kind {
-                RunnerKind::Embed => {
-                    let runner = host.embed(runtime, index).await?;
-                    episode(runner, host.setup(kind, true), journal, &desk).await
+                RunnerKind::Embed | RunnerKind::EmbedMcp => {
+                    let runner = host.embed(kind, Arc::clone(&desk), runtime, index).await?;
+                    episode(runner, host.setup(kind, true), journal, &*desk).await
                 }
                 RunnerKind::Raw => {
                     let runner = host.raw(index).await?;
-                    episode(runner, host.setup(kind, true), journal, &desk).await
+                    episode(runner, host.setup(kind, true), journal, &*desk).await
                 }
                 RunnerKind::Hosted => {
                     let (runner, desk) = host.hosted(&journal, true).await?;
@@ -698,7 +812,7 @@ async fn episode<R: SeatRunner, J: Journal>(
         None
     };
     let primary: Option<&(dyn Router + '_)> = router.as_ref().map(|r| r as &(dyn Router + '_));
-    let opened_at = journal.append("operator", scenario.task, None, None);
+    let opened_at = journal.append("operator", scenario.task, None, &[]);
 
     // The door route: who starts.
     let door = RoutingRequest {
@@ -709,11 +823,11 @@ async fn episode<R: SeatRunner, J: Journal>(
             kind: ConversationKind::Desk,
             thread_root: None,
         },
-        desk_purpose: Some("Diagnose a regression from the seat that owns it.".to_owned()),
+        desk_purpose: Some(scenario.description.to_owned()),
         thread_context: Vec::new(),
         candidates: candidates.clone(),
         roster_version: 1,
-        policy: policy(4),
+        policy: policy(scenario.door_width),
     };
     let plan = route_message(primary, None, &door, None, fallback).await;
     if matches!(plan, RoutingPlan::Clarify { .. }) {
@@ -767,10 +881,10 @@ async fn episode<R: SeatRunner, J: Journal>(
         report.conversations
     );
     for row in journal.all().iter().filter(|_| !quiet) {
-        let scope = match (row.thread, row.only_for.as_deref()) {
+        let scope = match (row.thread, row.only_for.as_slice()) {
             (Some(root), _) => format!(" (thread {})", root.0),
-            (None, Some(only)) => format!(" (to @{only})"),
-            (None, None) => String::new(),
+            (None, []) => String::new(),
+            (None, only) => format!(" (to @{})", only.join(", @")),
         };
         println!(
             "  {:>3}  @{}{scope}: {}",
@@ -792,7 +906,8 @@ async fn episode<R: SeatRunner, J: Journal>(
             println!(
                 "offline proof: a {} tool call became a desk row",
                 match kind {
-                    RunnerKind::Embed => "`mcp_call_tool`",
+                    RunnerKind::EmbedMcp => "`mcp_call_tool`",
+                    RunnerKind::Embed => "spec-belt native",
                     RunnerKind::Raw => "native",
                     RunnerKind::Hosted => "hosted native",
                 }

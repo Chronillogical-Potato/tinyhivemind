@@ -3,7 +3,8 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use super::support::{
-    Journal, ask, broadcast, complete, door, hive, policy, post, run, seats, two_seat, wave,
+    Journal, ask, broadcast, complete, door, group_ask, hive, policy, post, run, seats, two_seat,
+    wave,
 };
 use crate::CompletionDriver;
 use crate::conduct::{ConductPolicy, Conductor, Event, Refusal, Step};
@@ -35,7 +36,8 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     let root = Sequence(2);
     assert!(matches!(
         asked.events.as_slice(),
-        [Event::Asked { seat, askee, root: at }] if seat == "one" && askee == "two" && *at == root
+        [Event::Asked { seat, askees, root: at }]
+            if seat == "one" && askees.as_slice() == ["two".to_string()] && *at == root
     ));
     assert!(!conductor.finished(), "a conversation is open");
 
@@ -59,12 +61,13 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     );
     assert!(matches!(
         answered.turns[0].channel,
-        Channel::Thread { root: at, ref other, opened_it: false } if at == root && other == "one"
+        Channel::Thread { root: at, ref others, opened_it: false }
+            if at == root && others.as_slice() == ["one".to_string()]
     ));
     assert!(matches!(
         answered.events.as_slice(),
-        [Event::Concluded { root: at, asker, askee, forced: false, .. }]
-            if *at == root && asker == "one" && askee == "two"
+        [Event::Concluded { root: at, asker, askees, forced: false, .. }]
+            if *at == root && asker == "one" && askees.as_slice() == ["two".to_string()]
     ));
     assert_eq!(conductor.conversations(), 1);
     // The private row says the conversation ended, and does not carry the
@@ -90,7 +93,7 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     assert_eq!(brief.conversations.len(), 1);
     assert!(brief.conversations[0].concluded);
     assert!(brief.conversations[0].opened_it);
-    assert_eq!(brief.conversations[0].other, "two");
+    assert_eq!(brief.conversations[0].others, ["two".to_string()]);
     assert_eq!(
         brief.conversations[0].transcript.len(),
         2,
@@ -99,7 +102,7 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     conductor.record(&turns[0], vec![ToolCall::Speak(complete("shipped"))]);
     while let Some(step) = conductor.step().expect("steps") {
         if let Step::Commit(commit) = step {
-            let sequence = journal.append(&commit.author, "row", commit.thread, None);
+            let sequence = journal.append(&commit.author, "row", commit.thread, Vec::new());
             run(conductor.committed(sequence)).expect("committed");
         }
     }
@@ -144,6 +147,211 @@ fn a_completion_while_a_conversation_is_open_is_refused_and_explained() {
         "{:?}",
         journal.bodies()
     );
+}
+
+/// **A group ask is one conversation, not one each.**
+///
+/// The seats asked are in it together: both are due in the same thread, and
+/// each is briefed with the asker *and* the seats it was asked alongside, so
+/// it can read what they answered rather than repeat it (ADR 0026). One part
+/// is not the answer: the conversation stays open until the rest arrive.
+#[test]
+fn a_group_ask_opens_one_conversation_every_seat_it_named_runs_in() {
+    let hive = hive(&["one", "two", "three"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = Conductor::open(
+        &driver,
+        routing,
+        ConductPolicy::default(),
+        door(&["one", "two", "three"], &["one"], &journal),
+    )
+    .expect("opens");
+
+    let asked = wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![group_ask(&["two", "three"], "does this hold?")])],
+    )
+    .expect("wave");
+    let root = Sequence(2);
+    assert!(
+        matches!(
+            asked.events.as_slice(),
+            [Event::Asked { seat, askees, root: at }]
+                if seat == "one"
+                    && askees.as_slice() == ["two".to_string(), "three".to_string()]
+                    && *at == root
+        ),
+        "one ask, one conversation, both seats in it: {:?}",
+        asked.events
+    );
+
+    // Both are due in the thread, and each is told who else is in it.
+    let answered = wave(
+        &mut conductor,
+        &journal,
+        &[("two", vec![complete("it holds for the parser")])],
+    )
+    .expect("wave");
+    let thread_turns: Vec<&str> = answered
+        .turns
+        .iter()
+        .filter(|turn| turn.thread() == Some(root))
+        .map(|turn| turn.seat.as_str())
+        .collect();
+    assert_eq!(
+        thread_turns,
+        ["two", "three"],
+        "every seat asked runs in the one conversation"
+    );
+    let three = answered
+        .turns
+        .iter()
+        .find(|turn| turn.seat == "three")
+        .expect("three is due");
+    assert!(
+        matches!(
+            three.channel,
+            Channel::Thread { root: at, ref others, opened_it: false }
+                if at == root && others.as_slice() == ["one".to_string(), "two".to_string()]
+        ),
+        "a seat asked sees the asker and the seats asked with it: {:?}",
+        three.channel
+    );
+    assert!(
+        !answered
+            .events
+            .iter()
+            .any(|event| matches!(event, Event::Concluded { .. })),
+        "one part is not the answer: {:?}",
+        answered.events
+    );
+    assert_eq!(conductor.conversations(), 0, "it is still open");
+}
+
+/// **A group conversation concludes once, when the last part lands.**
+///
+/// Each seat asked carries its own part to the asker privately, which is what
+/// releases the asker's hold seat by seat; the conversation itself is over
+/// only when the last of them has (ADR 0026).
+#[test]
+fn a_group_conversation_concludes_once_every_seat_has_carried_its_part_back() {
+    let hive = hive(&["one", "two", "three"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = Conductor::open(
+        &driver,
+        routing,
+        ConductPolicy::default(),
+        door(&["one", "two", "three"], &["one"], &journal),
+    )
+    .expect("opens");
+    let root = Sequence(2);
+    wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![group_ask(&["two", "three"], "does this hold?")])],
+    )
+    .expect("wave");
+    wave(
+        &mut conductor,
+        &journal,
+        &[("two", vec![complete("it holds for the parser")])],
+    )
+    .expect("wave");
+
+    // The last part lands; now it concludes, and each carried its own to the
+    // asker.
+    let concluded = wave(
+        &mut conductor,
+        &journal,
+        &[("three", vec![complete("and for the writer")])],
+    )
+    .expect("wave");
+    assert!(
+        matches!(
+            concluded.events.iter().find(|event| matches!(event, Event::Concluded { .. })),
+            Some(Event::Concluded { root: at, asker, askees, forced: false, .. })
+                if *at == root
+                    && asker == "one"
+                    && askees.as_slice() == ["two".to_string(), "three".to_string()]
+        ),
+        "the conversation concludes once, naming everyone in it: {:?}",
+        concluded.events
+    );
+    assert_eq!(conductor.conversations(), 1);
+    let carriers: Vec<&str> = concluded
+        .commits
+        .iter()
+        .filter(|(_, commit)| matches!(commit.utterance, Utterance::Dm { .. }))
+        .map(|(_, commit)| commit.author.as_str())
+        .collect();
+    assert_eq!(
+        carriers,
+        ["two", "three"],
+        "each seat carries its own part to the asker, which is what releases it"
+    );
+    assert!(
+        concluded
+            .commits
+            .iter()
+            .filter(|(_, commit)| matches!(commit.utterance, Utterance::Dm { .. }))
+            .all(|(_, commit)| commit.only_for == ["one".to_string()]),
+        "and does so privately to the asker"
+    );
+
+    // Released and shown the conversation whole on its next desk turn, the
+    // asker reads it as one room with both of them in it, and finishes.
+    let turns = conductor.turns().expect("turns");
+    let brief = conductor.open_turn(&turns[0], journal.latest(), Vec::new(), |root| {
+        journal.thread(root)
+    });
+    assert_eq!(brief.seat, "one");
+    assert_eq!(brief.conversations.len(), 1, "one conversation, not two");
+    assert!(brief.conversations[0].concluded);
+    assert!(brief.conversations[0].opened_it);
+    assert_eq!(
+        brief.conversations[0].others,
+        ["two".to_string(), "three".to_string()],
+    );
+    assert!(
+        brief
+            .render()
+            .contains("### With @two and @three (thread 2)"),
+        "{}",
+        brief.render()
+    );
+
+    // Finishing is what the hold was for: it is refused until both parts are
+    // in, and taken once they are.
+    conductor.record(
+        &turns[0],
+        [tinyhivemind::speech::ToolCall::Speak(complete("both hold"))],
+    );
+    while let Some(step) = conductor.step().expect("steps") {
+        if let Step::Commit(commit) = &step {
+            let sequence = journal.append(&commit.author, "row", commit.thread, Vec::new());
+            run(conductor.committed(sequence)).expect("the completion is taken");
+        }
+    }
+    assert!(conductor.finished(), "nothing is left open");
 }
 
 #[test]
@@ -304,7 +512,7 @@ fn a_refused_reply_in_a_conversation_is_not_its_answer() {
     while let Some(step) = conductor.step().expect("steps") {
         match step {
             Step::Commit(commit) => {
-                let sequence = journal.append(&commit.author, "row", commit.thread, None);
+                let sequence = journal.append(&commit.author, "row", commit.thread, Vec::new());
                 run(conductor.committed(sequence)).expect("committed");
             }
             Step::Event(Event::Refused {

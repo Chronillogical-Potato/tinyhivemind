@@ -119,10 +119,12 @@ const SPECS: &[ToolSpec] = &[
                       then end your turn, and their answer reaches you on a later turn. You \
                       will not be able to finish until every question you asked has been \
                       answered, so nothing you asked for can be lost. Ask everyone you need in \
-                      one turn; each ask is its own conversation. If an answer raises another \
-                      question, ask again. It is a question, not a handoff — work that \
-                      belongs to another seat is `broadcast`. The seat you ask keeps whatever it \
-                      was already doing. A person can read the question, so write it plainly.",
+                      one turn; each ask is its own conversation, and they cannot read each \
+                      other. When the answer depends on two seats agreeing, put them in one \
+                      room with `ask_teammates` instead. If an answer raises another question, \
+                      ask again. It is a question, not a handoff — work that belongs to \
+                      another seat is `broadcast`. The seat you ask keeps whatever it was \
+                      already doing. A person can read the question, so write it plainly.",
         parameters: &[
             ToolParameter {
                 name: "to",
@@ -134,6 +136,37 @@ const SPECS: &[ToolSpec] = &[
                 name: "message",
                 description: Some(
                     "What you need from them, self-contained and in plain words: the question and why it matters to your work.",
+                ),
+                kind: ParameterKind::Text,
+                required: true,
+            },
+        ],
+    },
+    ToolSpec {
+        name: "ask_teammates",
+        description: "Put one question to several seats at once, in a conversation they are \
+                      all in together. Use it when the answer depends on them agreeing: they \
+                      read each other's answers and can settle the disagreement between \
+                      themselves, which separate questions cannot do — you would get two \
+                      answers written in ignorance of each other and be the only one who \
+                      noticed they conflict. It runs on its own, not while you wait, and it \
+                      concludes once every seat you named has answered; you cannot finish \
+                      until it does. Name only the seats whose agreement you need — every \
+                      extra seat is another turn the room waits for. For something only one \
+                      seat can settle, use `ask`.",
+        parameters: &[
+            ToolParameter {
+                name: "to",
+                description: Some(
+                    "A list of two or more seat ids, by id rather than name, without the @. Only an id listed here is a seat; there is no name for the group.",
+                ),
+                kind: ParameterKind::TextList,
+                required: true,
+            },
+            ToolParameter {
+                name: "message",
+                description: Some(
+                    "What you need from them, self-contained and in plain words: the question, why it matters to your work, and what you need them to agree on.",
                 ),
                 kind: ParameterKind::Text,
                 required: true,

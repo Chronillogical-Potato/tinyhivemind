@@ -47,7 +47,7 @@ fn describe(utterance: &Utterance) -> String {
     match utterance {
         Utterance::Post { message } | Utterance::Dm { message, .. } => message.clone(),
         Utterance::Broadcast { message } => format!("BROADCAST: {message}"),
-        Utterance::Ask { to, message } => format!("asks @{to}: {message}"),
+        Utterance::Ask { to, message } => format!("asks @{}: {message}", to.join(", @")),
         Utterance::CompleteEpisode { message } => format!("COMPLETE: {message}"),
     }
 }
@@ -62,13 +62,13 @@ impl Journal for DeskJournal {
             &commit.author,
             &describe(&commit.utterance),
             commit.thread,
-            commit.only_for.as_deref(),
+            &commit.only_for,
         ))
     }
 
     fn note(&self, note: &Note) -> tinyhivemind_openhuman::Result<()> {
         self.log
-            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+            .append("desk", &note.body, note.thread, note.only_for.as_slice());
         Ok(())
     }
 
@@ -105,8 +105,13 @@ impl Journal for DeskJournal {
             Event::CompletedByBroadcast { seat, .. } => {
                 eprintln!("[completed] @{seat} by its broadcast");
             }
-            Event::Asked { seat, askee, root } => println!(
-                "[ask] @{seat} opened a conversation with @{askee} (thread {})",
+            Event::Asked {
+                seat,
+                askees,
+                root,
+            } => println!(
+                "[ask] @{seat} opened a conversation with @{} (thread {})",
+                askees.join(", @"),
                 root.0
             ),
             Event::Handoff { to, from, .. } => {
@@ -134,12 +139,13 @@ impl Journal for DeskJournal {
             Event::Concluded {
                 root,
                 asker,
-                askee,
+                askees,
                 forced,
                 ..
             } => println!(
-                "[concluded] thread {} between @{asker} and @{askee}{}",
+                "[concluded] thread {} between @{asker} and @{}{}",
                 root.0,
+                askees.join(", @"),
                 if *forced {
                     " (nothing due, or out of turns)"
                 } else {

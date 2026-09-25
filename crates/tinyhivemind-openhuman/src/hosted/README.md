@@ -37,6 +37,5 @@ already in the record.
 | file | holds |
 | --- | --- |
 | `mod.rs` | `EpisodeHost` with its prefix and after-turn hook, `HostedTurn`, `EpisodeBelt`, `HostedSeat`, `HostedRunner` |
-| `seed.rs` | a seat's history from the host's log, as `(role, content)` pairs |
 | `admission.rs` | the gate that admits the episode's tools over the host's |
 | `test.rs` | seeding, withholding, the watermark, a thread, the memory log's pages, the belt and its gate, a prefixed belt |

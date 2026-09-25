@@ -228,12 +228,15 @@ pub enum HostAction {
     /// Deliver an already-committed desk-private message.
     ///
     /// For an [`Utterance::Ask`] this is the signal to **open a child
-    /// conversation** between the author and the seat named: a thread of the
-    /// desk rooted at the ask row, with the two as its participants, run to
-    /// its own quiescence. When it concludes, the host cross-posts its outcome
-    /// as a private message from the seat asked to the asker; that row is what
-    /// releases the asker's hold and wakes it, with the whole conversation in
-    /// its context. See ADR 0023.
+    /// conversation** between the author and the seats named: a thread of the
+    /// desk rooted at the ask row, with all of them as its participants, run
+    /// to its own quiescence. `ask_teammates` names a group and opens one
+    /// conversation holding it, not one each, so they read each other's
+    /// answers.
+    /// When it concludes, the host cross-posts its outcome as a private
+    /// message from each seat asked to the asker; those rows are what release
+    /// the asker's hold and wake it, with the whole conversation in its
+    /// context. See ADR 0023 and ADR 0026.
     DeliverDm {
         /// Private desk route, never a global direct route.
         route: MessageRoute,
@@ -543,8 +546,13 @@ impl<'a, A: BoundAgent> CompletionDriver<'a, A> {
             Utterance::CompleteEpisode { .. } => Self::fold_completion(&mut next, &event)?,
             Utterance::Dm { to, message } => self.deliver_privately(author, to, message)?,
             Utterance::Ask { to, message } => {
-                let actions = self.deliver_privately(author, std::slice::from_ref(to), message)?;
-                next.ledger.open_ask(author, to, event.sequence);
+                let actions = self.deliver_privately(author, to, message)?;
+                // One conversation, one entry per seat in it: the asker is
+                // released seat by seat as each carries its part back, and
+                // may complete only once the last of them has.
+                for seat in to {
+                    next.ledger.open_ask(author, seat, event.sequence);
+                }
                 actions
             }
             Utterance::Broadcast { message } => {

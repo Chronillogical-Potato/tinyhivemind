@@ -143,7 +143,16 @@ async fn the_handshake_echoes_the_protocol_version_and_lists_the_served_tools() 
         .iter()
         .map(|tool| tool["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["broadcast", "ask", "complete_episode", "read"]);
+    assert_eq!(
+        names,
+        [
+            "broadcast",
+            "ask",
+            "ask_teammates",
+            "complete_episode",
+            "read"
+        ]
+    );
     let (_, reply) = post(
         server.port(),
         &path_of(&server, "lead"),
@@ -286,9 +295,29 @@ async fn refusals_are_the_vocabularys_own_sentences() {
         ),
     )
     .await;
+    assert!(
+        text(&reply).starts_with("`ask` puts a question to one seat; 2 were named."),
+        "`ask` names one seat and says which tool takes two: {}",
+        text(&reply)
+    );
+    let (_, reply) = post(
+        port,
+        &path_of(&server, "lead"),
+        call(
+            "ask_teammates",
+            &on_desk(&json!({ "message": "?", "to": ["solver", "checker"] })),
+        ),
+    )
+    .await;
+    assert!(
+        text(&reply).starts_with("your question to solver and checker is sent:"),
+        "a group ask is served over the wire, as one conversation: {}",
+        text(&reply)
+    );
     assert_eq!(
-        text(&reply),
-        "`to` must name exactly one seat to ask; 2 were named"
+        tools.drain("lead").len(),
+        1,
+        "that one was taken, not refused; everything else here records nothing"
     );
     let (_, reply) = post(
         port,
@@ -332,7 +361,7 @@ async fn an_ask_is_recorded_and_told_the_answer_comes_later() {
     assert_eq!(
         events[0].call,
         ToolCall::Speak(Utterance::Ask {
-            to: "solver".into(),
+            to: vec!["solver".into()],
             message: "is it tight?".into()
         })
     );

@@ -103,7 +103,7 @@ fn every_row_of_a_conversation_carries_its_root_wherever_it_lands() {
         .find(|(_, commit)| matches!(commit.utterance, Utterance::Dm { .. }))
         .expect("the conclusion reached the asker");
     assert_eq!(conclusion.thread, None);
-    assert_eq!(conclusion.only_for.as_deref(), Some("one"));
+    assert_eq!(conclusion.only_for, vec!["one".to_string()]);
     assert!(talked.events.iter().any(|event| matches!(
         event,
         Event::Concluded { root: r, at, forced: false, .. } if r == root && at == concluded_at

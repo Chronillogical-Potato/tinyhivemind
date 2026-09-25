@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use tinyhivemind::Sequence;
-use tinyhivemind::speech::ToolSpec;
+use tinyhivemind::speech::{ParameterKind, ToolSpec};
 
 use super::DriverState;
 use super::ledger::open_assignment;
@@ -29,12 +29,14 @@ use super::ledger::open_assignment;
 pub enum Channel {
     /// The open desk.
     Desk,
-    /// A conversation rooted at an ask row, between this seat and `other`.
+    /// A conversation rooted at an ask row, between this seat and `others`.
     Thread {
         /// The ask row the conversation is rooted at.
         root: Sequence,
-        /// The other seat in it.
-        other: String,
+        /// The other seats in it: the seat that asked, or -- for that seat --
+        /// everyone it asked. One ask can name a group, and then everyone in
+        /// it reads everyone else.
+        others: Vec<String>,
         /// Whether this seat opened it.
         opened_it: bool,
     },
@@ -45,8 +47,8 @@ pub enum Channel {
 pub struct ConversationView {
     /// The ask row it is rooted at.
     pub root: Sequence,
-    /// The other seat in it.
-    pub other: String,
+    /// The other seats in it, in the order the ask named them.
+    pub others: Vec<String>,
     /// Whether this seat opened it.
     pub opened_it: bool,
     /// Every row in it so far, rendered by the host.
@@ -135,15 +137,31 @@ impl EpisodeBrief {
     /// a conversation, and the seats it waits on -- with `name`.
     pub fn name_seats(&mut self, name: impl Fn(&str) -> String) {
         let mut seats: Vec<&str> = self.awaiting.iter().map(String::as_str).collect();
-        seats.extend(self.conversations.iter().map(|view| view.other.as_str()));
-        if let Channel::Thread { other, .. } = &self.channel {
-            seats.push(other);
+        seats.extend(
+            self.conversations
+                .iter()
+                .flat_map(|view| view.others.iter().map(String::as_str)),
+        );
+        if let Channel::Thread { others, .. } = &self.channel {
+            seats.extend(others.iter().map(String::as_str));
         }
         let named: BTreeMap<String, String> = seats
             .into_iter()
             .map(|seat| (seat.to_owned(), name(seat)))
             .collect();
         self.names.extend(named);
+    }
+
+    /// How the brief writes a group of seats, as a person would read them
+    /// out: `a`, `a and b`, `a, b and c`.
+    #[must_use]
+    fn roll_call(&self, seats: &[String]) -> String {
+        let named: Vec<String> = seats.iter().map(|seat| self.speaker(seat)).collect();
+        match named.split_last() {
+            None => String::new(),
+            Some((last, [])) => last.clone(),
+            Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+        }
     }
 
     /// How the brief writes `seat`: its name, or `@id` when it has none.
@@ -169,9 +187,9 @@ impl EpisodeBrief {
             Channel::Desk => self.render_desk(),
             Channel::Thread {
                 root,
-                other,
+                others,
                 opened_it,
-            } => self.render_thread(*root, other, *opened_it),
+            } => self.render_thread(*root, others, *opened_it),
         }
     }
 
@@ -249,10 +267,16 @@ impl EpisodeBrief {
         out
     }
 
-    fn render_thread(&self, root: Sequence, other: &str, opened_it: bool) -> String {
+    fn render_thread(&self, root: Sequence, others: &[String], opened_it: bool) -> String {
         let role = if opened_it {
             "You opened this conversation; their answer reaches you on the desk. There is \
              nothing for you to do here."
+        } else if others.len() > 1 {
+            "A peer asked all of you this. Answer with `complete_episode`: its message is your \
+             answer and reaches them. The others were asked the same question and you read \
+             their answers here, so answer your part of it and say where you differ rather \
+             than repeating what they have already settled. If you need another seat first, \
+             say so in that answer, and the seat that asked you will ask them."
         } else {
             "A peer asked you this. Answer with `complete_episode`: its message is your answer \
              and reaches them. If you need another seat first, say so in that answer, and the \
@@ -263,12 +287,17 @@ impl EpisodeBrief {
         } else {
             format!(" {READER}")
         };
+        let readers = if others.len() > 1 {
+            "Only the seats in it read this thread."
+        } else {
+            "Only the two of you read this thread."
+        };
         format!(
-            "## A private conversation with {} (thread {})\n{}{}\n\n{role} Only the two of \
-             you read this thread.\n\nEvery tool call must carry \"chat\": \"{}\" and \
+            "## A private conversation with {} (thread {})\n{}{}\n\n{role} {readers}\n\nEvery \
+             tool call must carry \"chat\": \"{}\" and \
              \"parent\": \"{}\". `ask` is not available inside a conversation. A `broadcast` made here \
              hands work off on the desk, exactly as it would there.{reader}",
-            self.speaker(other),
+            self.roll_call(others),
             root.0,
             rows_or_nothing(&self.new_rows),
             self.render_elsewhere(),
@@ -324,7 +353,7 @@ impl EpisodeBrief {
     fn render_conversation(&self, view: &ConversationView) -> String {
         format!(
             "### With {} (thread {}){}\n{}",
-            self.speaker(&view.other),
+            self.roll_call(&view.others),
             view.root.0,
             if view.concluded {
                 ""
@@ -333,6 +362,16 @@ impl EpisodeBrief {
             },
             rows_or_nothing(&view.transcript)
         )
+    }
+}
+
+/// Seat ids as a person reads them out: `@a`, `@a and @b`, `@a, @b and @c`.
+fn roll_call(seats: &[String]) -> String {
+    let named: Vec<String> = seats.iter().map(|seat| format!("@{seat}")).collect();
+    match named.split_last() {
+        None => String::new(),
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
     }
 }
 
@@ -358,19 +397,58 @@ pub fn speaker(id: &str, name: &str) -> String {
 pub fn standing_contract<'a>(
     specs: impl IntoIterator<Item = &'a ToolSpec>,
     chat: &str,
+    seats: &[String],
     how_to_call: &str,
 ) -> String {
-    let mut out = format!(
-        "Your work is recorded by calling a tool. Prose alone changes nothing: if you end a turn \
-         without calling one, nothing you said is recorded and the desk does not move.\n\n\
-         {how_to_call} Every call carries \"chat\": \"{chat}\" and the \"parent\" you are told, \
-         beside its own arguments:"
+    let mut out = String::from(
+        "Your work is recorded by calling a tool. Prose alone changes nothing: if you end a \
+         turn without calling one, nothing you said is recorded and the desk does not move.",
+    );
+    // Who is here, in the one place every seat reads every turn.
+    //
+    // The roster used to live only in the rendered schema of the asking
+    // tools -- their `to` enumeration and its description. A seat whose tools
+    // arrive over MCP never sees that unless it lists them first, and two
+    // live runs show what a seat does instead: one invented `@backend`,
+    // `@frontend` and `@qa` on a five-seat desk, another addressed a
+    // collective it made up (`teammates`). Both recovered from the refusal,
+    // four wasted model calls later. A seat cannot address a room it has not
+    // been shown.
+    if !seats.is_empty() {
+        let _ = std::fmt::Write::write_fmt(
+            &mut out,
+            format_args!(
+                "\n\nThe seats at this desk are {}. That is all of them, and their ids are the \
+                 only ones a tool argument may name: there is no id for the desk as a whole, \
+                 and a seat you invent is refused.",
+                roll_call(seats)
+            ),
+        );
+    }
+    let _ = std::fmt::Write::write_fmt(
+        &mut out,
+        format_args!(
+            "\n\n{how_to_call} Every call carries \"chat\": \"{chat}\" and the \"parent\" you are \
+             told, beside its own arguments:"
+        ),
     );
     for spec in specs {
+        // The shape, not just the name. A seat that reads `"to": ...` has to
+        // guess whether one id or a list goes there, and a seat told it may
+        // ask several guesses a collective noun: a live desk-of-one wrote
+        // `"to": "teammates"`, was refused, and then asked its four teammates
+        // one at a time. What the wire wants is cheap to show.
         let arguments: Vec<String> = spec
             .parameters
             .iter()
-            .map(|parameter| format!("\"{}\": ...", parameter.name))
+            .map(|parameter| {
+                let shape = match parameter.kind {
+                    ParameterKind::Text => "\"...\"".to_owned(),
+                    ParameterKind::TextList => "[\"...\"]".to_owned(),
+                    ParameterKind::Count { default, .. } => default.to_string(),
+                };
+                format!("\"{}\": {shape}", parameter.name)
+            })
             .collect();
         let _ = std::fmt::Write::write_fmt(
             &mut out,

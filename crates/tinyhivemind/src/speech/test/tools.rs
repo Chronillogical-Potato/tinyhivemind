@@ -5,11 +5,19 @@
 use crate::speech::{CallArguments, ParameterKind, READ_DEFAULT, READ_MAX, interpret, tool_specs};
 
 #[test]
-fn serves_exactly_the_six_tools_a_seat_may_call() {
+fn serves_exactly_the_seven_tools_a_seat_may_call() {
     let names: Vec<&str> = tool_specs().iter().map(|spec| spec.name).collect();
     assert_eq!(
         names,
-        vec!["post", "broadcast", "dm", "ask", "complete_episode", "read"]
+        vec![
+            "post",
+            "broadcast",
+            "dm",
+            "ask",
+            "ask_teammates",
+            "complete_episode",
+            "read"
+        ]
     );
 }
 
@@ -28,6 +36,10 @@ fn an_ask_takes_one_seat_and_says_the_answer_comes_later() {
     );
     assert!(to.required);
     assert!(
+        ask.description.contains("`ask_teammates`"),
+        "a seat asking two is told which tool puts them in one room",
+    );
+    assert!(
         ask.description.contains("later turn"),
         "a seat is told the answer does not arrive while it waits",
     );
@@ -42,12 +54,41 @@ fn an_ask_takes_one_seat_and_says_the_answer_comes_later() {
 }
 
 #[test]
+fn a_group_ask_takes_two_or_more_and_says_what_a_shared_room_is_for() {
+    let group = tool_specs()
+        .iter()
+        .find(|spec| spec.name == "ask_teammates")
+        .expect("ask_teammates is served");
+    let to = group.parameters.first().expect("it takes seats");
+    assert_eq!(to.name, "to");
+    assert_eq!(
+        to.kind,
+        ParameterKind::TextList,
+        "a group is a list of ids, and the schema says so",
+    );
+    assert!(
+        group.description.contains("read each other's answers"),
+        "a seat is told what a shared conversation buys it",
+    );
+    assert!(
+        group.description.contains("`ask`"),
+        "and which tool takes a question only one seat can settle",
+    );
+}
+
+#[test]
 fn every_tool_is_one_a_seat_can_actually_call() {
     for spec in tool_specs() {
-        let to = ["checker".to_string()];
+        // Two, so the group tool has a group; `ask` takes the first of them.
+        let to = ["checker".to_string(), "theory".to_string()];
+        let to = if spec.name == "ask" {
+            &to[..1]
+        } else {
+            &to[..]
+        };
         let arguments = CallArguments {
             message: Some("something"),
-            to: &to,
+            to,
             limit: None,
         };
         assert!(

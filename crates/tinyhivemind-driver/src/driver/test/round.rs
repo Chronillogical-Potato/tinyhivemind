@@ -206,7 +206,7 @@ fn an_ask_inside_a_round_is_preflighted_and_holds_the_asker() {
                     "one",
                     1,
                     Utterance::Ask {
-                        to: "two".into(),
+                        to: vec!["two".into()],
                         message: "which?".into(),
                     },
                 ),
@@ -236,7 +236,7 @@ fn an_ask_inside_a_round_is_preflighted_and_holds_the_asker() {
                 "one",
                 1,
                 Utterance::Ask {
-                    to: "nobody".into(),
+                    to: vec!["nobody".into()],
                     message: "?".into(),
                 },
             ),

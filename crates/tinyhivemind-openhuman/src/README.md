@@ -8,6 +8,7 @@
 | `runner/` | The seam: open, run, close; `Lane`, `TurnJob`; which runner the environment names. |
 | `journal/` | `MemoryLog`, an in-memory journal that is a real `SessionLog`; always compiled. |
 | `hosted/` | Seats as the host's own agents, built through `EpisodeHost`, seeded from the host's log. |
-| `embed/` | Seats as `openhuman-embed` agents, tools over MCP. |
+| `embed/` | Seats as `openhuman-embed` agents, the room's tools on the spec's own belt -- or over MCP with `seat_over_mcp` -- seeded from the host's journal every turn. |
+| `seed/` | A seat's history as it reads it, and its persona at the head: what `hosted` and `embed` give a turn instead of resuming one. |
 | `raw/` | Seats as raw sessions, tools in-process: the belt, the gate, the memory that keeps nothing. |
 | `offline/` | The scripted model, the backend stub and the offline config, behind the `offline` feature and in tests. |

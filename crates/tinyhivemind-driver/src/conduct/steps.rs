@@ -67,8 +67,11 @@ pub struct Commit {
     pub utterance: Utterance,
     /// The thread it lands in, or `None` for the open desk.
     pub thread: Option<Sequence>,
-    /// On the open desk, the one seat it reaches; `None` reaches every seat.
-    pub only_for: Option<String>,
+    /// On the open desk, the seats it reaches; empty reaches every seat.
+    ///
+    /// An `ask` naming a group is one row all of them read, so this is a list
+    /// rather than the one seat it was while an ask could name only one.
+    pub only_for: Vec<String>,
     /// The conversation this row belongs to, by the ask row it is rooted at.
     ///
     /// Set for a row said inside a conversation, for desk work a seat lifted
@@ -177,8 +180,8 @@ pub enum Event {
     Asked {
         /// The seat that asked.
         seat: String,
-        /// The seat asked.
-        askee: String,
+        /// The seats asked: one conversation holds all of them.
+        askees: Vec<String>,
         /// The ask row the conversation is rooted at.
         root: Sequence,
     },
@@ -210,14 +213,15 @@ pub enum Event {
         /// The broadcast row that was over budget.
         at: Sequence,
     },
-    /// A conversation concluded.
+    /// A conversation concluded: every seat in it has carried its part to
+    /// the asker.
     Concluded {
         /// The ask row it was rooted at.
         root: Sequence,
         /// The seat that asked.
         asker: String,
-        /// The seat asked.
-        askee: String,
+        /// The seats asked.
+        askees: Vec<String>,
         /// Without an answer: nothing was due, or it ran out of turns.
         forced: bool,
         /// The row that carried the outcome to the asker.
