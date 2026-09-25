@@ -345,7 +345,7 @@ fn arbitrary_event_orderings_never_corrupt_the_episode() {
                         who,
                         at,
                         Utterance::Ask {
-                            to: target.into(),
+                            to: vec![target.into()],
                             message: "?".into(),
                         },
                         &router,
@@ -400,7 +400,7 @@ fn a_snapshot_round_trip_preserves_every_decision() {
                     message: "handoff".into(),
                 },
                 _ => Utterance::Ask {
-                    to: IDS[rng.below(count)].into(),
+                    to: vec![IDS[rng.below(count)].into()],
                     message: "?".into(),
                 },
             };

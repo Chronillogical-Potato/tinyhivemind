@@ -7,11 +7,12 @@
 //! cannot hold because they span both, or because they are about what a
 //! turn did *not* do:
 //!
-//! - **Conversations.** An ask roots one at its row, with the seat asked as
-//!   its participant. It runs ahead of desk turns, because it is what
-//!   unblocks one. It concludes when the seat asked completes, or at a wall,
-//!   or when nothing is due anywhere; its outcome is cross-posted to the
-//!   asker as a private row, which releases the asker's hold.
+//! - **Conversations.** An ask roots one at its row, with every seat it
+//!   named as a participant -- `ask` names one, `ask_teammates` names a
+//!   group, and a group is one conversation, not one each (ADR 0026). It runs ahead of desk turns, because it is what unblocks
+//!   one. It concludes when every seat asked has completed, or at a wall, or
+//!   when nothing is due anywhere; its outcome is cross-posted to the asker
+//!   as a private row per seat, which releases the asker's hold.
 //! - **Nudges** (ADR 0024). A desk seat that holds open work, ran for it and
 //!   has been shown everything is told once, per assignment, and owed a turn.
 //!   A seat asked that took its turn and did not answer is told once and
@@ -359,7 +360,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             self.state.owe_turn(&seat);
         }
         for child in self.children.values_mut() {
-            child.turned = false;
+            child.turned.clear();
         }
         steps
     }
@@ -395,7 +396,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 turns.push(Turn {
                     channel: Channel::Thread {
                         root: child.root,
-                        other: child.other(&seat),
+                        others: child.others(&seat),
                         opened_it: seat == child.asker,
                     },
                     seat,
@@ -502,7 +503,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 });
             }
             // The same validation the desk episode gets: the conversation
-            // names this desk, and its two seats are seats of this hive.
+            // names this desk, and its seats are seats of this hive.
             child.state = driver.resume(child.state)?;
             children.insert(root, child);
         }
@@ -572,7 +573,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         if let Some(child) = thread.and_then(|root| self.children.get_mut(&root)) {
             // Not a silence: the askee is coming back to this conversation,
             // so it is not nudged for having said nothing in it.
-            child.turned = false;
+            child.turned.remove(&turn.seat);
         }
         self.parked.insert(turn.seat.clone(), thread);
         self.wave.event(Event::Parked {
@@ -628,7 +629,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     }
                     child.state.turn_started(&turn.seat);
                     child.turns += 1;
-                    child.turned = true;
+                    child.turned.insert(turn.seat.clone());
                     return EpisodeBrief::for_turn(
                         &child.state,
                         self.chat.clone(),

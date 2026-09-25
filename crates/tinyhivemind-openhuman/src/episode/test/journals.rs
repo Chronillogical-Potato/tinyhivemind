@@ -24,7 +24,7 @@ fn a_journal_that_keeps_the_defaults_is_briefed_as_the_episode_words_it() {
         thread_context: &[],
     };
     let journal = BareJournal(MemoryLog::new("engineering"));
-    let opened_at = journal.0.append("operator", "the task", None, None);
+    let opened_at = journal.0.append("operator", "the task", None, &[]);
     // The first turn's task panics; the second completes. A panicked task
     // is a failed turn, not a failed wave, and the seat runs again.
     let runner = ScriptRunner::new(
@@ -106,8 +106,8 @@ fn a_seat_the_host_names_is_written_by_its_name_in_the_brief() {
         thread_context: &[],
     };
     let journal = NamedJournal(BareJournal(MemoryLog::new("engineering")));
-    journal.0.0.append("two", "the port is 8080", None, None);
-    let opened_at = journal.0.0.append("operator", "the task", None, None);
+    journal.0.0.append("two", "the port is 8080", None, &[]);
+    let opened_at = journal.0.0.append("operator", "the task", None, &[]);
     let runner = ScriptRunner::new(
         &["one", "two"],
         &[("one", vec![vec![complete("done", None)]])],

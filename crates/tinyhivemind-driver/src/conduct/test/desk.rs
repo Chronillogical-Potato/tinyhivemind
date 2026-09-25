@@ -140,7 +140,7 @@ fn a_placed_broadcast_completes_its_author_and_a_busy_recipient_gets_it_as_a_han
     while let Some(step) = conductor.step().expect("steps") {
         match step {
             Step::Commit(commit) => {
-                let sequence = journal.append(&commit.author, "row", None, None);
+                let sequence = journal.append(&commit.author, "row", None, Vec::new());
                 run(conductor.committed(sequence)).expect("committed");
             }
             Step::Event(Event::Refused { why, .. }) => refused = Some(why),

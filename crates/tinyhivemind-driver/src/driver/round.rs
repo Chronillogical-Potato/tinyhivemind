@@ -158,16 +158,12 @@ impl<A: BoundAgent> CompletionDriver<'_, A> {
                         episode = apply_completion(&episode, &event.author_id, event.sequence)?;
                     }
                 }
-                Utterance::Dm { to, .. } => {
+                // An ask resolves as a private message does: it reaches the
+                // seats it names, however many, and they are what the round
+                // may wake.
+                Utterance::Dm { to, .. } | Utterance::Ask { to, .. } => {
                     self.hive
                         .resolve_dm(&event.author_id, to, self.round_width)?;
-                }
-                Utterance::Ask { to, .. } => {
-                    self.hive.resolve_dm(
-                        &event.author_id,
-                        std::slice::from_ref(to),
-                        self.round_width,
-                    )?;
                 }
                 Utterance::Broadcast { .. } => {
                     if routing.is_none() {

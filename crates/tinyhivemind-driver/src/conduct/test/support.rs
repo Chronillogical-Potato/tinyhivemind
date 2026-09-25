@@ -123,7 +123,7 @@ impl Router for ClarifyRouter {
 }
 
 /// One row: sequence, author, body, thread, and the one seat it is for.
-pub(super) type Row = (Sequence, String, String, Option<Sequence>, Option<String>);
+pub(super) type Row = (Sequence, String, String, Option<Sequence>, Vec<String>);
 
 /// The host: rows, and nothing else.
 #[derive(Debug)]
@@ -154,7 +154,7 @@ impl Journal {
         author: &str,
         body: &str,
         thread: Option<Sequence>,
-        only_for: Option<String>,
+        only_for: Vec<String>,
     ) -> Sequence {
         let mut rows = self.rows.lock().unwrap();
         let sequence = Sequence(rows.last().map_or(self.first, |row| row.0.0 + 1));
@@ -190,7 +190,7 @@ impl Journal {
             .lock()
             .unwrap()
             .iter()
-            .filter(|row| row.4.as_deref() == Some(seat))
+            .filter(|row| row.4.iter().any(|only| only == seat))
             .map(|row| row.2.clone())
             .collect()
     }
@@ -267,7 +267,12 @@ pub(super) fn wave_parking(
 pub(super) fn take(step: Step, journal: &Journal, seen: &mut Wave) {
     match step {
         Step::Note(note) => {
-            journal.append("desk", &note.body, note.thread, note.only_for);
+            journal.append(
+                "desk",
+                &note.body,
+                note.thread,
+                note.only_for.into_iter().collect(),
+            );
         }
         Step::Event(event) => seen.events.push(event),
         Step::Commit(_) => panic!("a commit is not taken, it is committed"),
@@ -278,7 +283,7 @@ pub(super) fn describe(utterance: &Utterance) -> String {
     match utterance {
         Utterance::Post { message } | Utterance::Dm { message, .. } => message.clone(),
         Utterance::Broadcast { message } => format!("BROADCAST: {message}"),
-        Utterance::Ask { to, message } => format!("asks @{to}: {message}"),
+        Utterance::Ask { to, message } => format!("asks @{}: {message}", to.join(", @")),
         Utterance::CompleteEpisode { message } => format!("COMPLETE: {message}"),
     }
 }
@@ -290,8 +295,12 @@ pub(super) fn complete(message: &str) -> Utterance {
 }
 
 pub(super) fn ask(to: &str, message: &str) -> Utterance {
+    group_ask(&[to], message)
+}
+
+pub(super) fn group_ask(to: &[&str], message: &str) -> Utterance {
     Utterance::Ask {
-        to: to.into(),
+        to: to.iter().map(|seat| (*seat).to_string()).collect(),
         message: message.into(),
     }
 }
@@ -309,7 +318,7 @@ pub(super) fn post(message: &str) -> Utterance {
 }
 
 pub(super) fn door(ids: &[&str], starters: &[&str], journal: &Journal) -> Door {
-    let opened_at = journal.append("operator", "the task", None, None);
+    let opened_at = journal.append("operator", "the task", None, Vec::new());
     Door {
         chat: "engineering".into(),
         desk_name: "Engineering".into(),

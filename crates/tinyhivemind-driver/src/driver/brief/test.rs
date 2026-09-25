@@ -26,7 +26,7 @@ fn state_with_an_ask() -> (crate::BoundHive<crate::test_support::Seat>, DriverSt
             "one",
             1,
             Utterance::Ask {
-                to: "two".into(),
+                to: vec!["two".into()],
                 message: "?".into(),
             },
         ),
@@ -105,14 +105,14 @@ fn conversations_are_split_into_concluded_and_in_progress_with_their_transcripts
         vec![
             ConversationView {
                 root: Sequence(1),
-                other: "two".into(),
+                others: vec!["two".into()],
                 opened_it: true,
                 transcript: vec!["@one: ?".into(), "@two: because".into()],
                 concluded: true,
             },
             ConversationView {
                 root: Sequence(4),
-                other: "three".into(),
+                others: vec!["three".into()],
                 opened_it: false,
                 transcript: vec!["@three: and you?".into()],
                 concluded: false,
@@ -140,7 +140,7 @@ fn a_thread_brief_names_its_root_as_the_parent_and_says_which_side_the_seat_is_o
         "one",
         Channel::Thread {
             root: Sequence(1),
-            other: "two".into(),
+            others: vec!["two".into()],
             opened_it: true,
         },
         vec!["@two: because".into()],
@@ -158,7 +158,7 @@ fn a_thread_brief_names_its_root_as_the_parent_and_says_which_side_the_seat_is_o
         "two",
         Channel::Thread {
             root: Sequence(1),
-            other: "one".into(),
+            others: vec!["one".into()],
             opened_it: false,
         },
         Vec::new(),
@@ -168,12 +168,58 @@ fn a_thread_brief_names_its_root_as_the_parent_and_says_which_side_the_seat_is_o
 }
 
 #[test]
+fn a_group_thread_names_everyone_in_it_and_says_the_others_were_asked_too() {
+    let (_hive, state) = state_with_an_ask();
+    let answerer = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "two",
+        Channel::Thread {
+            root: Sequence(1),
+            others: vec!["one".into(), "three".into()],
+            opened_it: false,
+        },
+        Vec::new(),
+        Vec::new(),
+    );
+    let text = answerer.render();
+    assert!(
+        text.contains("## A private conversation with @one and @three (thread 1)"),
+        "{text}"
+    );
+    assert!(text.contains("A peer asked all of you this."), "{text}");
+    assert!(
+        text.contains("you read their answers here"),
+        "a seat is told it can see what the others said: {text}"
+    );
+    assert!(
+        text.contains("Only the seats in it read this thread."),
+        "{text}"
+    );
+}
+
+#[test]
 fn the_standing_contract_is_the_specs_own_words_with_the_hosts_one_sentence() {
     let served = tool_specs().iter().filter(|spec| spec.name != "dm");
+    let seats = ["lead".to_owned(), "solver".to_owned(), "checker".to_owned()];
     let text = standing_contract(
         served,
         "engineering",
+        &seats,
         "Use `mcp_call_tool` with `server: \"episode\"`.",
+    );
+    assert!(
+        text.contains("The seats at this desk are @lead, @solver and @checker."),
+        "a seat is told who is here, in the prompt it carries every turn: {text}"
+    );
+    assert!(
+        text.contains("a seat you invent is refused"),
+        "and that the roster is the whole of it: {text}"
+    );
+    assert!(
+        !standing_contract(tool_specs(), "engineering", &[], "Call it.")
+            .contains("The seats at this desk"),
+        "a host that names no seats claims none",
     );
     assert!(text.starts_with("Your work is recorded by calling a tool."));
     assert!(text.contains("Use `mcp_call_tool` with `server: \"episode\"`."));
@@ -189,7 +235,14 @@ fn the_standing_contract_is_the_specs_own_words_with_the_hosts_one_sentence() {
         text.contains(ask.description),
         "descriptions travel verbatim"
     );
-    assert!(text.contains("arguments {\"to\": ..., \"message\": ...}"));
+    assert!(
+        text.contains("arguments {\"to\": [\"...\"], \"message\": \"...\"}"),
+        "the contract shows the shape each argument takes, not only its name: {text}"
+    );
+    assert!(
+        text.contains("arguments {\"limit\": 20}"),
+        "a bounded number shows the value it takes when absent: {text}"
+    );
 }
 
 #[test]
@@ -233,7 +286,7 @@ fn elsewhere_is_rendered_as_context_on_the_desk_and_in_a_thread_and_absent_when_
         "two",
         Channel::Thread {
             root: Sequence(1),
-            other: "one".into(),
+            others: vec!["one".into()],
             opened_it: false,
         },
         vec!["@one: ?".into()],
@@ -268,7 +321,7 @@ fn a_seat_that_records_something_is_told_a_person_reads_it() {
         "two",
         Channel::Thread {
             root: Sequence(1),
-            other: "one".into(),
+            others: vec!["one".into()],
             opened_it: false,
         },
         Vec::new(),
@@ -281,7 +334,7 @@ fn a_seat_that_records_something_is_told_a_person_reads_it() {
         "one",
         Channel::Thread {
             root: Sequence(1),
-            other: "two".into(),
+            others: vec!["two".into()],
             opened_it: true,
         },
         Vec::new(),
@@ -291,7 +344,7 @@ fn a_seat_that_records_something_is_told_a_person_reads_it() {
         !asker.render().contains("A person reads what you record"),
         "a seat with nothing to do in the thread is not told how to write"
     );
-    let contract = standing_contract(tool_specs(), "engineering", "Call it.");
+    let contract = standing_contract(tool_specs(), "engineering", &[], "Call it.");
     assert!(contract.contains("what a person and the desk read"));
 }
 
@@ -317,7 +370,7 @@ fn a_named_brief_writes_its_conversations_and_waits_by_name() {
         Vec::new(),
         vec![ConversationView {
             root: Sequence(1),
-            other: "two".into(),
+            others: vec!["two".into()],
             opened_it: true,
             transcript: vec!["Tess: because".into()],
             concluded: false,
@@ -340,7 +393,7 @@ fn a_named_brief_writes_its_conversations_and_waits_by_name() {
         "one",
         Channel::Thread {
             root: Sequence(1),
-            other: "two".into(),
+            others: vec!["two".into()],
             opened_it: true,
         },
         Vec::new(),

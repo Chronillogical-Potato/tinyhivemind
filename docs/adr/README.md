@@ -50,6 +50,7 @@ link any earlier ADR it amends.
 | [0023](0023-an-ask-opens-a-child-conversation.md) | An ask opens a child conversation, a thread of the desk | Proposed — amends review decision D22 |
 | [0024](0024-a-broadcast-completes-its-author.md) | A broadcast completes its author unless it is waiting | Proposed — amends review decision D13 |
 | [0025](0025-the-driver-names-no-harness.md) | The driver names no harness; one crate links it | Proposed |
+| [0026](0026-an-ask-may-name-a-group.md) | A question to a group is its own tool, and the group is one conversation | Proposed — amends 0023 |
 
 ## Reading order
 

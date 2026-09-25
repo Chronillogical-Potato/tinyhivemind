@@ -199,7 +199,7 @@ fn a_seat_that_says_nothing_is_nudged_and_then_the_episode_stalls() {
     let rows = journal.log.all();
     assert!(
         rows.iter()
-            .any(|row| row.author == "desk" && row.only_for.as_deref() == Some("one"))
+            .any(|row| row.author == "desk" && row.only_for == ["one".to_string()])
     );
     let turns = journal.turns.lock().unwrap();
     assert!(turns.iter().any(|(_, _, outcome, _, recorded)| matches!(

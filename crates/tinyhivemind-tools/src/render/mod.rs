@@ -29,8 +29,18 @@ pub(crate) fn served() -> impl Iterator<Item = &'static ToolSpec> {
 
 /// The specs this server serves, for a host that renders the standing
 /// contract from the same list the seats are offered.
+///
+/// A host that withholds a tool renders its contract from
+/// [`EpisodeTools::specs`](crate::EpisodeTools::specs) instead, which is this
+/// list minus what it withheld.
 pub fn served_specs() -> impl Iterator<Item = &'static ToolSpec> {
     served()
+}
+
+/// Whether this tool's `to` names seats of the desk, and so is offered the
+/// roster as its choices.
+pub(crate) fn names_a_seat(tool: &str) -> bool {
+    matches!(tool, "ask" | "ask_teammates")
 }
 
 /// Whether a tool of this name is served.
@@ -40,8 +50,9 @@ pub(crate) fn serves(name: &str) -> bool {
 
 /// Every served tool as an MCP tool definition.
 ///
-/// `seats` are the choices `ask`'s `to` offers: a seat that can read the
-/// alternatives does not guess eight ids and learn nothing from eight refusals.
+/// `seats` are the choices the asking tools' `to` offers: a seat that can read
+/// the alternatives does not guess eight ids and learn nothing from eight
+/// refusals.
 /// The served tools as MCP tool definitions: name, description and an
 /// `inputSchema` that carries the vocabulary's parameters plus the `chat` and
 /// `parent` every call must name. `seats` fills `ask`'s recipient enumeration.
@@ -81,13 +92,22 @@ fn definition(spec: &ToolSpec, seats: &[(String, String)]) -> Value {
         if let Some(description) = parameter.description {
             schema["description"] = Value::String(description.to_owned());
         }
-        if spec.name == "ask" && parameter.name == "to" {
-            schema["enum"] = Value::Array(
+        if names_a_seat(spec.name) && parameter.name == "to" {
+            let ids = Value::Array(
                 seats
                     .iter()
                     .map(|(id, _)| Value::String(id.clone()))
                     .collect(),
             );
+            // `ask` takes a list of seats, so the enumeration constrains each
+            // entry rather than the argument. Written against the rendered
+            // shape rather than the parameter's kind: whichever `ask`'s `to`
+            // becomes, the choices land where a client reads them.
+            if let Some(items) = schema.get_mut("items") {
+                items["enum"] = ids;
+            } else {
+                schema["enum"] = ids;
+            }
             if let Some(roster) = roster(seats) {
                 let base = parameter.description.unwrap_or_default();
                 schema["description"] = Value::String(format!("{base} {roster}"));
@@ -169,8 +189,9 @@ impl Arguments {
 /// A generic dispatcher may forward them as an object, as a JSON string, or
 /// flattened onto the params themselves, and every one of those looks
 /// identical from inside a refusal. Accepting all three is cheaper than being
-/// wrong about which. `to` is one string for `ask` and a list for anything
-/// that takes several; both are read.
+/// wrong about which. `to` is a list for every tool that takes it, and a bare
+/// string is read as a list of one: a model that asks a single seat writes it
+/// both ways.
 #[cfg(test)]
 pub(crate) fn arguments(params: &Value) -> Arguments {
     parse_arguments(&raw_arguments(params))

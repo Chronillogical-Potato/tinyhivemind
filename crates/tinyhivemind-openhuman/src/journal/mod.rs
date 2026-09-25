@@ -7,9 +7,9 @@
 //! here. Two rules decide who may
 //! read a row, and they are the ones a host follows too:
 //!
-//! - A desk row with `only_for` reaches its author and that one seat.
-//! - A row in a conversation reaches the conversation's two seats: the author
-//!   of the ask row it hangs off, and the seat that ask was for.
+//! - A desk row with `only_for` reaches its author and the seats it names.
+//! - A row in a conversation reaches every seat in it: the author of the ask
+//!   row it hangs off, and every seat that ask was for.
 
 use std::sync::{Mutex, PoisonError};
 
@@ -27,8 +27,8 @@ pub struct Row {
     pub body: String,
     /// The conversation it is in, by its ask row, or `None` on the desk.
     pub thread: Option<Sequence>,
-    /// On the desk, the one seat it reaches.
-    pub only_for: Option<String>,
+    /// On the desk, the seats it reaches; empty reaches the desk.
+    pub only_for: Vec<String>,
     /// The desk it is on, when that is not this journal's own: a host's log
     /// spans its channels, and a seat reads its others as context.
     pub desk: Option<String>,
@@ -72,7 +72,7 @@ impl MemoryLog {
         author: &str,
         body: &str,
         thread: Option<Sequence>,
-        only_for: Option<&str>,
+        only_for: &[String],
     ) -> Sequence {
         self.append_row(None, author, body, thread, only_for)
     }
@@ -85,7 +85,7 @@ impl MemoryLog {
         author: &str,
         body: &str,
         thread: Option<Sequence>,
-        only_for: Option<&str>,
+        only_for: &[String],
     ) -> Sequence {
         self.append_row(Some(desk), author, body, thread, only_for)
     }
@@ -96,7 +96,7 @@ impl MemoryLog {
         author: &str,
         body: &str,
         thread: Option<Sequence>,
-        only_for: Option<&str>,
+        only_for: &[String],
     ) -> Sequence {
         let mut rows = self.rows();
         let sequence = Sequence(rows.last().map_or(self.first, |row| row.sequence.0 + 1));
@@ -105,7 +105,7 @@ impl MemoryLog {
             author: author.to_owned(),
             body: body.to_owned(),
             thread,
-            only_for: only_for.map(str::to_owned),
+            only_for: only_for.to_vec(),
             desk: desk.map(str::to_owned),
         });
         sequence
@@ -126,9 +126,9 @@ impl MemoryLog {
             .filter(|row| row.desk.is_none())
             .filter(|row| after.is_none_or(|after| row.sequence > after) && row.thread.is_none())
             .filter(|row| {
-                row.only_for
-                    .as_deref()
-                    .is_none_or(|only| only == seat || row.author == seat)
+                row.only_for.is_empty()
+                    || row.author == seat
+                    || row.only_for.iter().any(|only| only == seat)
             })
             .map(render)
             .collect()
@@ -166,11 +166,11 @@ impl MemoryLog {
                 .find(|candidate| candidate.sequence == root)
                 .map(|ask| {
                     std::iter::once(ask.author.clone())
-                        .chain(ask.only_for.clone())
+                        .chain(ask.only_for.iter().cloned())
                         .collect()
                 })
                 .unwrap_or_default(),
-            None => row.only_for.clone().into_iter().collect(),
+            None => row.only_for.clone(),
         };
         let mut members: Vec<String> = Vec::new();
         for id in addressed {
@@ -178,7 +178,7 @@ impl MemoryLog {
                 members.push(id);
             }
         }
-        if members.is_empty() && row.thread.is_none() && row.only_for.is_none() {
+        if members.is_empty() && row.thread.is_none() && row.only_for.is_empty() {
             Audience::Desk
         } else {
             Audience::Aside { members }

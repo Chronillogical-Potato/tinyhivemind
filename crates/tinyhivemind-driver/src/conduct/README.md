@@ -8,17 +8,19 @@ that no single fold can hold.
 | --- | --- |
 | `mod.rs` | `Conductor`, `ConductPolicy`, `Door`, `starters`; opening the desk, beginning a wave, proposing turns, opening a turn with its brief, recording what it called |
 | `wave.rs` | After a wave: the phase machine that hands the host one `Step` at a time -- commits in conversations, silent askees, commits on the desk with their consequences, conclusions, the turn wall |
-| `child.rs` | A conversation: its root, its two seats, its own driver state, its turns, its nudge; and one that concluded |
+| `child.rs` | A conversation: its root, its asker and the seats it asked, its own driver state, its turns, its nudges; and one that concluded |
 | `steps.rs` | `Turn`, `Note`, `Commit`, `Event`, `Refusal`, `Step`: the wire forms a host journals and streams |
 | `test/` | Every rule, driven by a host that is only a journal; the exact wire forms; the links from a row to its conversation and from an event to its row |
 
 The rules, each with the decision it comes from:
 
 - **A conversation runs first** (ADR 0023): it is what unblocks a desk turn.
-  It concludes when the seat asked completes, at `child_turn_wall`, or when
-  nothing is due anywhere; its outcome reaches the asker as a private row,
-  which releases the asker's hold. The seats that had it are shown it whole
-  once, on their next desk turn.
+  It concludes when every seat asked completes, at `child_turn_wall` per seat
+  asked, or when nothing is due anywhere; its outcome reaches the asker as a
+  private row from each of them, which releases the asker's hold seat by seat.
+  `ask_teammates` names a group, and then the group is one conversation whose
+  seats read each other (ADR 0026). The seats that had it are shown it whole once,
+  on their next desk turn.
 - **Nudges** (ADR 0024): a desk seat that holds open work, ran for it and
   has been shown everything is told once per assignment and owed a turn. A
   seat asked that took its turn without answering is told once and owed a

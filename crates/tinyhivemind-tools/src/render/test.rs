@@ -16,7 +16,16 @@ fn names(seats: &[String]) -> Vec<String> {
 
 #[test]
 fn serves_the_vocabulary_minus_post_and_dm_in_its_order() {
-    assert_eq!(names(&[]), ["broadcast", "ask", "complete_episode", "read"]);
+    assert_eq!(
+        names(&[]),
+        [
+            "broadcast",
+            "ask",
+            "ask_teammates",
+            "complete_episode",
+            "read"
+        ]
+    );
     assert!(!serves("dm"));
     assert!(!serves("post"));
     assert!(serves("ask"));
@@ -54,17 +63,29 @@ fn every_tool_takes_chat_and_optionally_parent() {
 }
 
 #[test]
-fn ask_offers_the_seats_as_its_choices() {
+fn both_asking_tools_offer_the_seats_as_their_choices() {
     let seats = ["lead".to_string(), "solver".to_string()];
-    let ask = tool_definitions(&seats)
-        .into_iter()
-        .find(|tool| tool["name"] == "ask")
-        .unwrap();
+    let definitions = tool_definitions(&seats);
+    let of = |name: &str| {
+        definitions
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .expect("the tool is served")["inputSchema"]["properties"]["to"]
+            .clone()
+    };
+    // `ask` is one seat: the choices constrain the value itself.
+    let ask = of("ask");
+    assert_eq!(ask["type"], "string");
+    assert_eq!(ask["enum"], json!(["lead", "solver"]));
+    // `ask_teammates` is a list: they constrain each entry.
+    let group = of("ask_teammates");
+    assert_eq!(group["type"], "array");
+    assert_eq!(group["items"]["type"], "string");
     assert_eq!(
-        ask["inputSchema"]["properties"]["to"]["enum"],
-        json!(["lead", "solver"])
+        group["items"]["enum"],
+        json!(["lead", "solver"]),
+        "the choices constrain each seat named, since `to` is a list"
     );
-    assert_eq!(ask["inputSchema"]["properties"]["to"]["type"], "string");
 }
 
 #[test]

@@ -140,7 +140,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 }
                 Phase::Desk => {
                     for (seat, utterance, conversation) in std::mem::take(&mut self.wave.desk) {
-                        let only_for = utterance.asks().map(str::to_owned);
+                        let only_for = utterance.asks().to_vec();
                         self.wave.commits.push_back(Commit {
                             author: seat,
                             utterance,
@@ -183,31 +183,49 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             author: seat,
             utterance,
             thread: Some(root),
-            only_for: None,
+            only_for: Vec::new(),
             conversation: Some(root),
             kind: Kind::Thread { root },
         });
     }
 
-    /// The seat asked took its turn and the conversation is not over: it did
-    /// not answer, whatever it did instead. Once, it is told so and owed one
-    /// more turn; a second silence stands. A conversation at its wall is
-    /// concluding this wave and is not nudged.
+    /// A seat asked took its turn and has still not answered, whatever it did
+    /// instead. Once, it is told so and owed one more turn; a second silence
+    /// stands. A conversation at its wall is concluding this wave and is not
+    /// nudged.
+    ///
+    /// Told seat by seat, because a group ask is one conversation with
+    /// several of them in it: a seat that answered is done, and a note to the
+    /// thread at large would tell it so again while the others are still
+    /// thinking.
     fn nudge_silent_askees(&mut self) {
         let wall = self.policy.child_turn_wall;
         for child in self.children.values_mut() {
-            if child.turned && !child.is_over(wall) && !child.nudged {
-                child.nudged = true;
+            if child.is_over(wall) {
+                continue;
+            }
+            let silent: Vec<String> = child
+                .askees
+                .iter()
+                .filter(|askee| {
+                    child.turned.contains(*askee)
+                        && !child.nudged.contains(*askee)
+                        && child.owes_an_answer(askee)
+                })
+                .cloned()
+                .collect();
+            for askee in silent {
+                child.nudged.insert(askee.clone());
                 self.wave.steps.push_back(Step::Note(Note {
                     body: "the teammate who asked you is waiting for your answer. Finish your \
                            part with it; if you need someone else first, say so in that answer."
                         .to_owned(),
                     thread: Some(child.root),
-                    only_for: None,
+                    only_for: Some(askee.clone()),
                 }));
-                child.state.owe_turn(&child.askee);
+                child.state.owe_turn(&askee);
                 self.wave.steps.push_back(Step::Event(Event::Nudged {
-                    seat: child.askee.clone(),
+                    seat: askee,
                     thread: Some(child.root),
                 }));
             }
@@ -231,34 +249,49 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 continue;
             };
             let forced = !child.state.quiescent();
-            self.wave.commits.push_back(Commit {
-                author: child.askee.clone(),
-                utterance: Utterance::Dm {
-                    to: vec![child.asker.clone()],
-                    // The row is the ledger's release, not a copy of the
-                    // answer: what was said is already the asker's to read
-                    // (`Child::outcome`).
-                    // The row is the ledger's release, not a copy of the
-                    // answer: the asker reads what was said in its own desk
-                    // read, marked private, and a restatement here put the
-                    // same paragraph in front of one seat three times. Only
-                    // a forced close adds anything, because that is the one
-                    // ending the rows do not show.
-                    message: if forced {
-                        format!(
-                            "concluded our conversation (thread {}): the conversation did not \
-                             conclude in time; take what was said and proceed",
-                            root.0
-                        )
-                    } else {
-                        format!("concluded our conversation (thread {}).", root.0)
+            // One row per seat asked, because the ledger releases the asker
+            // seat by seat: the row that carries a seat's part to the asker is
+            // authored by that seat. A conversation of one is the one row it
+            // always was. A seat whose conclusion already landed is skipped,
+            // so a conclusion the fold refused is re-issued for the rest
+            // rather than for everyone again.
+            let owed: Vec<String> = child
+                .askees
+                .iter()
+                .filter(|askee| !child.answered.contains(*askee))
+                .cloned()
+                .collect();
+            let asker = child.asker.clone();
+            for askee in owed {
+                self.wave.commits.push_back(Commit {
+                    author: askee,
+                    utterance: Utterance::Dm {
+                        to: vec![asker.clone()],
+                        // The row is the ledger's release, not a copy of the
+                        // answer: what was said is already the asker's to read
+                        // (`Child::outcome`).
+                        // The row is the ledger's release, not a copy of the
+                        // answer: the asker reads what was said in its own desk
+                        // read, marked private, and a restatement here put the
+                        // same paragraph in front of one seat three times. Only
+                        // a forced close adds anything, because that is the one
+                        // ending the rows do not show.
+                        message: if forced {
+                            format!(
+                                "concluded our conversation (thread {}): the conversation did \
+                                 not conclude in time; take what was said and proceed",
+                                root.0
+                            )
+                        } else {
+                            format!("concluded our conversation (thread {}).", root.0)
+                        },
                     },
-                },
-                thread: None,
-                only_for: Some(child.asker.clone()),
-                conversation: Some(root),
-                kind: Kind::Conclusion { root, forced },
-            });
+                    thread: None,
+                    only_for: vec![asker.clone()],
+                    conversation: Some(root),
+                    kind: Kind::Conclusion { root, forced },
+                });
+            }
         }
     }
 
@@ -328,7 +361,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     async fn commit_desk(&mut self, committed: CommittedUtterance) -> Result<()> {
         let seat = committed.author_id.clone();
         let sequence = committed.sequence;
-        let asked = committed.utterance.asks().map(str::to_owned);
+        let asked = committed.utterance.asks().to_vec();
         let is_broadcast = committed.utterance.broadcasting();
         let held = holds(&self.state, &seat);
         let routing = self.routing();
@@ -392,7 +425,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                         message: "budget spent; keeping the work".into(),
                     },
                     thread: None,
-                    only_for: None,
+                    only_for: Vec::new(),
                     conversation: None,
                     kind: Kind::Discharge,
                 });
@@ -420,8 +453,8 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 // thread of the desk rooted at the ask row, with the two as
                 // its seats.
                 HostAction::DeliverDm { .. } => {
-                    if let Some(askee) = &said.asked {
-                        self.open_conversation(&said.seat, askee, said.sequence)?;
+                    if !said.asked.is_empty() {
+                        self.open_conversation(&said.seat, &said.asked, said.sequence)?;
                     }
                 }
                 HostAction::DeliverHandoff { agent_id, handoff } => {
@@ -460,7 +493,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         Ok(())
     }
 
-    fn open_conversation(&mut self, by: &str, to: &str, root: Sequence) -> Result<()> {
+    fn open_conversation(&mut self, by: &str, to: &[String], root: Sequence) -> Result<()> {
         let state = self.driver.start(CompletionEpisodeState::opened(
             Conversation {
                 desk_id: self.chat.clone(),
@@ -468,11 +501,11 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 thread_root: Some(root),
             },
             root,
-            [to],
+            to.iter().map(String::as_str),
         )?)?;
         self.wave.event(Event::Asked {
             seat: by.to_owned(),
-            askee: to.to_owned(),
+            askees: to.to_vec(),
             root,
         });
         self.children.insert(root, Child::new(root, by, to, state));
@@ -489,6 +522,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             return Ok(());
         }
         let at = committed.sequence;
+        let author = committed.author_id.clone();
         // The fold first: a conclusion it refuses leaves the conversation
         // open, to be concluded again on a later wave, rather than gone.
         let transition = self
@@ -496,20 +530,30 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             .apply_committed(&self.state, committed, None)
             .await?;
         self.state = transition.state;
+        let Some(child) = self.children.get_mut(&root) else {
+            return Ok(());
+        };
+        child.answered.insert(author);
+        // A group ask is one conversation: it is over once every seat in it
+        // has carried its part to the asker, and until then the rest are
+        // still in it.
+        if child.answered.len() < child.askees.len() {
+            return Ok(());
+        }
         let Some(child) = self.children.remove(&root) else {
             return Ok(());
         };
         self.wave.event(Event::Concluded {
             root,
             asker: child.asker.clone(),
-            askee: child.askee.clone(),
+            askees: child.askees.clone(),
             forced,
             at,
         });
         self.concluded.push(Concluded {
             root,
             asker: child.asker,
-            askee: child.askee,
+            askees: child.askees,
         });
         Ok(())
     }
@@ -519,7 +563,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
 struct Said {
     seat: String,
     sequence: Sequence,
-    asked: Option<String>,
+    asked: Vec<String>,
     is_broadcast: bool,
     held: bool,
 }
