@@ -47,12 +47,12 @@ corpus and paid campaign described in
 | `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
 | `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS completion-driven hive with stable OpenHuman sessions and live TypeSafe routing. |
 | `src/bin/deepswe_hive.rs` | Hermetic four-seat software-engineering hive over a caller-prepared disposable Git checkout. |
-| `src/bin/conducted.rs` | A live completion-driven episode: the loop stepped through the `Conductor`, any of the adapter's three runners, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline against the adapter's scripted model. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal. |
+| `src/bin/conducted.rs` | A live completion-driven episode: the loop stepped through the `Conductor`, any of the adapter's three runners, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline against the adapter's scripted model. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal; `CONDUCTED_DESK=launch` is a desk of one, whose single assigned seat holds no facts at all and has to reach four teammates with `ask` -- two of whom hold conditions that contradict each other, so settling it means asking them together in one conversation. |
 | `src/bin/conducted/hosted.rs` | This example as a host: `DeskJournal`, its in-memory log with the prompt and the log lines, for every runner; and `DeskHost`, an `EpisodeHost` whose seats are library sessions with the episode's belt. The runners and the loop live in `tinyhivemind-openhuman`. |
 | `src/bin/conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`, bridged through the wire form. |
 | `deepswe-sandbox/` | Reproducible local Docker image used for agent shell and test execution. |
 
-## `conducted`: one loop, three runners
+## `conducted`: one loop, four runners
 
 `src/bin/conducted.rs` runs one completion-driven episode through
 `tinyhivemind_openhuman::run_episode`: it builds the hive, the driver, the
@@ -65,7 +65,8 @@ implementations the loop cannot tell apart:
 
 | `TINYHIVEMIND_RUNNER` | Seat | Tools | Context between turns |
 | --- | --- | --- | --- |
-| `embed` (default) | an `openhuman-embed` `AgentSpec` agent | the three MCP dispatchers, dialling `tinyhivemind-mcp`'s server | OpenHuman's own session, stable for the episode |
+| `embed` (default) | an `openhuman-embed` `AgentSpec` agent | the episode's tools on the spec's own belt, through `AgentSpec::tools` | one session for the episode, seeded from the host's journal every turn |
+| `embed-mcp` | the same agent | the three MCP dispatchers, dialling `tinyhivemind-mcp`'s server | the same |
 | `raw` | an `OpenHumanSessionHost` built one level down, per turn | the same four tools, in-process, each calling `EpisodeTools::call` | a per-seat log the runner keeps |
 | `hosted` | the host's own seat, built once per episode through `EpisodeHost` | the same four tools, in-process, admitted over the host's gate | seeded every turn from the host's journal, up to the seat's watermark |
 
