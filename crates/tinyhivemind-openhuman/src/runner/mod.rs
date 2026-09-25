@@ -85,8 +85,11 @@ pub type TurnJob = Pin<Box<dyn Future<Output = (String, Lane, TurnResult)> + Sen
 /// is for one that reads the environment.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RunnerKind {
-    /// `openhuman-embed` agents, tools over MCP. The default.
+    /// `openhuman-embed` agents, the episode's tools on their belt. The
+    /// default.
     Embed,
+    /// The same agents, reaching the same tools over MCP instead.
+    EmbedMcp,
     /// Raw `OpenHumanSessionHost` sessions, tools in-process.
     Raw,
     /// The host's own agents, tools in-process, seeded from the host's log.
@@ -94,7 +97,7 @@ pub enum RunnerKind {
 }
 
 impl RunnerKind {
-    /// `TINYHIVEMIND_RUNNER=embed` (default), `raw` or `hosted`.
+    /// `TINYHIVEMIND_RUNNER=embed` (default), `embed-mcp`, `raw` or `hosted`.
     ///
     /// # Errors
     ///
@@ -112,6 +115,7 @@ impl RunnerKind {
     pub fn parse(value: Option<&str>) -> std::result::Result<Self, String> {
         match value {
             None | Some("" | "embed") => Ok(Self::Embed),
+            Some("embed-mcp") => Ok(Self::EmbedMcp),
             Some("raw") => Ok(Self::Raw),
             Some("hosted") => Ok(Self::Hosted),
             Some(other) => Err(other.to_owned()),
@@ -123,6 +127,7 @@ impl RunnerKind {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Embed => "embed",
+            Self::EmbedMcp => "embed-mcp",
             Self::Raw => "raw",
             Self::Hosted => "hosted",
         }
@@ -133,11 +138,13 @@ impl RunnerKind {
     #[must_use]
     pub const fn how_to_call(self) -> &'static str {
         match self {
-            Self::Embed => {
+            Self::EmbedMcp => {
                 "Use `mcp_call_tool` with `server: \"episode\"`; its `arguments` is a JSON \
                  object, never a string."
             }
-            Self::Raw | Self::Hosted => "Each tool below is yours to call directly, by its name.",
+            Self::Embed | Self::Raw | Self::Hosted => {
+                "Each tool below is yours to call directly, by its name."
+            }
         }
     }
 }

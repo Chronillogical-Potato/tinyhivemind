@@ -53,13 +53,13 @@ impl Journal for TestHost {
             &commit.author,
             commit.utterance.message(),
             commit.thread,
-            commit.only_for.as_deref(),
+            &commit.only_for,
         ))
     }
 
     fn note(&self, note: &Note) -> crate::Result<()> {
         self.log
-            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+            .append("desk", &note.body, note.thread, note.only_for.as_slice());
         Ok(())
     }
 
@@ -120,6 +120,10 @@ fn the_runner_is_named_by_the_environment_and_defaults_to_embed() {
     assert_eq!(RunnerKind::parse(None), Ok(RunnerKind::Embed));
     assert_eq!(RunnerKind::parse(Some("")), Ok(RunnerKind::Embed));
     assert_eq!(RunnerKind::parse(Some("embed")), Ok(RunnerKind::Embed));
+    assert_eq!(
+        RunnerKind::parse(Some("embed-mcp")),
+        Ok(RunnerKind::EmbedMcp)
+    );
     assert_eq!(RunnerKind::parse(Some("raw")), Ok(RunnerKind::Raw));
     assert_eq!(RunnerKind::parse(Some("hosted")), Ok(RunnerKind::Hosted));
     assert!(
@@ -139,9 +143,19 @@ fn the_runner_is_named_by_the_environment_and_defaults_to_embed() {
 
 #[test]
 fn each_runner_states_its_own_mechanics_and_nothing_else() {
-    assert!(RunnerKind::Embed.how_to_call().contains("mcp_call_tool"));
+    assert!(RunnerKind::EmbedMcp.how_to_call().contains("mcp_call_tool"));
+    assert!(
+        !RunnerKind::Embed.how_to_call().contains("mcp"),
+        "an embed seat's belt is its own; only the MCP road says otherwise"
+    );
+    assert_eq!(
+        RunnerKind::Embed.how_to_call(),
+        RunnerKind::Hosted.how_to_call(),
+        "a native belt is called the same way whoever built the agent"
+    );
     assert!(!RunnerKind::Raw.how_to_call().contains("mcp"));
     assert_eq!(RunnerKind::Embed.name(), "embed");
+    assert_eq!(RunnerKind::EmbedMcp.name(), "embed-mcp");
     assert_eq!(RunnerKind::Raw.name(), "raw");
     assert_eq!(RunnerKind::Hosted.name(), "hosted");
     assert_eq!(
@@ -173,6 +187,161 @@ async fn one_turn<R: SeatRunner>(runner: &R, since: Option<Sequence>) -> (String
     (reply, runner.close("lead"))
 }
 
+/// **Where a seat learns who is on the desk.**
+///
+/// The invented teammates -- `@backend`, `@frontend`, `@qa` on a desk of
+/// five, and a made-up `teammates` for the group -- were both embed seats
+/// over MCP, and this is why: the roster lives in the asking tools' `to`
+/// enumeration, and an MCP seat is not offered those tools at all. It is
+/// offered three dispatchers, and the tools are behind a call it has to
+/// think to make. A seat that reaches straight for `mcp_call_tool` has never
+/// been shown a seat id, so it writes one that sounds right.
+///
+/// A native belt puts the tools in the first request, schemas and all, so
+/// there is nothing to fetch and nothing to guess.
+async fn where_the_roster_is(
+    runtime: &Arc<Runtime>,
+    briefs: &BTreeMap<String, String>,
+    contract: &dyn Fn(RunnerKind) -> String,
+    metrics: &offline::Metrics,
+) {
+    let seats_in = |tools: &serde_json::Value| -> bool {
+        serde_json::to_string(tools).is_ok_and(|rendered| rendered.contains("\"lead\""))
+    };
+
+    metrics.reset();
+    let (_, native) = embedded(
+        RunnerKind::Embed,
+        runtime,
+        briefs,
+        &contract(RunnerKind::Embed),
+    )
+    .await;
+    one_turn(&native, None).await;
+    let offered = metrics.snapshot().first_tools.expect("the model saw tools");
+    let names: Vec<String> = offered
+        .as_array()
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(|tool| tool["function"]["name"].as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        names.iter().any(|name| name == "ask"),
+        "a native belt offers the vocabulary itself: {names:?}"
+    );
+    assert!(
+        seats_in(&offered),
+        "and the asking tools carry the roster as their choices: {offered}"
+    );
+
+    metrics.reset();
+    let (_, over_mcp) = embedded(
+        RunnerKind::EmbedMcp,
+        runtime,
+        briefs,
+        &contract(RunnerKind::EmbedMcp),
+    )
+    .await;
+    one_turn(&over_mcp, None).await;
+    let offered = metrics.snapshot().first_tools.expect("the model saw tools");
+    let names: Vec<String> = offered
+        .as_array()
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(|tool| tool["function"]["name"].as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut names = names;
+    names.sort();
+    assert_eq!(
+        names,
+        ["mcp_call_tool", "mcp_list_servers", "mcp_list_tools"],
+        "an MCP seat is offered the road, not the tools"
+    );
+    assert!(
+        !seats_in(&offered),
+        "so no seat id reaches it through its tools at all: {offered}"
+    );
+    metrics.reset();
+}
+
+/// Both embed arms, each seated on a journal of its own.
+async fn embed_arms(
+    runtime: &Arc<Runtime>,
+    briefs: &BTreeMap<String, String>,
+    contract: &dyn Fn(RunnerKind) -> String,
+) -> (Arc<PlainHost>, EmbedRunner, EmbedRunner) {
+    let (host, native) = embedded(
+        RunnerKind::Embed,
+        runtime,
+        briefs,
+        &contract(RunnerKind::Embed),
+    )
+    .await;
+    let (_, mcp) = embedded(
+        RunnerKind::EmbedMcp,
+        runtime,
+        briefs,
+        &contract(RunnerKind::EmbedMcp),
+    )
+    .await;
+    (host, native, mcp)
+}
+
+/// The embed runner over a journal of its own, on the road `kind` names.
+///
+/// An embed seat seeds from its host's journal exactly as a hosted one does,
+/// so it takes one; the operator's row is what its first turn is shown.
+async fn embedded(
+    kind: RunnerKind,
+    runtime: &Arc<Runtime>,
+    briefs: &BTreeMap<String, String>,
+    contract: &str,
+) -> (Arc<PlainHost>, EmbedRunner) {
+    let log = MemoryLog::new("engineering");
+    log.append("operator", "state the root cause", None, &[]);
+    let host = Arc::new(PlainHost {
+        log,
+        runtime: Arc::clone(runtime),
+    });
+    let journal = Arc::clone(&host) as Arc<dyn Journal>;
+    let tools = Arc::new(EpisodeTools::new(["lead"]));
+    let run_id = format!("test-{}", seating());
+    let runner = match kind {
+        RunnerKind::EmbedMcp => {
+            EmbedRunner::seat_over_mcp(
+                journal,
+                runtime,
+                tools,
+                briefs,
+                contract,
+                "engineering",
+                "Engineering",
+                SESSION_WINDOW,
+                &run_id,
+            )
+            .await
+        }
+        _ => EmbedRunner::seat(
+            journal,
+            runtime,
+            tools,
+            briefs,
+            contract,
+            "engineering",
+            "Engineering",
+            SESSION_WINDOW,
+            &run_id,
+        ),
+    };
+    (host, runner.expect("embed seats"))
+}
+
 /// A host that overrides nothing it need not: no prefix, no wrapper, no
 /// hook. Its seat runs under the process default context the library boot
 /// installed, which is what a host with a booted core of its own has.
@@ -191,13 +360,13 @@ impl Journal for PlainHost {
             &commit.author,
             commit.utterance.message(),
             commit.thread,
-            commit.only_for.as_deref(),
+            &commit.only_for,
         ))
     }
 
     fn note(&self, note: &Note) -> crate::Result<()> {
         self.log
-            .append("desk", &note.body, note.thread, note.only_for.as_deref());
+            .append("desk", &note.body, note.thread, note.only_for.as_slice());
         Ok(())
     }
 }
@@ -258,7 +427,7 @@ fn seat_agent(
 /// seeded from the thread, and a call outside its thread is refused.
 async fn plain(runtime: &Arc<Runtime>) {
     let log = MemoryLog::new("engineering");
-    log.append("operator", "state the root cause", None, None);
+    log.append("operator", "state the root cause", None, &[]);
     let host = Arc::new(PlainHost {
         log,
         runtime: Arc::clone(runtime),
@@ -379,7 +548,7 @@ fn hosted(
 ) -> (Arc<TestHost>, HostedRunner<TestHost>) {
     assert!(format!("{library:?}").contains(offline::MODEL));
     let log = MemoryLog::new("engineering");
-    log.append("operator", "state the root cause", None, None);
+    log.append("operator", "state the root cause", None, &[]);
     let host = Arc::new(TestHost {
         log,
         library,
@@ -426,14 +595,34 @@ fn one_completion(name: &str, events: &[SeatEvent]) {
     );
 }
 
-/// A second turn on each native runner: raw is seeded with what it said,
-/// hosted clears and reseeds the session it reuses, and both call again.
-async fn again(raw: &RawRunner, host: &TestHost, hosted: &HostedRunner<TestHost>) {
+/// A second turn on every runner: raw is seeded with what it said, embed and
+/// hosted clear and reseed the session they reuse, and all three call again.
+///
+/// Embed is here because it once was not. It held a session across the
+/// episode and *resumed* it, which binds that session's transcript on the
+/// first committed turn and refuses the next one whose target is not the same
+/// binding -- so every embed seat failed on its second turn, and nothing in
+/// this file ran one. A seat speaks twice whenever it asks and is woken by
+/// the answer.
+async fn again(
+    embed: &EmbedRunner,
+    embed_log: &MemoryLog,
+    raw: &RawRunner,
+    host: &TestHost,
+    hosted: &HostedRunner<TestHost>,
+) {
+    embed_log.append("lead", "COMPLETE: done", None, &[]);
+    let (_, again) = one_turn(embed, embed_log.latest()).await;
+    assert_eq!(
+        again.len(),
+        1,
+        "the embed seat ran a second turn and called again"
+    );
     // A second raw turn is seeded with the first: what the seat said is what
     // it is shown, and the record starts empty again.
     let (_, again) = one_turn(raw, None).await;
     assert_eq!(again.len(), 1);
-    host.log.append("lead", "COMPLETE: done", None, None);
+    host.log.append("lead", "COMPLETE: done", None, &[]);
     let (_, again) = one_turn(hosted, host.log.latest()).await;
     assert_eq!(again.len(), 1, "the reused session ran and called again");
     assert_eq!(host.wrapped.load(Ordering::SeqCst), 2);
@@ -595,8 +784,14 @@ async fn both_runners() {
     let briefs: BTreeMap<String, String> = [("lead".to_owned(), "You lead the desk.".to_owned())]
         .into_iter()
         .collect();
-    let contract =
-        |kind: RunnerKind| standing_contract(served_specs(), "engineering", kind.how_to_call());
+    let contract = |kind: RunnerKind| {
+        standing_contract(
+            served_specs(),
+            "engineering",
+            std::slice::from_ref(&"lead".to_owned()),
+            kind.how_to_call(),
+        )
+    };
 
     // One definition for `lead` names every tool either native runner hands
     // it: the served belt for raw, and the host's prefixed one for hosted.
@@ -606,15 +801,10 @@ async fn both_runners() {
     register_seats(workspace.path(), &[("lead", "You lead the desk.")], &named)
         .expect("seats register");
     let runtime = Arc::new(runtime(&config, &backend, &route, workspace.path()).await);
-    let embed = EmbedRunner::seat(
-        &runtime,
-        Arc::new(EpisodeTools::new(["lead"])),
-        &briefs,
-        &contract(RunnerKind::Embed),
-        "test",
-    )
-    .await
-    .expect("embed seats");
+    // Both embed roads: the native belt, and the same seat over the socket.
+    // The second keeps ADR 0022's server exercised, and the two together
+    // prove a road is a road -- the same call lands in the same record.
+    let (embed_host, embed, mcp) = embed_arms(&runtime, &briefs, &contract).await;
     let raw = RawRunner::seat(
         Arc::new(EpisodeTools::new(["lead"])),
         &briefs,
@@ -641,6 +831,7 @@ async fn both_runners() {
     let (host, hosted) = hosted(library, &runtime, &contract(RunnerKind::Hosted));
 
     let (embed_reply, embed_events) = one_turn(&embed, None).await;
+    let (mcp_reply, mcp_events) = one_turn(&mcp, None).await;
     let (raw_reply, raw_events) = one_turn(&raw, None).await;
     // Seeded from the host's log: the operator's row is history, not brief.
     let (hosted_reply, hosted_events) = one_turn(&hosted, host.log.latest()).await;
@@ -655,20 +846,26 @@ async fn both_runners() {
     assert_eq!(hosted_reply, raw_reply);
     for (name, events) in [
         ("embed", &embed_events),
+        ("embed-mcp", &mcp_events),
         ("raw", &raw_events),
         ("hosted", &hosted_events),
     ] {
         one_completion(name, events);
     }
     assert_eq!(
+        embed_reply, mcp_reply,
+        "the two roads reach the same tools and land the same call"
+    );
+    assert_eq!(
         embed_reply, raw_reply,
         "the closing sentence is the model's"
     );
     let seen = metrics.snapshot();
-    assert_eq!(seen.round_trips.len(), 3, "one receipted call per runner");
-    assert!(seen.requests >= 6, "each turn is a call and a receipt");
+    assert_eq!(seen.round_trips.len(), 4, "one receipted call per runner");
+    assert!(seen.requests >= 8, "each turn is a call and a receipt");
 
-    again(&raw, &host, &hosted).await;
+    again(&embed, &embed_host.log, &raw, &host, &hosted).await;
+    where_the_roster_is(&runtime, &briefs, &contract, &metrics).await;
     ghosts(&embed, &raw, &hosted).await;
     plain(&runtime).await;
     halts(&host, &hosted).await;

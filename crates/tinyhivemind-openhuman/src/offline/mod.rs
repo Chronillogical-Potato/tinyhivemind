@@ -51,6 +51,9 @@ pub struct Metrics {
 struct Inner {
     requests: u64,
     bytes: u64,
+    /// The `tools` array of the first request since the last reset: what the
+    /// model was offered before it had asked anything.
+    first_tools: Option<Value>,
     /// Tool calls emitted and not yet receipted, oldest first.
     pending: VecDeque<Instant>,
     round_trips: Vec<Duration>,
@@ -63,6 +66,14 @@ pub struct Snapshot {
     pub requests: u64,
     /// Request bytes sent to the model, all requests.
     pub bytes: u64,
+    /// What the first request offered the model as tools, verbatim.
+    ///
+    /// A seat can only call what it was offered, and can only name what it
+    /// was shown. Two roads to the same tools differ here and nowhere else:
+    /// a native belt puts the tools themselves in this array, schemas and
+    /// all, and an MCP one puts three dispatchers in it and leaves the tools
+    /// behind a call the seat has to think to make.
+    pub first_tools: Option<Value>,
     /// Time from a tool call to its receipt, one per receipted call.
     pub round_trips: Vec<Duration>,
 }
@@ -80,12 +91,16 @@ impl Metrics {
         Snapshot {
             requests: inner.requests,
             bytes: inner.bytes,
+            first_tools: inner.first_tools.clone(),
             round_trips: inner.round_trips.clone(),
         }
     }
 
-    fn saw_request(&self, bytes: usize, receipted: bool) {
+    fn saw_request(&self, bytes: usize, receipted: bool, tools: Option<&Value>) {
         let mut inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+        if inner.requests == 0 {
+            inner.first_tools = tools.cloned();
+        }
         inner.requests += 1;
         inner.bytes += bytes as u64;
         if receipted && let Some(emitted) = inner.pending.pop_front() {
@@ -171,7 +186,7 @@ impl Respond for ScriptedModel {
                 .and_then(|m| m["content"].as_str().map(str::to_owned))
         });
         self.metrics
-            .saw_request(request.body.len(), receipt.is_some());
+            .saw_request(request.body.len(), receipt.is_some(), body.get("tools"));
         if receipt.is_some() && self.faults.receipt.load(Ordering::SeqCst) {
             return ResponseTemplate::new(500).set_body_string("scripted fault");
         }

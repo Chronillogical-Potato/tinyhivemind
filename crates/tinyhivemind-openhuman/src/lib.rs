@@ -15,10 +15,11 @@
 //!   every turn from the host's own log up to the seat's watermark. This is
 //!   the runner for a host that already has agents.
 //! - [`EmbedRunner`]: a seat is an `openhuman-embed` `AgentSpec` agent on a
-//!   runtime the host booted, holding one session across the episode, and
-//!   reaching the episode's tools through `OpenHuman`'s three MCP dispatchers
-//!   against `tinyhivemind-mcp`'s server -- the only road a spec offers a
-//!   tool the runtime did not ship.
+//!   runtime the host booted, holding one session across the episode that it
+//!   seeds from the host's journal every turn. Its belt is the episode's
+//!   tools, handed to the spec directly through `AgentSpec::tools`; the same
+//!   seats reach the same tools over `tinyhivemind-mcp`'s server instead
+//!   through [`EmbedRunner::seat_over_mcp`].
 //! - [`RawRunner`]: a seat is an `OpenHumanSessionHost` this crate builds on
 //!   a [`LibraryHost`] every turn, handed the same tools natively, with a
 //!   gate and a memory that keeps nothing, and seeded from a per-seat log it
@@ -68,11 +69,16 @@
 //!     }
 //!
 //!     fn commit(&self, commit: &Commit) -> tinyhivemind_openhuman::Result<Sequence> {
-//!         Ok(self.log.append(&commit.author, commit.utterance.message(), commit.thread, None))
+//!         Ok(self.log.append(
+//!             &commit.author,
+//!             commit.utterance.message(),
+//!             commit.thread,
+//!             &commit.only_for,
+//!         ))
 //!     }
 //!
 //!     fn note(&self, note: &Note) -> tinyhivemind_openhuman::Result<()> {
-//!         self.log.append("desk", &note.body, note.thread, note.only_for.as_deref());
+//!         self.log.append("desk", &note.body, note.thread, note.only_for.as_slice());
 //!         Ok(())
 //!     }
 //! }
@@ -136,6 +142,7 @@ pub mod journal;
 pub mod offline;
 pub mod raw;
 pub mod runner;
+mod seed;
 
 pub use embed::{EmbedRunner, EmbedSeat};
 pub use episode::{Journal, Released, Report, resume_episode, run_episode};

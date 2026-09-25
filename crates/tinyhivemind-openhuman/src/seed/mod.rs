@@ -1,4 +1,10 @@
 //! A seat's history, read from the host's log as that seat.
+//!
+//! Every runner that keeps a session across an episode seeds it from here
+//! rather than resuming it: a seeded turn *replaces* what the session holds
+//! (`clear_history`, then the rows, then no transcript autoload), so the host's
+//! journal is the only history a seat has, and two runners reading the same
+//! log show the same seat the same thing.
 
 use tinyhivemind::aside::Viewer;
 use tinyhivemind::{
@@ -25,7 +31,7 @@ use crate::Result;
 /// # Errors
 ///
 /// The host's log failing to read, or breaking the port's contract.
-pub(super) async fn history(
+pub(crate) async fn history(
     log: &dyn SessionLog,
     conversation: Conversation,
     seat: &str,
@@ -111,7 +117,7 @@ fn turn(
 /// question answers on its first turn and is never seen again, and what a
 /// host says here is often which side of the conversation that seat is on.
 #[must_use]
-pub(super) fn with_persona(
+pub(crate) fn with_persona(
     mut history: Vec<(String, String)>,
     persona: Option<String>,
 ) -> Vec<(String, String)> {

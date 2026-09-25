@@ -28,7 +28,6 @@
 //! like any other runner's.
 
 mod admission;
-mod seed;
 #[cfg(test)]
 mod test;
 
@@ -391,11 +390,15 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                 let usage = Arc::clone(&usage);
                 let this_turn = Arc::clone(&this_turn);
                 async move {
-                    let history =
-                        seed::history(host.log(), conversation, &seat, since, window, &|id| {
-                            host.display_name(id)
-                        })
-                        .await?;
+                    let history = crate::seed::history(
+                        host.log(),
+                        conversation,
+                        &seat,
+                        since,
+                        window,
+                        &|id| host.display_name(id),
+                    )
+                    .await?;
                     // At the head, so it lands where a composed prompt would,
                     // and on **every** turn -- including a seat's first.
                     //
@@ -419,7 +422,7 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                     // a teammate asked to take ownership of a piece of work
                     // replied that the *asker* owned it, having no idea which
                     // side of the conversation it was on.
-                    let history = seed::with_persona(history, host.persona(&seat));
+                    let history = crate::seed::with_persona(history, host.persona(&seat));
                     // `seed` is the whole of what the five calls here used to
                     // do: it drops whatever the session composed, puts this
                     // history in its place, and keeps the durable transcript
