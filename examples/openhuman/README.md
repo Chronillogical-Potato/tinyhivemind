@@ -47,7 +47,7 @@ corpus and paid campaign described in
 | `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
 | `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS completion-driven hive with stable OpenHuman sessions and live TypeSafe routing. |
 | `src/bin/deepswe_hive.rs` | Hermetic four-seat software-engineering hive over a caller-prepared disposable Git checkout. |
-| `src/bin/conducted.rs` | A live completion-driven episode: the loop stepped through the `Conductor`, any of the adapter's three runners, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline against the adapter's scripted model. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal; `CONDUCTED_DESK=launch` is a desk of one, whose single assigned seat holds no facts at all and has to reach four teammates with `ask` -- two of whom hold conditions that contradict each other, so settling it means asking them together in one conversation. |
+| `src/bin/conducted.rs` | A live completion-driven episode: the loop stepped through the `Conductor`, any of the adapter's runners, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline against the adapter's scripted model. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal; `CONDUCTED_DESK=launch` is a desk of one, whose single assigned seat holds no facts at all and has to reach four teammates by asking -- two of whom hold conditions that contradict each other, so settling it means putting them in one conversation with `ask_teammates`. |
 | `src/bin/conducted/hosted.rs` | This example as a host: `DeskJournal`, its in-memory log with the prompt and the log lines, for every runner; and `DeskHost`, an `EpisodeHost` whose seats are library sessions with the episode's belt. The runners and the loop live in `tinyhivemind-openhuman`. |
 | `src/bin/conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`, bridged through the wire form. |
 | `deepswe-sandbox/` | Reproducible local Docker image used for agent shell and test execution. |
@@ -60,8 +60,9 @@ door and a runner, and implements `Journal` over an in-memory log. The
 journal, the prompt and the log lines are the host's; the wave loop is the
 adapter's, and the conversations, nudges, sorting, refusals and walls are
 the conductor's, in `tinyhivemind-driver`.
-How a seat's turn *runs* is behind one seam, `SeatRunner`, with three
-implementations the loop cannot tell apart:
+How a seat's turn *runs* is behind one seam, `SeatRunner`, with four arms the
+loop cannot tell apart -- three implementations, and one of them on two roads
+to its tools:
 
 | `TINYHIVEMIND_RUNNER` | Seat | Tools | Context between turns |
 | --- | --- | --- | --- |
@@ -70,7 +71,7 @@ implementations the loop cannot tell apart:
 | `raw` | an `OpenHumanSessionHost` built one level down, per turn | the same four tools, in-process, each calling `EpisodeTools::call` | a per-seat log the runner keeps |
 | `hosted` | the host's own seat, built once per episode through `EpisodeHost` | the same four tools, in-process, admitted over the host's gate | seeded every turn from the host's journal, up to the seat's watermark |
 
-All three land every call in the same `EpisodeTools`, so the driver drains
+All four land every call in the same `EpisodeTools`, so the driver drains
 identical events and a seat is refused and acknowledged in the same words
 whichever runs it. The bound handle differs -- an `Agent` for embed, the raw seat
 itself for raw -- which is what `tinyhivemind-driver`'s `BoundAgent` is
@@ -93,12 +94,12 @@ TINYHIVEMIND_LIVE_OPENROUTER=1 cargo run --manifest-path examples/openhuman/Carg
 TINYHIVEMIND_LIVE_OPENROUTER=1 TINYHIVEMIND_RUNNER=raw cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
 ```
 
-Offline, either runner is a proof of its mechanics and needs no credential.
+Offline, every arm is a proof of its mechanics and needs no credential.
 A scripted model answers every seat with one `complete_episode` call in
-whichever dialect the request offers -- native for a raw session, or
-`mcp_call_tool` against the `episode` server for an embed agent -- routing is
-the deterministic fallback, and the run asserts that the call became a desk
-row.
+whichever dialect the request offers -- native for a raw session, a hosted
+seat or an embed seat on its own belt, or `mcp_call_tool` against the
+`episode` server for `embed-mcp` -- routing is the deterministic fallback, and
+the run asserts that the call became a desk row.
 
 ```sh
 cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
@@ -114,8 +115,8 @@ is about answers: every seat completes on its first turn, and what differs
 between the arms is the host. The arms share one process, so each begins
 with one episode that is run and not counted, for page faults and a cold
 allocator; `TINYHIVEMIND_RUNNER` names the arm that goes first (`embed` by
-default, `raw` or `hosted` for the native ones), and a difference that
-survives every order is the harness's.
+default, or `embed-mcp`, `raw` or `hosted`), and a difference that survives
+every order is the harness's.
 
 | Column | What it is |
 | --- | --- |
