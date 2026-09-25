@@ -39,7 +39,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use openhuman_core::agent::tinyagents::host::LastTurnUsage;
 use openhuman_core::agent::tool_policy::ToolPolicy;
-use openhuman_core::agent::{OpenHumanSessionHost, TurnOverrides};
+use openhuman_embed::Agent;
 use tinyhivemind::{Conversation, Sequence};
 use tinyhivemind_driver::{AgentBinding, BoundAgent};
 use tinyhivemind_tools::EpisodeTools;
@@ -56,16 +56,40 @@ pub type HostedTurn<'a> = Pin<Box<dyn Future<Output = Result<String>> + Send + '
 
 /// What a host gives the hosted runner, beside the [`Journal`] it is.
 pub trait EpisodeHost: Journal + 'static {
-    /// Build the session `seat` runs on, with `belt` on it.
+    /// The agent `seat` runs on, with `belt` reachable from it.
     ///
-    /// The host builds the agent it would build anyway, adds `belt.tools` to
-    /// its belt, and gates it with [`EpisodeBelt::admit`] over its own
-    /// policy. The session is reused for every turn of the episode.
+    /// The host returns the agent it would return anyway -- the same handle
+    /// its pool holds, not a second one built for the episode. What the
+    /// episode adds is `belt`: its tools, its advertised names, and
+    /// [`EpisodeBelt::admit`] over the host's own policy.
+    ///
+    /// # Why a handle rather than a session
+    ///
+    /// A session fixes its belt when it is built, so a host used to build one
+    /// session per seat per episode and the runner reused it. An `AgentSpec`
+    /// composes its belt per turn instead, which means the episode's tools can
+    /// reach the host's existing agent rather than a copy of it -- and a
+    /// teammate stops existing twice, once as the pool's handle and once as
+    /// the episode's session.
+    ///
+    /// The host keys `belt` by [`seat_session`](Self::seat_session) so its own
+    /// per-turn belt can answer with the episode's tools for those turns and
+    /// its ordinary ones otherwise.
     ///
     /// # Errors
     ///
-    /// Whatever stops the host building the seat.
-    fn build_seat(&self, seat: &str, belt: EpisodeBelt) -> Result<OpenHumanSessionHost>;
+    /// Whatever stops the host seating the agent.
+    fn build_seat(&self, seat: &str, belt: EpisodeBeltSource) -> Result<Agent>;
+
+    /// The conversation id every turn of this seat runs under.
+    ///
+    /// One id for the whole episode, minted by the host because the host is
+    /// what has to recognise it: it is the key its per-turn belt looks up to
+    /// know this turn is the episode's. The runner only passes it back.
+    ///
+    /// It must not collide with a conversation the host runs outside the
+    /// episode, or that conversation's belt answers here.
+    fn seat_session(&self, seat: &str) -> String;
 
     /// Wrap one turn. The default runs it as it is.
     fn wrap_turn<'a>(&'a self, seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
@@ -85,7 +109,7 @@ pub trait EpisodeHost: Journal + 'static {
         String::new()
     }
 
-    /// The seat's own standing prompt, for the turns that are not its first.
+    /// The seat's own standing prompt, for every turn it runs.
     ///
     /// A seat's session is cleared and reseeded from the host's log every
     /// turn, and seeding brings the runtime session up before the turn runs.
@@ -99,6 +123,13 @@ pub trait EpisodeHost: Journal + 'static {
     /// history, where the turn reads it as the system message it would have
     /// composed. `None` keeps the old behaviour for a host that has no
     /// standing prompt to give.
+    ///
+    /// This is asked on a seat's **first** turn too. A cold turn composes its
+    /// own prompt and takes the seed as well, so the two do not compete --
+    /// and the first turn is the one a host most needs to reach, because what
+    /// it says here is often *which side of a conversation this seat is on*.
+    /// A seat that is asked a question answers on turn one and is never seen
+    /// again; told nothing, it answers as though the room were its own.
     fn persona(&self, seat: &str) -> Option<String> {
         let _ = seat;
         None
@@ -149,6 +180,45 @@ impl std::fmt::Debug for EpisodeBelt {
     }
 }
 
+/// What builds a seat's [`EpisodeBelt`], as often as a host needs one.
+///
+/// A belt is `Vec<Box<dyn Tool>>` and a `Box<dyn Tool>` is not `Clone`, so a
+/// belt can be handed over once. An `AgentSpec` composes its belt **per turn**
+/// from a factory that is `Fn`, not `FnOnce` -- so a host cannot close over a
+/// belt it was given, only over what makes one. This is that.
+///
+/// Cheap to hold and to call: the tools are rebuilt from the episode's own
+/// [`EpisodeTools`], which is shared.
+#[derive(Clone)]
+pub struct EpisodeBeltSource {
+    seat: String,
+    tools: Arc<EpisodeTools>,
+    prefix: String,
+}
+
+impl std::fmt::Debug for EpisodeBeltSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EpisodeBeltSource")
+            .field("seat", &self.seat)
+            .field("prefix", &self.prefix)
+            .finish_non_exhaustive()
+    }
+}
+
+impl EpisodeBeltSource {
+    /// A belt for this seat, built fresh.
+    #[must_use]
+    pub fn belt(&self) -> EpisodeBelt {
+        EpisodeBelt::new(&self.seat, &self.tools, &self.prefix)
+    }
+
+    /// The seat this source belongs to.
+    #[must_use]
+    pub fn seat(&self) -> &str {
+        &self.seat
+    }
+}
+
 impl EpisodeBelt {
     fn new(seat: &str, tools: &Arc<EpisodeTools>, prefix: &str) -> Self {
         let tools = belt_with_prefix(seat, tools, prefix);
@@ -175,7 +245,7 @@ impl EpisodeBelt {
 #[derive(Clone)]
 pub struct HostedSeat {
     id: String,
-    session: Arc<tokio::sync::Mutex<OpenHumanSessionHost>>,
+    agent: Agent,
 }
 
 impl BoundAgent for HostedSeat {
@@ -233,13 +303,17 @@ impl<H: EpisodeHost> HostedRunner<H> {
         tools.name_seats(seats.iter().map(|id| (id.clone(), host.display_name(id))));
         let mut built = BTreeMap::new();
         for id in seats {
-            let belt = EpisodeBelt::new(id, &tools, &host.tool_prefix());
-            let session = host.build_seat(id, belt)?;
+            let belt = EpisodeBeltSource {
+                seat: id.clone(),
+                tools: Arc::clone(&tools),
+                prefix: host.tool_prefix(),
+            };
+            let agent = host.build_seat(id, belt)?;
             built.insert(
                 id.clone(),
                 HostedSeat {
                     id: id.clone(),
-                    session: Arc::new(tokio::sync::Mutex::new(session)),
+                    agent,
                 },
             );
         }
@@ -286,9 +360,10 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
     /// and run the brief, inside the host's wrapper.
     fn turn(&self, seat: String, lane: Lane, since: Option<Sequence>, prompt: String) -> TurnJob {
         let host = Arc::clone(&self.host);
-        let Some(session) = self.seats.get(&seat).map(|held| Arc::clone(&held.session)) else {
+        let Some(agent) = self.seats.get(&seat).map(|held| held.agent.clone()) else {
             return unseated(seat, lane);
         };
+        let session_id = self.host.seat_session(&seat);
         let usage = Arc::clone(&self.usage);
         // Whatever the turn before left under this seat is not this turn's:
         // a turn that fails before the session reports anything is metered
@@ -316,43 +391,96 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                 let usage = Arc::clone(&usage);
                 let this_turn = Arc::clone(&this_turn);
                 async move {
-                    let mut history =
-                        seed::history(host.log(), conversation, &seat, since, window, &|id| {
-                            host.display_name(id)
-                        })
-                        .await?;
-                    // At the head, so it lands where a composed prompt would.
-                    // Only when there is history to seed: with none, seeding
-                    // is skipped entirely and the turn is cold, which is the
-                    // one case that already renders the prompt itself.
-                    if !history.is_empty()
-                        && let Some(persona) = host.persona(&seat)
-                    {
-                        history.insert(0, ("system".to_owned(), persona));
-                    }
-                    let mut session = session.lock().await;
-                    // Clearing drops the runtime session, and with it the
-                    // turn state, so the seed and the overrides go after it.
-                    session.clear_history();
-                    session.seed_resume_from_messages(history, &prompt)?;
-                    session.set_next_turn_overrides(TurnOverrides {
-                        suppress_transcript_autoload: true,
-                        ..TurnOverrides::default()
-                    });
-                    let reply = tokio::time::timeout(TURN_TIMEOUT, session.turn(&prompt))
-                        .await
-                        .map_err(|_| Error::TimedOut { seat: seat.clone() })?
-                        .map_err(Error::Harness)?;
-                    // This turn's usage, or none: a turn the session reported
-                    // nothing for must not be metered as the one before it.
-                    let last = session.last_turn_usage();
-                    let mut metered = usage.lock().unwrap_or_else(PoisonError::into_inner);
+                    let history = seed::history(
+                        host.log(),
+                        conversation,
+                        &seat,
+                        since,
+                        window,
+                        &|id| host.display_name(id),
+                    )
+                    .await?;
+                    // At the head, so it lands where a composed prompt would,
+                    // and on **every** turn -- including a seat's first.
+                    //
+                    // This used to be guarded on `!history.is_empty()`, on the
+                    // reasoning that a turn with nothing to seed "is cold, and
+                    // that is the one case that renders the prompt itself". The
+                    // premise is right and the conclusion does not follow. The
+                    // host runtime matches `seed: Some(seed)`, which an empty
+                    // vector satisfies, so the seeding branch runs either way;
+                    // and what it runs is `clear_history`, which drops the
+                    // conversation, not the definition's composed prompt. So a
+                    // cold turn renders that prompt *and* would take a seed --
+                    // it was simply never given one.
+                    //
+                    // What the guard actually did was withhold the persona from
+                    // the only turn that has no other way to learn who it is. A
+                    // host tells a seat here that it is a guest in someone
+                    // else's conversation, and what it may do about that; a
+                    // seat asked a question answers it on turn one and is never
+                    // seen again, so under the guard it was told neither. Live:
+                    // a teammate asked to take ownership of a piece of work
+                    // replied that the *asker* owned it, having no idea which
+                    // side of the conversation it was on.
+                    let history = seed::with_persona(history, host.persona(&seat));
+                    // `seed` is the whole of what the five calls here used to
+                    // do: it drops whatever the session composed, puts this
+                    // history in its place, and keeps the durable transcript
+                    // from being reloaded over it. The journal is the only
+                    // history a seat has, and this is how it becomes the turn's.
+                    // Metered through the callback, not the outcome.
+                    //
+                    // A `TurnOutcome` is built on the success path only, so a
+                    // turn that ran, called tools and then failed would report
+                    // no spend at all -- undercounting exactly the turns that
+                    // cost the most. `meter` fires after the turn settles and
+                    // before its error is returned, so the hook below sees the
+                    // spend either way.
+                    let metered: Arc<Mutex<Option<LastTurnUsage>>> = Arc::new(Mutex::new(None));
+                    let sink = Arc::clone(&metered);
+                    let settled = tokio::time::timeout(
+                        TURN_TIMEOUT,
+                        agent
+                            .turn(&prompt)
+                            .session(session_id.clone())
+                            .seed(history)
+                            .meter(move |usage| {
+                                *sink.lock().unwrap_or_else(PoisonError::into_inner) = usage;
+                            })
+                            .send(),
+                    )
+                    .await;
+                    // Recorded before either error is raised, which is the
+                    // whole point of metering through the callback: `meter`
+                    // fires as the turn settles, either way, and a `?` above
+                    // these writes would carry what it caught out of the
+                    // function. Two things then go wrong at once -- the hook
+                    // is handed `None`, and the seat's entry in the usage map
+                    // is left reading the *previous* turn's spend.
+                    //
+                    // What the sink actually holds for a turn that died is
+                    // `None` today: OpenHuman records `last_turn_usage` after
+                    // the turn's durable commit, so a turn that failed before
+                    // one was never counted. That is a gap one layer down,
+                    // not here; this end is correct either way, and the stale
+                    // entry it clears is a real number a host would have
+                    // billed twice.
+                    let last = metered
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .take();
+                    let mut spend = usage.lock().unwrap_or_else(PoisonError::into_inner);
                     match &last {
-                        Some(last) => metered.insert(seat.clone(), last.clone()),
-                        None => metered.remove(&seat),
+                        Some(last) => spend.insert(seat.clone(), last.clone()),
+                        None => spend.remove(&seat),
                     };
-                    drop(metered);
+                    drop(spend);
                     *this_turn.lock().unwrap_or_else(PoisonError::into_inner) = last;
+                    let reply = settled
+                        .map_err(|_| Error::TimedOut { seat: seat.clone() })?
+                        .map_err(|error| Error::Harness(anyhow::anyhow!(error.to_string())))?
+                        .reply;
                     Ok(reply)
                 }
             };

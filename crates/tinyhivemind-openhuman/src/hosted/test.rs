@@ -15,7 +15,7 @@ use tinyhivemind::{Conversation, Sequence, SessionLog};
 use tinyhivemind_tools::{Dispatch, EpisodeTools, served_specs};
 
 use super::EpisodeBelt;
-use super::seed::history;
+use super::seed::{history, with_persona};
 use crate::MemoryLog;
 
 fn desk(thread_root: Option<Sequence>) -> Conversation {
@@ -320,4 +320,40 @@ async fn a_prefixed_belt_is_called_by_the_prefixed_name_and_records_the_served_o
             tinyhivemind::speech::Utterance::CompleteEpisode { .. }
         )
     ));
+}
+
+/// A seat's persona reaches its **first** turn, not just its later ones.
+///
+/// The guard this replaces asked for a non-empty history, on the reasoning
+/// that a turn with nothing to seed renders its own prompt anyway. It does --
+/// and it takes the seed as well, because the host runtime's seeding branch
+/// matches `seed: Some(..)` and clears the conversation rather than the
+/// composed prompt. So the guard bought nothing and cost the one turn that
+/// has no other way to learn who it is: a seat that is asked a question
+/// answers once and is never seen again. Observed live, a teammate asked to
+/// take ownership of a piece of work replied that the *asker* owned it.
+#[test]
+fn a_persona_leads_the_seed_even_when_there_is_nothing_else_in_it() {
+    let cold = with_persona(Vec::new(), Some("you are a guest here".into()));
+    assert_eq!(
+        cold,
+        vec![("system".to_string(), "you are a guest here".to_string())],
+        "a first turn is seeded with the persona alone"
+    );
+
+    let warm = with_persona(
+        vec![("user".into(), "which port?".into())],
+        Some("you are a guest here".into()),
+    );
+    assert_eq!(
+        warm.first().map(|(role, _)| role.as_str()),
+        Some("system"),
+        "and leads what a later turn was shown"
+    );
+    assert_eq!(warm.len(), 2, "without displacing it");
+
+    assert!(
+        with_persona(Vec::new(), None).is_empty(),
+        "a host with no standing prompt seeds nothing, as before"
+    );
 }
