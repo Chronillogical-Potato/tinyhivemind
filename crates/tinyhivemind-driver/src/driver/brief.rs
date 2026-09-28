@@ -224,8 +224,10 @@ impl EpisodeBrief {
                     format_args!(
                         "Your assignment was made at sequence {}. Record your part with \
                          `complete_episode`: its message is your finding. Hand what is another \
-                         seat's on with `broadcast`. A reply that calls no tool records nothing. \
-                         {READER}",
+                         seat's on with `broadcast`. Those two and `ask` are the only calls \
+                         that record anything here -- every other tool does real work but says \
+                         nothing, so a turn that calls only those, or no tool at all, leaves \
+                         the desk exactly as it was. {READER}",
                         at.0
                     ),
                 );
@@ -267,7 +269,55 @@ impl EpisodeBrief {
         out
     }
 
+    /// The seat's own other conversations, for a turn taken inside one of
+    /// them. `skip` is the thread being rendered above, whose rows are
+    /// already there.
+    ///
+    /// # Why a thread turn gets these at all
+    ///
+    /// Because a seat is one agent across every conversation it sits in, and
+    /// it was a party to each of them. Without this it wakes inside one
+    /// holding only the sentence it was just sent: a live run asked one
+    /// teammate the same question twice, on two threads, and the second brief
+    /// carried no trace of the answer it had already given -- so it answered
+    /// blind and the asker paid to restate context the askee itself had
+    /// produced.
+    ///
+    /// This does not widen what the seat may read. Every conversation here is
+    /// one this seat was a party to, never one it was not in, and never the
+    /// room's own traffic -- a guest bound into an operator's line is a party
+    /// to its threads and not to that line. A group ask puts several seats in
+    /// one conversation, and each of them was still a party to it.
+    fn render_own_conversations(&self, skip: Sequence) -> String {
+        let mine = |concluded: bool| -> Vec<String> {
+            self.conversations
+                .iter()
+                .filter(|view| view.root != skip && view.concluded == concluded)
+                .map(|view| self.render_conversation(view))
+                .collect()
+        };
+        let mut out = String::new();
+        let concluded = mine(true);
+        if !concluded.is_empty() {
+            out.push_str("\n\n## Your other conversations, concluded\n");
+            out.push_str(&concluded.join("\n\n"));
+        }
+        let open = mine(false);
+        if !open.is_empty() {
+            out.push_str("\n\n## Your other conversations, still open\n");
+            out.push_str(&open.join("\n\n"));
+        }
+        out
+    }
+
     fn render_thread(&self, root: Sequence, others: &[String], opened_it: bool) -> String {
+        // The seat's own other conversations, then whatever the desk is
+        // carrying: bound here because the outer `format!` may not nest one.
+        let context = format!(
+            "{}{}",
+            self.render_own_conversations(root),
+            self.render_elsewhere()
+        );
         let role = if opened_it {
             "You opened this conversation; their answer reaches you on the desk. There is \
              nothing for you to do here."
@@ -300,7 +350,7 @@ impl EpisodeBrief {
             self.roll_call(others),
             root.0,
             rows_or_nothing(&self.new_rows),
-            self.render_elsewhere(),
+            context,
             self.chat,
             root.0
         )

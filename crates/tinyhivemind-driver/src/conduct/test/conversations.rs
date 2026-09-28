@@ -706,3 +706,169 @@ fn a_conclusion_the_fold_refuses_leaves_the_conversation_to_conclude_later() {
     );
     assert_eq!(conductor.conversations(), 1);
 }
+
+/// A seat asked twice is shown, on the second thread, what it already said on
+/// the first.
+///
+/// # The run this is drawn from
+///
+/// One teammate was asked two questions on two threads. The second brief
+/// carried no trace of the answer it had already given, so it answered blind —
+/// and the asker paid to restate context the askee itself had produced. The
+/// thread branch of `open_turn` was handing `EpisodeBrief::for_turn` an empty
+/// conversation list, so a seat inside a conversation held only the sentence it
+/// had just been sent.
+///
+/// The read must not consume: `views` advances `shown` because a desk turn is
+/// owed each concluded conversation once, and a thread turn borrowing it would
+/// spend that digest somewhere the cursor was never meant to serve. The final
+/// assertion is the one that catches it — the asker's own desk turn still gets
+/// the conversations afterwards.
+#[test]
+fn a_seat_asked_twice_is_shown_its_own_earlier_conversation() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 8).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+
+    // First question, answered and concluded.
+    wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![ask("two", "which port?")])],
+    )
+    .expect("first ask");
+    wave(&mut conductor, &journal, &[("two", vec![complete("8080")])]).expect("first answer");
+
+    // Second question to the same seat.
+    wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![ask("two", "and the timeout?")])],
+    )
+    .expect("second ask");
+
+    conductor.begin_wave();
+    let turns = conductor.turns().expect("turns");
+    let second = turns
+        .iter()
+        .find(|turn| turn.seat == "two")
+        .expect("the askee is due again");
+    // What the seat's desk cursor stood at before the thread turn: its own
+    // earlier desk turns have already spent part of it, and this turn must
+    // spend none of it.
+    let cursor_before = conductor.shown_conversations("two");
+    let brief = conductor.open_turn(second, journal.latest(), Vec::new(), |root| {
+        journal.thread(root)
+    });
+
+    let earlier: Vec<_> = brief
+        .conversations
+        .iter()
+        .filter(|view| view.concluded)
+        .collect();
+    assert_eq!(
+        earlier.len(),
+        1,
+        "the second thread must carry the first conversation: {:?}",
+        brief.conversations
+    );
+    assert!(
+        !earlier[0].transcript.is_empty(),
+        "and carry its rows, not just its existence"
+    );
+    assert!(
+        !earlier[0].opened_it,
+        "the askee did not open the conversation it was asked in"
+    );
+
+    // Read, not spent. `views` advances `shown` because a desk turn is owed
+    // each concluded conversation once; a thread turn borrowing it would spend
+    // that digest where the cursor was never meant to serve.
+    assert_eq!(
+        conductor.shown_conversations("two"),
+        cursor_before,
+        "a thread turn must not advance the seat's own desk cursor"
+    );
+}
+
+/// A thread turn asks its transcript callback for exactly the roots
+/// `conversations_involving` reports, and for nothing else.
+///
+/// # Why this invariant is the one that matters
+///
+/// The callback is a prefetch, not a lookup: a host reads the rows it expects to
+/// be asked for and answers only from what it read. `tinyhivemind-openhuman`
+/// returns an empty transcript for any other root, and a `ConversationView`
+/// with no transcript renders as a heading promising an exchange and delivering
+/// none — worse than showing nothing.
+///
+/// So the list a host prefetches and the roots the conductor requests have to be
+/// the same list. They were not: the host prefetched nothing at all on a thread
+/// turn, so the first version of this fix would have rendered a seat's own
+/// history as empty headings in production while both of its own tests passed —
+/// one supplying a callback that served every root, the other hand-building
+/// views that already had transcripts.
+#[test]
+fn a_thread_turn_asks_only_for_the_roots_the_host_is_told_to_prefetch() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 8).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+
+    wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![ask("two", "which port?")])],
+    )
+    .expect("first ask");
+    wave(&mut conductor, &journal, &[("two", vec![complete("8080")])]).expect("first answer");
+    wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![ask("two", "and the timeout?")])],
+    )
+    .expect("second ask");
+
+    conductor.begin_wave();
+    let turns = conductor.turns().expect("turns");
+    let second = turns
+        .iter()
+        .find(|turn| turn.seat == "two")
+        .expect("the askee is due again");
+
+    let expected = conductor.conversations_involving("two");
+    assert!(
+        !expected.is_empty(),
+        "the seat has been in conversations, so a host has something to prefetch"
+    );
+
+    let mut asked_for = Vec::new();
+    conductor.open_turn(second, journal.latest(), Vec::new(), |root| {
+        asked_for.push(root);
+        journal.thread(root)
+    });
+    asked_for.sort_by_key(|root| root.0);
+    let mut expected_sorted = expected.clone();
+    expected_sorted.sort_by_key(|root| root.0);
+    assert_eq!(
+        asked_for, expected_sorted,
+        "what the conductor requests and what a host is told to prefetch must be one list"
+    );
+}

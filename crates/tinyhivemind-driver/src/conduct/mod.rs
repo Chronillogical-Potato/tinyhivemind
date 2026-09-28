@@ -352,7 +352,10 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             steps.push(Step::Note(Note {
                 body: "you still have open work and nothing new has come in. Finish your part \
                        with what you have, or hand the part that belongs to a teammate over to \
-                       them. Only a tool call is recorded."
+                       them, or ask one of them a question. Those three are the only \
+                       things that record anything here; reading, searching and every other \
+                       kind of work says nothing on its own, so a turn spent only on those \
+                       leaves this desk as it was."
                     .to_owned(),
                 thread: None,
                 only_for: Some(seat.clone()),
@@ -623,6 +626,10 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     ) -> EpisodeBrief {
         match turn.channel {
             Channel::Thread { root, .. } => {
+                // Read before the child is borrowed mutably below, and before
+                // this turn's own mutations: what the seat is owed is what it
+                // has already been part of, which this turn has not changed.
+                let mine = self.views_unconsumed(&turn.seat, &mut transcript);
                 if let Some(child) = self.children.get_mut(&root) {
                     if let Some(latest) = latest {
                         child.state.delivered(&turn.seat, latest);
@@ -636,7 +643,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                         turn.seat.clone(),
                         turn.channel.clone(),
                         new_rows,
-                        Vec::new(),
+                        mine.clone(),
                     );
                 }
                 EpisodeBrief::for_turn(
@@ -645,7 +652,7 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                     turn.seat.clone(),
                     turn.channel.clone(),
                     new_rows,
-                    Vec::new(),
+                    mine,
                 )
             }
             Channel::Desk => {
@@ -664,6 +671,37 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
                 )
             }
         }
+    }
+
+    /// Every conversation this seat was a party to, cursor ignored: exactly
+    /// the roots a thread turn's transcript callback will be asked for.
+    ///
+    /// (Unlinked on purpose: the read that asks for them, `views_unconsumed`,
+    /// is private, and `cargo doc` runs with `-D warnings`.)
+    ///
+    /// # Why a host needs this
+    ///
+    /// Because that callback is a prefetch, not a lookup. A host reads the rows
+    /// it expects to be asked for and hands back what it has; a root it did not
+    /// read yields an empty transcript, and a `ConversationView` with no
+    /// transcript renders as a heading promising an exchange and delivering
+    /// none. So a host opening a **thread** turn must prefetch these, and
+    /// [`Self::shown_conversations`] is the wrong list for that — it is the
+    /// cursored one a desk turn is owed, and it is deliberately empty for a
+    /// seat whose digest has already been spent.
+    #[must_use]
+    pub fn conversations_involving(&self, seat: &str) -> Vec<Sequence> {
+        self.concluded
+            .iter()
+            .filter(|done| done.involves(seat))
+            .map(|done| done.root)
+            .chain(
+                self.children
+                    .values()
+                    .filter(|child| child.involves(seat))
+                    .map(|child| child.root),
+            )
+            .collect()
     }
 
     /// The conversations `seat` would be shown on its next desk turn, by
@@ -688,6 +726,44 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
 
     /// The conversations a seat is shown on a desk turn: those concluded
     /// since it last spoke, whole, once; and any still in progress.
+    /// The conversations a seat is shown on a **thread** turn: every one it
+    /// was a party to in this episode, read without consuming anything.
+    ///
+    /// # Why this does not call [`Self::views`]
+    ///
+    /// Because that one is "since you last spoke" and says so by advancing
+    /// `shown`. A thread turn borrowing it would consume the seat's digest:
+    /// the conversation would be shown inside the thread and then be missing
+    /// from the desk turn that the cursor exists to serve. Two different
+    /// questions -- "what is new for you on the desk" and "what have you
+    /// already been part of" -- so two reads, and only the first one counts.
+    ///
+    /// Whole history rather than a window, for the same reason: a seat
+    /// answering a second question needs what it said the first time, however
+    /// long ago that was. A live run asked one teammate twice on two threads
+    /// and the second brief carried no trace of the first, so it answered
+    /// blind and the asker paid to restate context the askee itself had
+    /// produced.
+    fn views_unconsumed(
+        &self,
+        seat: &str,
+        transcript: &mut impl FnMut(Sequence) -> Vec<String>,
+    ) -> Vec<ConversationView> {
+        let mut views: Vec<ConversationView> = self
+            .concluded
+            .iter()
+            .filter(|done| done.involves(seat))
+            .map(|done| done.view(seat, transcript(done.root)))
+            .collect();
+        views.extend(
+            self.children
+                .values()
+                .filter(|child| child.involves(seat))
+                .map(|child| child.view(seat, transcript(child.root))),
+        );
+        views
+    }
+
     fn views(
         &mut self,
         seat: &str,
