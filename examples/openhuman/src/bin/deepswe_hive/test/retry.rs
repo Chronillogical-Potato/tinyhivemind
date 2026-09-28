@@ -654,10 +654,16 @@ fn empty_provider_response_retries_only_that_seat_and_commits_once() {
         assert_eq!(result["turns"], 4, "provider failure is not committed");
 
         let state = state.lock().expect("script state");
+        // The empty response, then the hive's own fresh retry. There is no
+        // second fallback above it any more: an episode used to build its own
+        // `OpenHumanSessionHost` beside the one the host already had, and both
+        // turn loops answered an empty completion. Seating the episode on the
+        // host's own agent left one loop, so one retry -- which is the point of
+        // that change, not a regression in it.
         assert_eq!(
             state.turn_starts.get("lead"),
-            Some(&3),
-            "one OpenHuman empty-response fallback and one fresh hive retry"
+            Some(&2),
+            "the empty response, then one fresh hive retry"
         );
         for seat in ["implementer", "tester", "reviewer"] {
             assert_eq!(state.turn_starts.get(seat), Some(&1), "@{seat} reran");
