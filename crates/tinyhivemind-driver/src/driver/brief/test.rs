@@ -406,3 +406,90 @@ fn a_named_brief_writes_its_conversations_and_waits_by_name() {
             .contains("## A private conversation with Tess (thread 1)")
     );
 }
+
+/// A seat answering inside one conversation reads its own others, and not the
+/// thread it is already looking at.
+///
+/// The conductor hands these over on a thread turn so a seat asked twice is not
+/// answering blind (`conduct::test::conversations`). This is the half that puts
+/// them in front of it: without the rendering the data arrives and nothing
+/// prints it, which is how the first attempt at this fix shipped inert.
+#[test]
+fn a_thread_brief_carries_the_seat_s_other_conversations() {
+    let (_hive, state) = state_with_an_ask();
+    let earlier = ConversationView {
+        root: Sequence(7),
+        others: vec!["three".into()],
+        opened_it: false,
+        transcript: vec!["@three: which port?".into(), "@two: 8080".into()],
+        concluded: true,
+    };
+    let open = ConversationView {
+        root: Sequence(9),
+        others: vec!["four".into()],
+        opened_it: true,
+        transcript: vec!["@two: still waiting".into()],
+        concluded: false,
+    };
+    let text = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "two",
+        Channel::Thread {
+            root: Sequence(1),
+            others: vec!["one".into()],
+            opened_it: false,
+        },
+        vec!["@one: and the timeout?".into()],
+        vec![earlier, open],
+    )
+    .render();
+
+    assert!(
+        text.contains("## Your other conversations, concluded"),
+        "the concluded one is shown: {text}"
+    );
+    assert!(
+        text.contains("@two: 8080"),
+        "and carries its rows, which is the whole point: {text}"
+    );
+    assert!(
+        text.contains("## Your other conversations, still open"),
+        "an open one is shown under its own heading: {text}"
+    );
+    assert!(
+        text.contains("@one: and the timeout?"),
+        "the thread being answered is still rendered above: {text}"
+    );
+}
+
+/// The thread being answered is not repeated among "your other conversations".
+#[test]
+fn a_thread_brief_does_not_repeat_the_conversation_it_is_in() {
+    let (_hive, state) = state_with_an_ask();
+    let this_one = ConversationView {
+        root: Sequence(1),
+        others: vec!["one".into()],
+        opened_it: false,
+        transcript: vec!["@one: the question".into()],
+        concluded: false,
+    };
+    let text = EpisodeBrief::for_turn(
+        &state,
+        "engineering",
+        "two",
+        Channel::Thread {
+            root: Sequence(1),
+            others: vec!["one".into()],
+            opened_it: false,
+        },
+        Vec::new(),
+        vec![this_one],
+    )
+    .render();
+
+    assert!(
+        !text.contains("## Your other conversations"),
+        "the only conversation it has is the one it is in: {text}"
+    );
+}
