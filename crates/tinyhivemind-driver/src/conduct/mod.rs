@@ -352,9 +352,10 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
             steps.push(Step::Note(Note {
                 body: "you still have open work and nothing new has come in. Finish your part \
                        with what you have, or hand the part that belongs to a teammate over to \
-                       them. Only finishing your part or handing it over records anything \
-                       here; reading, searching and every other kind of work says nothing on \
-                       its own, so a turn spent only on those leaves this desk as it was."
+                       them, or ask one of them a question. Those three are the only \
+                       things that record anything here; reading, searching and every other \
+                       kind of work says nothing on its own, so a turn spent only on those \
+                       leaves this desk as it was."
                     .to_owned(),
                 thread: None,
                 only_for: Some(seat.clone()),

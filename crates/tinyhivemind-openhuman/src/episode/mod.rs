@@ -480,7 +480,15 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
         // `rows` already holds these lines, and the same row rendered two
         // ways would never match itself.
         let fresh = rows_above(log, &thread, &turn.seat, turn.since, latest, true, &names).await?;
-        if fresh.iter().all(|row| rows.contains(row)) {
+        // **Nothing fresh is not the same as already carried.**
+        //
+        // `all` over an empty `fresh` is vacuously true, and on a thread turn
+        // `turn.since` is *this* thread's watermark -- so every row of an
+        // earlier, concluded conversation sits below it and `fresh` comes back
+        // empty. Treating that as carried drops the transcript, which is the
+        // one thing a seat answering a second question needs. The check is
+        // about rows this read already holds, so it needs rows to hold.
+        if !fresh.is_empty() && fresh.iter().all(|row| rows.contains(row)) {
             carried.insert(root);
             continue;
         }
