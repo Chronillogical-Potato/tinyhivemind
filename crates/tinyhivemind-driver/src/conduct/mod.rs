@@ -673,8 +673,10 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
     }
 
     /// Every conversation this seat was a party to, cursor ignored: exactly
-    /// the roots [`Self::views_unconsumed`] will ask a thread turn's transcript
-    /// callback for.
+    /// the roots a thread turn's transcript callback will be asked for.
+    ///
+    /// (Unlinked on purpose: the read that asks for them, `views_unconsumed`,
+    /// is private, and `cargo doc` runs with `-D warnings`.)
     ///
     /// # Why a host needs this
     ///
