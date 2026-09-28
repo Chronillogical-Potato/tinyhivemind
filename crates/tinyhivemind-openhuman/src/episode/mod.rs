@@ -438,8 +438,11 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
             parent: turn.thread().map(|root| root.0.to_string()),
         },
     );
-    // Only a desk turn is shown its conversations, so only a desk turn
-    // reads them.
+    // A desk turn is shown the conversations it is owed; a thread turn is
+    // shown the seat's own, so it reads those. Both have to be prefetched
+    // here, because the callback below answers only from what this map holds
+    // and a view with no transcript is a heading that promises an exchange
+    // and delivers none.
     let mut transcripts = std::collections::BTreeMap::new();
     // Conversations this turn's desk read already carries, whose views are
     // dropped below. Held rather than simply skipped: the conductor builds a
@@ -450,7 +453,11 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
     let mut carried = std::collections::BTreeSet::new();
     let shown = match turn.thread() {
         None => conductor.shown_conversations(&turn.seat),
-        Some(_) => Vec::new(),
+        // Exactly the roots `views_unconsumed` asks for. Not
+        // `shown_conversations`: that one is cursored, and a seat whose desk
+        // digest has already been spent would prefetch nothing and read its own
+        // history as a row of empty headings.
+        Some(_) => conductor.conversations_involving(&turn.seat),
     };
     for root in shown {
         let thread = Conversation {

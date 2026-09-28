@@ -672,6 +672,35 @@ impl<'a, A: BoundAgent> Conductor<'a, A> {
         }
     }
 
+    /// Every conversation this seat was a party to, cursor ignored: exactly
+    /// the roots [`Self::views_unconsumed`] will ask a thread turn's transcript
+    /// callback for.
+    ///
+    /// # Why a host needs this
+    ///
+    /// Because that callback is a prefetch, not a lookup. A host reads the rows
+    /// it expects to be asked for and hands back what it has; a root it did not
+    /// read yields an empty transcript, and a `ConversationView` with no
+    /// transcript renders as a heading promising an exchange and delivering
+    /// none. So a host opening a **thread** turn must prefetch these, and
+    /// [`Self::shown_conversations`] is the wrong list for that — it is the
+    /// cursored one a desk turn is owed, and it is deliberately empty for a
+    /// seat whose digest has already been spent.
+    #[must_use]
+    pub fn conversations_involving(&self, seat: &str) -> Vec<Sequence> {
+        self.concluded
+            .iter()
+            .filter(|done| done.involves(seat))
+            .map(|done| done.root)
+            .chain(
+                self.children
+                    .values()
+                    .filter(|child| child.involves(seat))
+                    .map(|child| child.root),
+            )
+            .collect()
+    }
+
     /// The conversations `seat` would be shown on its next desk turn, by
     /// root: those concluded since it last spoke, and any still in progress.
     /// A host that reads its log asynchronously fetches these transcripts

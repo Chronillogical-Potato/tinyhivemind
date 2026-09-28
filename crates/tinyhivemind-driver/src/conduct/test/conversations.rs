@@ -799,3 +799,76 @@ fn a_seat_asked_twice_is_shown_its_own_earlier_conversation() {
         "a thread turn must not advance the seat's own desk cursor"
     );
 }
+
+/// A thread turn asks its transcript callback for exactly the roots
+/// `conversations_involving` reports, and for nothing else.
+///
+/// # Why this invariant is the one that matters
+///
+/// The callback is a prefetch, not a lookup: a host reads the rows it expects to
+/// be asked for and answers only from what it read. `tinyhivemind-openhuman`
+/// returns an empty transcript for any other root, and a `ConversationView`
+/// with no transcript renders as a heading promising an exchange and delivering
+/// none — worse than showing nothing.
+///
+/// So the list a host prefetches and the roots the conductor requests have to be
+/// the same list. They were not: the host prefetched nothing at all on a thread
+/// turn, so the first version of this fix would have rendered a seat's own
+/// history as empty headings in production while both of its own tests passed —
+/// one supplying a callback that served every root, the other hand-building
+/// views that already had transcripts.
+#[test]
+fn a_thread_turn_asks_only_for_the_roots_the_host_is_told_to_prefetch() {
+    let hive = hive(&["one", "two"]);
+    let driver = CompletionDriver::new(&hive, 8).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = two_seat(&driver, routing, ConductPolicy::default(), &journal);
+
+    wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![ask("two", "which port?")])],
+    )
+    .expect("first ask");
+    wave(&mut conductor, &journal, &[("two", vec![complete("8080")])]).expect("first answer");
+    wave(
+        &mut conductor,
+        &journal,
+        &[("one", vec![ask("two", "and the timeout?")])],
+    )
+    .expect("second ask");
+
+    conductor.begin_wave();
+    let turns = conductor.turns().expect("turns");
+    let second = turns
+        .iter()
+        .find(|turn| turn.seat == "two")
+        .expect("the askee is due again");
+
+    let expected = conductor.conversations_involving("two");
+    assert!(
+        !expected.is_empty(),
+        "the seat has been in conversations, so a host has something to prefetch"
+    );
+
+    let mut asked_for = Vec::new();
+    conductor.open_turn(second, journal.latest(), Vec::new(), |root| {
+        asked_for.push(root);
+        journal.thread(root)
+    });
+    asked_for.sort_by_key(|root| root.0);
+    let mut expected_sorted = expected.clone();
+    expected_sorted.sort_by_key(|root| root.0);
+    assert_eq!(
+        asked_for, expected_sorted,
+        "what the conductor requests and what a host is told to prefetch must be one list"
+    );
+}
