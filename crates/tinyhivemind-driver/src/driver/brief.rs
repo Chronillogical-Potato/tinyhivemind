@@ -224,8 +224,10 @@ impl EpisodeBrief {
                     format_args!(
                         "Your assignment was made at sequence {}. Record your part with \
                          `complete_episode`: its message is your finding. Hand what is another \
-                         seat's on with `broadcast`. A reply that calls no tool records nothing. \
-                         {READER}",
+                         seat's on with `broadcast`. Those two and `ask` are the only calls \
+                         that record anything here -- every other tool does real work but says \
+                         nothing, so a turn that calls only those, or no tool at all, leaves \
+                         the desk exactly as it was. {READER}",
                         at.0
                     ),
                 );
