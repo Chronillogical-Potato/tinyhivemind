@@ -275,7 +275,8 @@ where
                 )
             })
             .collect();
-        for (seat, lane, outcome) in join_turns(jobs, named).await {
+        let mut running = Running::spawn(jobs, named);
+        while let Some((seat, lane, outcome)) = running.next().await {
             // Close the turn first: the record refuses a call on a closed
             // turn, so nothing can land after this point is read.
             let events = runner.close(&seat);
@@ -288,6 +289,18 @@ where
                 } else {
                     conductor.record(turn, calls);
                 }
+            }
+            // The conversation whose last turn this was is settled: its rows
+            // go in and it concludes now, releasing the asker, rather than
+            // when the slowest seat anywhere in the wave comes back. An
+            // asker's own desk turn is one of those seats.
+            if let Lane::Thread(root) = lane
+                && !running.running_in(root)
+            {
+                conductor.commit_conversation(root);
+                settle_queued(journal, &mut conductor).await?;
+                conductor.close_conversation(root);
+                settle_queued(journal, &mut conductor).await?;
             }
         }
         settle_wave(journal, &mut conductor).await?;
@@ -305,6 +318,23 @@ where
         conversations: conductor.conversations(),
         settled: conductor.state().episode().settled(),
     })
+}
+
+/// Take every step already queued, without advancing the wave's phases:
+/// used mid-wave, when one conversation has settled and the rest of the wave
+/// is still running. Checkpointed like [`settle_wave`], for the same reason.
+async fn settle_queued<A: BoundAgent, J: Journal>(
+    journal: &J,
+    conductor: &mut Conductor<'_, A>,
+) -> Result<()> {
+    while let Some(step) = conductor.queued()? {
+        let committed = matches!(step, Step::Commit(_));
+        settle(journal, conductor, step).await?;
+        if committed && let Some(snapshot) = conductor.snapshot() {
+            journal.checkpoint(&snapshot)?;
+        }
+    }
+    Ok(())
 }
 
 /// Take every step the wave has left, checkpointing after each committed
@@ -345,35 +375,56 @@ async fn settle<A: BoundAgent, J: Journal>(
     Ok(())
 }
 
-/// Every turn of a wave, run together, in the order they finish. A turn
-/// whose task panicked is a failed turn, not a failed wave: `named` says
-/// which seat and lane each job was, in the order the jobs were made.
-async fn join_turns(
-    jobs: Vec<TurnJob>,
-    named: Vec<(String, Lane)>,
-) -> Vec<(String, Lane, TurnResult)> {
-    let mut tasks = tokio::task::JoinSet::new();
-    let mut who = std::collections::HashMap::new();
-    for (job, name) in jobs.into_iter().zip(named) {
-        who.insert(tasks.spawn(job).id(), name);
+/// Every turn of a wave, run together and taken in the order they finish, so
+/// a conversation can settle on its own last turn while the rest of the wave
+/// is still going. A turn whose task panicked is a failed turn, not a failed
+/// wave: `named` says which seat and lane each job was, in the order the jobs
+/// were made.
+struct Running {
+    tasks: tokio::task::JoinSet<(String, Lane, TurnResult)>,
+    /// The seat and lane of every turn still in flight, by task.
+    who: std::collections::HashMap<tokio::task::Id, (String, Lane)>,
+}
+
+impl Running {
+    fn spawn(jobs: Vec<TurnJob>, named: Vec<(String, Lane)>) -> Self {
+        let mut tasks = tokio::task::JoinSet::new();
+        let mut who = std::collections::HashMap::new();
+        for (job, name) in jobs.into_iter().zip(named) {
+            who.insert(tasks.spawn(job).id(), name);
+        }
+        Self { tasks, who }
     }
-    let mut done = Vec::new();
-    while let Some(joined) = tasks.join_next_with_id().await {
-        match joined {
-            Ok((_, outcome)) => done.push(outcome),
+
+    /// Whether a turn in the conversation rooted at `root` is still running.
+    /// Read after a turn has landed, to tell the last one in a conversation
+    /// from the rest.
+    fn running_in(&self, root: Sequence) -> bool {
+        self.who
+            .values()
+            .any(|(_, lane)| *lane == Lane::Thread(root))
+    }
+
+    /// The next turn to land, or `None` once the wave is empty.
+    async fn next(&mut self) -> Option<(String, Lane, TurnResult)> {
+        match self.tasks.join_next_with_id().await? {
+            Ok((id, outcome)) => {
+                self.who.remove(&id);
+                Some(outcome)
+            }
             Err(error) => {
-                let (seat, lane) = who
+                let (seat, lane) = self
+                    .who
                     .remove(&error.id())
                     .unwrap_or_else(|| (String::new(), Lane::Desk));
-                done.push((
+                Some((
                     seat,
                     lane,
                     TurnResult::Failed(format!("the turn's task failed: {error}")),
-                ));
+                ))
             }
         }
     }
-    done
 }
 
 /// Nothing is due: if seats are held on the host, wait for it to release

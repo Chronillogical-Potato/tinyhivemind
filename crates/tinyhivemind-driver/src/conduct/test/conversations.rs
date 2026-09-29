@@ -3,8 +3,8 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use super::support::{
-    Journal, ask, broadcast, complete, door, group_ask, hive, policy, post, run, seats, two_seat,
-    wave,
+    Journal, Wave, ask, broadcast, complete, door, group_ask, hive, policy, post, pump, run, seats,
+    take, two_seat, wave,
 };
 use crate::CompletionDriver;
 use crate::conduct::{ConductPolicy, Conductor, Event, Refusal, Step};
@@ -870,5 +870,109 @@ fn a_thread_turn_asks_only_for_the_roots_the_host_is_told_to_prefetch() {
     assert_eq!(
         asked_for, expected_sorted,
         "what the conductor requests and what a host is told to prefetch must be one list"
+    );
+}
+
+/// The host takes turns as they land, not all at once, so a conversation
+/// settles on the last of its *own* turns: what the seats asked said goes in
+/// and the conversation concludes, releasing the asker, while the asker's own
+/// desk turn is still running. Held until the wave ended, an answer waited on
+/// the slowest turn anywhere in it -- on a live run, the asker itself, for
+/// five minutes.
+#[test]
+fn a_conversation_concludes_on_its_own_turns_while_the_rest_of_the_wave_runs() {
+    let hive = hive(&["one", "two", "three"]);
+    let driver = CompletionDriver::new(&hive, 4).expect("driver");
+    let route_policy = policy(1);
+    let routing = BroadcastRouting {
+        primary: None,
+        reasoning: None,
+        policy: &route_policy,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let journal = Journal::default();
+    let mut conductor = Conductor::open(
+        &driver,
+        routing,
+        ConductPolicy::default(),
+        door(&["one", "two", "three"], &["one"], &journal),
+    )
+    .expect("opens");
+
+    wave(
+        &mut conductor,
+        &journal,
+        &[(
+            "one",
+            vec![group_ask(&["two", "three"], "what is the port?")],
+        )],
+    )
+    .expect("wave");
+    let root = Sequence(2);
+
+    // The wave the host opens: both seats asked in the thread, and the asker
+    // on the desk, which it still holds.
+    let mut opened = Wave::default();
+    for step in conductor.begin_wave() {
+        take(step, &journal, &mut opened);
+    }
+    let turns = conductor.turns().expect("turns");
+    for turn in &turns {
+        conductor.open_turn(turn, journal.latest(), Vec::new(), |root| {
+            journal.thread(root)
+        });
+    }
+    let desk_turn = turns
+        .iter()
+        .find(|turn| turn.seat == "one" && turn.thread().is_none())
+        .expect("the asker's desk turn shares the wave with the conversation it opened");
+
+    // Only the seats asked land. The asker's turn is still running.
+    for turn in turns.iter().filter(|turn| turn.thread() == Some(root)) {
+        conductor.record(turn, [ToolCall::Speak(complete("port 8080"))]);
+    }
+    let mut settled = Wave::default();
+    conductor.commit_conversation(root);
+    pump(&mut conductor, &journal, &mut settled, false).expect("rows");
+    conductor.close_conversation(root);
+    pump(&mut conductor, &journal, &mut settled, false).expect("conclusion");
+
+    assert!(
+        settled.events.iter().any(|event| matches!(
+            event,
+            Event::Concluded { root: at, asker, forced: false, .. }
+                if *at == root && asker == "one"
+        )),
+        "it concluded on its own turns, not on the wave's: {:?}",
+        settled.events
+    );
+    assert_eq!(
+        journal
+            .private_to("one")
+            .iter()
+            .filter(|body| body.contains("concluded our conversation"))
+            .count(),
+        2,
+        "one conclusion row per seat asked, already the asker's to read"
+    );
+    assert_eq!(
+        conductor.conversations(),
+        1,
+        "and the conversation is closed"
+    );
+
+    // Only now does the asker's turn come back. The wave's own phases find
+    // the conversation gone: nothing concludes twice.
+    conductor.record(desk_turn, [ToolCall::Speak(post("thanks, both"))]);
+    let mut rest = Wave::default();
+    pump(&mut conductor, &journal, &mut rest, true).expect("wave");
+    assert!(
+        !rest
+            .events
+            .iter()
+            .any(|event| matches!(event, Event::Concluded { .. })),
+        "{:?}",
+        rest.events
     );
 }

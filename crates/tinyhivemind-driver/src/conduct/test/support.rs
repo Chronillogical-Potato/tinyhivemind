@@ -247,7 +247,27 @@ pub(super) fn wave_parking(
         }
     }
     seen.turns = turns;
-    while let Some(step) = conductor.step()? {
+    pump(conductor, journal, &mut seen, true)?;
+    Ok(seen)
+}
+
+/// Every step the conductor has, appended to the journal the way the host
+/// appends it. With `phases`, the wave runs to its end; without, only what
+/// is already queued is taken, which is how the host settles one
+/// conversation while the rest of the wave is still running.
+pub(super) fn pump(
+    conductor: &mut Conductor<'_, Seat>,
+    journal: &Journal,
+    seen: &mut Wave,
+    phases: bool,
+) -> Result<(), Error> {
+    loop {
+        let next = if phases {
+            conductor.step()?
+        } else {
+            conductor.queued()?
+        };
+        let Some(step) = next else { return Ok(()) };
         if let Step::Commit(commit) = &step {
             let sequence = journal.append(
                 &commit.author,
@@ -259,9 +279,8 @@ pub(super) fn wave_parking(
             seen.commits.push((sequence, commit.clone()));
             continue;
         }
-        take(step, journal, &mut seen);
+        take(step, journal, seen);
     }
-    Ok(seen)
 }
 
 pub(super) fn take(step: Step, journal: &Journal, seen: &mut Wave) {
