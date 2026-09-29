@@ -158,3 +158,30 @@ fn a_call_borrows_as_the_algebras_shape() {
     assert_eq!(call.to, ["a"]);
     assert_eq!(call.limit, Some(2));
 }
+
+/// A stringified `null` names no thread.
+///
+/// The schema types `parent` as `["string", "null"]`, so the string `"null"`
+/// satisfies it, and `Value::as_str` then answers `Some("null")` -- a thread
+/// root called `null`, which matches no open turn and refuses every call in
+/// it. A root is a sequence number (`"42"`), so the string can never name a
+/// real one; reading it as the sentinel the model meant is the only sound
+/// interpretation.
+///
+/// Observed on a live desk before this normalisation: 10 of 18 calls refused
+/// this way, alternating with the correct literal within one episode.
+#[test]
+fn a_stringified_null_parent_reads_as_no_thread() {
+    for sent in [json!(null), json!("null"), json!("")] {
+        assert_eq!(
+            arguments(&json!({ "arguments": { "chat": "eng", "parent": sent } })).parent,
+            None,
+            "`parent`: {sent} names no thread",
+        );
+    }
+    // A real root still reads as itself.
+    assert_eq!(
+        arguments(&json!({ "arguments": { "chat": "eng", "parent": "42" } })).parent,
+        Some("42".to_owned()),
+    );
+}
