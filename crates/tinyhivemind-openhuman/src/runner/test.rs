@@ -41,6 +41,10 @@ struct TestHost {
     halt: AtomicBool,
     /// The next turn stops on the host instead of standing.
     park: AtomicBool,
+    /// Where this host watches a seat's turn, when it is watching one. The
+    /// reader lives in the test, because the channel is backpressure on the
+    /// turn and a sender nobody drains stalls the seat.
+    progress: std::sync::Mutex<Option<crate::TurnProgressSink>>,
 }
 
 impl Journal for TestHost {
@@ -74,6 +78,13 @@ impl Journal for TestHost {
 impl EpisodeHost for TestHost {
     fn build_seat(&self, seat: &str, belt: EpisodeBeltSource) -> crate::Result<Agent> {
         seat_agent(&self.runtime, seat, &self.prompt, belt)
+    }
+
+    fn progress(&self, _seat: &str) -> Option<crate::TurnProgressSink> {
+        self.progress
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Namespaced per host, not just per seat. Both hosts in this file seat a
@@ -557,6 +568,7 @@ fn hosted(
         wrapped: AtomicUsize::new(0),
         after: AtomicUsize::new(0),
         metered: AtomicBool::new(false),
+        progress: std::sync::Mutex::new(None),
         halt: AtomicBool::new(false),
         park: AtomicBool::new(false),
     });
@@ -766,6 +778,33 @@ fn both_runners_land_the_same_scripted_call_in_the_record() {
 /// Sixteen megabytes: what the example's host loop gives its workers.
 const WIDE_STACK: usize = 16 * 1024 * 1024;
 
+/// Run `turn` with the host watching it, and count what the host saw.
+///
+/// The reader is the contract rather than tidiness: `on_progress` sends are
+/// awaited by the core, so a sink nobody drains stalls the seat mid-turn. It is
+/// spawned before the turn starts and joined after the host's own sender is
+/// dropped, which is the only thing left holding the channel open.
+async fn watching<T>(host: &Arc<TestHost>, turn: impl Future<Output = T>) -> (T, usize) {
+    let (progress, mut arriving) = tokio::sync::mpsc::channel(64);
+    let reader = tokio::spawn(async move {
+        let mut seen = 0usize;
+        while arriving.recv().await.is_some() {
+            seen += 1;
+        }
+        seen
+    });
+    *host
+        .progress
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(progress);
+    let out = turn.await;
+    *host
+        .progress
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    (out, reader.await.expect("the reader ran"))
+}
+
 async fn both_runners() {
     let workspace = tempfile::tempdir().expect("a workspace");
     let metrics = Arc::new(offline::Metrics::default());
@@ -834,7 +873,9 @@ async fn both_runners() {
     let (mcp_reply, mcp_events) = one_turn(&mcp, None).await;
     let (raw_reply, raw_events) = one_turn(&raw, None).await;
     // Seeded from the host's log: the operator's row is history, not brief.
-    let (hosted_reply, hosted_events) = one_turn(&hosted, host.log.latest()).await;
+    let ((hosted_reply, hosted_events), watched) =
+        watching(&host, one_turn(&hosted, host.log.latest())).await;
+    assert!(watched > 0, "the watching host saw the turn it seated");
     assert_eq!(
         host.wrapped.load(Ordering::SeqCst),
         1,

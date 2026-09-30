@@ -53,6 +53,15 @@ use admission::Admission;
 /// One hosted turn, as the host wraps it.
 pub type HostedTurn<'a> = Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
 
+/// Where a seat's turn reports what it is doing, as [`EpisodeHost::progress`]
+/// hands it over and `on_progress` takes it.
+///
+/// Named for the seam rather than borrowed from `openhuman_embed`, which has a
+/// `ProgressSink` of its own meaning a different thing -- the task-local sink a
+/// turn installs, not the channel a host reads.
+pub type TurnProgressSink =
+    tokio::sync::mpsc::Sender<openhuman_embed::agent_progress::AgentProgress>;
+
 /// Holds one turn's belt narrowed. Dropping it restores the seat's whole belt.
 ///
 /// A guard rather than a matching `widen` call, because the narrowing must lift
@@ -139,6 +148,43 @@ pub trait EpisodeHost: Journal + 'static {
     fn narrow_turn(&self, seat: &str, only: &[String]) -> Narrowing {
         let _ = (seat, only);
         Narrowing::none()
+    }
+
+    /// Where one turn of `seat` should report what it is doing, if the host
+    /// wants to watch.
+    ///
+    /// The turn's tool calls, its thinking runs and its attempts arrive on this
+    /// sender as they happen. `None` -- the default -- attaches nothing and
+    /// costs nothing.
+    ///
+    /// # Why the host and not this crate
+    ///
+    /// A seat's turn is the host's agent doing the host's work, and what a
+    /// progress event *means* is the host's vocabulary: which frames are worth
+    /// showing, how a tool call is labelled, where the fold is written down. A
+    /// runner that folded them here would be inventing an answer to a question
+    /// it cannot see the point of.
+    ///
+    /// What it is for: a hosted seat's turn calls tools, and until this existed
+    /// none of that reached the host. `OpenCompany` journals a seat's row with an
+    /// empty step list, so its console can show that a seat asked and finished
+    /// and nothing of the reading, writing or publishing in between -- while
+    /// the same console shows all of it for a turn taken outside an episode.
+    ///
+    /// [`Self::wrap_turn`] cannot supply this. It is handed a turn already
+    /// built, and the sink has to be attached while it is being built.
+    /// Symmetric with `meter`, which this runner already gives a host for the
+    /// same reason.
+    ///
+    /// # The channel is backpressure on the turn
+    ///
+    /// The core **awaits** its sends, so a receiver that stops draining stalls
+    /// the seat mid-turn. A host that returns a sender owes it a reader for as
+    /// long as the turn runs, and a bounded channel it keeps up with. This is
+    /// why the default is `None` rather than a sink nobody reads.
+    fn progress(&self, seat: &str) -> Option<TurnProgressSink> {
+        let _ = seat;
+        None
     }
 
     /// Wrap one turn. The default runs it as it is.
@@ -511,18 +557,22 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                     // spend either way.
                     let metered: Arc<Mutex<Option<LastTurnUsage>>> = Arc::new(Mutex::new(None));
                     let sink = Arc::clone(&metered);
-                    let settled = tokio::time::timeout(
-                        TURN_TIMEOUT,
-                        agent
-                            .turn(&prompt)
-                            .session(session_id.clone())
-                            .seed(history)
-                            .meter(move |usage| {
-                                *sink.lock().unwrap_or_else(PoisonError::into_inner) = usage;
-                            })
-                            .send(),
-                    )
-                    .await;
+                    // Asked per turn, not once per seat: a host may watch one
+                    // turn and not the next, and the sink it hands back is the
+                    // one it is currently reading.
+                    let watching = host.progress(&seat);
+                    let started = agent
+                        .turn(&prompt)
+                        .session(session_id.clone())
+                        .seed(history)
+                        .meter(move |usage| {
+                            *sink.lock().unwrap_or_else(PoisonError::into_inner) = usage;
+                        });
+                    let started = match watching {
+                        Some(progress) => started.on_progress(progress),
+                        None => started,
+                    };
+                    let settled = tokio::time::timeout(TURN_TIMEOUT, started.send()).await;
                     // Recorded before either error is raised, which is the
                     // whole point of metering through the callback: `meter`
                     // fires as the turn settles, either way, and a `?` above
