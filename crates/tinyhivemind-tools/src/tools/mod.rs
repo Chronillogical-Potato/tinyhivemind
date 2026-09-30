@@ -254,6 +254,21 @@ impl EpisodeTools {
             .insert(seat.to_owned(), seats);
     }
 
+    /// Whether `seat` is still waiting on anyone at all.
+    ///
+    /// A seat in this state may not complete -- the driver refuses it with
+    /// `AwaitingReply` -- so a host that compels a recording call on such a
+    /// turn compels one that can only be refused. The runner reads this to
+    /// tell the agent runtime that this turn may not record.
+    #[must_use]
+    pub fn awaiting_anyone(&self, seat: &str) -> bool {
+        self.awaiting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(seat)
+            .is_some_and(|seats| !seats.is_empty())
+    }
+
     /// Whether `seat` has already asked `other` and is still waiting.
     fn awaits(&self, seat: &str, other: &str) -> bool {
         self.awaiting
