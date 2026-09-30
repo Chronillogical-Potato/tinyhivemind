@@ -149,6 +149,7 @@ pub use episode::{Journal, Released, Report, resume_episode, run_episode};
 pub use error::{Error, Result};
 pub use hosted::{
     Disposition, EpisodeBelt, EpisodeBeltSource, EpisodeHost, HostedRunner, HostedSeat, HostedTurn,
+    Narrowing,
 };
 pub use journal::MemoryLog;
 pub use raw::{LibraryHost, RawRunner, RawSeat, Route, register_seats};
