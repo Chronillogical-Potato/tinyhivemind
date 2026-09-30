@@ -175,6 +175,27 @@ pub trait SeatRunner: Send + Sync {
     /// yet. How a seat holds context between turns is the runner's business.
     fn turn(&self, seat: String, lane: Lane, since: Option<Sequence>, prompt: String) -> TurnJob;
 
+    /// The same turn, narrowed to `only` -- the seat is offered those tools and
+    /// no others, and must call one of them.
+    ///
+    /// For the insisting second attempt after a turn that recorded nothing: the
+    /// seat said something the room cannot hear, and a retry that can end in
+    /// prose again would only spend a turn. The default ignores `only` and runs
+    /// an ordinary turn, which is the honest answer for a runner that cannot
+    /// constrain one -- the retry then costs a turn and may still record
+    /// nothing, exactly as before.
+    fn turn_only(
+        &self,
+        seat: String,
+        lane: Lane,
+        since: Option<Sequence>,
+        prompt: String,
+        only: Vec<String>,
+    ) -> TurnJob {
+        let _ = only;
+        self.turn(seat, lane, since, prompt)
+    }
+
     /// Open a turn: what the seat may `read`, and the chat and parent every
     /// call it makes must name.
     fn open(&self, seat: &str, window: Vec<String>, dispatch: Dispatch) {

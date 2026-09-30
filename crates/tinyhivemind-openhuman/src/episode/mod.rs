@@ -23,6 +23,7 @@ mod test;
 use std::pin::Pin;
 
 use tinyhivemind::aside::Viewer;
+use tinyhivemind::speech::ToolCall;
 use tinyhivemind::{
     Conversation, ElsewhereQuery, SESSION_WINDOW, Sequence, SessionAuthor, SessionLog,
     SessionMessage, SessionQuery, gather_elsewhere, project_session,
@@ -264,7 +265,9 @@ where
         let latest = latest(journal.log()).await?;
         let mut jobs: Vec<TurnJob> = Vec::with_capacity(turns.len());
         for turn in &turns {
-            jobs.push(open_turn(journal, runner, &mut conductor, &desk, turn, latest).await?);
+            let prompt = prepare_turn(journal, runner, &mut conductor, &desk, turn, latest).await?;
+            let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
+            jobs.push(runner.turn(turn.seat.clone(), lane, turn.since, prompt));
         }
         let named: Vec<(String, Lane)> = turns
             .iter()
@@ -275,12 +278,45 @@ where
                 )
             })
             .collect();
-        for (seat, lane, outcome) in join_turns(jobs, named).await {
+        let mut running = Running::spawn(jobs, named);
+        while let Some((seat, lane, outcome)) = running.next().await {
             // Close the turn first: the record refuses a call on a closed
             // turn, so nothing can land after this point is read.
-            let events = runner.close(&seat);
+            let mut events = runner.close(&seat);
             let refused = runner.tools().drain_refusals(&seat);
             journal.turn_done(&seat, lane, &outcome, &refused, events.len());
+            // A turn that said nothing the room can hear: insist once.
+            //
+            // A row exists because a verb was called, so a turn ending in prose
+            // is a turn the desk did not hear -- the work ran, the seat
+            // answered, and by the room's own contract nothing happened. The
+            // prose is *not* committed in its place: it would have to be given
+            // a verb, and the verb is what carries the meaning. A seat that
+            // meant to ask a teammate, recorded as a post, is a conversation
+            // that never opens and an answer nobody is waiting for.
+            //
+            // So the seat is asked again, shown what it just said, and offered
+            // only the verbs that would record it. Once, and only when the turn
+            // came back at all: a failed turn has nothing to show it, and a
+            // second silence stands as silence -- `begin_wave` nudges the seat
+            // on the next wave, which is what it did before this existed.
+            if let Some(turn) = turns.iter().find(|turn| turn.seat == seat)
+                && !outcome.parked()
+                && let TurnResult::Replied(said) = &outcome
+                && !events.iter().any(|event| records(&event.call))
+                // A seat still owed an answer is *right* to say nothing: it was
+                // woken by its own ask row and has nothing to add until its
+                // teammate replies. Insisting there compels the one call it
+                // cannot make -- `complete_episode` is refused with
+                // `AwaitingReply` -- and pulls forward work it has no basis for
+                // yet. Silence is only a fault for a seat with nothing to wait
+                // on.
+                && !runner.tools().awaiting_anyone(&seat)
+                && let Some(again) =
+                    insist(journal, runner, &mut conductor, &desk, turn, said, latest).await?
+            {
+                events.extend(again);
+            }
             if let Some(turn) = turns.iter().find(|turn| turn.seat == seat) {
                 let calls = events.into_iter().map(|event| event.call);
                 if outcome.parked() {
@@ -288,6 +324,18 @@ where
                 } else {
                     conductor.record(turn, calls);
                 }
+            }
+            // The conversation whose last turn this was is settled: its rows
+            // go in and it concludes now, releasing the asker, rather than
+            // when the slowest seat anywhere in the wave comes back. An
+            // asker's own desk turn is one of those seats.
+            if let Lane::Thread(root) = lane
+                && !running.running_in(root)
+            {
+                conductor.commit_conversation(root);
+                settle_queued(journal, &mut conductor).await?;
+                conductor.close_conversation(root);
+                settle_queued(journal, &mut conductor).await?;
             }
         }
         settle_wave(journal, &mut conductor).await?;
@@ -305,6 +353,118 @@ where
         conversations: conductor.conversations(),
         settled: conductor.state().episode().settled(),
     })
+}
+
+/// Whether a call puts a row in the journal.
+///
+/// `Read` does not: it is a seat asking to see further back, and a turn that
+/// only read has still said nothing. `Dm` does -- it is a row, private to its
+/// recipients -- so a seat that answered its asker privately has been heard and
+/// is not asked again.
+fn records(call: &ToolCall) -> bool {
+    matches!(call, ToolCall::Speak(_))
+}
+
+/// The verbs that would record a turn in `lane`, as the room names them.
+///
+/// Different in a conversation than on the desk, which is why the room decides
+/// and not the runtime: inside one, `post` is how a seat speaks and `broadcast`
+/// and `ask` are refused outright, so offering the desk's three would compel a
+/// call the seat cannot make.
+fn recording_verbs(lane: Lane) -> Vec<String> {
+    match lane {
+        Lane::Desk => ["broadcast", "ask", "complete_episode"],
+        Lane::Thread(_) => ["post", "dm", "complete_episode"],
+    }
+    .iter()
+    .map(|verb| (*verb).to_string())
+    .collect()
+}
+
+/// Ask a seat again for the same turn, offering only the verbs that record it.
+///
+/// Returns what the second attempt called, or `None` when it called nothing --
+/// a second silence stands, and the seat is nudged on the next wave as it was
+/// before this existed.
+async fn insist<A: BoundAgent, J: Journal, R: SeatRunner>(
+    journal: &J,
+    runner: &R,
+    conductor: &mut Conductor<'_, A>,
+    desk: &Conversation,
+    turn: &Turn,
+    said: &str,
+    delivered: Option<Sequence>,
+) -> Result<Option<Vec<tinyhivemind_tools::SeatEvent>>> {
+    let verbs = recording_verbs(turn.thread().map_or(Lane::Desk, Lane::Thread));
+    // Shown what it said, so the second attempt is a re-recording rather than
+    // the work over again -- and told plainly that the room heard none of it,
+    // because a seat that is only asked to "use a tool" tends to call `read`.
+    let note = format!(
+        "Your turn ended without calling any of the verbs this room records by, so \
+         nothing you said reached anyone -- not the person who asked, not your \
+         teammates. This is what you said:\n\n{said}\n\nSay it again now by calling \
+         one of {}. Do not read anything further first; this turn exists only to \
+         put those words on the record.",
+        verbs
+            .iter()
+            .map(|verb| format!("`{verb}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    // Prepared exactly as any turn is, so the seat sees the window, the rows it
+    // has not been shown, and its conversations -- a bespoke prompt here dropped
+    // a row the host appended during the first attempt, and if the seat then
+    // finished, that row was never shown at all.
+    //
+    // This counts as a turn on the conductor, which is right: the seat really
+    // does take it, and a conversation's wall exists to bound the work done in
+    // it, retries included.
+    let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
+    // Its own watermark, not the wave's: this turn happens after the first
+    // attempt returned, so a row the host appended meanwhile has arrived and is
+    // the seat's to see. Carrying the wave's watermark here hid such a row, and
+    // if the seat then finished, nothing ever showed it.
+    let latest = latest(journal.log()).await?;
+    let prepared = prepare_turn(journal, runner, conductor, desk, turn, latest).await?;
+    // Read from what the first attempt was delivered through, not from where
+    // that attempt started: the seat has already seen everything up to the
+    // wave's watermark, and showing it twice is what the watermark is for.
+    let job = runner.turn_only(
+        turn.seat.clone(),
+        lane,
+        delivered,
+        format!("{prepared}\n\n{note}"),
+        verbs,
+    );
+    let (seat, _, outcome) = job.await;
+    let events = runner.close(&seat);
+    // Drained here, on the turn that earned them: a refusal left queued is
+    // handed to whatever turn this seat takes next, which reports another
+    // turn's refusal as its own and this one as having had none.
+    let refused = runner.tools().drain_refusals(&seat);
+    journal.turn_done(&seat, lane, &outcome, &refused, events.len());
+    Ok(if events.iter().any(|event| records(&event.call)) {
+        Some(events)
+    } else {
+        None
+    })
+}
+
+/// Take every step already queued, without advancing the wave's phases:
+/// used mid-wave, when one conversation has settled and the rest of the wave
+/// is still running. Checkpointed like [`settle_wave`], for the same reason.
+async fn settle_queued<A: BoundAgent, J: Journal>(
+    journal: &J,
+    conductor: &mut Conductor<'_, A>,
+) -> Result<()> {
+    while let Some(step) = conductor.queued()? {
+        let committed = matches!(step, Step::Commit(_));
+        settle(journal, conductor, step).await?;
+        if committed && let Some(snapshot) = conductor.snapshot() {
+            journal.checkpoint(&snapshot)?;
+        }
+    }
+    Ok(())
 }
 
 /// Take every step the wave has left, checkpointing after each committed
@@ -345,35 +505,56 @@ async fn settle<A: BoundAgent, J: Journal>(
     Ok(())
 }
 
-/// Every turn of a wave, run together, in the order they finish. A turn
-/// whose task panicked is a failed turn, not a failed wave: `named` says
-/// which seat and lane each job was, in the order the jobs were made.
-async fn join_turns(
-    jobs: Vec<TurnJob>,
-    named: Vec<(String, Lane)>,
-) -> Vec<(String, Lane, TurnResult)> {
-    let mut tasks = tokio::task::JoinSet::new();
-    let mut who = std::collections::HashMap::new();
-    for (job, name) in jobs.into_iter().zip(named) {
-        who.insert(tasks.spawn(job).id(), name);
+/// Every turn of a wave, run together and taken in the order they finish, so
+/// a conversation can settle on its own last turn while the rest of the wave
+/// is still going. A turn whose task panicked is a failed turn, not a failed
+/// wave: `named` says which seat and lane each job was, in the order the jobs
+/// were made.
+struct Running {
+    tasks: tokio::task::JoinSet<(String, Lane, TurnResult)>,
+    /// The seat and lane of every turn still in flight, by task.
+    who: std::collections::HashMap<tokio::task::Id, (String, Lane)>,
+}
+
+impl Running {
+    fn spawn(jobs: Vec<TurnJob>, named: Vec<(String, Lane)>) -> Self {
+        let mut tasks = tokio::task::JoinSet::new();
+        let mut who = std::collections::HashMap::new();
+        for (job, name) in jobs.into_iter().zip(named) {
+            who.insert(tasks.spawn(job).id(), name);
+        }
+        Self { tasks, who }
     }
-    let mut done = Vec::new();
-    while let Some(joined) = tasks.join_next_with_id().await {
-        match joined {
-            Ok((_, outcome)) => done.push(outcome),
+
+    /// Whether a turn in the conversation rooted at `root` is still running.
+    /// Read after a turn has landed, to tell the last one in a conversation
+    /// from the rest.
+    fn running_in(&self, root: Sequence) -> bool {
+        self.who
+            .values()
+            .any(|(_, lane)| *lane == Lane::Thread(root))
+    }
+
+    /// The next turn to land, or `None` once the wave is empty.
+    async fn next(&mut self) -> Option<(String, Lane, TurnResult)> {
+        match self.tasks.join_next_with_id().await? {
+            Ok((id, outcome)) => {
+                self.who.remove(&id);
+                Some(outcome)
+            }
             Err(error) => {
-                let (seat, lane) = who
+                let (seat, lane) = self
+                    .who
                     .remove(&error.id())
                     .unwrap_or_else(|| (String::new(), Lane::Desk));
-                done.push((
+                Some((
                     seat,
                     lane,
                     TurnResult::Failed(format!("the turn's task failed: {error}")),
-                ));
+                ))
             }
         }
     }
-    done
 }
 
 /// Nothing is due: if seats are held on the host, wait for it to release
@@ -405,14 +586,14 @@ async fn wait_for_release<A: BoundAgent, J: Journal>(
 
 /// One turn opened: the rows it has not seen, the record, the brief, the
 /// prompt, and the job started on the runner.
-async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
+async fn prepare_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
     journal: &J,
     runner: &R,
     conductor: &mut Conductor<'_, A>,
     desk: &Conversation,
     turn: &Turn,
     latest: Option<Sequence>,
-) -> Result<TurnJob> {
+) -> Result<String> {
     let channel = Conversation {
         thread_root: turn.thread(),
         ..desk.clone()
@@ -522,9 +703,7 @@ async fn open_turn<A: BoundAgent, J: Journal, R: SeatRunner>(
     // driver's, and the record cannot read it, so it is handed over per turn
     // exactly as the `read` window is.
     runner.tools().awaiting(&turn.seat, brief.awaiting.clone());
-    let prompt = journal.compose(&turn.seat, &brief);
-    let lane = turn.thread().map_or(Lane::Desk, Lane::Thread);
-    Ok(runner.turn(turn.seat.clone(), lane, turn.since, prompt))
+    Ok(journal.compose(&turn.seat, &brief))
 }
 
 /// What the seat's other conversations hold, as the brief carries them:

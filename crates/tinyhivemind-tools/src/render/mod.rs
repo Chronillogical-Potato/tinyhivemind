@@ -231,7 +231,20 @@ pub(crate) fn parse_arguments(raw: &Value) -> Arguments {
         to,
         limit: raw.get("limit").and_then(Value::as_u64),
         chat: raw.get("chat").and_then(Value::as_str).map(str::to_owned),
-        parent: raw.get("parent").and_then(Value::as_str).map(str::to_owned),
+        // A thread root is a sequence number rendered as a string ("77"), so
+        // the string `"null"` can never name one. Models stringify the JSON
+        // literal `null` this field uses for "no thread" often enough that
+        // taking it at face value is a bug, not leniency: `as_str` answers
+        // `Some("null")`, which reads as a thread called `null`, and the
+        // dispatch check then refuses every call in the turn. Observed on a
+        // live desk: 10 of 18 calls refused this way, alternating with the
+        // correct literal, because the refusal never said what was wrong.
+        // An empty string is normalised for the same reason.
+        parent: raw
+            .get("parent")
+            .and_then(Value::as_str)
+            .filter(|parent| !parent.is_empty() && *parent != "null")
+            .map(str::to_owned),
     }
 }
 

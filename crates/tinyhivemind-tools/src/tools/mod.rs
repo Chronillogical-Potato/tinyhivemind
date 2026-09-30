@@ -17,7 +17,7 @@ use std::sync::{Mutex, PoisonError};
 use serde_json::Value;
 use tinyhivemind::speech::{ToolCall, Utterance, UtteranceRejection, interpret};
 
-use crate::render::{named_definitions, parse_arguments, served_specs, serves};
+use crate::render::{Arguments, named_definitions, parse_arguments, served_specs, serves};
 use tinyhivemind::speech::ToolSpec;
 
 /// The thread a registered turn is in, as the host told the seat.
@@ -254,6 +254,21 @@ impl EpisodeTools {
             .insert(seat.to_owned(), seats);
     }
 
+    /// Whether `seat` is still waiting on anyone at all.
+    ///
+    /// A seat in this state may not complete -- the driver refuses it with
+    /// `AwaitingReply` -- so a host that compels a recording call on such a
+    /// turn compels one that can only be refused. The runner reads this to
+    /// tell the agent runtime that this turn may not record.
+    #[must_use]
+    pub fn awaiting_anyone(&self, seat: &str) -> bool {
+        self.awaiting
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(seat)
+            .is_some_and(|seats| !seats.is_empty())
+    }
+
     /// Whether `seat` has already asked `other` and is still waiting.
     fn awaits(&self, seat: &str, other: &str) -> bool {
         self.awaiting
@@ -348,15 +363,7 @@ impl EpisodeTools {
             return Err("no turn is open for you, so nothing you call now can be recorded".into());
         };
         if args.chat.as_deref() != Some(dispatch.chat.as_str()) || args.parent != dispatch.parent {
-            let parent = dispatch
-                .parent
-                .as_deref()
-                .map_or_else(|| "null".to_owned(), |parent| format!("\"{parent}\""));
-            return Err(format!(
-                "every call in this turn carries \"chat\": \"{}\" and \"parent\": {parent}, \
-                 exactly as your brief gave them",
-                dispatch.chat
-            ));
+            return Err(wrong_dispatch(&dispatch, &args));
         }
         // Whether the tool exists here comes first. A host that withheld
         // `ask_teammates` has a seat whose contract never mentioned it, and
@@ -461,6 +468,42 @@ impl EpisodeTools {
             .or_default()
             .push(event);
     }
+}
+
+/// The refusal for a call whose `chat` or `parent` is not the turn's own.
+///
+/// Names what was actually sent, not only what was expected. The previous
+/// wording restated the contract and left the caller to guess which half it
+/// had broken -- and a model cannot correct an error it was never shown.
+/// Observed live: a seat alternated between the right value and the wrong one
+/// across ten refusals without converging, because every refusal read
+/// identically.
+fn wrong_dispatch(dispatch: &Dispatch, args: &Arguments) -> String {
+    let parent = dispatch
+        .parent
+        .as_deref()
+        .map_or_else(|| "null".to_owned(), |parent| format!("\"{parent}\""));
+    let sent_chat = args
+        .chat
+        .as_deref()
+        .map_or_else(|| "nothing".to_owned(), |chat| format!("\"{chat}\""));
+    let sent_parent = args
+        .parent
+        .as_deref()
+        .map_or_else(|| "null".to_owned(), |parent| format!("\"{parent}\""));
+    // Only say this where it is true: on the desk `parent` is the JSON
+    // literal, in a thread it is that thread's root.
+    let hint = if dispatch.parent.is_none() && args.parent.as_deref() == Some("null") {
+        " `parent` here is the JSON literal null, not the string \"null\"."
+    } else {
+        ""
+    };
+    format!(
+        "every call in this turn carries \"chat\": \"{}\" and \"parent\": {parent}, \
+         exactly as your brief gave them. This call sent \"chat\": {sent_chat} and \
+         \"parent\": {sent_parent}.{hint}",
+        dispatch.chat
+    )
 }
 
 fn unknown_tool(name: &str) -> String {

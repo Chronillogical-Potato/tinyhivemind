@@ -53,6 +53,42 @@ use admission::Admission;
 /// One hosted turn, as the host wraps it.
 pub type HostedTurn<'a> = Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
 
+/// Holds one turn's belt narrowed. Dropping it restores the seat's whole belt.
+///
+/// A guard rather than a matching `widen` call, because the narrowing must lift
+/// however the turn ends -- including a turn that panics, which no paired call
+/// would survive. A host that cannot narrow a belt returns [`Narrowing::none`],
+/// which does nothing on drop.
+pub struct Narrowing(Option<Box<dyn FnOnce() + Send>>);
+
+impl Narrowing {
+    /// No narrowing: the seat keeps the belt it would have had.
+    #[must_use]
+    pub fn none() -> Self {
+        Self(None)
+    }
+
+    /// Narrowing the host lifts by running `restore` when the turn ends.
+    #[must_use]
+    pub fn until(restore: impl FnOnce() + Send + 'static) -> Self {
+        Self(Some(Box::new(restore)))
+    }
+}
+
+impl std::fmt::Debug for Narrowing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Narrowing").field(&self.0.is_some()).finish()
+    }
+}
+
+impl Drop for Narrowing {
+    fn drop(&mut self) {
+        if let Some(restore) = self.0.take() {
+            restore();
+        }
+    }
+}
+
 /// What a host gives the hosted runner, beside the [`Journal`] it is.
 pub trait EpisodeHost: Journal + 'static {
     /// The agent `seat` runs on, with `belt` reachable from it.
@@ -89,6 +125,21 @@ pub trait EpisodeHost: Journal + 'static {
     /// It must not collide with a conversation the host runs outside the
     /// episode, or that conversation's belt answers here.
     fn seat_session(&self, seat: &str) -> String;
+
+    /// The tools one turn of `seat` may call, by served name.
+    ///
+    /// For a turn that must end in a particular call rather than in prose. The
+    /// host narrows the belt it composes and returns a [`Narrowing`] that lifts
+    /// when the turn ends; the default ignores `only` and narrows nothing, which
+    /// is the honest answer for a host whose belt it does not compose.
+    ///
+    /// Most of a hosted seat's belt is the host's own -- a live run advertised 46
+    /// tools of which 7 were the room's -- so this is the host's to do and cannot
+    /// be done here.
+    fn narrow_turn(&self, seat: &str, only: &[String]) -> Narrowing {
+        let _ = (seat, only);
+        Narrowing::none()
+    }
 
     /// Wrap one turn. The default runs it as it is.
     fn wrap_turn<'a>(&'a self, seat: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
@@ -353,6 +404,28 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
             .iter()
             .map(|(id, seat)| AgentBinding::new(id.clone(), seat.clone()))
             .collect()
+    }
+
+    /// The same turn with its belt narrowed to `only`, for as long as it runs.
+    ///
+    /// The narrowing is the host's: this asks for it, holds the guard across the
+    /// turn, and drops it after, so a host that narrows nothing runs an ordinary
+    /// turn and a host that does narrows for exactly this turn.
+    fn turn_only(
+        &self,
+        seat: String,
+        lane: Lane,
+        since: Option<Sequence>,
+        prompt: String,
+        only: Vec<String>,
+    ) -> TurnJob {
+        let narrowed = self.host.narrow_turn(&seat, &only);
+        let job = self.turn(seat, lane, since, prompt);
+        Box::pin(async move {
+            let outcome = job.await;
+            drop(narrowed);
+            outcome
+        })
     }
 
     /// Clear the seat's session, seed it from the host's log up to `since`,
