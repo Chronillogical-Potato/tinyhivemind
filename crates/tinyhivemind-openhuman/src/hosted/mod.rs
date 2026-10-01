@@ -572,7 +572,11 @@ impl<H: EpisodeHost> SeatRunner for HostedRunner<H> {
                         Some(progress) => started.on_progress(progress),
                         None => started,
                     };
-                    let settled = tokio::time::timeout(TURN_TIMEOUT, started.send()).await;
+                    // Boxed for the same reason as the seeded turn in
+                    // `embed`: this future is ~118 KiB and trips
+                    // `large_futures` since the OpenHuman pin moved.
+                    let settled =
+                        Box::pin(tokio::time::timeout(TURN_TIMEOUT, started.send())).await;
                     // Recorded before either error is raised, which is the
                     // whole point of metering through the callback: `meter`
                     // fires as the turn settles, either way, and a `?` above
