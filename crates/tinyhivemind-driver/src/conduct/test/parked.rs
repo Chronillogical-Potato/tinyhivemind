@@ -40,7 +40,7 @@ fn a_parked_desk_seat_is_held_until_the_host_releases_it() {
     // The next wave nudges nobody, proposes nothing, and is not a stall:
     // the seat is waiting on the host, and the host is asked.
     let waiting = wave(&mut conductor, &journal, &[]).expect("not a stall");
-    assert!(waiting.turns.is_empty());
+    assert!(waiting.turns.is_empty(), "{:?}", waiting.turns);
     assert!(waiting.events.is_empty(), "{:?}", waiting.events);
     assert!(
         !journal
@@ -62,7 +62,8 @@ fn a_parked_desk_seat_is_held_until_the_host_releases_it() {
         resumed.events.as_slice(),
         [Event::Resumed { seat, thread: None }] if seat == "one"
     ));
-    assert!(conductor.parked().is_empty());
+    let parked_found = conductor.parked();
+    assert!(parked_found.is_empty(), "{parked_found:?}");
     assert!(conductor.finished());
 }
 
@@ -348,7 +349,8 @@ fn a_held_seat_keeps_the_episode_open_even_where_its_work_closed() {
     );
     // Released, there is nothing left to hold and the episode is over.
     conductor.resume_seat("one");
-    assert!(conductor.parked().is_empty());
+    let parked_found = conductor.parked();
+    assert!(parked_found.is_empty(), "{parked_found:?}");
     assert!(conductor.finished());
 }
 

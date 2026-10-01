@@ -221,7 +221,11 @@ fn commits_private_completion_and_clarification_outcomes() {
             }),
         ))
         .expect("clarification commits");
-    assert!(clarification.actions.is_empty());
+    assert!(
+        clarification.actions.is_empty(),
+        "{:?}",
+        clarification.actions
+    );
     assert_eq!(clarification.state.revision(), 1);
 }
 

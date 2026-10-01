@@ -234,7 +234,7 @@ fn resumed_round_replay_is_a_noop_before_stale_round_validation() {
         .block_on(driver.apply_committed_round(&restored, &round, events.clone(), Some(routing)))
         .expect("exact replay");
     assert_eq!(replay.state, restored);
-    assert!(replay.actions.is_empty());
+    assert!(replay.actions.is_empty(), "{:?}", replay.actions);
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 
     let mut conflict = events.clone();
@@ -298,13 +298,13 @@ fn completed_round_replays_after_restart_with_a_new_empty_pending_round() {
     let empty_round = driver
         .pending_round(&restored)
         .expect("restored pending round");
-    assert!(empty_round.is_empty());
+    assert!(empty_round.is_empty(), "{empty_round:?}");
 
     let replay = fixture()
         .block_on(driver.apply_committed_round(&restored, &empty_round, events, None))
         .expect("receipt-only batch replay");
     assert_eq!(replay.state, restored);
-    assert!(replay.actions.is_empty());
+    assert!(replay.actions.is_empty(), "{:?}", replay.actions);
 }
 
 #[test]

@@ -60,7 +60,8 @@ fn one_dispatch_runs_exactly_one_agent_turn() -> Result<(), String> {
     harness.dispatch(Some("engineering"), &mut selected)?;
 
     assert_eq!(selected.calls().len(), 1);
-    assert!(unselected.calls().is_empty());
+    let calls_found = unselected.calls();
+    assert!(calls_found.is_empty(), "{calls_found:?}");
     assert_eq!(harness.journal().len(), 2);
     Ok(())
 }
@@ -136,5 +137,6 @@ fn an_agent_without_a_script_reports_an_error_without_appending() {
     let result = harness.dispatch(None, &mut exhausted);
 
     assert_eq!(result, Err("planner has no scripted response".to_owned()),);
-    assert!(harness.journal().is_empty());
+    let journal_found = harness.journal();
+    assert!(journal_found.is_empty(), "{journal_found:?}");
 }

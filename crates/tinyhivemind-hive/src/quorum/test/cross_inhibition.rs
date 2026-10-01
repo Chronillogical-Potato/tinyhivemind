@@ -47,7 +47,7 @@ fn silencing_the_last_advocate_zeroes_a_topics_weight() {
     ];
     let standings = fold(&transcript, &policy(2));
     let held = standing(&standings, "stage");
-    assert!(held.supporters.is_empty());
+    assert!(held.supporters.is_empty(), "{:?}", held.supporters);
     assert_eq!(held.silenced, ["planner"]);
     assert_eq!(held.support, 0);
 }
@@ -72,7 +72,8 @@ fn an_ungrounded_objection_silences_nobody() {
         said(2, "critic", "!object >1"),
     ];
     let standings = fold(&transcript, &policy(2));
-    assert!(standing(&standings, "stage").silenced.is_empty());
+    let silenced = &standing(&standings, "stage").silenced;
+    assert!(silenced.is_empty(), "{silenced:?}");
 }
 
 #[test]
@@ -82,11 +83,9 @@ fn an_objection_at_an_unknown_or_absent_target_silences_nobody() {
         said(2, "critic", "!object >99 ^1"),
         said(3, "critic", "!object ^1"),
     ];
-    assert!(
-        standing(&fold(&transcript, &policy(2)), "stage")
-            .silenced
-            .is_empty()
-    );
+    let standings = fold(&transcript, &policy(2));
+    let silenced = &standing(&standings, "stage").silenced;
+    assert!(silenced.is_empty(), "{silenced:?}");
 }
 
 #[test]

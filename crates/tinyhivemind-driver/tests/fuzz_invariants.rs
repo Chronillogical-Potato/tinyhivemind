@@ -255,7 +255,7 @@ fn hold(driver: &CompletionDriver<'_, Seat>, state: &DriverState, settled_before
     }
     // Quiescent implies complete, never the reverse alone.
     if state.quiescent() {
-        assert!(pending.is_empty());
+        assert!(pending.is_empty(), "{pending:?}");
         assert!(state.ledger().is_drained());
     }
 }

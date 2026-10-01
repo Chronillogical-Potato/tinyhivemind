@@ -85,7 +85,11 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     // The asker is released: it runs on the desk, is shown the whole
     // conversation once, and completes.
     assert_eq!(conductor.shown_conversations("one"), vec![root]);
-    assert!(conductor.shown_conversations("three").is_empty());
+    let shown_conversations_found = conductor.shown_conversations("three");
+    assert!(
+        shown_conversations_found.is_empty(),
+        "{shown_conversations_found:?}"
+    );
     let turns = conductor.turns().expect("turns");
     let brief = conductor.open_turn(&turns[0], journal.latest(), Vec::new(), |root| {
         journal.thread(root)
@@ -109,7 +113,7 @@ fn an_ask_opens_a_conversation_that_runs_first_and_concludes_to_the_asker() {
     assert!(conductor.finished());
     // Shown once: a second desk turn would show nothing again.
     let brief = conductor.open_turn(&turns[0], journal.latest(), Vec::new(), |_| Vec::new());
-    assert!(brief.conversations.is_empty());
+    assert!(brief.conversations.is_empty(), "{:?}", brief.conversations);
 }
 
 #[test]
@@ -631,7 +635,7 @@ fn nothing_due_concludes_every_open_conversation_without_an_answer() {
     wave(&mut conductor, &journal, &[]).expect("wave");
     wave(&mut conductor, &journal, &[]).expect("wave");
     let forced = wave(&mut conductor, &journal, &[]).expect("wave");
-    assert!(forced.turns.is_empty());
+    assert!(forced.turns.is_empty(), "{:?}", forced.turns);
     assert!(
         forced
             .events

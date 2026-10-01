@@ -221,7 +221,8 @@ async fn invalid_candidate_and_choice_bounds_fail_before_transport() {
         error.downcast_ref::<Error>(),
         Some(Error::InvalidCandidateIds)
     ));
-    assert!(router.transport().requests.lock().unwrap().is_empty());
+    let transport_found = router.transport().requests.lock().unwrap();
+    assert!(transport_found.is_empty(), "{transport_found:?}");
 }
 
 #[test]

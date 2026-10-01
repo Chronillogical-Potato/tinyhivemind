@@ -180,7 +180,11 @@ async fn one_turn<R: SeatRunner>(runner: &R, since: Option<Sequence>) -> (String
     let bindings = runner.bindings();
     assert_eq!(bindings.len(), 1);
     assert_eq!(bindings[0].hive_agent_id, "lead");
-    assert!(!bindings[0].runtime_agent_id().is_empty());
+    let runtime_agent_id_found = bindings[0].runtime_agent_id();
+    assert!(
+        !runtime_agent_id_found.is_empty(),
+        "{runtime_agent_id_found:?}"
+    );
     runner.open(
         "lead",
         vec!["    1  @operator: state the root cause".into()],
@@ -469,7 +473,7 @@ async fn plain(runtime: &Arc<Runtime>) {
         "a host that names nobody leaves the record's seats by id"
     );
     let (reply, events) = one_turn(&runner, host.log.latest()).await;
-    assert!(!reply.is_empty());
+    assert!(!reply.is_empty(), "{reply:?}");
     assert_eq!(
         events.len(),
         1,

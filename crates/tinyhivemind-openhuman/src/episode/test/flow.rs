@@ -220,7 +220,7 @@ fn a_seat_that_says_nothing_is_nudged_and_then_the_episode_stalls() {
         "{prompts:?}"
     );
     let shown_two = journal.log.desk_since("two", None);
-    assert!(!shown_two.is_empty());
+    assert!(!shown_two.is_empty(), "{shown_two:?}");
     assert!(
         shown_two.iter().all(|row| !row.contains("open work")),
         "{shown_two:?}"

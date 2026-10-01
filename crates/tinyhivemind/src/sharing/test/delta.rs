@@ -47,7 +47,7 @@ async fn exclusive_before_and_watermark_rows_are_not_emitted() {
         None,
     )]);
     let result = delta(plan(&log, &state(10), 11).await.expect("plans"));
-    assert!(result.messages.is_empty());
+    assert!(result.messages.is_empty(), "{:?}", result.messages);
 }
 
 #[tokio::test]

@@ -159,7 +159,7 @@ fn exhaustion_after_a_silent_episode_reports_no_standings() {
     let HiveStep::Exhausted { standings, .. } = run(&room, &spent, &quiet, &policy) else {
         panic!("expected an exhausted episode")
     };
-    assert!(standings.is_empty());
+    assert!(standings.is_empty(), "{standings:?}");
 }
 
 #[test]

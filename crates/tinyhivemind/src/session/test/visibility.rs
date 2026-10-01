@@ -121,7 +121,7 @@ fn a_non_member_sees_one_collapsed_stub_rather_than_the_content() {
 
     let stub = &projected[1];
     assert_eq!(stub.readable(), None);
-    assert!(stub.content.is_empty());
+    assert!(stub.content.is_empty(), "{:?}", stub.content);
     // Attribution survives: the row still says who spoke and to whom.
     assert_eq!(
         stub.author,

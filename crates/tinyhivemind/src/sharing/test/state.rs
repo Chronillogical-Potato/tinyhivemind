@@ -13,7 +13,11 @@ use std::collections::BTreeSet;
 fn initialized_state_starts_empty_at_the_accepted_trigger() {
     let state = initialized_state(engineering(), Sequence(10));
     assert_eq!(state.watermark, Sequence(10));
-    assert!(state.present_above_watermark.is_empty());
+    assert!(
+        state.present_above_watermark.is_empty(),
+        "{:?}",
+        state.present_above_watermark
+    );
 }
 
 #[test]

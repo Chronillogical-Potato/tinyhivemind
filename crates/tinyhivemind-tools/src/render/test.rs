@@ -138,7 +138,7 @@ fn to_is_read_as_one_seat_or_several() {
         "a non-string entry is dropped here, not refused"
     );
     let none = arguments(&json!({ "arguments": { "to": 7 } }));
-    assert!(none.to.is_empty());
+    assert!(none.to.is_empty(), "{:?}", none.to);
     assert_eq!(
         arguments(&json!({ "arguments": { "parent": null } })).parent,
         None

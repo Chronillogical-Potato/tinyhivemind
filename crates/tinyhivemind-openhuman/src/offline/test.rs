@@ -68,7 +68,7 @@ fn a_call_is_emitted_once_and_receipted_once() {
     assert_eq!(metrics.snapshot().round_trips.len(), 1);
     metrics.reset();
     assert_eq!(metrics.snapshot().requests, 0);
-    assert!(!COMPLETION.is_empty());
+    assert!(!COMPLETION.is_empty(), "{COMPLETION:?}");
 }
 
 #[test]

@@ -11,12 +11,8 @@ use crate::Error;
 #[tokio::test]
 async fn zero_window_performs_no_read() {
     let log = FakeLog::new(Vec::new());
-    assert!(
-        project_session(&log, &query(0))
-            .await
-            .expect("projects")
-            .is_empty()
-    );
+    let found = project_session(&log, &query(0)).await.expect("projects");
+    assert!(found.is_empty(), "{found:?}");
     assert_eq!(log.call_count(), 0);
 }
 
@@ -171,11 +167,9 @@ async fn scan_cap_is_a_successful_partial_projection() {
         pages.push(page(messages, Some(high - (PAGE_SIZE as u64 - 1))));
     }
     let log = FakeLog::new(pages);
-    assert!(
-        project_session(&log, &query(1))
-            .await
-            .expect("scan cap succeeds")
-            .is_empty()
-    );
+    let found_found = project_session(&log, &query(1))
+        .await
+        .expect("scan cap succeeds");
+    assert!(found_found.is_empty(), "{found_found:?}");
     assert_eq!(log.call_count(), 4);
 }
