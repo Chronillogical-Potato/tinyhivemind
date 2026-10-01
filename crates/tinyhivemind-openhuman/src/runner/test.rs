@@ -269,9 +269,20 @@ async fn where_the_roster_is(
         .unwrap_or_default();
     let mut names = names;
     names.sort();
+    // `tool_search` and `tool_call` arrived with openhuman v0.64.10, which
+    // advertises them intrinsically whenever a run has a deferred tool. They
+    // belong on this list by the claim it already makes: both are how a seat
+    // *reaches* a tool rather than a tool it was granted, which is the same
+    // reason `mcp_call_tool` is here and `shell` is not.
     assert_eq!(
         names,
-        ["mcp_call_tool", "mcp_list_servers", "mcp_list_tools"],
+        [
+            "mcp_call_tool",
+            "mcp_list_servers",
+            "mcp_list_tools",
+            "tool_call",
+            "tool_search"
+        ],
         "an MCP seat is offered the road, not the tools"
     );
     assert!(
