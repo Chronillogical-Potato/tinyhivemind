@@ -160,7 +160,8 @@ fn fold_keeps_only_the_most_recent_threads_up_to_the_limit() {
             .collect::<Vec<_>>(),
         vec![8, 7, 6]
     );
-    assert!(fold_thread_index(&rows, &Viewer::Operator, 0).is_empty());
+    let found = fold_thread_index(&rows, &Viewer::Operator, 0);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
@@ -258,18 +259,14 @@ async fn index_is_empty_and_unread_for_a_thread_or_a_zero_limit() {
     )]);
     let mut inside = conversation();
     inside.thread_root = Some(Sequence(1));
-    assert!(
-        read_thread_index(&log, &inside, &Viewer::Operator, THREAD_INDEX_LIMIT)
-            .await
-            .expect("indexes")
-            .is_empty()
-    );
-    assert!(
-        read_thread_index(&log, &conversation(), &Viewer::Operator, 0)
-            .await
-            .expect("indexes")
-            .is_empty()
-    );
+    let found_found = read_thread_index(&log, &inside, &Viewer::Operator, THREAD_INDEX_LIMIT)
+        .await
+        .expect("indexes");
+    assert!(found_found.is_empty(), "{found_found:?}");
+    let found_found_found = read_thread_index(&log, &conversation(), &Viewer::Operator, 0)
+        .await
+        .expect("indexes");
+    assert!(found_found_found.is_empty(), "{found_found_found:?}");
     assert_eq!(log.call_count(), 0);
 }
 
@@ -295,11 +292,13 @@ async fn index_stops_at_its_own_scan_bound_well_below_the_projection_limit() {
             None,
         ),
     ]);
-    assert!(
+    let found_found_found_found =
         read_thread_index(&log, &conversation(), &Viewer::Operator, THREAD_INDEX_LIMIT)
             .await
-            .expect("indexes")
-            .is_empty()
+            .expect("indexes");
+    assert!(
+        found_found_found_found.is_empty(),
+        "{found_found_found_found:?}"
     );
     assert_eq!(log.call_count(), 1);
 }

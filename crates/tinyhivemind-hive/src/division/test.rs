@@ -81,7 +81,7 @@ fn one_facet_is_one_seat_answering_alone() {
 #[test]
 fn a_task_with_no_facets_divides_into_nothing() {
     let division = divided(0, DivisionPolicy::DEFAULT);
-    assert!(division.is_empty());
+    assert!(division.is_empty(), "{division:?}");
     assert!(!division.is_alone());
     assert_eq!(division.depth(), 0);
     assert_eq!(division.width(), 0);

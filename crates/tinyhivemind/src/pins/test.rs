@@ -128,18 +128,22 @@ fn requires_a_closing_fence_at_least_as_long_as_the_opener() {
     // inside it is Markdown content — an example fence being quoted — not a
     // close, so the `!unpin` on the line after it must stay inert.
     let body = "````\nexample:\n```\n!unpin ^1\n```\nstill inside\n````";
-    assert!(read_directives(body, &agent("alice"), Sequence(9)).is_empty());
+    let found = read_directives(body, &agent("alice"), Sequence(9));
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
 fn ignores_an_unknown_marker_and_a_body_with_no_marker_at_all() {
-    assert!(read_directives("!propose #x", &agent("alice"), Sequence(1)).is_empty());
-    assert!(read_directives("ordinary conversation", &agent("alice"), Sequence(1)).is_empty());
+    let found = read_directives("!propose #x", &agent("alice"), Sequence(1));
+    assert!(found.is_empty(), "{found:?}");
+    let found = read_directives("ordinary conversation", &agent("alice"), Sequence(1));
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
 fn refuses_an_unpin_with_no_target() {
-    assert!(read_directives("!unpin", &agent("alice"), Sequence(3)).is_empty());
+    let found = read_directives("!unpin", &agent("alice"), Sequence(3));
+    assert!(found.is_empty(), "{found:?}");
     let directives = read_directives("!unpin ^2", &agent("alice"), Sequence(3));
     assert_eq!(directives[0].action, PinAction::Unpin);
     assert_eq!(directives[0].target, Sequence(2));
@@ -209,7 +213,8 @@ fn an_unpin_takes_a_message_back_off() {
         row(2, None, None, "!pin ^1"),
         row(3, None, None, "!unpin ^1"),
     ];
-    assert!(fold_pins(&rows, &Viewer::Operator, PIN_LIMIT).is_empty());
+    let found = fold_pins(&rows, &Viewer::Operator, PIN_LIMIT);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
@@ -225,7 +230,8 @@ fn orders_the_board_most_recently_pinned_first_and_drops_the_oldest_over_the_lim
 #[test]
 fn folds_nothing_at_a_zero_limit() {
     let rows = [row(2, None, None, "!pin ^1")];
-    assert!(fold_pins(&rows, &Viewer::Operator, 0).is_empty());
+    let found = fold_pins(&rows, &Viewer::Operator, 0);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
@@ -326,12 +332,10 @@ fn preserves_directive_order_within_one_message() {
 #[tokio::test]
 async fn reads_nothing_at_a_zero_limit_and_reports_a_read_failure() {
     let log = FakeLog::new(vec![SessionPage::default()]);
-    assert!(
-        read_pinboard(&log, &conversation(None), &Viewer::Operator, 0, None)
-            .await
-            .expect("reads")
-            .is_empty()
-    );
+    let found_found = read_pinboard(&log, &conversation(None), &Viewer::Operator, 0, None)
+        .await
+        .expect("reads");
+    assert!(found_found.is_empty(), "{found_found:?}");
     assert_eq!(log.call_count(), 0);
 
     let failing = FakeLog::failing();

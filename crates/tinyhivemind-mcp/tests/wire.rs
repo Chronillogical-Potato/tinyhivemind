@@ -339,7 +339,8 @@ async fn refusals_are_the_vocabularys_own_sentences() {
         text(&reply),
         "`to` names @johnny, who is not an active seat on this desk. You can ask: checker, lead, solver"
     );
-    assert!(tools.drain("lead").is_empty());
+    let found = tools.drain("lead");
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[tokio::test]
@@ -415,7 +416,8 @@ async fn an_ask_inside_a_conversation_is_refused_with_what_to_do_instead() {
     .await;
     assert_eq!(reply["result"]["isError"], true);
     assert!(text(&reply).starts_with("inside a conversation you answer the seat that asked you"));
-    assert!(tools.drain("solver").is_empty());
+    let found = tools.drain("solver");
+    assert!(found.is_empty(), "{found:?}");
     let (_, reply) = post(
         server.port(),
         &path_of(&server, "solver"),
@@ -491,7 +493,8 @@ async fn an_endpoint_is_a_capability_and_a_wrong_one_learns_nothing() {
             "the turn lead is in is not disclosed: {shown}"
         );
     }
-    assert!(tools.drain("lead").is_empty());
+    let found = tools.drain("lead");
+    assert!(found.is_empty(), "{found:?}");
     assert!(
         tools.drain_refusals("lead").is_empty(),
         "nothing reached the seat"

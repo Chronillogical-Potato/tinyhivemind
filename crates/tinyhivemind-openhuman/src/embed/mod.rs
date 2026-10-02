@@ -268,10 +268,14 @@ impl SeatRunner for EmbedRunner {
                 Err(error) => TurnResult::Failed(error.to_string()),
                 Ok(history) => {
                     let history = crate::seed::with_persona(history, persona);
-                    match tokio::time::timeout(
+                    // `Box::pin`: the turn future carries the whole session
+                    // builder and crossed clippy's `large_futures` threshold
+                    // (~118 KiB) when the OpenHuman pin moved. Boxing keeps it
+                    // off the stack of every caller that awaits this one.
+                    match Box::pin(tokio::time::timeout(
                         TURN_TIMEOUT,
                         agent.turn(prompt).session(&session).seed(history).send(),
-                    )
+                    ))
                     .await
                     {
                         Ok(Ok(outcome)) => TurnResult::Replied(outcome.reply),

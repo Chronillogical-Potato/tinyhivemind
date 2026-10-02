@@ -492,7 +492,8 @@ async fn does_not_call_a_digester_for_a_channel_that_is_current() {
         .expect("plans"),
         DigestOutcome::Current
     );
-    assert!(digester.seen().is_empty());
+    let seen_found = digester.seen();
+    assert!(seen_found.is_empty(), "{seen_found:?}");
     assert_eq!(log.calls(), 0, "a current channel is not even read");
 }
 
@@ -897,5 +898,6 @@ async fn a_fold_with_no_pins_is_told_so_rather_than_guessing() {
     )
     .await
     .expect("folds");
-    assert!(digester.seen()[0].pinned.is_empty());
+    let pinned = &digester.seen()[0].pinned;
+    assert!(pinned.is_empty(), "{pinned:?}");
 }

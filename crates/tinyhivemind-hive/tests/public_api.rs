@@ -292,7 +292,8 @@ fn root_exports_the_deferral_marker() {
     assert_eq!(deferred[0].kind, TraceKind::Defer);
     assert_eq!(deferred[0].topic, Some(TopicId("pool".into())));
     // A deferral without a topic is not a deferral.
-    assert!(resolve("!defer", None, &agent("planner"), Sequence(3)).is_empty());
+    let found = resolve("!defer", None, &agent("planner"), Sequence(3));
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
@@ -330,7 +331,7 @@ fn root_exports_refutation_through_the_public_surface() {
     // Two distinct refuters cap the topic. Nothing was removed to do it: both
     // supporters survive, and the standing records the whole exchange.
     assert_eq!(stage.supporters, ["planner", "critic"]);
-    assert!(stage.silenced.is_empty());
+    assert!(stage.silenced.is_empty(), "{:?}", stage.silenced);
     assert!(!stage.carried(&policy));
     assert_eq!(consensus(&standings, &policy), ConsensusState::Deliberating);
 }

@@ -69,7 +69,8 @@ fn never_offers_a_retired_agent() {
     let members = members();
     let retired = vec!["alice".to_owned()];
     let roster = Roster::new(&members, &[], &retired);
-    assert!(agents("naka", &roster, 8).is_empty());
+    let roster_found = agents("naka", &roster, 8);
+    assert!(roster_found.is_empty(), "{roster_found:?}");
 }
 
 #[test]
@@ -118,9 +119,12 @@ fn returns_nothing_for_an_unmatched_query() {
     let roster = Roster::new(&members, &[], &[]);
     let records = desk_records();
     let set = DeskSet::new(&records, &[], &[], &[], &[]);
-    assert!(agents("zzzz", &roster, 8).is_empty());
-    assert!(people("zzzz", &roster, 8).is_empty());
-    assert!(desks("zzzz", &set, 8).is_empty());
+    let roster_found = agents("zzzz", &roster, 8);
+    assert!(roster_found.is_empty(), "{roster_found:?}");
+    let roster_found = people("zzzz", &roster, 8);
+    assert!(roster_found.is_empty(), "{roster_found:?}");
+    let set_found = desks("zzzz", &set, 8);
+    assert!(set_found.is_empty(), "{set_found:?}");
 }
 
 #[test]

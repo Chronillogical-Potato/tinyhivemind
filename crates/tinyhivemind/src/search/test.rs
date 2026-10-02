@@ -235,20 +235,14 @@ async fn keeps_a_short_row_whole_and_collapses_its_whitespace() {
 #[tokio::test]
 async fn returns_nothing_and_reads_nothing_for_a_blank_query_or_zero_limit() {
     let log = FakeLog::new(vec![page(vec![message(2, None, None, "ship")])]);
-    assert!(
-        search_messages(&log, &SearchQuery::new("   ", Viewer::Operator))
-            .await
-            .expect("searches")
-            .is_empty()
-    );
+    let found_found = search_messages(&log, &SearchQuery::new(" ", Viewer::Operator))
+        .await
+        .expect("searches");
+    assert!(found_found.is_empty(), "{found_found:?}");
     let mut query = SearchQuery::new("ship", Viewer::Operator);
     query.limit = 0;
-    assert!(
-        search_messages(&log, &query)
-            .await
-            .expect("searches")
-            .is_empty()
-    );
+    let found_found_found = search_messages(&log, &query).await.expect("searches");
+    assert!(found_found_found.is_empty(), "{found_found_found:?}");
     assert_eq!(log.call_count(), 0);
 }
 
@@ -314,41 +308,44 @@ async fn searches_threads_by_their_opening_words() {
 #[tokio::test]
 async fn searches_no_threads_from_inside_one_or_at_zero_limit() {
     let log = FakeLog::new(vec![page(vec![message(3, None, None, "shipping")])]);
+    let found_found_found_found = search_threads(
+        &log,
+        &conversation(Some(3)),
+        &Viewer::Operator,
+        &SearchPattern::parse("ship"),
+        8,
+    )
+    .await
+    .expect("searches");
     assert!(
-        search_threads(
-            &log,
-            &conversation(Some(3)),
-            &Viewer::Operator,
-            &SearchPattern::parse("ship"),
-            8
-        )
-        .await
-        .expect("searches")
-        .is_empty()
+        found_found_found_found.is_empty(),
+        "{found_found_found_found:?}"
     );
+    let found_found_found_found_found = search_threads(
+        &log,
+        &conversation(None),
+        &Viewer::Operator,
+        &SearchPattern::parse("ship"),
+        0,
+    )
+    .await
+    .expect("searches");
     assert!(
-        search_threads(
-            &log,
-            &conversation(None),
-            &Viewer::Operator,
-            &SearchPattern::parse("ship"),
-            0
-        )
-        .await
-        .expect("searches")
-        .is_empty()
+        found_found_found_found_found.is_empty(),
+        "{found_found_found_found_found:?}"
     );
+    let found_found_found_found_found_found = search_threads(
+        &log,
+        &conversation(None),
+        &Viewer::Operator,
+        &SearchPattern::parse(" "),
+        8,
+    )
+    .await
+    .expect("searches");
     assert!(
-        search_threads(
-            &log,
-            &conversation(None),
-            &Viewer::Operator,
-            &SearchPattern::parse(" "),
-            8
-        )
-        .await
-        .expect("searches")
-        .is_empty()
+        found_found_found_found_found_found.is_empty(),
+        "{found_found_found_found_found_found:?}"
     );
     assert_eq!(log.call_count(), 0);
 }
@@ -501,7 +498,7 @@ fn a_whole_log_search_never_quotes_an_aside_the_seeker_is_outside() {
         ),
     ];
     let hits = hits_for(rows, seeker("archivist"), "credentials");
-    assert!(hits.is_empty());
+    assert!(hits.is_empty(), "{hits:?}");
 }
 
 #[test]

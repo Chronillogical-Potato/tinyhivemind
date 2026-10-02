@@ -137,8 +137,8 @@ fn a_deferral_moves_no_support_and_creates_no_standing() {
     assert_eq!(folded.len(), 1);
     let stage = standing(&folded, "stage");
     assert_eq!(stage.supporters, ["planner", "critic"]);
-    assert!(stage.silenced.is_empty());
-    assert!(stage.refuted_by.is_empty());
+    assert!(stage.silenced.is_empty(), "{:?}", stage.silenced);
+    assert!(stage.refuted_by.is_empty(), "{:?}", stage.refuted_by);
 
     // The same room without the two deferrals folds identically.
     let without = fold(&transcript[..2], &policy(2));

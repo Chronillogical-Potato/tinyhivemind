@@ -173,7 +173,7 @@ fn a_broadcast_appends_a_desk_row_and_requests_semantic_routing() {
 #[test]
 fn a_post_that_names_nobody_hands_the_turn_to_nobody() {
     let committed = commit("solver", &post("still working"));
-    assert!(committed.mentions.is_empty());
+    assert!(committed.mentions.is_empty(), "{:?}", committed.mentions);
     assert_eq!(committed.audience, Audience::Desk);
     assert_eq!(committed.refusal, None);
 }
@@ -198,8 +198,10 @@ fn an_ask_is_private_to_the_seat_it_asks_and_records_whom() {
 
 #[test]
 fn a_post_asks_nobody() {
-    assert!(commit("solver", &post("still working")).asks.is_empty());
-    assert!(commit("solver", &dm(&["checker"], "fyi")).asks.is_empty());
+    let asks_found = commit("solver", &post("still working")).asks;
+    assert!(asks_found.is_empty(), "{asks_found:?}");
+    let asks_found = commit("solver", &dm(&["checker"], "fyi")).asks;
+    assert!(asks_found.is_empty(), "{asks_found:?}");
 }
 
 #[test]

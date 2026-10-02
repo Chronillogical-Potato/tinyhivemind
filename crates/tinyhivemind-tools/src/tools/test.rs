@@ -133,7 +133,8 @@ fn an_in_process_call_is_refused_where_the_wire_would_refuse_it() {
         .expect_err("unknown recipient");
     assert!(refusal.contains("You can ask: lead, solver"));
     // Nothing above was recorded.
-    assert!(tools.drain("lead").is_empty());
+    let found = tools.drain("lead");
+    assert!(found.is_empty(), "{found:?}");
     // Inside a conversation, `ask` is refused and `complete_episode` is the answer.
     tools.register(
         "lead",

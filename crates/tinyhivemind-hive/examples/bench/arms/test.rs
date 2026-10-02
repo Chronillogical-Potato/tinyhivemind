@@ -60,7 +60,8 @@ fn the_routers_prompt_grows_with_the_room() {
 fn a_blind_arm_of_no_turns_has_no_shape_to_price() {
     // `vote` with a zero budget takes no turns; a round of nothing would be
     // charged a round of wall clock it never waited.
-    assert!(blind_shape(0).is_empty());
+    let blind_shape_found = blind_shape(0);
+    assert!(blind_shape_found.is_empty(), "{blind_shape_found:?}");
 }
 
 #[test]

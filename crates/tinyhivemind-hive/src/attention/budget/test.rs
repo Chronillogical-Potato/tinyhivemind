@@ -168,7 +168,8 @@ fn a_zero_budget_drops_every_source_that_wanted_anything() {
 
 #[test]
 fn no_requests_allocate_nothing() {
-    assert!(allocate_chars(&[], &BudgetPolicy::DEFAULT).is_empty());
+    let found = allocate_chars(&[], &BudgetPolicy::DEFAULT);
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]

@@ -51,7 +51,7 @@ allow-wildcard-paths = true
 # this exact package's manifest-level wildcard finding; its dependency tree
 # remains subject to every ban check.
 skip = [
-    { name = "openhuman", version = "0.63.29" },
+    { name = "openhuman", version = "0.64.10" },
     # `tinyjuice` is vendored inside OpenHuman and arrived with the pin bump
     # that follows `main`. Its manifest carries no `publish = false`, so
     # `allow-wildcard-paths` does not reach it -- cargo-deny reads a published
@@ -62,7 +62,7 @@ skip = [
     # Same narrowness as the entry above: this skips one package's
     # manifest-level wildcard finding, and its dependency tree stays subject to
     # every other ban.
-    { name = "tinyjuice", version = "0.3.1" },
+    { name = "tinyjuice", version = "0.4.0" },
 ]
 # Crates that must never enter the dependency graph.
 deny = []

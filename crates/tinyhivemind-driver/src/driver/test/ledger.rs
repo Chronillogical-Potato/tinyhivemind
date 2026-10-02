@@ -205,7 +205,7 @@ fn a_completion_with_nothing_queued_hands_nothing_back() {
     let router = FirstRouter::default();
     let state = driver.start(episode(&["one", "two"])).expect("state");
     let transition = apply(&driver, &state, "one", 1, complete(), &router).expect("completes");
-    assert!(transition.actions.is_empty());
+    assert!(transition.actions.is_empty(), "{:?}", transition.actions);
     assert_eq!(transition.state.episode().settled(), 1);
 }
 
@@ -505,7 +505,8 @@ fn seats_that_ran_and_were_shown_everything_are_stalled_not_woken() {
     );
     ran.delivered("one", Sequence(2));
     ran.delivered("two", Sequence(2));
-    assert!(round_ids(&driver, &ran).is_empty());
+    let ran_found = round_ids(&driver, &ran);
+    assert!(ran_found.is_empty(), "{ran_found:?}");
     assert_eq!(ran.stalled(), ["one", "two"]);
     assert!(!ran.quiescent(), "stalled is not over");
 }
@@ -525,7 +526,8 @@ fn quiescence_is_complete_with_nothing_queued_and_nothing_awaited() {
         .expect("two")
         .state;
     assert!(both.quiescent());
-    assert!(round_ids(&driver, &both).is_empty());
+    let both_found = round_ids(&driver, &both);
+    assert!(both_found.is_empty(), "{both_found:?}");
 }
 
 #[test]
@@ -554,7 +556,7 @@ fn a_completion_from_a_settled_seat_is_recorded_and_changes_nothing() {
     assert_eq!(settled.episode().settled(), 1);
     let again = apply(&driver, &settled, "two", 2, complete(), &router)
         .expect("a settled seat saying it is done is already true");
-    assert!(again.actions.is_empty());
+    assert!(again.actions.is_empty(), "{:?}", again.actions);
     assert_eq!(again.state.episode().settled(), 1, "nothing moved");
     assert_eq!(again.state.revision(), 2, "the row is still on the record");
     assert_eq!(

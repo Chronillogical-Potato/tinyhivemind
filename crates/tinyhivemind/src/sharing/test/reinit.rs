@@ -75,7 +75,7 @@ async fn equal_bound_is_empty_and_keeps_state_without_reading() {
     let log = FakeLog::new(Vec::new());
     let state = state(10);
     let result = delta(plan(&log, &state, 10).await.expect("plans"));
-    assert!(result.messages.is_empty());
+    assert!(result.messages.is_empty(), "{:?}", result.messages);
     assert_eq!(result.next_state, state);
     assert_eq!(log.calls(), 0);
 }

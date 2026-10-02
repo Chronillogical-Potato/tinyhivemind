@@ -197,7 +197,8 @@ async fn an_unexpected_host_failure_keeps_its_source() {
         .expect_err("the queue failed");
     assert!(matches!(error, crate::Error::Enqueue { .. }));
     assert!(std::error::Error::source(&error).is_some());
-    assert!(queue.durable.lock().unwrap().children.is_empty());
+    let durable = queue.durable.lock().unwrap();
+    assert!(durable.children.is_empty(), "{:?}", durable.children);
 }
 
 #[tokio::test]

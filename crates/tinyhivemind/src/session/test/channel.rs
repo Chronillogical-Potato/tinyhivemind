@@ -106,12 +106,8 @@ async fn channel_projection_drops_a_reply_whose_root_is_outside_the_scan() {
         vec![message(9, Some("engineering"), Some(2), "orphan reply")],
         None,
     )]);
-    assert!(
-        project_session(&log, &query(5))
-            .await
-            .expect("projects")
-            .is_empty()
-    );
+    let found = project_session(&log, &query(5)).await.expect("projects");
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[tokio::test]

@@ -69,7 +69,7 @@ fn the_refutation_cap_takes_a_topic_out_of_contention_without_silencing_anyone()
     let held = standing(&standings, "stage");
 
     assert_eq!(held.refuted_by, ["auditor", "scout"]);
-    assert!(held.silenced.is_empty());
+    assert!(held.silenced.is_empty(), "{:?}", held.silenced);
     // Everything the room did survives in the standing. Only `carried` moves.
     assert_eq!(held.supporters, ["planner", "critic"]);
     assert_eq!(
@@ -129,7 +129,7 @@ fn refuting_a_topic_nobody_advocated_is_inert() {
         ],
         &policy(2),
     );
-    assert!(standings.is_empty());
+    assert!(standings.is_empty(), "{standings:?}");
 }
 
 #[test]
@@ -190,6 +190,6 @@ fn a_refutation_outside_the_window_stops_capping() {
     };
     let standings = standings(&read(&transcript), Sequence(41), &narrow).expect("folds");
     let held = standing(&standings, "stage");
-    assert!(held.refuted_by.is_empty());
+    assert!(held.refuted_by.is_empty(), "{:?}", held.refuted_by);
     assert!(held.carried(&narrow));
 }

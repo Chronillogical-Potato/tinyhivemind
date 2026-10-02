@@ -68,7 +68,11 @@ impl TurnResult {
 /// A runner indexes its seats by what the driver proposed, and the driver
 /// proposes only bound seats; a seat outside that is a host bug, and a
 /// failed turn is a better report of it than a panic.
-#[must_use]
+///
+/// No `#[must_use]`: `TurnJob` is a boxed future and already carries it, so
+/// repeating it here is what `clippy::double_must_use` objects to. Dropping
+/// the returned job is still a warning, from the type rather than the
+/// function.
 pub fn unseated(seat: String, lane: Lane) -> TurnJob {
     Box::pin(async move {
         let failed = format!("`{seat}` is not a seat of this runner");

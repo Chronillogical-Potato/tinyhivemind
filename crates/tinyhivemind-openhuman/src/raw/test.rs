@@ -115,28 +115,19 @@ async fn the_memory_keeps_nothing_and_never_errors() {
         .store("ns", "key", "content", MemoryCategory::Core, None)
         .await
         .expect("accepted");
-    assert!(
-        memory
-            .recall("anything", 10, RecallOpts::default())
-            .await
-            .expect("empty")
-            .is_empty()
-    );
+    let recall_found = memory
+        .recall("anything", 10, RecallOpts::default())
+        .await
+        .expect("empty");
+    assert!(recall_found.is_empty(), "{recall_found:?}");
     assert!(memory.get("ns", "key").await.expect("empty").is_none());
-    assert!(
-        memory
-            .list(None, None, None)
-            .await
-            .expect("empty")
-            .is_empty()
-    );
+    let list_found = memory.list(None, None, None).await.expect("empty");
+    assert!(list_found.is_empty(), "{list_found:?}");
     assert!(!memory.forget("ns", "key").await.expect("nothing to forget"));
+    let namespace_summaries_found = memory.namespace_summaries().await.expect("empty");
     assert!(
-        memory
-            .namespace_summaries()
-            .await
-            .expect("empty")
-            .is_empty()
+        namespace_summaries_found.is_empty(),
+        "{namespace_summaries_found:?}"
     );
     assert_eq!(memory.count().await.expect("zero"), 0);
     assert!(memory.health_check().await);
