@@ -1,0 +1,29 @@
+[package]
+name = "tinyhivemind-hives"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Durable coordination for dynamically registered agents and hives"
+
+[features]
+default = ["sqlite"]
+# SQLite persistence is replaceable by the host storage port.
+sqlite = ["dep:rusqlite"]
+
+[dependencies]
+tinyhivemind-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+futures.workspace = true
+rusqlite = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
