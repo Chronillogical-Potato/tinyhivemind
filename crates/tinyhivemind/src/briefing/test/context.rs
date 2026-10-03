@@ -33,7 +33,7 @@ fn context_renders_pins_between_threads_and_notes() {
             lines: vec!["#12 rewrite the changelog".into()],
         }],
     };
-    assert!(!context.is_empty());
+    assert!(!context.is_empty(), "{context:?}");
     assert_eq!(
         context.system_text(),
         Some(
@@ -102,7 +102,7 @@ async fn initialization_keeps_briefing_separate_from_history() {
     assert_eq!(initialized.briefing.teammates, briefing.teammates);
     assert_eq!(initialized.history.len(), 1);
     assert_eq!(initialized.history[0].sequence, Sequence(4));
-    assert!(initialized.context.is_empty());
+    assert!(initialized.context.is_empty(), "{:?}", initialized.context);
 }
 
 fn desk_row(sequence: u64, parent: Option<u64>, content: &str) -> LogMessage {
@@ -178,7 +178,7 @@ async fn context_skips_the_index_inside_a_thread_and_propagates_read_failures() 
     let initialized = initialize_session_with_context(&log, &query, viewer_briefing(), Vec::new())
         .await
         .expect("initializes");
-    assert!(initialized.context.is_empty());
+    assert!(initialized.context.is_empty(), "{:?}", initialized.context);
 
     query.conversation.thread_root = None;
     assert!(matches!(

@@ -130,12 +130,10 @@ async fn thread_scan_cap_is_a_successful_partial_projection() {
         pages.push(page(messages, Some(high - (PAGE_SIZE as u64 - 1))));
     }
     let log = FakeLog::new(pages);
-    assert!(
-        project_session(&log, &thread_query(1, 5))
-            .await
-            .expect("scan cap succeeds")
-            .is_empty()
-    );
+    let found = project_session(&log, &thread_query(1, 5))
+        .await
+        .expect("scan cap succeeds");
+    assert!(found.is_empty(), "{found:?}");
     assert_eq!(log.call_count(), 4);
 }
 
@@ -170,12 +168,10 @@ async fn whitespace_thread_root_stops_before_another_read() {
     };
     let mut query = query(8);
     query.conversation.thread_root = Some(Sequence(5));
-    assert!(
-        project_session(&log, &query)
-            .await
-            .expect("root terminates the walk")
-            .is_empty()
-    );
+    let found_found = project_session(&log, &query)
+        .await
+        .expect("root terminates the walk");
+    assert!(found_found.is_empty(), "{found_found:?}");
     assert_eq!(log.call_count(), 1);
 }
 

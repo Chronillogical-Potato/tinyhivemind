@@ -1,0 +1,27 @@
+[package]
+name = "tinyhivemind-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The episode's tools as a record a host drains: what a seat may call, the turn it calls in, and what its calls did -- whichever road they took."
+# This crate is the room's edge, minus any wire. `tinyhivemind::speech` states
+# what a seat may say; this crate renders those specs as tool definitions,
+# checks a call against the turn the host opened, and records what it did, so
+# a harness handed the tools natively and a harness reaching them over MCP
+# (`tinyhivemind-mcp`, which depends on this) are refused, acknowledged and
+# recorded in the same words. It opens nothing and awaits nothing.
+
+[dependencies]
+# The tool vocabulary this crate renders and the fold that reads a call.
+# Nothing here invents a tool: `speech::tool_specs()` states them and
+# `interpret` reads them.
+tinyhivemind.workspace = true
+# A tool definition is JSON Schema and a call's arguments arrive as JSON,
+# whichever transport carried them.
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -57,6 +57,7 @@ pub mod approval;
 pub mod briefing;
 pub mod digest;
 pub mod dispatch;
+pub mod elsewhere;
 pub mod error;
 pub mod pins;
 pub mod referral;
@@ -87,6 +88,7 @@ pub use dispatch::{
     EnqueueOutcome, EnqueueRefusal, MentionDispatchOutcome, MentionTurnFuture, MentionTurnQueue,
     dispatch_mention,
 };
+pub use elsewhere::{Elsewhere, ElsewhereQuery, gather_elsewhere, render_row};
 pub use error::{Error, Result};
 pub use pins::{
     PIN_EXCERPT_CHARS, PIN_LIMIT, PIN_SCAN, Pin, PinAction, PinDirective, fold_pins, pin_note,

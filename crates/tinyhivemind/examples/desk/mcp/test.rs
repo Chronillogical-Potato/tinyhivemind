@@ -95,7 +95,8 @@ fn a_cleared_outbox_holds_nothing_from_the_turn_before() {
     )
     .expect("a post is served");
     clear_outbox(&outbox);
-    assert!(drain_outbox(&outbox).is_empty());
+    let outbox_found = drain_outbox(&outbox);
+    assert!(outbox_found.is_empty(), "{outbox_found:?}");
 }
 
 #[test]
@@ -119,7 +120,8 @@ fn skips_a_garbled_line_rather_than_losing_the_turn() {
 
 #[test]
 fn drains_nothing_from_an_outbox_that_was_never_written() {
-    assert!(drain_outbox(Path::new("/nonexistent/desk/outbox.jsonl")).is_empty());
+    let found = drain_outbox(Path::new("/nonexistent/desk/outbox.jsonl"));
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]

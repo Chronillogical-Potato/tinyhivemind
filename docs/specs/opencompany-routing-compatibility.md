@@ -16,8 +16,9 @@ OpenCompany or OpenHuman before the TinyHiveMind API and evidence land.
 ## Proposed behavior
 
 The host builds one OpenHuman `Runtime` and instantiates one OpenHuman `Agent`
-per company agent. The `tinyhivemind-openhuman` adapter binds those existing
-handles to canonical ids in a validated `OpenHumanHive`. It resolves accepted
+per company agent. `tinyhivemind-driver` binds those existing handles, as
+`tinyhivemind-openhuman`'s `EmbedSeat`, to canonical ids in a validated
+`BoundHive`. It resolves accepted
 plans to borrowed handles and drives completion state only from host-committed
 events; it never constructs an agent, serializes a provider session id, or
 recreates an agent between turns. Each turn separately carries a

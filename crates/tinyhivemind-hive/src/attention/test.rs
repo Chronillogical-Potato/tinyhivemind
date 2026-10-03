@@ -213,7 +213,7 @@ fn nobody_bids_when_every_threshold_is_unreachable() {
         .collect();
     let weights = SalienceWeights::DEFAULT;
     let bids = bids(&context(&fixture, &MEMBERS, &thresholds, &weights)).expect("bids");
-    assert!(bids.is_empty());
+    assert!(bids.is_empty(), "{bids:?}");
     assert!(floor_holder(&bids).is_none());
 }
 

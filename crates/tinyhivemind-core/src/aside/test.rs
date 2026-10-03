@@ -327,7 +327,8 @@ fn a_malformed_roster_is_an_error_rather_than_a_refusal() {
 fn desk_audience_admits_everyone() {
     let desk = Audience::Desk;
     assert!(desk.is_desk());
-    assert!(desk.members().is_empty());
+    let members_found = desk.members();
+    assert!(members_found.is_empty(), "{members_found:?}");
     for viewer in [
         Viewer::Operator,
         Viewer::Person { id: "ada".into() },

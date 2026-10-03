@@ -92,16 +92,14 @@ fn rejects_a_mention_opened_after_a_semicolon() {
     let roster = Roster::new(&members, &[], &[]);
     let desks = DeskSet::new(&[], &[], &[], &[], &[]);
 
-    assert!(
-        resolve(
-            "prefix;@alice",
-            None,
-            &MentionAuthor::Other,
-            &roster,
-            &desks
-        )
-        .is_empty()
+    let resolved = resolve(
+        "prefix;@alice",
+        None,
+        &MentionAuthor::Other,
+        &roster,
+        &desks,
     );
+    assert!(resolved.is_empty(), "{resolved:?}");
 }
 
 #[test]
@@ -109,16 +107,14 @@ fn rejects_bad_openers_alias_starts_and_unknown_names() {
     let members = [member("alice", None)];
     let roster = Roster::new(&members, &[], &[]);
     let desks = DeskSet::new(&[], &[], &[], &[], &[]);
-    assert!(
-        resolve(
-            "x@alice @_missing @nobody",
-            None,
-            &MentionAuthor::Other,
-            &roster,
-            &desks
-        )
-        .is_empty()
+    let resolved = resolve(
+        "x@alice @_missing @nobody",
+        None,
+        &MentionAuthor::Other,
+        &roster,
+        &desks,
     );
+    assert!(resolved.is_empty(), "{resolved:?}");
 }
 
 #[test]
@@ -264,16 +260,14 @@ fn recognizes_tilde_fences_and_masks_an_unclosed_fence_to_eof() {
     let members = [member("alice", None)];
     let roster = Roster::new(&members, &[], &[]);
     let desks = DeskSet::new(&[], &[], &[], &[], &[]);
-    assert!(
-        resolve(
-            "~~~\n@alice\n",
-            None,
-            &MentionAuthor::Other,
-            &roster,
-            &desks
-        )
-        .is_empty()
+    let resolved = resolve(
+        "~~~\n@alice\n",
+        None,
+        &MentionAuthor::Other,
+        &roster,
+        &desks,
     );
+    assert!(resolved.is_empty(), "{resolved:?}");
 
     let body = "```\n```still code\n@alice\n```\n@alice";
     let found = resolve(body, None, &MentionAuthor::Other, &roster, &desks);
@@ -285,32 +279,28 @@ fn supplied_empty_is_authoritative_and_malformed_or_code_spans_are_dropped() {
     let members = [member("alice", None)];
     let roster = Roster::new(&members, &[], &[]);
     let desks = DeskSet::new(&[], &[], &[], &[], &[]);
-    assert!(
-        resolve(
-            "@alice",
-            Some(vec![]),
-            &MentionAuthor::Other,
-            &roster,
-            &desks
-        )
-        .is_empty()
+    let resolved = resolve(
+        "@alice",
+        Some(vec![]),
+        &MentionAuthor::Other,
+        &roster,
+        &desks,
     );
+    assert!(resolved.is_empty(), "{resolved:?}");
 
     let malformed = vec![
         mention(target_agent("alice"), "@alice", 99),
         mention(target_agent("alice"), "@alice", 1),
         mention(target_agent("alice"), "@alice", 1),
     ];
-    assert!(
-        resolve(
-            "`@alice`",
-            Some(malformed),
-            &MentionAuthor::Other,
-            &roster,
-            &desks
-        )
-        .is_empty()
+    let resolved = resolve(
+        "`@alice`",
+        Some(malformed),
+        &MentionAuthor::Other,
+        &roster,
+        &desks,
     );
+    assert!(resolved.is_empty(), "{resolved:?}");
 }
 
 #[test]
@@ -328,7 +318,7 @@ fn supplied_mentions_must_match_one_exact_mention_token() {
         &desks,
     );
 
-    assert!(found.is_empty());
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
@@ -470,16 +460,14 @@ fn expands_context_without_fanout_deduplicates_and_excludes_responder() {
         ),
         vec!["bob", "cara"]
     );
-    assert!(
-        mentioned_members(
-            &[mention(MentionTarget::Everyone, "@everyone", 0)],
-            Some("missing"),
-            None,
-            &roster,
-            &desks
-        )
-        .is_empty()
+    let members_found = mentioned_members(
+        &[mention(MentionTarget::Everyone, "@everyone", 0)],
+        Some("missing"),
+        None,
+        &roster,
+        &desks,
     );
+    assert!(members_found.is_empty(), "{members_found:?}");
 }
 
 #[test]
@@ -541,7 +529,8 @@ fn refuses_unknown_retired_and_tombstoned_mentions_identically() {
     // Extraction: none of the three names produces a mention at all, so the
     // author cannot tell a deleted teammate from one who never existed.
     let body = "@retired @tombstoned @never_existed";
-    assert!(resolve(body, None, &MentionAuthor::Other, &roster, &desks).is_empty());
+    let desks_found = resolve(body, None, &MentionAuthor::Other, &roster, &desks);
+    assert!(desks_found.is_empty(), "{desks_found:?}");
 
     // Revalidation: a supplied reference to any of the three is retained as
     // quiet context, with no reason distinguishing which state refused it.

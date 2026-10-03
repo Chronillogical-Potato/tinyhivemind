@@ -1,0 +1,312 @@
+//! A scripted OpenAI-compatible model, so a runner is proven offline.
+//!
+//! Also here: the runtime config an offline run needs ([`config`]) and the
+//! stub for the backend calls the core makes beside inference ([`backend`]),
+//! since signed out of the real one those hang rather than fail.
+//!
+//! A canned completion cannot exercise a transport, so an offline run proves
+//! mechanics, not the task: the model answers every seat with one
+//! `complete_episode` call, and the run asserts that the call became a desk
+//! row. The script speaks both dialects a runner can offer it, told apart by
+//! the tools the request advertises: a raw session advertises the room's
+//! tools themselves, so the call is native; an embed agent advertises the
+//! three MCP dispatchers, so the call is `mcp_call_tool` against the
+//! `episode` server. Either way the second request carries the receipt and
+//! gets a closing sentence.
+//!
+//! The script also keeps [`Metrics`]: every request's size, and the time from
+//! emitting a tool call to seeing its receipt -- the whole harness's round
+//! trip as the model experiences it, whichever road the call took. That is
+//! what the example's bench compares between the runners.
+
+#[cfg(test)]
+mod test;
+
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
+
+/// The in-memory journal, here too for a host that reaches it through the
+/// feature.
+pub use crate::journal::{MemoryLog, Row};
+use openhuman_embed::RuntimeConfig;
+use serde_json::{Value, json};
+use wiremock::matchers::{any, method, path};
+use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+
+/// The model id the scripted endpoint answers as.
+pub const MODEL: &str = "openhuman-raw-proof-model";
+
+/// The message every scripted seat completes with.
+pub const COMPLETION: &str = "offline proof: read the desk, nothing to add";
+
+/// What the scripted model saw: the harness cost, from the model's side.
+#[derive(Debug, Default)]
+pub struct Metrics {
+    inner: Mutex<Inner>,
+}
+
+#[derive(Debug, Default)]
+struct Inner {
+    requests: u64,
+    bytes: u64,
+    /// The `tools` array of the first request since the last reset: what the
+    /// model was offered before it had asked anything.
+    first_tools: Option<Value>,
+    /// Tool calls emitted and not yet receipted, oldest first.
+    pending: VecDeque<Instant>,
+    round_trips: Vec<Duration>,
+}
+
+/// A snapshot of [`Metrics`].
+#[derive(Clone, Debug, Default)]
+pub struct Snapshot {
+    /// Model requests made.
+    pub requests: u64,
+    /// Request bytes sent to the model, all requests.
+    pub bytes: u64,
+    /// What the first request offered the model as tools, verbatim.
+    ///
+    /// A seat can only call what it was offered, and can only name what it
+    /// was shown. Two roads to the same tools differ here and nowhere else:
+    /// a native belt puts the tools themselves in this array, schemas and
+    /// all, and an MCP one puts three dispatchers in it and leaves the tools
+    /// behind a call the seat has to think to make.
+    pub first_tools: Option<Value>,
+    /// Time from a tool call to its receipt, one per receipted call.
+    pub round_trips: Vec<Duration>,
+}
+
+impl Metrics {
+    /// Forget everything, at the start of an arm.
+    pub fn reset(&self) {
+        *self.inner.lock().unwrap_or_else(PoisonError::into_inner) = Inner::default();
+    }
+
+    /// What has been seen since the last reset.
+    #[must_use]
+    pub fn snapshot(&self) -> Snapshot {
+        let inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+        Snapshot {
+            requests: inner.requests,
+            bytes: inner.bytes,
+            first_tools: inner.first_tools.clone(),
+            round_trips: inner.round_trips.clone(),
+        }
+    }
+
+    fn saw_request(&self, bytes: usize, receipted: bool, tools: Option<&Value>) {
+        let mut inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+        if inner.requests == 0 {
+            inner.first_tools = tools.cloned();
+        }
+        inner.requests += 1;
+        inner.bytes += bytes as u64;
+        if receipted && let Some(emitted) = inner.pending.pop_front() {
+            inner.round_trips.push(emitted.elapsed());
+        }
+    }
+
+    fn emitted_call(&self) {
+        self.inner
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .pending
+            .push_back(Instant::now());
+    }
+}
+
+/// Which way the request lets the model call the room's tools.
+#[derive(Debug, PartialEq, Eq)]
+enum Dialect {
+    /// The room's tools are the request's own: call `complete_episode`, by
+    /// whatever name the belt advertises it under -- a host may prefix it.
+    Native(String),
+    /// `OpenHuman`'s dispatchers are: call `mcp_call_tool` on `episode`.
+    Mcp,
+    /// No tool at all: a session with no belt, such as an answer to an ask.
+    None,
+}
+
+fn dialect(body: &Value) -> Dialect {
+    let names: Vec<&str> = body["tools"]
+        .as_array()
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(|tool| {
+                    tool["function"]["name"]
+                        .as_str()
+                        .or_else(|| tool["name"].as_str())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(name) = names.iter().find(|name| name.ends_with("complete_episode")) {
+        Dialect::Native((*name).to_owned())
+    } else if names.contains(&"mcp_call_tool") {
+        Dialect::Mcp
+    } else {
+        Dialect::None
+    }
+}
+
+/// Faults the scripted model injects on request.
+///
+/// A turn that fails before it ran proves nothing about metering: there is
+/// no spend to keep. The interesting turn is the one that called a tool,
+/// was charged for it, and *then* died -- so the fault has to land on the
+/// second request, the one carrying the tool's receipt.
+#[derive(Debug, Default)]
+pub struct Faults {
+    receipt: AtomicBool,
+}
+
+impl Faults {
+    /// Answer the next receipt-bearing request with a server error, or stop.
+    pub fn fail_the_receipt(&self, on: bool) {
+        self.receipt.store(on, Ordering::SeqCst);
+    }
+}
+
+struct ScriptedModel {
+    chat: String,
+    metrics: Arc<Metrics>,
+    faults: Arc<Faults>,
+}
+
+impl Respond for ScriptedModel {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+        let receipt = body["messages"].as_array().and_then(|messages| {
+            messages
+                .iter()
+                .find(|m| m["role"] == "tool")
+                .and_then(|m| m["content"].as_str().map(str::to_owned))
+        });
+        self.metrics
+            .saw_request(request.body.len(), receipt.is_some(), body.get("tools"));
+        if receipt.is_some() && self.faults.receipt.load(Ordering::SeqCst) {
+            return ResponseTemplate::new(500).set_body_string("scripted fault");
+        }
+        let arguments = json!({
+            "message": COMPLETION,
+            "chat": self.chat,
+            "parent": null
+        });
+        let call = if receipt.is_some() {
+            None
+        } else {
+            match dialect(&body) {
+                Dialect::Native(name) => Some((name, arguments)),
+                Dialect::Mcp => Some((
+                    "mcp_call_tool".to_owned(),
+                    json!({
+                        "server": "episode",
+                        "tool": "complete_episode",
+                        "arguments": arguments
+                    }),
+                )),
+                Dialect::None => None,
+            }
+        };
+        let message = match &call {
+            Some((name, arguments)) => {
+                self.metrics.emitted_call();
+                json!({
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call_complete_1",
+                        "type": "function",
+                        "function": { "name": name, "arguments": arguments.to_string() }
+                    }]
+                })
+            }
+            None => json!({"role": "assistant", "content": "Recorded."}),
+        };
+        ResponseTemplate::new(200).set_body_json(json!({
+            "id": "chatcmpl-raw-proof",
+            "object": "chat.completion",
+            "created": 1_700_000_000_u64,
+            "model": MODEL,
+            "choices": [{
+                "index": 0,
+                "message": message,
+                "finish_reason": if call.is_some() { "tool_calls" } else { "stop" }
+            }],
+            "usage": {"prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16}
+        }))
+    }
+}
+
+/// The scripted model, bound on loopback, completing into `chat` and
+/// reporting into `metrics`.
+pub async fn model(chat: &str, metrics: Arc<Metrics>) -> MockServer {
+    model_with_faults(chat, metrics, Arc::new(Faults::default())).await
+}
+
+/// The same scripted model, over a [`Faults`] switch the caller keeps.
+pub async fn model_with_faults(
+    chat: &str,
+    metrics: Arc<Metrics>,
+    faults: Arc<Faults>,
+) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(ScriptedModel {
+            chat: chat.to_owned(),
+            metrics,
+            faults,
+        })
+        .mount(&server)
+        .await;
+    server
+}
+
+/// The runtime config an offline run boots with: nothing that would reach
+/// out or spawn. Live, a host loads its own; offline, this is the base every
+/// seat is built from.
+#[must_use]
+pub fn config() -> RuntimeConfig {
+    let mut config = RuntimeConfig::default();
+    // The scripted route answers with **native** structured tool calls, so the
+    // seat has to be reading them that way.
+    //
+    // OpenHuman's own default for this moved -- `"auto"` (native where the
+    // provider supports it) to `"python"` (calls parsed out of prose against
+    // Python signatures) -- and a runner that inherited it stopped seeing the
+    // script's calls as calls at all. Nothing errored: the reply came back,
+    // the record stayed empty, and the only symptom was a seat that had
+    // apparently chosen to say nothing.
+    //
+    // `LibraryHost::session` already pins `NativeDialect` for the raw and
+    // hosted seats, which is why they were unaffected and the embed seat was
+    // not. This is that same pin, for the runner that builds its agent from
+    // configuration instead of a session builder. A harness that scripts one
+    // dialect names it rather than inheriting whichever is current.
+    config.agent.tool_dispatcher = "auto".into();
+    config.local_ai.runtime_enabled = false;
+    config.runtime_python.enabled = false;
+    config.memory_tree.spacy_enabled = false;
+    config.memory_tree.embedding_endpoint = None;
+    config.memory_tree.embedding_model = None;
+    config.memory_tree.embedding_strict = false;
+    config
+}
+
+/// A backend that says yes to everything. The core makes non-inference
+/// calls to it; signed out of the real one those hang rather than fail.
+pub async fn backend() -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "success": true,
+            "data": {"id": "offline", "email": "local@openhuman.local"}
+        })))
+        .mount(&server)
+        .await;
+    server
+}

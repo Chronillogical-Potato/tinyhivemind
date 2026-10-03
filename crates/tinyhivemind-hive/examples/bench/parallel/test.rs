@@ -58,7 +58,7 @@ fn handles_slices_shorter_than_the_job_count() {
 
     let empty: [usize; 0] = [];
     let got = map_in_order(&empty, 32, |value: &usize| Ok(*value)).expect("no items cannot fail");
-    assert!(got.is_empty());
+    assert!(got.is_empty(), "{got:?}");
 }
 
 #[test]

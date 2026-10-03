@@ -12,14 +12,15 @@ use openhuman_embed::{
 };
 use serde_json::json;
 use tinyhivemind::desk::{Desk, ResponderMode};
+use tinyhivemind_driver::{
+    AgentBinding, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph,
+    HostAction,
+};
 use tinyhivemind_hive::{
     CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
     completion_status,
 };
-use tinyhivemind_openhuman::{
-    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, HostAction,
-    OpenHumanHive,
-};
+use tinyhivemind_openhuman::EmbedSeat;
 use tinyhivemind_typesafe::JevRouter;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -223,7 +224,7 @@ async fn run() -> anyhow::Result<()> {
         )?,
     ];
     let team = ["theory", "solver", "checker", "lead", "researcher"];
-    let hive = OpenHumanHive::new(
+    let hive = BoundHive::new(
         HiveGraph::new(
             Desk {
                 id: format!("pe{problem}"),
@@ -285,8 +286,10 @@ async fn run() -> anyhow::Result<()> {
             .iter()
             .map(|id| ParticipantCompletion {
                 agent_id: (*id).into(),
-                assigned_at: tinyhivemind::Sequence(0),
-                completed_at: Some(tinyhivemind::Sequence(0)),
+                assignments: vec![tinyhivemind_hive::AssignmentRecord {
+                    assigned_at: tinyhivemind::Sequence(0),
+                    completed_at: Some(tinyhivemind::Sequence(0)),
+                }],
             })
             .collect(),
     };
@@ -316,7 +319,7 @@ async fn run() -> anyhow::Result<()> {
             .map(|pending_agent| {
                 (
                     pending_agent.hive_agent_id.to_owned(),
-                    pending_agent.agent.clone(),
+                    pending_agent.agent.0.clone(),
                 )
             })
             .collect();
@@ -404,7 +407,7 @@ async fn run() -> anyhow::Result<()> {
                         author: id.clone(),
                         body: format!("BROADCAST: {message}"),
                     });
-                    visibility.mark_own(&id, index);
+                    visibility.mark_own(id, index);
                 }
                 tinyhivemind::speech::Utterance::CompleteEpisode { message } => {
                     let index = transcript.len();
@@ -412,10 +415,11 @@ async fn run() -> anyhow::Result<()> {
                         author: id.clone(),
                         body: format!("COMPLETE: {message}"),
                     });
-                    visibility.mark_own(&id, index);
+                    visibility.mark_own(id, index);
                 }
                 tinyhivemind::speech::Utterance::Post { .. }
-                | tinyhivemind::speech::Utterance::Dm { .. } => {
+                | tinyhivemind::speech::Utterance::Dm { .. }
+                | tinyhivemind::speech::Utterance::Ask { .. } => {
                     anyhow::bail!("MCP completion surface emitted an unsupported utterance")
                 }
             }
@@ -459,6 +463,11 @@ async fn run() -> anyhow::Result<()> {
                 }
                 HostAction::DeliverDm { .. } => {
                     anyhow::bail!("MCP completion surface emitted an unsupported DM")
+                }
+                // The seat that just completed was handed queued work; the
+                // next pending round runs it, so there is nothing to start.
+                HostAction::DeliverHandoff { agent_id, handoff } => {
+                    println!("[handoff] -> {agent_id} (from {})", handoff.from);
                 }
             }
         }
@@ -507,7 +516,7 @@ fn instantiated(
     problem: &str,
     id: &'static str,
     role: String,
-) -> anyhow::Result<AgentBinding> {
+) -> anyhow::Result<AgentBinding<EmbedSeat>> {
     let runtime_id = format!("{id}-pe{problem}-{}", std::process::id());
     let tools = vec![
         "file_read".into(),
@@ -549,7 +558,7 @@ fn instantiated(
                 .mcp(mcp)
                 .action_dir(workspace),
         )
-        .map(|agent| AgentBinding::new(id, agent))
+        .map(|agent| AgentBinding::new(id, EmbedSeat(agent)))
         .map_err(Into::into)
 }
 

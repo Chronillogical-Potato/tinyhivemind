@@ -74,6 +74,7 @@ jobs:
           cargo run -p tinyhivemind-hive --example bench -- --specialists 2 --cost-tiers --blind-evidence --episodes 25
           cargo run -p tinyhivemind-hive --example bench -- --hidden-profile --blind-evidence --episodes 25
           cargo run -p tinyhivemind-hive --example bench -- --stats-check
+          cargo run -p tinyhivemind-driver --example bench -- --episodes 25
 
       # `tinyhivemind-core` is what a host links on the hot path of every agent
       # turn, in its default build. Keeping it free of runtimes and transports
@@ -81,6 +82,13 @@ jobs:
       # pointing one way.
       - name: Assert the pure crates stay pure
         run: .github/scripts/assert-pure.sh
+
+      # `openhuman-embed` is a git dependency pinned by rev, redirected by
+      # `[patch]` onto `vendor/openhuman` for this workspace. A host without
+      # that patch builds the rev; this build builds the submodule. They must
+      # be the same commit or the two are silently different trees.
+      - name: Assert the openhuman-embed rev matches the vendored submodule
+        run: .github/scripts/assert-openhuman-pin.sh
 
       - name: Require 90% line coverage in every source file
         run: .github/scripts/check-file-coverage.sh 90 coverage.json

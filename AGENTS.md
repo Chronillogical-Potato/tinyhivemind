@@ -73,10 +73,17 @@ crates/
 │                         # group deliberation
 ├── tinyhivemind-embed/    # host-neutral conversation surfaces and validated
 │                       # Jev-first routing composition
-├── tinyhivemind-typesafe/ # System One wires and Jev questions behind one
-│                         # transport port; no HTTP client or async runtime
-└── tinyhivemind-openhuman/ # bindings to existing OpenHuman agents and the
-                          # completion driver
+├── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
+│                       # one transport port; no HTTP client or async runtime
+├── tinyhivemind-driver/   # the completion driver over a handle the host binds:
+│                       # who runs next, what a committed row means, and the
+│                       # conducted episode: conversations and nudges. Pure.
+├── tinyhivemind-openhuman/ # the OpenHuman adapter: both runners behind one seam;
+│                       # the one crate that links a harness, by ADR 0025
+├── tinyhivemind-tools/    # the episode's tools as a record a host drains:
+│                       # definitions, the call gate, the events. Pure.
+└── tinyhivemind-mcp/      # that record served over MCP; the one socket the
+                        # repository opens, by ADR 0022
 docs/
 ├── specs/              # behavior and architecture specifications
 ├── plans/              # test-first implementation plans
@@ -227,6 +234,10 @@ Supporting commands:
   endpoint and print the flags that pin a run to them. Five of the six columns
   are computed from those constants; `crates/tinyhivemind-hive/examples/bench/COST.md`
   says what they do and do not claim.
+- `cargo run --release -p tinyhivemind-driver --example bench -- --episodes 2000`
+  — price the completion driver's policy with no model: the same seeded rooms
+  per arm, queue depth and broadcast budget and width varied one at a time.
+  Findings in `docs/experiments/2026-09-22-the-driver-under-the-benchmark.md`.
 
   The harness is documented in `crates/tinyhivemind-hive/examples/bench/README.md`,
   its accepted behaviour in `docs/specs/benchmark-matrix.md`, and its findings

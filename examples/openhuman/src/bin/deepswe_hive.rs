@@ -6,20 +6,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::future::join_all;
+use openhuman_core::agent::registry::types::{
+    AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
+};
 use openhuman_embed::{
     Access, Agent, AgentDefinitionSpec, AgentSpec, CoreError, McpServer, Provider, Runtime,
     RuntimeConfig, ToolScopeSpec, Workspace,
 };
-use openhuman_core::agent::registry::types::{
-    AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
-};
 use serde::{Deserialize, Serialize};
 use tinyhivemind::desk::{Desk, ResponderMode};
 use tinyhivemind::responder::Probability;
-use tinyhivemind_hive::{CompletionEpisodeState, CompletionStep, completion_status};
-use tinyhivemind_openhuman::{
-    AgentBinding, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph, OpenHumanHive,
+use tinyhivemind_driver::{
+    AgentBinding, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph,
 };
+use tinyhivemind_hive::{CompletionEpisodeState, CompletionStep, completion_status};
+use tinyhivemind_openhuman::EmbedSeat;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -183,7 +184,7 @@ async fn run_prepared_with_mcp_executable(
         .iter()
         .map(|id| instantiate(&runtime, &sandbox, &outbox, mcp_executable, id))
         .collect::<anyhow::Result<Vec<_>>>()?;
-    let hive = OpenHumanHive::new(
+    let hive = BoundHive::new(
         HiveGraph::new(
             Desk {
                 id: format!("deepswe-{}", task.instance_id),
@@ -227,7 +228,7 @@ async fn run_prepared_with_mcp_executable(
         let frozen = transcript.clone();
         let jobs = pending.agents().iter().map(|seat| {
             run_seat(
-                seat.agent.clone(),
+                seat.agent.0.clone(),
                 seat.hive_agent_id.to_owned(),
                 task.clone(),
                 frozen.clone(),
@@ -416,7 +417,8 @@ fn accepted_action_reply(
             format!("COMPLETE: {message}")
         }
         tinyhivemind::speech::Utterance::Post { .. }
-        | tinyhivemind::speech::Utterance::Dm { .. } => {
+        | tinyhivemind::speech::Utterance::Dm { .. }
+        | tinyhivemind::speech::Utterance::Ask { .. } => {
             anyhow::bail!("@{id} emitted an unsupported hive action")
         }
     };
@@ -488,7 +490,7 @@ fn instantiate(
     outbox_dir: &Path,
     executable: &Path,
     id: &str,
-) -> anyhow::Result<AgentBinding> {
+) -> anyhow::Result<AgentBinding<EmbedSeat>> {
     let workspace = McpServer::stdio("deepswe", executable.to_string_lossy(), sandbox.mcp_args())
         .allow_tools(["file_read", "file_write", "file_edit", "shell", "test"])
         .description("Docker-confined local checkout tools");
@@ -544,7 +546,7 @@ fn instantiate(
                 .config(move |config| config.agent_registry.entries.push(registry_entry))
                 .action_dir(sandbox.repo_path()),
         )
-        .map(|agent| AgentBinding::new(id, agent))
+        .map(|agent| AgentBinding::new(id, EmbedSeat(agent)))
         .map_err(Into::into)
 }
 
@@ -579,6 +581,19 @@ fn role(id: &str) -> &'static str {
 
 fn offline_config() -> RuntimeConfig {
     let mut config = RuntimeConfig::default();
+    // The scripted route answers with native tool calls, so the seats have to
+    // be reading them that way.
+    //
+    // OpenHuman's own default for this moved -- `"auto"` (native where the
+    // provider supports it) to `"python"` (calls parsed out of prose against
+    // Python signatures) -- and a harness that inherited it stopped seeing the
+    // script's calls as calls. Nothing errored: each seat "emitted zero hive
+    // actions", retried to its attempt cap, and the run failed as though the
+    // model had gone quiet.
+    //
+    // A harness that scripts one dialect names it rather than inheriting
+    // whichever is current.
+    config.agent.tool_dispatcher = "auto".into();
     config.local_ai.runtime_enabled = false;
     config.runtime_python.enabled = false;
     config.memory_tree.spacy_enabled = false;

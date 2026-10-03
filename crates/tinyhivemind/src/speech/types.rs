@@ -33,6 +33,25 @@ pub enum Utterance {
         /// The text to append.
         message: String,
     },
+    /// A private conversation opened with the peers it names: one, or a
+    /// group of them.
+    ///
+    /// Unlike a [`Dm`](Self::Dm) it opens an obligation: the asker cannot
+    /// complete its assignment until the conversation has concluded and its
+    /// outcome has reached it. The seats asked keep whatever they were doing
+    /// — this is a question, not a handoff.
+    ///
+    /// Naming several opens **one** conversation holding all of them, not one
+    /// each: they read each other's answers and can work the question out
+    /// between themselves, and it concludes when every one of them has
+    /// answered. Naming one is that same conversation with a single peer in
+    /// it, which is what every ask was before a group could be named.
+    Ask {
+        /// The peers asked, without the `@`, in the order they were named.
+        to: Vec<String>,
+        /// The question.
+        message: String,
+    },
     /// A message that also reports the author's current assignment finished.
     ///
     /// The seat is reporting, not ending the desk: the host still appends the
@@ -52,6 +71,7 @@ impl Utterance {
             Self::Post { message }
             | Self::Broadcast { message }
             | Self::Dm { message, .. }
+            | Self::Ask { message, .. }
             | Self::CompleteEpisode { message } => message,
         }
     }
@@ -73,6 +93,19 @@ impl Utterance {
     #[must_use]
     pub const fn broadcasting(&self) -> bool {
         matches!(self, Self::Broadcast { .. })
+    }
+
+    /// The seats this utterance asks, when it is an [`Ask`](Self::Ask).
+    ///
+    /// A host holds the asker's completion open until every one of them has
+    /// answered. Empty for anything else, so a caller that only wants the
+    /// recipients does not match on the variant.
+    #[must_use]
+    pub fn asks(&self) -> &[String] {
+        match self {
+            Self::Ask { to, .. } => to,
+            _ => &[],
+        }
     }
 }
 
@@ -120,6 +153,19 @@ pub enum UtteranceRejection {
     /// A private message named its own author.
     #[error("`to` names you; a message to yourself reaches nobody else")]
     SelfRecipient,
+    /// An `ask` named more than one seat.
+    #[error(
+        "`ask` puts a question to one seat; {count} were named. Use `ask_teammates` to put one question to several seats at once, in a conversation they are all in"
+    )]
+    OneRecipient {
+        /// How many the seat wrote.
+        count: usize,
+    },
+    /// An `ask_teammates` named a single seat.
+    #[error(
+        "`ask_teammates` is for two or more seats, in one conversation together; `to` named one. Use `ask` for a question only that seat can settle"
+    )]
+    NotAGroup,
 }
 
 /// The arguments of one tool call, in the shapes the tools declare.
@@ -152,6 +198,11 @@ pub struct CommittedUtterance {
     pub completes_episode: bool,
     /// Whether the appended desk row must be routed semantically to teammates.
     pub broadcasting: bool,
+    /// The seats this row asks, when it is an `ask`; empty otherwise.
+    ///
+    /// The host holds the author's completion open until every one of them
+    /// answers, and opens one conversation holding all of them.
+    pub asks: Vec<String>,
     /// Why a requested aside was declined, when one was.
     ///
     /// A refusal is not a failure: the row is appended to the whole desk,

@@ -46,7 +46,7 @@ fn standings_are_idempotent_over_duplicated_traces() {
 #[test]
 fn an_empty_medium_is_deliberating() {
     let standings = standings(&[], Sequence(0), &policy(2)).expect("folds");
-    assert!(standings.is_empty());
+    assert!(standings.is_empty(), "{standings:?}");
     assert_eq!(
         consensus(&standings, &policy(2)),
         ConsensusState::Deliberating

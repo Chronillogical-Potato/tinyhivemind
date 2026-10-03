@@ -100,7 +100,7 @@ fn a_dm_naming_the_same_seat_twice_names_it_once() {
 #[test]
 fn refuses_a_message_that_is_absent_or_only_whitespace() {
     for message in [None, Some(""), Some("   \n ")] {
-        for tool in ["post", "complete_episode", "broadcast", "dm"] {
+        for tool in ["post", "complete_episode", "broadcast", "dm", "ask"] {
             let to = ["checker".to_string()];
             assert_eq!(
                 interpret(
@@ -147,6 +147,179 @@ fn refuses_a_dm_that_names_nobody() {
             "{to:?}",
         );
     }
+}
+
+#[test]
+fn an_ask_names_one_seat_and_keeps_its_question() {
+    let to = ["@checker".to_string()];
+    let utterance = said(
+        "ask",
+        &CallArguments {
+            message: Some("  is the depth bound tight?  "),
+            to: &to,
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        utterance,
+        Utterance::Ask {
+            to: vec!["checker".into()],
+            message: "is the depth bound tight?".into(),
+        },
+    );
+    assert_eq!(utterance.asks(), ["checker".to_string()]);
+    assert!(!utterance.completes_episode(), "asking is not finishing");
+    assert!(!utterance.broadcasting());
+    assert!(post("anything").asks().is_empty(), "only an ask asks");
+}
+
+#[test]
+fn refuses_an_ask_that_names_nobody() {
+    let blanks = [" ".to_string(), "@".to_string()];
+    for to in [&[][..], &blanks[..]] {
+        assert_eq!(
+            interpret(
+                "ask",
+                &CallArguments {
+                    message: Some("anyone?"),
+                    to,
+                    ..Default::default()
+                }
+            ),
+            Err(UtteranceRejection::NoRecipients),
+            "{to:?}",
+        );
+    }
+}
+
+#[test]
+fn ask_teammates_names_a_group_and_keeps_them_in_order() {
+    let to = ["@checker".to_string(), "theory".to_string()];
+    assert_eq!(
+        interpret(
+            "ask_teammates",
+            &CallArguments {
+                message: Some("which of you?"),
+                to: &to,
+                ..Default::default()
+            }
+        ),
+        Ok(ToolCall::Speak(Utterance::Ask {
+            to: vec!["checker".into(), "theory".into()],
+            message: "which of you?".into(),
+        })),
+        "a group question is the same utterance, with the group in it",
+    );
+}
+
+#[test]
+fn each_asking_tool_refuses_the_others_arity_and_names_it() {
+    let two = ["checker".to_string(), "theory".to_string()];
+    assert_eq!(
+        interpret(
+            "ask",
+            &CallArguments {
+                message: Some("both of you?"),
+                to: &two,
+                ..Default::default()
+            }
+        ),
+        Err(UtteranceRejection::OneRecipient { count: 2 }),
+        "`ask` is one seat, and the refusal says which tool takes two",
+    );
+    let one = ["checker".to_string()];
+    assert_eq!(
+        interpret(
+            "ask_teammates",
+            &CallArguments {
+                message: Some("just you?"),
+                to: &one,
+                ..Default::default()
+            }
+        ),
+        Err(UtteranceRejection::NotAGroup),
+        "a room of one is a pair, and the refusal says so",
+    );
+    for tool in ["ask", "ask_teammates"] {
+        assert_eq!(
+            interpret(
+                tool,
+                &CallArguments {
+                    message: Some("anyone?"),
+                    to: &[],
+                    ..Default::default()
+                }
+            ),
+            Err(UtteranceRejection::NoRecipients),
+            "{tool}",
+        );
+    }
+}
+
+#[test]
+fn an_ask_naming_a_seat_twice_asks_it_once() {
+    let to = ["checker".to_string(), "@checker".to_string()];
+    assert_eq!(
+        interpret(
+            "ask",
+            &CallArguments {
+                message: Some("twice?"),
+                to: &to,
+                ..Default::default()
+            }
+        ),
+        Ok(ToolCall::Speak(Utterance::Ask {
+            to: vec!["checker".into()],
+            message: "twice?".into(),
+        })),
+        "a seat named twice is one seat in the conversation",
+    );
+}
+
+#[test]
+fn refuses_an_ask_to_a_seat_the_roster_does_not_hold() {
+    let members = members();
+    let roster = Roster::new(&members, &[], &[]);
+    let utterance = Utterance::Ask {
+        to: vec!["johnny".into()],
+        message: "are you there?".into(),
+    };
+    assert_eq!(
+        check_recipients(&utterance, "solver", &roster),
+        Err(UtteranceRejection::UnknownRecipient {
+            id: "johnny".into()
+        }),
+    );
+}
+
+#[test]
+fn refuses_an_ask_a_seat_addressed_to_itself() {
+    let members = members();
+    let roster = Roster::new(&members, &[], &[]);
+    let alone = Utterance::Ask {
+        to: vec!["solver".into()],
+        message: "what do I think?".into(),
+    };
+    assert_eq!(
+        check_recipients(&alone, "solver", &roster),
+        Err(UtteranceRejection::SelfRecipient),
+    );
+    let peer = Utterance::Ask {
+        to: vec!["checker".into()],
+        message: "what do you think?".into(),
+    };
+    assert_eq!(check_recipients(&peer, "solver", &roster), Ok(()));
+    let group = Utterance::Ask {
+        to: vec!["checker".into(), "johnny".into()],
+        message: "what do you two think?".into(),
+    };
+    assert_eq!(
+        check_recipients(&group, "solver", &roster),
+        Err(UtteranceRejection::UnknownRecipient {
+            id: "johnny".into()
+        }),
+        "a group ask is refused whole where one of the seats is a stranger",
+    );
 }
 
 #[test]
@@ -272,6 +445,17 @@ fn the_wire_form_is_what_a_host_writes_and_reads_back() {
                 message: "recheck".into(),
             },
             serde_json::json!({ "kind": "dm", "to": ["checker"], "message": "recheck" }),
+        ),
+        (
+            Utterance::Ask {
+                to: vec!["checker".into(), "theory".into()],
+                message: "is it tight?".into(),
+            },
+            serde_json::json!({
+                "kind": "ask",
+                "to": ["checker", "theory"],
+                "message": "is it tight?",
+            }),
         ),
         (
             Utterance::CompleteEpisode {

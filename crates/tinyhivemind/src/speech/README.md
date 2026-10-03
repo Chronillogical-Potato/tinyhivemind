@@ -23,7 +23,7 @@ after the fact.
 | --- | --- |
 | `mod.rs` | `interpret`, `commit_utterance`, `check_recipients`, `addressed_peers`, `read_limit` |
 | `types.rs` | `Utterance`, `ToolCall`, `UtteranceRejection`, `CallArguments`, `CommittedUtterance`, `ParameterKind` |
-| `tools.rs` | `tool_specs()` — the five tools, their descriptions and their arguments, as data |
+| `tools.rs` | `tool_specs()` — the six tools, their descriptions and their arguments, as data |
 | `fence.rs` | `extract_post`, for the two callers that cannot reach a tool |
 | `test/` | `parse`, `commit`, `tools`, `fence`, and the shared `support` fixture |
 

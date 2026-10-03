@@ -114,7 +114,9 @@ fn a_directory_is_transparently_its_entries() {
         serde_json::from_value::<Directory>(value).expect("deserializes"),
         folded,
     );
-    assert!(Directory::default().entries().is_empty());
+    let directory = Directory::default();
+    let entries = directory.entries();
+    assert!(entries.is_empty(), "{entries:?}");
 }
 
 #[test]
@@ -232,9 +234,12 @@ fn a_duplicate_prior_record_is_rejected() {
 #[test]
 fn an_empty_medium_folds_to_an_empty_directory() {
     let folded = fold(&[], &[]);
-    assert!(folded.entries().is_empty());
-    assert!(folded.topics().is_empty());
-    assert!(folded.lines().is_empty());
+    let entries_found = folded.entries();
+    assert!(entries_found.is_empty(), "{entries_found:?}");
+    let topics_found = folded.topics();
+    assert!(topics_found.is_empty(), "{topics_found:?}");
+    let lines_found = folded.lines();
+    assert!(lines_found.is_empty(), "{lines_found:?}");
     assert_eq!(folded.weight("archivist", &"pool".into()), 0);
     assert!(folded.top(&"pool".into()).is_none());
     assert!(folded.top_among(&"pool".into(), &["archivist"]).is_none());
@@ -370,7 +375,9 @@ fn priors_alone_reproduce_the_declared_affinity() {
 #[test]
 fn an_undeclared_affinity_contributes_no_prior() {
     let priors = [AgentThreshold::new("archivist", 0)];
-    assert!(fold(&[], &priors).entries().is_empty());
+    let folded = fold(&[], &priors);
+    let entries = folded.entries();
+    assert!(entries.is_empty(), "{entries:?}");
 
     // And a member who declared nothing is not lifted to the neutral 50 the
     // salience multiplier uses.
@@ -394,7 +401,8 @@ fn a_deposit_outside_the_window_contributes_nothing() {
         ..DirectoryPolicy::DEFAULT
     };
     let folded = directory(&read(&transcript), Sequence(80), &policy, &[]).expect("folds");
-    assert!(folded.entries().is_empty());
+    let entries_found = folded.entries();
+    assert!(entries_found.is_empty(), "{entries_found:?}");
 }
 
 #[test]

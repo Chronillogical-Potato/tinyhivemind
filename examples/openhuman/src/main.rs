@@ -3,19 +3,20 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use openhuman_embed::{Access, Agent, AgentSpec, Provider, Runtime, RuntimeConfig, Workspace};
 use openhuman_core::agent::registry::types::{
     AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
 };
+use openhuman_embed::{Access, Agent, AgentSpec, Provider, Runtime, RuntimeConfig, Workspace};
 use serde_json::json;
 use tinyhivemind::{
     desk::{Desk, ResponderMode},
     responder::Probability,
 };
+use tinyhivemind_driver::{AgentBinding, BoundHive, HiveGraph};
 use tinyhivemind_embed::{
     ConversationKind, ConversationRef, MessageRoute, RouteCandidate, RoutingPolicy, RoutingRequest,
 };
-use tinyhivemind_openhuman::{AgentBinding, HiveGraph, OpenHumanHive};
+use tinyhivemind_openhuman::EmbedSeat;
 use tinyhivemind_typesafe::{
     ChoiceAnswer, JevRouter, NoulAnswer, SystemOneAnswer, SystemOneRequest, SystemOneResponse,
     SystemOneTransport, SystemOneTransportFuture, TokenUsage,
@@ -177,7 +178,7 @@ async fn run() -> anyhow::Result<()> {
     // OpenHuman owns the runtime and agent lifecycle. TinyHiveMind receives
     // the already-instantiated handles and never serializes or reconstructs
     // them between turns.
-    let hive = OpenHumanHive::new(
+    let hive = BoundHive::new(
         HiveGraph::new(
             Desk {
                 id: "launch".into(),
@@ -191,29 +192,33 @@ async fn run() -> anyhow::Result<()> {
         vec![
             AgentBinding::new(
                 "engineering",
-                runtime.agent(
-                    AgentSpec::new("engineering")
-                        .system_prompt("You are the engineering specialist.")
-                        .config(|config| {
-                            config.agent_registry.entries.push(registry_entry(
-                                "engineering",
-                                "You are the engineering specialist.",
-                            ));
-                        }),
-                )?,
+                EmbedSeat(
+                    runtime.agent(
+                        AgentSpec::new("engineering")
+                            .system_prompt("You are the engineering specialist.")
+                            .config(|config| {
+                                config.agent_registry.entries.push(registry_entry(
+                                    "engineering",
+                                    "You are the engineering specialist.",
+                                ));
+                            }),
+                    )?,
+                ),
             ),
             AgentBinding::new(
                 "legal",
-                runtime.agent(
-                    AgentSpec::new("legal")
-                        .system_prompt("You are the legal specialist.")
-                        .config(|config| {
-                            config.agent_registry.entries.push(registry_entry(
-                                "legal",
-                                "You are the legal specialist.",
-                            ));
-                        }),
-                )?,
+                EmbedSeat(
+                    runtime.agent(
+                        AgentSpec::new("legal")
+                            .system_prompt("You are the legal specialist.")
+                            .config(|config| {
+                                config
+                                    .agent_registry
+                                    .entries
+                                    .push(registry_entry("legal", "You are the legal specialist."));
+                            }),
+                    )?,
+                ),
             ),
         ],
     )?;
@@ -238,8 +243,8 @@ async fn run() -> anyhow::Result<()> {
     let [engineering] = resolved.as_slice() else {
         anyhow::bail!("fixture routing did not select one responder: {desk_plan:?}");
     };
-    let session_id = openhuman_session(&engineering.agent);
-    let first = run_turn(&engineering.agent, &session_id, &desk_request.message).await?;
+    let session_id = openhuman_session(&engineering.agent.0);
+    let first = run_turn(&engineering.agent.0, &session_id, &desk_request.message).await?;
 
     // The same instantiated OpenHuman agent crosses from a desk into a DM.
     // The deterministic DM route bypasses Jev, and OpenHuman receives the same
@@ -258,7 +263,7 @@ async fn run() -> anyhow::Result<()> {
     if engineering.runtime_agent_id() != engineering_again.runtime_agent_id() {
         anyhow::bail!("surface change replaced the instantiated OpenHuman agent");
     }
-    let second = run_turn(&engineering_again.agent, &session_id, dm_message).await?;
+    let second = run_turn(&engineering_again.agent.0, &session_id, dm_message).await?;
     if first.reply != OPENHUMAN_REPLY
         || second.reply != OPENHUMAN_REPLY
         || first.session_id != session_id
@@ -331,7 +336,7 @@ fn registry_entry(id: &str, system_prompt: &str) -> AgentRegistryEntry {
 
 /// OpenHuman's per-agent transcript key; TinyHiveMind stores no session state.
 fn openhuman_session(agent: &Agent) -> String {
-    format!("tinyhivemind-openhuman:{}", agent.id())
+    format!("tinyhivemind-embed:{}", agent.id())
 }
 
 /// Send one turn through the already-instantiated OpenHuman agent.

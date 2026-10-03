@@ -384,7 +384,7 @@ fn a_bid_reason_is_reported_for_every_turn() -> Result<(), String> {
         &mut [&mut planner, &mut critic, &mut scout],
     )?;
 
-    assert!(!steps.is_empty());
+    assert!(!steps.is_empty(), "{steps:?}");
     for step in &steps {
         assert!(
             matches!(

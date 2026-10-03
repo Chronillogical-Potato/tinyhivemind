@@ -49,7 +49,8 @@ fn a_reading_clause_carries_no_facts() {
     // The other direction, and the one that would silently disqualify every
     // option a desk mentioned: an option named with a rating is an opinion,
     // never a disqualification.
-    assert!(facts("Desk-1 reads #stage at 40, #ship at 100.").is_empty());
+    let found = facts("Desk-1 reads #stage at 40, #ship at 100.");
+    assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
@@ -83,5 +84,6 @@ fn a_disqualification_nobody_owns_is_dropped() {
     // A bare `#option` with no desk clause open names nothing that can be
     // attributed, and an unattributable fact must not be applied — the same
     // rule the reading parser follows.
-    assert!(facts("we should drop #stage entirely.").is_empty());
+    let found = facts("we should drop #stage entirely.");
+    assert!(found.is_empty(), "{found:?}");
 }

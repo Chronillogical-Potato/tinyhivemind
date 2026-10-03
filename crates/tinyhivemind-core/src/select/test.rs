@@ -111,13 +111,15 @@ fn keeps_at_most_the_limit_and_nothing_at_zero() {
         Candidate::new("c", "ship three"),
     ];
     assert_eq!(rank("ship", &candidates, 2).len(), 2);
-    assert!(rank("ship", &candidates, 0).is_empty());
+    let candidates_found = rank("ship", &candidates, 0);
+    assert!(candidates_found.is_empty(), "{candidates_found:?}");
 }
 
 #[test]
 fn returns_nothing_when_no_candidate_matches() {
     let candidates = [Candidate::new("alice", "Alice")];
-    assert!(rank("zzzz", &candidates, 8).is_empty());
+    let candidates_found = rank("zzzz", &candidates, 8);
+    assert!(candidates_found.is_empty(), "{candidates_found:?}");
 }
 
 #[test]

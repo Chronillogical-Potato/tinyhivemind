@@ -220,7 +220,8 @@ fn live_agents_deliberate_and_the_episode_terminates_within_its_budget() -> Resu
             ["planner", "critic", "archivist"].contains(&step.agent_id.as_str()),
             "an unknown agent took a turn: {step:?}",
         );
-        assert!(!step.content.trim().is_empty());
+        let found = step.content.trim();
+        assert!(!found.is_empty(), "{found:?}");
     }
 
     // Attribution survives the round trip: every appended row names its author.

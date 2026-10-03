@@ -2,8 +2,13 @@
 
 | Path | Purpose |
 |---|---|
-| `lib.rs` | Crate overview and centralized public exports. |
-| `error/` | Typed graph, routing, and committed-event failures. |
-| `graph/` | The owned one-desk graph and OpenHuman agent bindings. |
-| `driver/` | Resumable completion rounds and committed-event folds. |
-| `test_support.rs` | Test-only OpenHuman runtime and agent fixtures shared by unit tests. |
+| `lib.rs` | Crate overview and the public surface: `run_episode`, `Journal`, `Report`, `SeatRunner`, `RunnerKind`, `HostedRunner`, `EpisodeHost`, `EpisodeBelt`, `EmbedRunner`, `EmbedSeat`, `RawRunner`, `RawSeat`, `LibraryHost`, `Route`, `register_seats`, `offline`. |
+| `error/` | What seating or running a seat, or an episode, can fail with. |
+| `episode/` | `run_episode` over a `Journal`: one episode from its door to quiescence. |
+| `runner/` | The seam: open, run, close; `Lane`, `TurnJob`; which runner the environment names. |
+| `journal/` | `MemoryLog`, an in-memory journal that is a real `SessionLog`; always compiled. |
+| `hosted/` | Seats as the host's own agents, built through `EpisodeHost`, seeded from the host's log. |
+| `embed/` | Seats as `openhuman-embed` agents, the room's tools on the spec's own belt -- or over MCP with `seat_over_mcp` -- seeded from the host's journal every turn. |
+| `seed/` | A seat's history as it reads it, and its persona at the head: what `hosted` and `embed` give a turn instead of resuming one. |
+| `raw/` | Seats as raw sessions, tools in-process: the belt, the gate, the memory that keeps nothing. |
+| `offline/` | The scripted model, the backend stub and the offline config, behind the `offline` feature and in tests. |

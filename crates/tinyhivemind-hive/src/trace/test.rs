@@ -119,9 +119,12 @@ fn every_marker_spelling_is_recognized() {
 
 #[test]
 fn a_deferral_without_a_topic_yields_no_trace() {
-    assert!(resolve("!defer", None, &agent("a"), Sequence(1)).is_empty());
-    assert!(resolve("!defer not mine", None, &agent("a"), Sequence(1)).is_empty());
-    assert!(resolve("!defer ^3", None, &agent("a"), Sequence(1)).is_empty());
+    let found_found = resolve("!defer", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
+    let found_found = resolve("!defer not mine", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
+    let found_found = resolve("!defer ^3", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
 
     // With one it is a real trace, and a citation stays optional.
     let deferred = only("!defer #pool ^3 The archivist measured this.");
@@ -133,15 +136,20 @@ fn a_deferral_without_a_topic_yields_no_trace() {
 
 #[test]
 fn a_body_without_a_marker_deposits_nothing() {
-    assert!(resolve("Just talking it over.", None, &agent("a"), Sequence(1)).is_empty());
-    assert!(resolve("", None, &agent("a"), Sequence(1)).is_empty());
-    assert!(resolve("!shout at everyone", None, &agent("a"), Sequence(1)).is_empty());
-    assert!(resolve("!", None, &agent("a"), Sequence(1)).is_empty());
+    let found_found = resolve("Just talking it over.", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
+    let found_found = resolve("", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
+    let found_found = resolve("!shout at everyone", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
+    let found_found = resolve("!", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
 }
 
 #[test]
 fn a_marker_must_lead_its_line() {
-    assert!(resolve("I would !propose #a", None, &agent("a"), Sequence(1)).is_empty());
+    let found_found = resolve("I would !propose #a", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
     assert_eq!(only("   !propose #a").kind, TraceKind::Propose);
 }
 
@@ -202,7 +210,8 @@ fn a_fence_only_closes_on_the_same_character_that_opened_it() {
 #[test]
 fn an_unclosed_fence_masks_to_the_end_of_the_body() {
     let body = "```\n!propose #hidden\n!support #hidden ^1";
-    assert!(resolve(body, None, &agent("a"), Sequence(1)).is_empty());
+    let found_found = resolve(body, None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
 }
 
 #[test]
@@ -218,7 +227,8 @@ fn a_marker_inside_a_multi_line_code_span_is_masked() {
 
 #[test]
 fn a_backticked_marker_is_not_line_leading_and_needs_no_masking() {
-    assert!(resolve("`!propose #a`", None, &agent("a"), Sequence(1)).is_empty());
+    let found_found = resolve("`!propose #a`", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
 }
 
 #[test]
@@ -250,7 +260,7 @@ fn an_empty_or_unparsable_qualifier_is_ignored() {
     let trace = only("!propose # >x ^y");
     assert_eq!(trace.topic, None);
     assert_eq!(trace.target, None);
-    assert!(trace.cites.is_empty());
+    assert!(trace.cites.is_empty(), "{:?}", trace.cites);
     assert!(!trace.grounded());
 }
 
@@ -399,7 +409,8 @@ fn a_duplicate_supplied_offset_is_rejected() {
 
 #[test]
 fn an_empty_supplied_list_deposits_nothing() {
-    assert!(resolve("!propose #a", Some(Vec::new()), &agent("a"), Sequence(1)).is_empty());
+    let found_found = resolve("!propose #a", Some(Vec::new()), &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
 }
 
 #[test]
@@ -430,7 +441,8 @@ fn a_transcript_of_ordinary_conversation_folds_to_an_empty_medium() {
         said(1, SessionAuthor::Operator, "What should we do?"),
         said(2, agent("planner"), "I think we should stage it."),
     ];
-    assert!(read(&transcript).is_empty());
+    let transcript_found = read(&transcript);
+    assert!(transcript_found.is_empty(), "{transcript_found:?}");
 }
 
 #[test]
@@ -450,17 +462,17 @@ fn a_refute_marker_is_the_one_that_requires_both_qualifiers() {
         only("!refute #stage ^4 It was retired.").kind,
         TraceKind::Refute
     );
-    assert!(
-        resolve(
-            "!refute #stage No citation.",
-            None,
-            &agent("a"),
-            Sequence(1)
-        )
-        .is_empty()
+    let noneagentasequence1 = resolve(
+        "!refute #stage No citation.",
+        None,
+        &agent("a"),
+        Sequence(1),
     );
-    assert!(resolve("!refute ^4 No topic.", None, &agent("a"), Sequence(1)).is_empty());
-    assert!(resolve("!refute Neither.", None, &agent("a"), Sequence(1)).is_empty());
+    assert!(noneagentasequence1.is_empty(), "{noneagentasequence1:?}");
+    let found_found = resolve("!refute ^4 No topic.", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
+    let found_found = resolve("!refute Neither.", None, &agent("a"), Sequence(1));
+    assert!(found_found.is_empty(), "{found_found:?}");
 }
 
 #[test]
