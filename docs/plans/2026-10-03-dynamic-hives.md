@@ -253,10 +253,12 @@ snapshot write, with a schema version. Both share the same contract tests.
 - [x] Standalone examples and native configuration/topology proofs.
 - [x] Migration docs, public API docs, and superseding design links.
 - [x] Independent implementation reviews and recorded verification gates.
-- [ ] Final delivery checks after the last dependency review correction.
-- [ ] TinyHivemind upstream PR and final dependency pin/gitlink publication.
+- [x] Final delivery checks after the last dependency review correction.
+- [x] TinyHivemind upstream PR (#95) and dependency pin/gitlink publication.
 
 Recorded verification is local evidence, not a claim that upstream CI has passed.
 The final TinyAgents legacy-prefix correction adds first/repeated resume and
 persisted-boundary coverage; it passed independent review and was published
 before the OpenHuman and TinyHivemind dependency pins were updated.
+
+Delivery: [TinyHivemind #95](https://github.com/tinyhumansai/tinyhivemind/pull/95) is a draft until TinyAgents #298 and OpenHuman #6977 land. The dependency PRs must land before the final merge pins are selected.
