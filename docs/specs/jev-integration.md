@@ -1,7 +1,7 @@
 # Typed System One decisions
 
 - **Status:** Implemented
-- **Owners:** `tinyhivemind-core`, `tinyhivemind`, `tinyhivemind-hive`, and the benchmark host
+- **Owners:** `tinyhivemind-core`, `tinyhivemind`, `tinyhivemind_core::hive`, and the benchmark host
 
 ## Behavior
 

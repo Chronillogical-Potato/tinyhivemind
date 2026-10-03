@@ -65,3 +65,5 @@ adapters and optional hive mechanisms; read it before applying older records.
 argument about what a private row is and what it costs, and should be read as a
 sequence. The measurements that pushed 0011 and 0012 are in
 [`../experiments/`](../experiments/README.md).
+
+- [ADR 0028: Consolidate the workspace into three crates](0028-three-crate-workspace.md)

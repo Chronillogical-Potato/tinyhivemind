@@ -409,7 +409,7 @@ fn hive_mcp_writes_only_native_tool_calls_and_separates_protocol_errors() {
     assert_eq!(response["result"]["content"][0]["type"], "text");
     assert!(matches!(
         super::mcp::drain(&outbox).expect("drain outbox").as_slice(),
-        [tinyhivemind::speech::Utterance::Broadcast { message }] if message == "test passed"
+        [tinyhivemind_core::runtime::speech::Utterance::Broadcast { message }] if message == "test passed"
     ));
     for request in [
         serde_json::json!({"method": "unknown"}),

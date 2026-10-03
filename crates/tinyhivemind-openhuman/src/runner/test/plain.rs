@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use openhuman_embed::Runtime;
-use tinyhivemind::{SESSION_WINDOW, Sequence};
+use tinyhivemind_core::runtime::{SESSION_WINDOW, Sequence};
 use tinyhivemind_tools::{Dispatch, EpisodeTools};
 
 use super::{PlainHost, one_turn};

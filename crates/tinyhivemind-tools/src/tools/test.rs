@@ -2,7 +2,7 @@
 
 #![allow(clippy::expect_used)]
 
-use tinyhivemind::speech::{ToolCall, Utterance};
+use tinyhivemind_core::runtime::speech::{ToolCall, Utterance};
 
 use super::{Dispatch, EpisodeTools, SeatEvent};
 
@@ -357,7 +357,7 @@ fn a_withheld_tool_is_not_offered_not_contracted_and_not_served() {
     let offered: Vec<String> = tools
         .tool_definitions()
         .into_iter()
-        .filter_map(|tool| tool["name"].as_str().map(str::to_owned))
+        .map(|tool| tool.name)
         .collect();
     assert!(offered.contains(&"ask".to_owned()), "{offered:?}");
     assert!(
@@ -444,11 +444,12 @@ fn the_record_describes_named_recipients_beside_the_ids_a_call_carries() {
     let bare = tools.tool_definitions();
     tools.name_seats([("solver", "Tess")]);
     let named = tools.tool_definitions();
-    let to = |definitions: &[serde_json::Value]| {
+    let to = |definitions: &[tinytools::ToolSpec]| {
         definitions
             .iter()
-            .find(|tool| tool["name"] == "ask")
-            .expect("ask is served")["inputSchema"]["properties"]["to"]
+            .find(|tool| tool.name == "ask")
+            .expect("ask is served")
+            .parameters["properties"]["to"]
             .clone()
     };
     assert_eq!(to(&named)["enum"], serde_json::json!(["lead", "solver"]));

@@ -42,11 +42,11 @@ pub enum Error {
     /// The host's log failed to read, or broke the port's contract, while a
     /// turn was being seeded or briefed.
     #[error(transparent)]
-    Session(#[from] tinyhivemind::Error),
+    Session(#[from] tinyhivemind_core::runtime::Error),
     /// The conductor stopped the episode: a stalled desk, a wall, or a fold
     /// error it could not explain to the seat.
     #[error(transparent)]
-    Conduct(#[from] tinyhivemind_driver::Error),
+    Conduct(#[from] tinyhivemind_core::driver::Error),
     /// `OpenHuman` refused: booting as a library host, resolving the route,
     /// building or seeding a session, or running the turn.
     #[error(transparent)]

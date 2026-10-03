@@ -3,14 +3,14 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use serde_json::json;
-use tinyhivemind::speech::tool_specs;
+use tinyhivemind_core::runtime::speech::tool_specs;
 
 use super::{Arguments, arguments, serves, tool_definitions};
 
 fn names(seats: &[String]) -> Vec<String> {
     tool_definitions(seats)
         .iter()
-        .map(|tool| tool["name"].as_str().unwrap().to_owned())
+        .map(|tool| tool.name.clone())
         .collect()
 }
 
@@ -41,24 +41,24 @@ fn descriptions_are_the_specs_own_words() {
     for tool in tool_definitions(&[]) {
         let spec = tool_specs()
             .iter()
-            .find(|spec| spec.name == tool["name"].as_str().unwrap())
+            .find(|spec| spec.name == tool.name)
             .expect("served tools are specs");
-        assert_eq!(tool["description"].as_str().unwrap(), spec.description);
+        assert_eq!(tool.description, spec.description);
     }
 }
 
 #[test]
 fn every_tool_takes_chat_and_optionally_parent() {
     for tool in tool_definitions(&[]) {
-        let schema = &tool["inputSchema"];
+        let schema = &tool.parameters;
         assert_eq!(schema["properties"]["chat"]["type"], "string");
         assert_eq!(
             schema["properties"]["parent"]["type"],
             json!(["string", "null"])
         );
         let required = schema["required"].as_array().unwrap();
-        assert!(required.contains(&json!("chat")), "{}", tool["name"]);
-        assert!(!required.contains(&json!("parent")), "{}", tool["name"]);
+        assert!(required.contains(&json!("chat")), "{}", tool.name);
+        assert!(!required.contains(&json!("parent")), "{}", tool.name);
     }
 }
 
@@ -69,8 +69,9 @@ fn both_asking_tools_offer_the_seats_as_their_choices() {
     let of = |name: &str| {
         definitions
             .iter()
-            .find(|tool| tool["name"] == name)
-            .expect("the tool is served")["inputSchema"]["properties"]["to"]
+            .find(|tool| tool.name == name)
+            .expect("the tool is served")
+            .parameters["properties"]["to"]
             .clone()
     };
     // `ask` is one seat: the choices constrain the value itself.
@@ -92,15 +93,15 @@ fn both_asking_tools_offer_the_seats_as_their_choices() {
 fn read_renders_its_bounds_as_the_schema_says() {
     let read = tool_definitions(&[])
         .into_iter()
-        .find(|tool| tool["name"] == "read")
+        .find(|tool| tool.name == "read")
         .unwrap();
-    let limit = &read["inputSchema"]["properties"]["limit"];
+    let limit = &read.parameters["properties"]["limit"];
     assert_eq!(limit["type"], "integer");
     assert_eq!(limit["minimum"], 1);
     assert_eq!(limit["maximum"], 100);
     assert_eq!(limit["default"], 20);
     assert!(
-        !read["inputSchema"]["required"]
+        !read.parameters["required"]
             .as_array()
             .unwrap()
             .contains(&json!("limit"))

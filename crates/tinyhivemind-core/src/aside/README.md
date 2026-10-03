@@ -33,7 +33,7 @@ neither is a decision this fold could make:
   content and keeps the row, so a reader outside an audience still sees that
   the exchange happened, who wrote it and to whom. That is what makes an aside
   auditable rather than a covert channel.
-- **An aside carries information, never support.** `tinyhivemind-hive` drops
+- **An aside carries information, never support.** `tinyhivemind_core::hive` drops
   traces from non-`Desk` rows uniformly, for every reader, so a private line
   moves no option toward a decision. To make an aside count, a member spends a
   desk-visible turn saying so in the open.

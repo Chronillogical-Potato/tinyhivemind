@@ -5,27 +5,23 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Desks, rosters, mentions and shared session transcripts for agent group chats: the pure algebra, with no transport and no IO."
+description = "Host-neutral agent coordination: grammar, session ports, routing, hive folds, and completion driver."
 documentation = "https://docs.rs/tinyhivemind-core"
 readme = "../../README.md"
 keywords = ["agents", "chat", "mentions", "roster", "transcript"]
 categories = ["development-tools"]
 publish = false
 
-# Deliberately dependency-light. This crate is linked into the hot path of
-# every agent turn — addressing a message, resolving a mention, projecting a
-# transcript — so it must cost a host almost nothing, and it must compile in a
-# host's default build with no feature flags. Nothing here may pull in an async
-# runtime, an HTTP client, a web framework, or a native library.
-# `.github/scripts/assert-pure.sh` asserts it.
-#
+# Core owns all host-neutral logic and ports. It opens no storage or transport
+# and must not link OpenHuman or TinyTools. assert-pure.sh guards this boundary.
 [dependencies]
 serde = { workspace = true }
 thiserror = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
-# Unit tests and the opt-in OpenRouter harness both exercise JSON wire forms.
-serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tinyjevclient = { workspace = true }
 
 [features]
 default = []
@@ -35,3 +31,12 @@ e2e = []
 
 [lints]
 workspace = true
+
+[[example]]
+name = "bench"
+path = "examples/bench/main.rs"
+test = true
+
+[[example]]
+name = "driver_bench"
+path = "examples/driver_bench/main.rs"

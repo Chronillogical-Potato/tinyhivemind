@@ -34,7 +34,7 @@ pub(super) struct CompletedSeatTurn {
     pub(super) id: String,
     pub(super) snapshot: PendingSnapshot,
     pub(super) reply: String,
-    pub(super) utterances: Vec<tinyhivemind::speech::Utterance>,
+    pub(super) utterances: Vec<tinyhivemind_core::runtime::speech::Utterance>,
 }
 
 pub(super) fn prepare_seat_turn(

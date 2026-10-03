@@ -2,13 +2,14 @@
 //! `CallArguments`.
 //!
 //! Everything a seat reads about a tool -- its name, what it does, what it
-//! takes -- comes from `tinyhivemind::speech`, verbatim. This module adds
+//! takes -- comes from `tinyhivemind_core::runtime::speech`, verbatim. This module adds
 //! exactly two arguments to every tool, `chat` and `parent`, because the record
 //! checks each call against the turn the host registered, and the seat has to
 //! say which turn it thinks it is in for that check to mean anything.
 
 use serde_json::{Map, Value, json};
-use tinyhivemind::speech::{CallArguments, ParameterKind, ToolSpec, tool_specs};
+use tinyhivemind_core::runtime::speech::{CallArguments, ParameterKind, ToolSpec, tool_specs};
+use tinytools::ToolSpec as NativeToolSpec;
 
 /// The vocabulary tools a completion episode does not serve.
 ///
@@ -48,19 +49,19 @@ pub(crate) fn serves(name: &str) -> bool {
     served().any(|spec| spec.name == name)
 }
 
-/// Every served tool as a JSON tool definition.
+/// Every served tool as a native `tinytools::ToolSpec`.
 ///
 /// `seats` are the choices the asking tools' `to` offers: a seat that can read
 /// the alternatives does not guess eight ids and learn nothing from eight
 /// refusals.
-/// The served tools as JSON tool definitions: name, description and an
-/// `inputSchema` that carries the vocabulary's parameters plus the `chat` and
+/// The served tools as native `tinytools::ToolSpec` values: name, description and
+/// a `parameters` schema that carries the vocabulary's parameters plus the `chat` and
 /// `parent` every call must name. `seats` fills `ask`'s recipient enumeration.
 ///
 /// Public so an in-process host can render the same definitions into its own
 /// tool language instead of re-stating the schema.
 #[must_use]
-pub fn tool_definitions(seats: &[String]) -> Vec<Value> {
+pub fn tool_definitions(seats: &[String]) -> Vec<NativeToolSpec> {
     let seats: Vec<(String, String)> = seats
         .iter()
         .map(|seat| (seat.clone(), seat.clone()))
@@ -71,11 +72,11 @@ pub fn tool_definitions(seats: &[String]) -> Vec<Value> {
 /// [`tool_definitions`] over `(id, name)` pairs: the recipient enumeration
 /// is the ids, and where any seat has a name of its own the recipient's
 /// description pairs each name with its id.
-pub(crate) fn named_definitions(seats: &[(String, String)]) -> Vec<Value> {
+pub(crate) fn named_definitions(seats: &[(String, String)]) -> Vec<NativeToolSpec> {
     served().map(|spec| definition(spec, seats)).collect()
 }
 
-fn definition(spec: &ToolSpec, seats: &[(String, String)]) -> Value {
+fn definition(spec: &ToolSpec, seats: &[(String, String)]) -> NativeToolSpec {
     let mut properties = Map::new();
     let mut required = Vec::new();
     for parameter in spec.parameters {
@@ -133,15 +134,15 @@ fn definition(spec: &ToolSpec, seats: &[(String, String)]) -> Value {
         }),
     );
     required.push(Value::String("chat".to_owned()));
-    json!({
-        "name": spec.name,
-        "description": spec.description,
-        "inputSchema": {
+    NativeToolSpec {
+        name: spec.name.to_owned(),
+        description: spec.description.to_owned(),
+        parameters: json!({
             "type": "object",
             "properties": Value::Object(properties),
             "required": required,
-        },
-    })
+        }),
+    }
 }
 
 /// Each seat by its name and id, or by its id alone when it has no name;

@@ -1,7 +1,7 @@
 //! Which byte ranges of a message body are code, and so carry no grammar.
 //!
 //! The mention grammar here and the stigmergic trace grammar in
-//! `tinyhivemind-hive` read the *same* message body. While each carried its
+//! `hive` module read the *same* message body. While each carried its
 //! own scanner they could disagree about which span of that body is code, and
 //! a marker one grammar read as quoted documentation the other read as a live
 //! instruction. This module is the one scanner they share.

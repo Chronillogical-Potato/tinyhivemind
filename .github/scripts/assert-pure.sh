@@ -12,30 +12,14 @@
 # looking clean even when this crate is the one at fault.
 set -euo pipefail
 
-# Crates that may not depend on a runtime, a transport, or a web framework.
-#
-# `tinyhivemind-hive` is here rather than in the exempt list below because it
-# defines no port of its own: an episode is a pure state machine over a
-# transcript the caller already holds, and every host obligation it needs is
-# already carried by `tinyhivemind`. See
-# docs/adr/0002-hive-episodes-are-sequential.md.
-pure_crates=("tinyhivemind-core" "tinyhivemind-hive" "tinyhivemind-tools" "tinyhivemind-driver")
+# Core owns host-neutral folds and ports, and must stay free of harness,
+# transport, runtime, and `anyhow` dependencies. Tools uses `tinytools::ToolSpec`,
+# whose vocabulary dependency includes `anyhow` and `async-trait`.
+pure_crates=("tinyhivemind-core")
+tool_crates=("tinyhivemind-tools")
 
-# `tinyhivemind` (the session runtime) is exempt from `tokio`/`futures`/
-# `async-trait`, which it needs for its ports — but not from the rest. Its
-# ports are boxed `std::future::Future`s, so today it needs none of the three;
-# the exemption exists so that adding one is not a CI failure.
-exempt_async_crates=("tinyhivemind" "tinyhivemind-embed" "tinyhivemind-typesafe")
-
-# This is a maintained blocklist of known offenders, not an exhaustive
-# allowlist: it names every async runtime, transport, HTTP client, database
-# client, and VCS binding this repository has needed to reject so far, plus
-# `anyhow` (AGENTS.md requires the crate error type instead). Extend it — do
-# not work around it — the day a new one shows up in the tree.
-forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2'
-
-# The same list minus the three async primitives a port layer legitimately needs.
-forbidden_exempt='axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2'
+forbidden_pure='tokio|futures|async-trait|axum|hyper|reqwest|ureq|curl|anyhow|rusqlite|git2|openhuman|tinyagents|tinytools'
+forbidden_tools='tokio|futures|axum|hyper|reqwest|ureq|curl|rusqlite|git2|openhuman|tinyagents'
 
 status=0
 check_crate() {
@@ -50,7 +34,7 @@ check_crate() {
     echo "assert-pure: cargo tree failed for '$crate'" >&2
     exit 1
   }
-  found="$(grep -Ei "$forbidden" <<<"$tree" || true)"
+  found="$(grep -Ei "^(${forbidden})(-embed)? v" <<<"$tree" || true)"
   if [ -n "$found" ]; then
     echo "$crate pulled in a dependency its manifest forbids:" >&2
     echo "$found" >&2
@@ -61,8 +45,8 @@ check_crate() {
 for crate in "${pure_crates[@]}"; do
   check_crate "$crate" "$forbidden_pure"
 done
-for crate in "${exempt_async_crates[@]}"; do
-  check_crate "$crate" "$forbidden_exempt"
+for crate in "${tool_crates[@]}"; do
+  check_crate "$crate" "$forbidden_tools"
 done
 
 if [ "$status" -ne 0 ]; then
@@ -73,4 +57,4 @@ if [ "$status" -ne 0 ]; then
   exit 1
 fi
 
-echo "assert-pure: ${pure_crates[*]} ${exempt_async_crates[*]} — clean"
+echo "assert-pure: ${pure_crates[*]} ${tool_crates[*]} — clean"

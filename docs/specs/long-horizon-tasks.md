@@ -31,7 +31,7 @@ And the control the claim is actually about **does not exist as an arm**.
 agent working a long task, compacting as it goes*, which is the thing said to
 win at small scale.
 
-[`context.rs`]: ../../crates/tinyhivemind-hive/examples/bench/context.rs
+[`context.rs`]: ../../crates/tinyhivemind-core/examples/bench/context.rs
 
 ## Goals
 
@@ -48,7 +48,7 @@ win at small scale.
 ## Non-goals
 
 - **A new library mechanism.** This is a task shape and two arms in the
-  harness. `tinyhivemind-hive` is unchanged.
+  harness. `tinyhivemind_core::hive` is unchanged.
 - **A claim about wall clock.** Stages are counted, not timed.
 - **Real work.** The participants stay arithmetic, for the reason they always
   have: a model would confound protocol quality with model quality.
@@ -101,7 +101,7 @@ compacted" are different events with different costs:
 `Compaction::Evict` is the default and every existing arm keeps it, so no
 recorded number moves.
 
-[`ContextBudget`]: ../../crates/tinyhivemind-hive/examples/bench/context.rs
+[`ContextBudget`]: ../../crates/tinyhivemind-core/examples/bench/context.rs
 
 ### The cost columns
 

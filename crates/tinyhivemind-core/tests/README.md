@@ -43,3 +43,8 @@ change here breaks, it is a breaking change for users.
 - `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` is
   applied per-file where tests need it; it is a test-only allowance and does
   not relax anything in library code.
+
+The `migrated_runtime/`, `migrated_hive/`, `migrated_embed/`, and
+`migrated_driver/` directories preserve the former crates' public contract
+suites and fixtures. The corresponding prefixed top-level `.rs` files compile
+each suite as an integration-test target of core.

@@ -4,8 +4,8 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use serde_json::json;
-use tinyhivemind::Sequence;
-use tinyhivemind_driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Event};
+use tinyhivemind_core::driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Event};
+use tinyhivemind_core::runtime::Sequence;
 
 use super::super::{Report, run_episode};
 use super::support::{ScriptRunner, TestJournal, ask, complete, door, hive, policy, post, run};
@@ -191,7 +191,7 @@ fn a_seat_that_says_nothing_is_nudged_and_then_the_episode_stalls() {
         door(&journal, &["one", "two"], &["one"]),
     ));
     assert!(
-        matches!(&stalled, Err(Error::Conduct(tinyhivemind_driver::Error::Stalled { seats })) if seats == &["one".to_owned()]),
+        matches!(&stalled, Err(Error::Conduct(tinyhivemind_core::driver::Error::Stalled { seats })) if seats == &["one".to_owned()]),
         "{stalled:?}"
     );
     // The nudge reached the journal as a row to one alone, and the failed

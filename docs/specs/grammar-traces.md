@@ -9,8 +9,8 @@
 **Status:** Implemented
 **Owner:** tinyhivemind maintainers
 
-The normative reference for the marker grammar of `tinyhivemind-hive`. Every
-rule here is derived from `crates/tinyhivemind-hive/src/trace/` and each
+The normative reference for the marker grammar of `tinyhivemind_core::hive`. Every
+rule here is derived from `crates/tinyhivemind-core/src/hive/trace/` and each
 non-obvious rule cites the test that pins it. Where prose elsewhere disagreed
 with the parser, the parser won; the [index](grammar.md) lists what was
 corrected.

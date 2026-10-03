@@ -12,8 +12,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tinyhivemind::Sequence;
-use tinyhivemind_driver::{AgentBinding, BoundAgent};
+use tinyhivemind_core::driver::{AgentBinding, BoundAgent};
+use tinyhivemind_core::runtime::Sequence;
 use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent};
 
 use crate::{Error, Result};

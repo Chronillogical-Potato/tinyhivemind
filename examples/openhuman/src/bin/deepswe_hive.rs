@@ -14,12 +14,12 @@ use openhuman_embed::{
     RuntimeConfig, ToolScopeSpec, Workspace,
 };
 use serde::{Deserialize, Serialize};
-use tinyhivemind::desk::{Desk, ResponderMode};
-use tinyhivemind::responder::Probability;
-use tinyhivemind_driver::{
+use tinyhivemind_core::runtime::desk::{Desk, ResponderMode};
+use tinyhivemind_core::runtime::responder::Probability;
+use tinyhivemind_core::driver::{
     AgentBinding, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph,
 };
-use tinyhivemind_hive::{CompletionEpisodeState, CompletionStep, completion_status};
+use tinyhivemind_core::hive::{CompletionEpisodeState, CompletionStep, completion_status};
 use tinyhivemind_openhuman::EmbedSeat;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -199,12 +199,12 @@ async fn run_prepared_with_mcp_executable(
     )?;
     let driver = CompletionDriver::new(&hive, ROUND_WIDTH)?;
     let episode = CompletionEpisodeState::opened(
-        tinyhivemind::Conversation {
+        tinyhivemind_core::runtime::Conversation {
             desk_id: hive.desk().id.clone(),
             desk_name: hive.desk().name.clone(),
             thread_root: None,
         },
-        tinyhivemind::Sequence(0),
+        tinyhivemind_core::runtime::Sequence(0),
         SEATS,
     )?;
     let mut state = driver.start(episode)?;
@@ -259,12 +259,12 @@ async fn run_prepared_with_mcp_executable(
                 .insert(transcript.len() - 1);
             committed.push(CommittedUtterance {
                 author_id: id,
-                sequence: tinyhivemind::Sequence(sequence),
+                sequence: tinyhivemind_core::runtime::Sequence(sequence),
                 utterance,
             });
         }
         turns = turns.saturating_add(u32::try_from(pending.agents().len()).unwrap_or(u32::MAX));
-        let routing_policy = tinyhivemind_embed::RoutingPolicy {
+        let routing_policy = tinyhivemind_core::embed::RoutingPolicy {
             minimum_confidence: Probability::ZERO,
             high_impact_minimum_confidence: Probability::ZERO,
             clarification_threshold: Probability::ONE,
@@ -275,7 +275,7 @@ async fn run_prepared_with_mcp_executable(
         let routing = committed.iter().any(|event| {
             matches!(
                 event.utterance,
-                tinyhivemind::speech::Utterance::Broadcast { .. }
+                tinyhivemind_core::runtime::speech::Utterance::Broadcast { .. }
             )
         });
         state = driver
@@ -344,7 +344,7 @@ async fn run_seat(
     delta: String,
     outbox: PathBuf,
     turn_timeout: Duration,
-) -> anyhow::Result<(String, String, tinyhivemind::speech::Utterance)> {
+) -> anyhow::Result<(String, String, tinyhivemind_core::runtime::speech::Utterance)> {
     let mut retry_reason = None;
     mcp::clear(&outbox)?;
     for attempt in 1..=MAX_SEAT_ATTEMPTS {
@@ -406,19 +406,19 @@ async fn run_seat(
 
 fn accepted_action_reply(
     id: &str,
-    utterance: &tinyhivemind::speech::Utterance,
+    utterance: &tinyhivemind_core::runtime::speech::Utterance,
     provider_error: Option<&CoreError>,
 ) -> anyhow::Result<String> {
     let mut body = match utterance {
-        tinyhivemind::speech::Utterance::Broadcast { message } => {
+        tinyhivemind_core::runtime::speech::Utterance::Broadcast { message } => {
             format!("BROADCAST: {message}")
         }
-        tinyhivemind::speech::Utterance::CompleteEpisode { message } => {
+        tinyhivemind_core::runtime::speech::Utterance::CompleteEpisode { message } => {
             format!("COMPLETE: {message}")
         }
-        tinyhivemind::speech::Utterance::Post { .. }
-        | tinyhivemind::speech::Utterance::Dm { .. }
-        | tinyhivemind::speech::Utterance::Ask { .. } => {
+        tinyhivemind_core::runtime::speech::Utterance::Post { .. }
+        | tinyhivemind_core::runtime::speech::Utterance::Dm { .. }
+        | tinyhivemind_core::runtime::speech::Utterance::Ask { .. } => {
             anyhow::bail!("@{id} emitted an unsupported hive action")
         }
     };

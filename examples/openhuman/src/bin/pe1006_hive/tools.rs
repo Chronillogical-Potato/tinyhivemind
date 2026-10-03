@@ -5,7 +5,7 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
-use tinyhivemind::speech::{
+use tinyhivemind_core::runtime::speech::{
     CallArguments, ParameterKind, ToolCall, Utterance, interpret, tool_specs,
 };
 
@@ -141,7 +141,7 @@ fn descriptors() -> Vec<Value> {
         .collect()
 }
 
-fn schema(parameters: &[tinyhivemind::speech::ToolParameter]) -> Value {
+fn schema(parameters: &[tinyhivemind_core::runtime::speech::ToolParameter]) -> Value {
     let mut properties = serde_json::Map::new();
     let mut required = Vec::new();
     for parameter in parameters {

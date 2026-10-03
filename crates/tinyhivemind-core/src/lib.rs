@@ -1,33 +1,19 @@
-//! Desks, rosters, mentions, approval, and routing decisions for a shared room.
+//! Host-neutral coordination for agents sharing a transcript.
 //!
-//! This crate answers decisions from data the caller supplies and holds no
-//! state while doing it:
+//! The top-level algebra resolves desks, rosters, mentions, approval, and
+//! responder decisions from data the host supplies. [`runtime`] projects a
+//! host-owned log and exposes waiting ports. [`hive`] folds task division and
+//! bounded deliberation rounds. [`embed`] handles conversation routing,
+//! [`typesafe`] builds exact System One questions through a transport port,
+//! and [`driver`] coordinates completion episodes over host-bound handles.
 //!
-//! - **Who is here?** A roster of teammates and the people signed in with them.
-//! - **What is a desk, and who is on it?** A blueprint-declared room merged
-//!   with the operator's runtime additions, retirements and ordering.
-//! - **Who does a name address?** The mention grammar, and the resolution of a
-//!   name against the roster and the desks.
-//! - **Who may act next?** The bounded responder, mention, and referral folds.
-//! - **Is an action allowed?** A total approval decision over supplied policy.
+//! # No owned IO
 //!
-//! # No IO, and why it matters
-//!
-//! Everything here is a fold over data the caller already holds. There is no
-//! async, no storage, no journal, no transport, and nothing that returns a
-//! `Result` for an IO reason. The caller does the one roster read and the one
-//! transcript read and hands the results in.
-//!
-//! That is not an aesthetic preference. This crate sits on the hot path of
-//! every agent turn: addressing a message and resolving a mention. It has to
-//! be cheap, and it has to compile in a host's
-//! default build with no feature flags behind it. It is also what keeps the
-//! dependency arrow pointing one way: a crate that cannot call out cannot grow
-//! a path back into its host. `.github/scripts/assert-pure.sh` asserts it.
-//!
-//! The session paging and projection work lives in the sibling `tinyhivemind`
-//! crate behind a log port. Hosts bind the pure routing decisions here to
-//! their own queues and model clients.
+//! This crate opens no database, file, or socket and owns no agent session.
+//! The host supplies snapshots, a session log, a model transport, and durable
+//! commits. Pure decisions stay separate from those waiting boundaries inside
+//! focused modules. The crate links no harness or async runtime; the
+//! dependency check in `.github/scripts/assert-pure.sh` guards that boundary.
 //!
 //! # Layout
 //!
@@ -52,6 +38,12 @@
 //! - [`roster`] — borrowed agent and person identity snapshots, and the
 //!   three states an agent can be in: active, retired, or tombstoned.
 //! - [`responder`] — deterministic selection of one agent for one message.
+//!
+//! - [`runtime`] — session ports, projection, sharing, pins, and digest.
+//! - [`hive`] — traces, salience, task division, completion, and quorum.
+//! - [`embed`] — host-neutral conversation surfaces and semantic routing.
+//! - [`typesafe`] — System One wire types and `JevRouter`.
+//! - [`driver`] — bound desks, completion scheduling, and conducted episodes.
 //!
 //! # Example
 //!
@@ -109,3 +101,14 @@ pub mod mention;
 pub mod referral;
 pub mod responder;
 pub mod roster;
+
+/// Host-neutral completion driver.
+pub mod driver;
+/// Host-neutral conversation and semantic routing.
+pub mod embed;
+/// Bounded group deliberation and completion folds.
+pub mod hive;
+/// Runtime-neutral session projection and ports.
+pub mod runtime;
+/// TypeSafe System One wire and Jev router.
+pub mod typesafe;

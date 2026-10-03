@@ -1,0 +1,141 @@
+//! Typed failures from malformed hive inputs.
+
+#[cfg(test)]
+mod test;
+
+use crate::runtime::Sequence;
+use thiserror::Error;
+
+/// A failure produced while folding a deliberation episode.
+///
+/// Every variant names a specific malformed input. Nothing here reports an IO
+/// failure, because this crate performs none.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum Error {
+    /// A roster or desk snapshot was structurally invalid.
+    ///
+    /// The pure-algebra failure is carried verbatim rather than flattened,
+    /// because "which desk was unknown" is the whole content of the report.
+    #[error("{source}")]
+    Core {
+        /// The underlying algebra failure.
+        #[source]
+        source: crate::error::Error,
+    },
+    /// Two threshold records named the same agent.
+    #[error("duplicate agent threshold `{agent_id}`")]
+    DuplicateAgentThreshold {
+        /// The repeated agent id.
+        agent_id: String,
+    },
+    /// A threshold record named an agent that is not an active desk member.
+    #[error("threshold `{agent_id}` is not an active member of desk `{desk_id}`")]
+    UnknownThresholdMember {
+        /// The offending agent id.
+        agent_id: String,
+        /// The desk the episode runs on.
+        desk_id: String,
+    },
+    /// A salience half-life of zero would make recency undefined.
+    #[error("salience half life must not be zero")]
+    ZeroHalfLife,
+    /// A quorum threshold of zero would carry every topic immediately.
+    #[error("quorum threshold must not be zero")]
+    ZeroQuorumThreshold,
+    /// A quorum window of zero would admit no support at all.
+    #[error("quorum window must not be zero")]
+    ZeroQuorumWindow,
+    /// A directory half-life of zero would make deposit decay undefined.
+    #[error("directory half life must not be zero")]
+    ZeroDirectoryHalfLife,
+    /// A directory window of zero would admit no deposit at all.
+    #[error("directory window must not be zero")]
+    ZeroDirectoryWindow,
+    /// A round width of zero would authorize nobody to speak, ever.
+    ///
+    /// `1` is how a host runs a sequential episode; `0` would cap the round
+    /// before anyone could be in one, which is a configuration error rather
+    /// than a quieter way of saying the same thing.
+    #[error("round width must not be zero")]
+    ZeroRoundWidth,
+    /// A decision evaluation carried a probability above the fixed-point scale.
+    #[error("decision evaluation probability exceeds one million parts")]
+    InvalidDecisionProbability,
+    /// A stance distribution was empty, duplicated a topic, overflowed, or did not sum to one.
+    #[error("decision evaluation stance is not a complete probability distribution")]
+    InvalidDecisionDistribution,
+    /// An evaluation did not bind to an in-window trace by the same author.
+    #[error("decision evaluation for `{agent_id}` does not match source {sequence}")]
+    StaleDecisionEvaluation {
+        /// Claimed author id.
+        agent_id: String,
+        /// Claimed source sequence.
+        sequence: Sequence,
+    },
+    /// A division was asked for on a desk with no active member to own a
+    /// facet.
+    ///
+    /// Distinct from an empty task, which divides into nothing and is not an
+    /// error: a task with no facets has nobody to disappoint, and a task with
+    /// facets and no seats cannot be answered at all.
+    #[error("desk `{desk_id}` has no active member to own a facet")]
+    NoSeats {
+        /// The desk that came back with no active member.
+        desk_id: String,
+    },
+    /// A completion-driven episode was opened without an assigned agent.
+    #[error("completion-driven episode requires at least one participant")]
+    NoCompletionParticipants,
+    /// A completion participant or assignment id was blank.
+    #[error("completion participant id must not be blank")]
+    InvalidCompletionParticipant,
+    /// The same completion participant was named twice.
+    #[error("duplicate completion participant `{agent_id}`")]
+    DuplicateCompletionParticipant {
+        /// Repeated agent id.
+        agent_id: String,
+    },
+    /// A completion event named an agent outside the episode.
+    #[error("unknown completion participant `{agent_id}`")]
+    UnknownCompletionParticipant {
+        /// Unknown agent id.
+        agent_id: String,
+    },
+    /// A completion or assignment event did not advance the agent's work.
+    #[error("stale completion event for `{agent_id}` at sequence {sequence:?}")]
+    StaleCompletionEvent {
+        /// Agent whose assignment would move backward.
+        agent_id: String,
+        /// Rejected event sequence.
+        sequence: Sequence,
+    },
+    /// An assignment was routed to a participant that still has open work.
+    ///
+    /// A participant holds at most one open assignment. A host that queues a
+    /// handoff for a busy participant never sees this; a host that forgets to
+    /// gets an error rather than a silent overwrite. See
+    /// `docs/adr/0021-an-assignment-is-appended-rather-than-overwritten.md`.
+    #[error("participant `{agent_id}` already has an assignment open at {assigned_at:?}")]
+    AssignmentWhileOpen {
+        /// Participant that is still working.
+        agent_id: String,
+        /// Sequence of the assignment it has not completed.
+        assigned_at: Sequence,
+    },
+    /// A completion event named a participant with nothing open to complete.
+    #[error("participant `{agent_id}` has no open assignment")]
+    NoOpenAssignment {
+        /// Participant that was already settled.
+        agent_id: String,
+    },
+}
+
+impl From<crate::error::Error> for Error {
+    fn from(source: crate::error::Error) -> Self {
+        Self::Core { source }
+    }
+}
+
+/// The crate-wide result alias.
+pub type Result<T> = std::result::Result<T, Error>;

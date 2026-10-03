@@ -86,7 +86,7 @@ as targets rather than as prose to be re-parsed.
 - **Replacing the mention grammar.** See above.
 - **Adding rows to an accepted utterance.** One accepted utterance is one row.
 - **`tinyhivemind-core` gaining anything.** Every type here needs `Audience`,
-  `Sequence` and a transcript view, which live in the runtime crate.
+  `Sequence` and a transcript view, which live in the `runtime` module.
 - **A tool that writes the transcript.** A tool call remains a *request to
   speak*; the host appends and the host decides.
 
@@ -94,7 +94,7 @@ as targets rather than as prose to be re-parsed.
 
 ### 1. `tinyhivemind::speech`
 
-A new module in the runtime crate, holding:
+A new module in the `runtime` module, holding:
 
 - `Utterance` — `Post`, `Broadcast`, `Dm`, and `CompleteEpisode`,
   the shape the example already has, with its serde representation pinned.
@@ -172,7 +172,7 @@ does so. It does not require any other host to.
    `accepts_the_symmetric_closing_fence`.
 6. Behavior on the run-28 path is unchanged: an offline desk run produces the
    same rows, audiences and dispatch decisions as before the refactor. **Met**
-   — `crates/tinyhivemind/tests/utterance_surface.rs`.
+   — `crates/tinyhivemind-core/tests/migrated_runtime/utterance_surface.rs`.
 7. `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features --
    -D warnings`, `cargo build --all-targets --all-features`,
    `cargo test --all-features` and `.github/scripts/assert-pure.sh` pass.

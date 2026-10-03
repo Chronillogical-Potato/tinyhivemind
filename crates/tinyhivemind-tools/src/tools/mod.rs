@@ -15,10 +15,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, PoisonError};
 
 use serde_json::Value;
-use tinyhivemind::speech::{ToolCall, Utterance, UtteranceRejection, interpret};
+use tinyhivemind_core::runtime::speech::{ToolCall, Utterance, UtteranceRejection, interpret};
 
 use crate::render::{Arguments, named_definitions, parse_arguments, served_specs, serves};
-use tinyhivemind::speech::ToolSpec;
+use tinyhivemind_core::runtime::speech::ToolSpec;
 
 /// The thread a registered turn is in, as the host told the seat.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -149,10 +149,10 @@ impl EpisodeTools {
         served_specs().filter(|spec| !self.withheld.contains(spec.name))
     }
 
-    /// The served tools as JSON tool definitions, with the asking tools'
+    /// The served tools as native `tinytools::ToolSpec` definitions, with the asking tools'
     /// recipients described by name beside the ids a call must carry.
     #[must_use]
-    pub fn tool_definitions(&self) -> Vec<Value> {
+    pub fn tool_definitions(&self) -> Vec<tinytools::ToolSpec> {
         let seats: Vec<(String, String)> = self
             .seats
             .iter()
@@ -160,11 +160,7 @@ impl EpisodeTools {
             .collect();
         named_definitions(&seats)
             .into_iter()
-            .filter(|tool| {
-                tool["name"]
-                    .as_str()
-                    .is_none_or(|name| !self.withheld.contains(name))
-            })
+            .filter(|tool| !self.withheld.contains(&tool.name))
             .collect()
     }
 

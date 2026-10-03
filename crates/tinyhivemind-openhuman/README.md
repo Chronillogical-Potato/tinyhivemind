@@ -1,6 +1,6 @@
 # `tinyhivemind-openhuman`
 
-The OpenHuman adapter. `tinyhivemind-driver` says who runs next and what a
+The OpenHuman adapter. `tinyhivemind_core::driver` says who runs next and what a
 committed row means, over a handle the host binds, and never runs a turn.
 This crate is the host's side of that seam for OpenHuman, with two runners:
 
@@ -50,7 +50,7 @@ through a native runner.
 ## How it relates to the other crates
 
 This adapter depends directly on three TinyHiveMind crates.
-[`tinyhivemind-driver`](../tinyhivemind-driver/README.md) supplies the
+[`tinyhivemind_core::driver`](../tinyhivemind-core/src/driver/README.md) supplies the
 pending rounds, bound-agent seam, conductor, and committed-event transitions.
 [`tinyhivemind-tools`](../tinyhivemind-tools/README.md) supplies the common
 call record used by every runner.
@@ -59,7 +59,7 @@ projection types for turns.
 
 The adapter also links the external OpenHuman harness and its tool packages.
 It has no normal dependency on the hive, embed, or TypeSafe crates. Its tests
-use `tinyhivemind-embed` to build a sample hive. The driver uses hive and
+use `tinyhivemind_core::embed` to build a sample hive. The driver uses hive and
 embed in production, and a host may supply a TypeSafe router through the
 embed port. No other workspace library depends on this adapter.
 

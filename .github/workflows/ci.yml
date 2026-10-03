@@ -68,13 +68,13 @@ jobs:
       - name: Run the bundled examples
         run: |
           cargo run -p tinyhivemind-core --example basic
-          cargo run -p tinyhivemind-hive --example hive
-          cargo run -p tinyhivemind-hive --example bench -- --episodes 25
-          cargo run -p tinyhivemind-hive --example bench -- --swarm --episodes 10
-          cargo run -p tinyhivemind-hive --example bench -- --specialists 2 --cost-tiers --blind-evidence --episodes 25
-          cargo run -p tinyhivemind-hive --example bench -- --hidden-profile --blind-evidence --episodes 25
-          cargo run -p tinyhivemind-hive --example bench -- --stats-check
-          cargo run -p tinyhivemind-driver --example bench -- --episodes 25
+          cargo run -p tinyhivemind-core --example hive
+          cargo run -p tinyhivemind-core --example bench -- --episodes 25
+          cargo run -p tinyhivemind-core --example bench -- --swarm --episodes 10
+          cargo run -p tinyhivemind-core --example bench -- --specialists 2 --cost-tiers --blind-evidence --episodes 25
+          cargo run -p tinyhivemind-core --example bench -- --hidden-profile --blind-evidence --episodes 25
+          cargo run -p tinyhivemind-core --example bench -- --stats-check
+          cargo run -p tinyhivemind-core --example driver_bench -- --episodes 25
 
       # `tinyhivemind-core` is what a host links on the hot path of every agent
       # turn, in its default build. Keeping it free of runtimes and transports

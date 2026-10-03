@@ -22,15 +22,15 @@ mod test;
 
 use std::pin::Pin;
 
-use tinyhivemind::aside::Viewer;
-use tinyhivemind::speech::ToolCall;
-use tinyhivemind::{
-    Conversation, ElsewhereQuery, SESSION_WINDOW, Sequence, SessionAuthor, SessionLog,
-    SessionMessage, SessionQuery, gather_elsewhere, project_session,
-};
-use tinyhivemind_driver::{
+use tinyhivemind_core::driver::{
     BoundAgent, BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Conductor,
     ConductorState, Door, ElsewhereView, EpisodeBrief, Event, Note, Step, Turn, speaker,
+};
+use tinyhivemind_core::runtime::aside::Viewer;
+use tinyhivemind_core::runtime::speech::ToolCall;
+use tinyhivemind_core::runtime::{
+    Conversation, ElsewhereQuery, SESSION_WINDOW, Sequence, SessionAuthor, SessionLog,
+    SessionMessage, SessionQuery, gather_elsewhere, project_session,
 };
 use tinyhivemind_tools::{Dispatch, Refusal};
 
@@ -119,7 +119,7 @@ pub trait Journal: Send + Sync {
     /// The episode cannot go on until one comes back, so a host that parks
     /// blocks here on its own queue -- an approval being answered -- and
     /// returns the seats it released. Returning none ends the episode with
-    /// [`driver::Error::Parked`](tinyhivemind_driver::Error::Parked), which
+    /// [`driver::Error::Parked`](tinyhivemind_core::driver::Error::Parked), which
     /// is the default, because a host that never parks is never asked.
     ///
     /// # Errors
@@ -201,7 +201,7 @@ where
 /// Carry on an episode from a snapshot the host stored.
 ///
 /// The same loop as [`run_episode`], opened from
-/// [`Conductor::resume`](tinyhivemind_driver::Conductor::resume) rather than
+/// [`Conductor::resume`](tinyhivemind_core::driver::Conductor::resume) rather than
 /// from a door: the same conversations are open, the same seats are held,
 /// and the rows already committed are already in the host's journal.
 ///
@@ -569,7 +569,7 @@ async fn wait_for_release<A: BoundAgent, J: Journal>(
     }
     let released = journal.released(&parked).await?;
     if released.is_empty() {
-        return Err(tinyhivemind_driver::Error::Parked { seats: parked }.into());
+        return Err(tinyhivemind_core::driver::Error::Parked { seats: parked }.into());
     }
     for seat in &released {
         conductor.resume_seat(seat);
@@ -757,7 +757,7 @@ async fn latest(log: &dyn SessionLog) -> Result<Option<Sequence>> {
     let page = log
         .read_before(None, 1)
         .await
-        .map_err(|source| tinyhivemind::Error::Read { source })?;
+        .map_err(|source| tinyhivemind_core::runtime::Error::Read { source })?;
     Ok(page.messages.first().map(|row| row.sequence))
 }
 
@@ -818,7 +818,12 @@ fn render(
             format!("@{label}")
         }
     };
-    if mark_aside && matches!(row.audience, tinyhivemind::aside::Audience::Aside { .. }) {
+    if mark_aside
+        && matches!(
+            row.audience,
+            tinyhivemind_core::runtime::aside::Audience::Aside { .. }
+        )
+    {
         return Some(format!("{author} (privately): {content}"));
     }
     Some(format!("{author}: {content}"))

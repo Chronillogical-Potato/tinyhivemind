@@ -38,13 +38,13 @@ use conducted::hosted::{DESK_PREAMBLE, DeskHost, DeskJournal};
 use conducted::jev::LiveJev;
 use conducted::routing::{candidate, policy};
 use openhuman_embed::{Access, Provider, Runtime, RuntimeConfig, ServiceSet, Workspace};
-use tinyhivemind::SESSION_WINDOW;
-use tinyhivemind::desk::{Desk, ResponderMode};
-use tinyhivemind_driver::{
+use tinyhivemind_core::runtime::SESSION_WINDOW;
+use tinyhivemind_core::runtime::desk::{Desk, ResponderMode};
+use tinyhivemind_core::driver::{
     BoundHive, BroadcastRouting, CompletionDriver, ConductPolicy, Door, HiveGraph,
     standing_contract,
 };
-use tinyhivemind_embed::{
+use tinyhivemind_core::embed::{
     ConversationKind, ConversationRef, RouteCandidate, Router, RouterFuture, RoutingPlan, RoutingRequest,
     RoutingSource, route_message,
 };
@@ -53,7 +53,7 @@ use tinyhivemind_openhuman::{
     offline, register_seats, run_episode,
 };
 use tinyhivemind_tools::{EpisodeTools, served_specs};
-use tinyhivemind_typesafe::JevRouter;
+use tinyhivemind_core::typesafe::JevRouter;
 
 
 
@@ -299,7 +299,7 @@ impl Host {
             &contract,
             desk_id,
             desk_name,
-            tinyhivemind::SESSION_WINDOW,
+            tinyhivemind_core::runtime::SESSION_WINDOW,
             &run_id,
         );
         seated.map_err(Into::into)
@@ -590,7 +590,7 @@ async fn episode<R: SeatRunner, J: Journal>(
     if matches!(plan, RoutingPlan::Clarify { .. }) {
         eprintln!("[door] routing asked for clarification; {fallback} owns it");
     }
-    let starters = tinyhivemind_driver::starters(&plan, fallback);
+    let starters = tinyhivemind_core::driver::starters(&plan, fallback);
     println!("[door] starts: {}", starters.join(", "));
 
     // Round width four: the door can start up to four seats and they run

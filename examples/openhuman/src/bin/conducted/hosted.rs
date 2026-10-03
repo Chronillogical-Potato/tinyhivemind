@@ -10,9 +10,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use openhuman_embed::{Agent, AgentSpec, HostTurnTools, Runtime};
-use tinyhivemind::speech::Utterance;
-use tinyhivemind::{Sequence, SessionLog};
-use tinyhivemind_driver::{Commit, EpisodeBrief, Event, Note, Refusal};
+use tinyhivemind_core::runtime::speech::Utterance;
+use tinyhivemind_core::runtime::{Sequence, SessionLog};
+use tinyhivemind_core::driver::{Commit, EpisodeBrief, Event, Note, Refusal};
 use tinyhivemind_openhuman::{
     EpisodeBeltSource, EpisodeHost, HostedTurn, Journal, Lane, LibraryHost, MemoryLog,
     TurnResult,

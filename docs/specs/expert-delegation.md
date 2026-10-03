@@ -4,7 +4,7 @@
 
 
 - **Status:** Implemented; both episode knobs are off by default
-- **Owner:** `crates/tinyhivemind-hive`
+- **Owner:** `crates/tinyhivemind-core/src/hive`
 - **Reading:** [`../research/delegation.md`](../research/delegation.md)
 - **Decision:** [ADR 0007](../adr/0007-the-directory-is-folded-from-citations.md)
 

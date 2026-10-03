@@ -1,6 +1,6 @@
 //! The `OpenHuman` adapter: how a seat's turn runs on `OpenHuman`.
 //!
-//! `tinyhivemind-driver` says who runs next and what a committed row means,
+//! `tinyhivemind_core::driver` says who runs next and what a committed row means,
 //! over a handle the host binds; it never runs a turn. This crate is the
 //! host's side of that seam for `OpenHuman`. A host loop touches a seat at
 //! three points -- open a turn, run it, close it and take what was called --
@@ -22,7 +22,7 @@
 //! All three land every call in the same record, so the driver drains
 //! identical events and a seat is refused and acknowledged in the same
 //! words whichever runs it. The bound handle differs, which is what
-//! [`BoundAgent`](tinyhivemind_driver::BoundAgent) is for.
+//! [`BoundAgent`](tinyhivemind_core::driver::BoundAgent) is for.
 //!
 //! Above the runners sits [`run_episode`]: one episode from its door to
 //! quiescence, over a [`Journal`] the host implements. A host builds its
@@ -41,8 +41,8 @@
 //! ```no_run
 //! use std::sync::Arc;
 //! use openhuman_embed::{Agent, AgentSpec, HostTurnTools, Runtime};
-//! use tinyhivemind::{SESSION_WINDOW, Sequence, SessionLog};
-//! use tinyhivemind_driver::{Commit, Note};
+//! use tinyhivemind_core::runtime::{SESSION_WINDOW, Sequence, SessionLog};
+//! use tinyhivemind_core::driver::{Commit, Note};
 //! use tinyhivemind_openhuman::MemoryLog;
 //! use tinyhivemind_openhuman::{
 //!     EpisodeBeltSource, EpisodeHost, HostedRunner, HostedTurn, Journal, Lane, LibraryHost,
@@ -119,7 +119,7 @@
 //! // The newest row `lead` was shown before this turn: its history is read
 //! // from the host's log up to here, and the brief carries what is above.
 //! // `None` would be a seat shown nothing yet.
-//! let since = Some(tinyhivemind::Sequence(1));
+//! let since = Some(tinyhivemind_core::runtime::Sequence(1));
 //! let (_, _, reply) = runner.turn("lead".into(), Lane::Desk, since, "Go.".into()).await;
 //! let events = runner.close("lead");
 //! # let _ = (reply, events);

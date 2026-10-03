@@ -21,16 +21,12 @@ openhuman = { path = "../../vendor/openhuman/crates/openhuman-core", default-fea
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tinyhivemind = { path = "../../crates/tinyhivemind" }
-tinyhivemind-embed = { path = "../../crates/tinyhivemind-embed" }
-tinyhivemind-hive = { path = "../../crates/tinyhivemind-hive" }
+tinyhivemind-core = { path = "../../crates/tinyhivemind-core" }
 # The driver: who runs next, and what a committed row means. Names no harness.
-tinyhivemind-driver = { path = "../../crates/tinyhivemind-driver" }
 # The OpenHuman adapter: both runners behind the `SeatRunner` seam, and --
 # with `offline` -- the scripted model and backend stub the proofs and the
 # bench run against.
 tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman", features = ["offline"] }
-tinyhivemind-typesafe = { path = "../../crates/tinyhivemind-typesafe" }
 # The room's tools as a record, for the `conducted` binary's own bookkeeping.
 tinyhivemind-tools = { path = "../../crates/tinyhivemind-tools" }
 # The live Jev transport for `conducted`. Reads `TYPESAFE_API_KEY` and nothing

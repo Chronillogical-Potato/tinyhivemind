@@ -15,7 +15,7 @@ publish = false
 # git dependency pinned by rev and patched onto `vendor/openhuman` in the
 # root manifest, so a host that vendors this repository links ONE OpenHuman
 # (ADR 0020). Nothing under `crates/*` other than this crate may depend on
-# it; the driver it serves, `tinyhivemind-driver`, names no harness.
+# it; the driver it serves, `tinyhivemind-core::driver`, names no harness.
 
 [features]
 # The scripted OpenAI-compatible model the runners are proven against, and
@@ -47,17 +47,17 @@ thiserror.workspace = true
 # A turn has a wall; `tokio::time::timeout` is it. Both harnesses run on
 # tokio already.
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
-tinyhivemind.workspace = true
+tinyhivemind-core.workspace = true
 # The record every call lands in, and the served definitions.
 tinyhivemind-tools.workspace = true
 # `BoundAgent` and `AgentBinding`: what the driver wants of a seat.
-tinyhivemind-driver.workspace = true
+
 wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
 # The routing surfaces, for a test that builds its own hive.
-tinyhivemind-embed.workspace = true
+
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
 wiremock.workspace = true
 

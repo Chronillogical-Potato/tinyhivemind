@@ -33,14 +33,14 @@ use openhuman_core::agent::registry::types::{
 use openhuman_embed::{
     Agent, AgentDefinitionSpec, AgentSpec, HostTurnTools, Runtime, ToolScopeSpec,
 };
-use tinyhivemind_driver::{AgentBinding, BoundAgent};
+use tinyhivemind_core::driver::{AgentBinding, BoundAgent};
 use tinyhivemind_tools::EpisodeTools;
 
 use crate::episode::Journal;
 use crate::raw::tools::belt;
 use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult, unseated};
 use crate::{Error, Result};
-use tinyhivemind::{Conversation, Sequence};
+use tinyhivemind_core::runtime::{Conversation, Sequence};
 
 /// An `openhuman-embed` agent as the handle the driver binds.
 ///
@@ -78,7 +78,7 @@ impl EmbedRunner {
     /// `journal` is the host's, read as each seat to seed its turn; `desk`
     /// and `desk_name` name the desk those turns run on or in a thread of, as
     /// that journal knows it; `window` bounds how many rows a turn is seeded
-    /// with, and `tinyhivemind::SESSION_WINDOW` is what the rest of the crate
+    /// with, and `tinyhivemind_core::runtime::SESSION_WINDOW` is what the rest of the crate
     /// reads with. `run_id` keeps agent ids unique across episodes on one
     /// runtime, which refuses a second agent of the same id.
     ///

@@ -36,28 +36,17 @@ pub(crate) fn belt_with_prefix(
         .tool_definitions()
         .into_iter()
         .map(|definition| {
-            let served = text(&definition, "name");
+            let served = definition.name;
             Box::new(EpisodeTool {
                 seat: seat.to_owned(),
                 name: format!("{prefix}{served}"),
                 served,
-                description: text(&definition, "description"),
-                schema: definition
-                    .get("inputSchema")
-                    .cloned()
-                    .unwrap_or(Value::Null),
+                description: definition.description,
+                schema: definition.parameters,
                 tools: Arc::clone(tools),
             }) as Box<dyn Tool>
         })
         .collect()
-}
-
-fn text(definition: &Value, key: &str) -> String {
-    definition
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
 }
 
 struct EpisodeTool {
