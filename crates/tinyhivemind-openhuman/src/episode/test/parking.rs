@@ -5,8 +5,8 @@
 
 use std::collections::VecDeque;
 
-use tinyhivemind::{Conversation, Sequence};
-use tinyhivemind_driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Event};
+use tinyhivemind_core::driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Event};
+use tinyhivemind_core::runtime::{Conversation, Sequence};
 
 use super::super::run_episode;
 use super::support::{ScriptRunner, TestJournal, complete, door, hive, policy, run};
@@ -94,7 +94,7 @@ fn a_host_that_releases_nobody_ends_the_episode_parked() {
         door(&journal, &["one", "two"], &["one"]),
     ));
     assert!(
-        matches!(&ended, Err(Error::Conduct(tinyhivemind_driver::Error::Parked { seats })) if seats == &["one".to_owned()]),
+        matches!(&ended, Err(Error::Conduct(tinyhivemind_core::driver::Error::Parked { seats })) if seats == &["one".to_owned()]),
         "{ended:?}"
     );
 }

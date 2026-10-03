@@ -1,0 +1,19 @@
+# Feature modules
+
+Each directory answers one question, folded independently and wired together
+by [`mod.rs`](mod.rs). Read a module's own `README.md` for its design and
+public surface; this file is only the index.
+
+| module | answers |
+| --- | --- |
+| [`attention/`](attention/README.md) | Who takes the floor this turn, and how much of a bounded prompt each context source gets. |
+| [`completion/`](completion/README.md) | Whether every currently assigned agent explicitly completed its work, and which routed broadcasts reopen work. |
+| [`directory/`](directory/README.md) | Who knows what — transactive memory folded from grounded deposits and the citations they drew. |
+| [`division/`](division/README.md) | A task's facets, split across the seats that own them, and what each owner reads. The one mechanism here whose default is *on*. |
+| [`episode/`](episode/README.md) | The pure state machine: given a transcript, who speaks next, and has the room finished. |
+| [`error/`](error/README.md) | The module `Error` and `Result<T>`. |
+| [`exchange/`](exchange/README.md) | Private, off-floor contact between turns that spends no floor and starts no turn. |
+| [`horizon/`](horizon/README.md) | Where a fold is measured to, and whether distance counts every row the host wrote or only the rows the fold reads. |
+| [`quorum/`](quorum/README.md) | Whether fixed-point expected support has carried, with typed admission and cross-inhibition that removes an advocate's contribution. |
+| [`salience/`](salience/README.md) | Recency decay, importance, and relevance, folded into one comparable score. |
+| [`trace/`](trace/README.md) | The stigmergic grammar: what a message deposits, and how it is read back. |

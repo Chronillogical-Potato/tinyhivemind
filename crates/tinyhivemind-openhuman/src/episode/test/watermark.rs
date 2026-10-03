@@ -5,8 +5,8 @@
 
 use std::sync::atomic::AtomicBool;
 
-use tinyhivemind::Sequence;
-use tinyhivemind_driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Door};
+use tinyhivemind_core::driver::{BroadcastRouting, CompletionDriver, ConductPolicy, Door};
+use tinyhivemind_core::runtime::Sequence;
 
 use super::super::{resume_episode, run_episode};
 use serde_json::json;

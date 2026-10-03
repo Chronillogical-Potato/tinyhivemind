@@ -1,6 +1,6 @@
 # The benchmark matrix
 
-Accepted behaviour for how `tinyhivemind-hive`'s benchmark executes, what it
+Accepted behaviour for how `tinyhivemind_core::hive`'s benchmark executes, what it
 reports, and what it refuses to report. Supersedes nothing — the arms and
 sweeps it describes all still run — but it fixes the *shape* the results are
 reported in, which was the defect.

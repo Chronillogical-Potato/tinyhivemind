@@ -11,7 +11,7 @@ use openhuman_core::agent::tool_policy::{
     ToolCallContext, ToolPolicy, ToolPolicyDecision, ToolPolicyRequest,
 };
 use serde_json::json;
-use tinyhivemind::{Conversation, Sequence, SessionLog};
+use tinyhivemind_core::runtime::{Conversation, Sequence, SessionLog};
 use tinyhivemind_tools::{Dispatch, EpisodeTools, served_specs};
 
 use super::{EpisodeBelt, EpisodeBeltSource, Narrowing};
@@ -345,8 +345,8 @@ async fn a_prefixed_belt_is_called_by_the_prefixed_name_and_records_the_served_o
     assert_eq!(events.len(), 1);
     assert!(matches!(
         events[0].call,
-        tinyhivemind::speech::ToolCall::Speak(
-            tinyhivemind::speech::Utterance::CompleteEpisode { .. }
+        tinyhivemind_core::runtime::speech::ToolCall::Speak(
+            tinyhivemind_core::runtime::speech::Utterance::CompleteEpisode { .. }
         )
     ));
 }

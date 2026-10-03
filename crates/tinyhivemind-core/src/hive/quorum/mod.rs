@@ -1,0 +1,375 @@
+//! Quorum as a local decaying count, and cross-inhibition that silences an
+//! advocate rather than debiting an option.
+//!
+//! Two properties here are load-bearing, and both come from how honeybee
+//! swarms actually settle on a nest site rather than from voting theory.
+//!
+//! **Quorum is local.** A topic carries when `threshold` *distinct*
+//! participants have supported it within the last `window` of transcript — not
+//! when it holds a majority of anything. The count is order-independent and
+//! idempotent, so a participant that catches up late folds to the same
+//! standing as one that watched live.
+//!
+//! **Cross-inhibition targets the advocate, not the option.** An objection
+//! naming a message removes that message's author from the supporter set of
+//! the topic they were advocating. Subtracting from a score cannot break a tie
+//! between two equally supported options; silencing an advocate can, and that
+//! asymmetry is the entire reason the mechanism is shaped this way.
+//!
+//! Refutations remain in [`TopicStanding::refuted_by`] for audit. They do not
+//! change whether a topic carries.
+
+#[cfg(test)]
+mod test;
+
+mod types;
+
+pub use types::{
+    AdmissionPolicy, ConsensusState, DecisionEvaluation, QuorumPolicy, TopicProbability,
+    TopicStanding,
+};
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::hive::{
+    error::{Error, Result},
+    horizon::Horizon,
+    salience::importance,
+    trace::{TopicId, Trace, TraceKind},
+};
+use crate::runtime::Sequence;
+pub use crate::runtime::responder::PROBABILITY_SCALE;
+
+/// Fold traces into one standing per topic.
+///
+/// Only [`TraceKind::Propose`] and [`TraceKind::Support`] add a supporter, and
+/// only within `policy.window` of `at` — counted in raw sequences or in folded
+/// rows according to the [`Horizon`] the caller passes. A bare [`Sequence`]
+/// gives the raw count. Under
+/// `policy.require_grounded`, support that cites nothing is ignored entirely:
+/// it joins neither the supporter set nor the weight.
+///
+/// A [`TraceKind::Refute`] naming a topic adds its author to that topic's
+/// `refuted_by`. It attaches only to a topic some member actually advocated:
+/// refuting something nobody put on the floor is inert, so one member cannot
+/// manufacture a standing. Refutation is recorded without changing support.
+///
+/// Objections and refutations are applied after all support, so the result does
+/// not depend on the order traces arrived in.
+///
+/// # Errors
+///
+/// Returns [`Error::ZeroQuorumThreshold`] or [`Error::ZeroQuorumWindow`]
+/// when the policy would make the count meaningless.
+pub fn standings<'a>(
+    traces: &[Trace],
+    at: impl Into<Horizon<'a>>,
+    policy: &QuorumPolicy,
+) -> Result<Vec<TopicStanding>> {
+    let at = at.into();
+    if policy.threshold == 0 {
+        return Err(Error::ZeroQuorumThreshold);
+    }
+    if policy.window == 0 {
+        return Err(Error::ZeroQuorumWindow);
+    }
+    let mut live: Vec<&Trace> = traces
+        .iter()
+        .filter(|trace| at.within(trace.sequence, policy.window))
+        .collect();
+    // A trace is addressed by where it was authored, so `(sequence, offset)`
+    // identifies it. Sorting and deduplicating on that address is what makes
+    // this fold commutative and idempotent: a redelivered trace, or a caller
+    // that folds an unordered list, lands in exactly the same place as one
+    // that saw the medium in order.
+    live.sort_by_key(|trace| (trace.sequence, trace.offset));
+    live.dedup_by_key(|trace| (trace.sequence, trace.offset));
+
+    let require_grounded = policy.require_grounded;
+
+    // Every `(agent, topic)` a message advocated, keyed by that message's
+    // sequence. One message can carry several propose/support traces at
+    // different offsets -- one per topic -- so an objection naming that
+    // message must be able to silence the advocate on *every* topic it
+    // advocated there, not just the last one folded.
+    //
+    // Every map here is keyed by a borrow of the traces being folded rather
+    // than by an owned copy. The fold runs on every step of every episode, and
+    // the owned `TopicStanding` is built once at the end from what survives.
+    let mut advocacy: BTreeMap<Sequence, Vec<(&str, &TopicId)>> = BTreeMap::new();
+    let mut ordered: Vec<&TopicId> = Vec::new();
+    let mut supporters: BTreeMap<&TopicId, Vec<&str>> = BTreeMap::new();
+    // Weight per topic, per contributing agent, so silencing one advocate can
+    // remove exactly their contribution rather than either leaving the whole
+    // sum untouched or zeroing every other supporter's weight along with it.
+    let mut weight: BTreeMap<&TopicId, BTreeMap<&str, i64>> = BTreeMap::new();
+
+    for trace in &live {
+        if !matches!(trace.kind, TraceKind::Propose | TraceKind::Support) {
+            continue;
+        }
+        let (Some(topic), Some(agent)) = (trace.topic.as_ref(), trace.agent_id()) else {
+            continue;
+        };
+        if require_grounded && trace.kind == TraceKind::Support && !trace.grounded() {
+            continue;
+        }
+        if !ordered.contains(&topic) {
+            ordered.push(topic);
+        }
+        advocacy
+            .entry(trace.sequence)
+            .or_default()
+            .push((agent, topic));
+        let entry = supporters.entry(topic).or_default();
+        if !entry.contains(&agent) {
+            entry.push(agent);
+        }
+        *weight.entry(topic).or_default().entry(agent).or_default() += importance(trace.kind);
+    }
+
+    let mut silenced = silenced_advocates(&live, &advocacy, require_grounded);
+
+    let mut refuted = refutations(&live, &ordered);
+
+    Ok(ordered
+        .into_iter()
+        .map(|topic| {
+            let silenced = silenced.remove(&topic).unwrap_or_default();
+            let refuted_by: Vec<String> = refuted
+                .remove(&topic)
+                .unwrap_or_default()
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            let supporters: Vec<String> = supporters
+                .remove(&topic)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|agent| !silenced.contains(agent))
+                .map(str::to_owned)
+                .collect();
+            let support: i64 = weight
+                .remove(&topic)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|(agent, _)| !silenced.contains(agent))
+                .map(|(_, contribution)| contribution)
+                .sum();
+            TopicStanding {
+                topic: topic.clone(),
+                probability_support: count_probability_support(&supporters),
+                supporters,
+                silenced: silenced.into_iter().map(str::to_owned).collect(),
+                refuted_by,
+                support,
+            }
+        })
+        .collect())
+}
+
+fn count_probability_support(supporters: &[String]) -> u64 {
+    u64::try_from(supporters.len())
+        .unwrap_or(u64::MAX)
+        .saturating_mul(u64::from(PROBABILITY_SCALE))
+}
+
+/// Fold traces and replace count-equivalent support with evaluated probability.
+///
+/// Each member contributes at most its latest admitted in-window evaluation.
+/// Missing or rejected evaluations contribute nothing. Cross-inhibition is
+/// applied before probabilistic support is summed; refutations remain audit
+/// data in the standing.
+///
+/// # Errors
+///
+/// Returns the ordinary standings policy errors, or a typed malformed
+/// evaluation error for an invalid distribution, stale source binding, or
+/// out-of-range probability.
+pub fn standings_with_evaluations<'a>(
+    traces: &[Trace],
+    evaluations: &[DecisionEvaluation],
+    at: impl Into<Horizon<'a>> + Copy,
+    policy: &QuorumPolicy,
+    admission: &AdmissionPolicy,
+) -> Result<Vec<TopicStanding>> {
+    if admission.maximum_violation_probability.parts() > PROBABILITY_SCALE {
+        return Err(Error::InvalidDecisionProbability);
+    }
+    let horizon = at.into();
+    let mut folded = standings(traces, horizon, policy)?;
+    let live: Vec<&Trace> = traces
+        .iter()
+        .filter(|trace| horizon.within(trace.sequence, policy.window))
+        .collect();
+    let allowed_topics: BTreeSet<&TopicId> =
+        folded.iter().map(|standing| &standing.topic).collect();
+    let mut latest: BTreeMap<&str, &DecisionEvaluation> = BTreeMap::new();
+    for evaluation in evaluations {
+        if !horizon.within(evaluation.source_sequence, policy.window) {
+            continue;
+        }
+        validate_evaluation(evaluation, &live, &allowed_topics)?;
+        if evaluation.violation_probability > admission.maximum_violation_probability {
+            continue;
+        }
+        let entry = latest.entry(&evaluation.agent_id).or_insert(evaluation);
+        if evaluation.source_sequence > entry.source_sequence {
+            *entry = evaluation;
+        } else if evaluation.source_sequence == entry.source_sequence && evaluation != *entry {
+            return Err(Error::InvalidDecisionDistribution);
+        }
+    }
+    for standing in &mut folded {
+        let mut support = 0_u64;
+        for agent in &standing.supporters {
+            let Some(evaluation) = latest.get(agent.as_str()) else {
+                continue;
+            };
+            let probability = evaluation
+                .stance
+                .iter()
+                .find(|item| item.topic.as_ref() == Some(&standing.topic))
+                .map_or(0_u64, |item| u64::from(item.probability.parts()));
+            let evidence = u64::from(evaluation.evidence_quality.parts());
+            support = support.saturating_add(
+                probability
+                    .saturating_mul(evidence)
+                    .saturating_add(u64::from(PROBABILITY_SCALE / 2))
+                    / u64::from(PROBABILITY_SCALE),
+            );
+        }
+        standing.probability_support = support;
+    }
+    Ok(folded)
+}
+
+fn validate_evaluation(
+    evaluation: &DecisionEvaluation,
+    live: &[&Trace],
+    allowed_topics: &BTreeSet<&TopicId>,
+) -> Result<()> {
+    if evaluation.evidence_quality.parts() > PROBABILITY_SCALE
+        || evaluation.violation_probability.parts() > PROBABILITY_SCALE
+        || evaluation.stance.is_empty()
+    {
+        return Err(Error::InvalidDecisionProbability);
+    }
+    let authored = live.iter().any(|trace| {
+        trace.sequence == evaluation.source_sequence
+            && trace.agent_id() == Some(evaluation.agent_id.as_str())
+    });
+    if !authored {
+        return Err(Error::StaleDecisionEvaluation {
+            agent_id: evaluation.agent_id.clone(),
+            sequence: evaluation.source_sequence,
+        });
+    }
+    let mut topics: BTreeSet<Option<&TopicId>> = BTreeSet::new();
+    let mut sum = 0_u32;
+    for item in &evaluation.stance {
+        if item.probability.parts() > PROBABILITY_SCALE
+            || item
+                .topic
+                .as_ref()
+                .is_some_and(|topic| !allowed_topics.contains(topic))
+            || !topics.insert(item.topic.as_ref())
+        {
+            return Err(Error::InvalidDecisionDistribution);
+        }
+        sum = sum
+            .checked_add(item.probability.parts())
+            .ok_or(Error::InvalidDecisionDistribution)?;
+    }
+    if sum != PROBABILITY_SCALE {
+        return Err(Error::InvalidDecisionDistribution);
+    }
+    Ok(())
+}
+
+/// Apply cross-inhibition: which advocates an objection removes, per topic.
+///
+/// An objection cannot silence its own author. That would let an agent retract
+/// another's support by objecting to itself.
+fn silenced_advocates<'a>(
+    live: &[&'a Trace],
+    advocacy: &BTreeMap<Sequence, Vec<(&'a str, &'a TopicId)>>,
+    require_grounded: bool,
+) -> BTreeMap<&'a TopicId, Vec<&'a str>> {
+    let mut silenced: BTreeMap<&'a TopicId, Vec<&'a str>> = BTreeMap::new();
+    for trace in live {
+        if trace.kind != TraceKind::Object {
+            continue;
+        }
+        if require_grounded && !trace.grounded() {
+            continue;
+        }
+        let Some(target) = trace.target else { continue };
+        let Some(advocacies) = advocacy.get(&target) else {
+            continue;
+        };
+        for (advocate, topic) in advocacies {
+            if trace.agent_id() == Some(*advocate) {
+                continue;
+            }
+            let entry = silenced.entry(topic).or_default();
+            if !entry.contains(advocate) {
+                entry.push(advocate);
+            }
+        }
+    }
+    silenced
+}
+
+/// Distinct refuters per advocated topic, in first-refutation order.
+///
+/// A refutation of a topic nobody advocated is dropped rather than creating a
+/// standing: one member must not be able to manufacture an entry for something
+/// the room never put on the floor.
+fn refutations<'a>(
+    live: &[&'a Trace],
+    ordered: &[&TopicId],
+) -> BTreeMap<&'a TopicId, Vec<&'a str>> {
+    let mut refuted: BTreeMap<&'a TopicId, Vec<&'a str>> = BTreeMap::new();
+    for trace in live {
+        if trace.kind != TraceKind::Refute || !trace.grounded() {
+            continue;
+        }
+        let (Some(topic), Some(agent)) = (trace.topic.as_ref(), trace.agent_id()) else {
+            continue;
+        };
+        if !ordered.contains(&topic) {
+            continue;
+        }
+        let entry = refuted.entry(topic).or_default();
+        if !entry.contains(&agent) {
+            entry.push(agent);
+        }
+    }
+    refuted
+}
+
+/// Decide what the standings add up to.
+///
+/// Exactly one carried topic is [`ConsensusState::Quorum`]; two or more is
+/// [`ConsensusState::Deadlocked`], which is a real outcome rather than an
+/// error — it is the state cross-inhibition exists to resolve.
+#[must_use]
+pub fn consensus(standings: &[TopicStanding], policy: &QuorumPolicy) -> ConsensusState {
+    let mut carried: Vec<&TopicStanding> = standings
+        .iter()
+        .filter(|standing| standing.carried(policy))
+        .collect();
+    match carried.len() {
+        0 => ConsensusState::Deliberating,
+        1 => ConsensusState::Quorum {
+            topic: carried.swap_remove(0).topic.clone(),
+        },
+        _ => ConsensusState::Deadlocked {
+            topics: carried
+                .into_iter()
+                .map(|standing| standing.topic.clone())
+                .collect(),
+        },
+    }
+}

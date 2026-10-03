@@ -1,6 +1,6 @@
 # Task variety: several facets at once
 
-**Status** Accepted · **Applies to** `crates/tinyhivemind-hive/examples/bench`
+**Status** Accepted · **Applies to** `crates/tinyhivemind-core/examples/bench`
 · **Follows** [`long-horizon-tasks.md`](long-horizon-tasks.md)
 
 ## Why
@@ -101,7 +101,7 @@ The measured shape is `hive+fold`, and it is the shape this repository builds
 on from here: **one task, one agent; two or more facets, one seat each.**
 
 It is now a library mechanism rather than a benchmark arm.
-`tinyhivemind_hive::division` folds a task's facets across the seats that own
+`tinyhivemind_core::hive::division` folds a task's facets across the seats that own
 them, `Division::scoped` gives each owner its own facet's rows and none of the
 others', and `DivisionPolicy::DEFAULT` is the one default in this crate that is
 **on** — see [ADR 0015](../adr/0015-the-division-of-labour-is-the-default-shape.md).

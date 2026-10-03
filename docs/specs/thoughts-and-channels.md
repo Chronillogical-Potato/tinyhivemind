@@ -148,7 +148,7 @@ what makes it safe to be lossy.
   it names seats as `@id` and cites rows as `^N`, and no seat is made to have
   said something it did not say.
 - `tinyhivemind-core` gains nothing. Every type here needs `Sequence` and
-  `SessionMessage`, which live in the runtime crate, and the fold needs a port.
+  `SessionMessage`, which live in the `runtime` module, and the fold needs a port.
 
 ## Acceptance criteria
 

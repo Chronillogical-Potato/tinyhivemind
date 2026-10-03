@@ -6,7 +6,7 @@ use std::{error, fmt};
 use std::{ffi::OsString, os::unix::ffi::OsStringExt};
 
 use serde::Deserialize;
-use tinyhivemind_embed::RouteCandidate;
+use tinyhivemind_core::embed::RouteCandidate;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -1,8 +1,8 @@
 //! Live TypeSafe transport and routing request construction.
 
-use tinyhivemind::responder::Probability;
-use tinyhivemind_embed::RoutingPolicy;
-use tinyhivemind_typesafe::{
+use tinyhivemind_core::runtime::responder::Probability;
+use tinyhivemind_core::embed::RoutingPolicy;
+use tinyhivemind_core::typesafe::{
     Error, SystemOneRequest, SystemOneResponse, SystemOneTransport, SystemOneTransportFuture,
 };
 

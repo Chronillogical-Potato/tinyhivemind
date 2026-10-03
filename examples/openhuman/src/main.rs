@@ -8,16 +8,16 @@ use openhuman_core::agent::registry::types::{
 };
 use openhuman_embed::{Access, Agent, AgentSpec, Provider, Runtime, RuntimeConfig, Workspace};
 use serde_json::json;
-use tinyhivemind::{
+use tinyhivemind_core::runtime::{
     desk::{Desk, ResponderMode},
     responder::Probability,
 };
-use tinyhivemind_driver::{AgentBinding, BoundHive, HiveGraph};
-use tinyhivemind_embed::{
+use tinyhivemind_core::driver::{AgentBinding, BoundHive, HiveGraph};
+use tinyhivemind_core::embed::{
     ConversationKind, ConversationRef, MessageRoute, RouteCandidate, RoutingPolicy, RoutingRequest,
 };
 use tinyhivemind_openhuman::EmbedSeat;
-use tinyhivemind_typesafe::{
+use tinyhivemind_core::typesafe::{
     ChoiceAnswer, JevRouter, NoulAnswer, SystemOneAnswer, SystemOneRequest, SystemOneResponse,
     SystemOneTransport, SystemOneTransportFuture, TokenUsage,
 };
@@ -91,7 +91,7 @@ fn noul(id: &str, probability: f64) -> (String, SystemOneAnswer) {
 fn request() -> RoutingRequest {
     RoutingRequest {
         message: "Review the launch implementation and compliance risk.".into(),
-        source: tinyhivemind_embed::RoutingSource::DeskMessage,
+        source: tinyhivemind_core::embed::RoutingSource::DeskMessage,
         conversation: ConversationRef {
             id: "launch".into(),
             kind: ConversationKind::Desk,

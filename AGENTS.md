@@ -49,116 +49,39 @@ is not advisory — do not add an exception to it to land a change.
 
 ## Project Structure
 
-This is a Rust 2024 cargo workspace rooted at a virtual `Cargo.toml`. Every
-crate lives under `crates/`, one directory per package, each directory named for
-the package it holds. There is no root package.
+This is a Rust 2024 virtual Cargo workspace with three packages. Core owns all
+host-neutral behavior; tools renders native tool definitions and records calls;
+OpenHuman is the only crate that links an agent harness.
 
 ```text
-Cargo.toml              # virtual workspace: members, [workspace.package],
-                        # [workspace.dependencies], [workspace.lints]
+Cargo.toml
 crates/
-├── tinyhivemind-core/     # the pure algebra: no async, no IO, no host types
+├── tinyhivemind-core/
 │   └── src/
-│       ├── lib.rs      # crate docs + the entire public re-export surface
-│       ├── error/mod.rs      # crate-wide `Error` and `Result<T>`
-│       └── <feature>/        # one directory per feature area
-│           ├── README.md     # the module's design, surface, and constraints
-│           ├── mod.rs        # module docs, wiring, smallest useful public API
-│           ├── types.rs      # substantial type definitions
-│           └── test.rs       # module-local unit tests, or a test/ directory
-│                             # of behavior-grouped submodules once it grows
-├── tinyhivemind/          # session runtime: ports, projection, digest,
-│                         # sharing, speech, and threads
-├── tinyhivemind-hive/     # pure task division, explicit completion, and bounded
-│                         # group deliberation
-├── tinyhivemind-embed/    # host-neutral conversation surfaces and validated
-│                       # Jev-first routing composition
-├── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
-│                       # one transport port; no HTTP client or async runtime
-├── tinyhivemind-driver/   # the completion driver over a handle the host binds:
-│                       # who runs next, what a committed row means, and the
-│                       # conducted episode: conversations and nudges. Pure.
-├── tinyhivemind-openhuman/ # the OpenHuman adapter: native-tool runners behind one seam;
-│                       # the one crate that links a harness, by ADR 0025
-└── tinyhivemind-tools/    # the episode's tools as a record a host drains:
-                        # definitions, the call gate, the events. Pure.
-docs/
-├── specs/              # behavior and architecture specifications
-├── plans/              # test-first implementation plans
-├── adr/                # immutable architecture decision records
-├── research/           # the reading behind a mechanism, with its equations
-└── experiments/        # what happened when it was actually run
-wiki/                   # the GitHub wiki, checked out as a submodule
-examples/               # standalone integration proofs outside the workspace
+│       ├── lib.rs         # core's public module surface
+│       ├── desk/, roster/, mention/, approval/, responder/ ...
+│       ├── runtime/       # session ports, projection, sharing, and digest
+│       ├── hive/          # task division, completion, and deliberation
+│       ├── embed/         # conversation surfaces and semantic routing
+│       ├── typesafe/      # System One wire and Jev router
+│       └── driver/        # host-neutral completion scheduling
+├── tinyhivemind-tools/   # native TinyTools specs and episode call record
+└── tinyhivemind-openhuman/ # seat runners and host integration
+wiki/                    # GitHub wiki submodule
+docs/                    # specs, plans, ADRs, research, experiments
+examples/                # standalone integration proofs
 ```
 
-### The two-crate split
+Pure decisions use supplied snapshots. Waiting behavior sits behind a narrow
+host-supplied port in core. Core opens no storage, socket, or model client,
+and does not name an OpenHuman type. Its `hive` module remains a pure fold with
+fixed-point arithmetic and bounded rounds. `embed` owns host-neutral routing;
+`typesafe` implements its `Router` through `SystemOneTransport`; `driver`
+combines routing and completion state over a host-bound handle.
 
-`crates/tinyhivemind-core` holds the algebra: desks and membership, the roster, the
-mention grammar and its resolution, approval decisions, and responder plans.
-Every function there is a fold over data the caller already holds. The
-attributed `SessionMessage` and paging projection live in `crates/tinyhivemind`.
-
-`crates/tinyhivemind` holds the parts that must wait on something, including the
-paging walk over a session log and digest generation, expressed
-against ports a host implements. It depends on the core crate and re-exports it,
-so a host takes one dependency rather than two and the types are the *same*
-types rather than structural twins.
-
-The rule for deciding where something goes: if it can be answered from arguments
-alone it belongs in the core crate; if it has to await a read, a write, or a
-model call, it belongs behind a port in the runtime crate. When in doubt, put
-the decision in the core crate and the waiting in the runtime crate — that split
-is what keeps the interesting logic testable without a fixture.
-
-### The embedding crates
-
-`crates/tinyhivemind-embed` names host-neutral conversation surfaces and
-combines semantic routing with deterministic eligibility, escalation, and
-fallback. It never parses a host chat id or names an OpenCompany/OpenHuman
-type. `crates/tinyhivemind-typesafe` builds the exact batched System One
-questions for that surface and converts responses to fixed-point evaluations.
-Its `SystemOneTransport` is the only waiting boundary; HTTP, credentials, and
-retry scheduling remain in the host adapter.
-
-`crates/tinyhivemind-openhuman` is the explicit OpenHuman adapter. It binds
-canonical hive identities to already-created agents and folds committed host
-events into caller-owned completion state. The host still owns agent sessions,
-the transcript, durable appends, and scheduling.
-
-### The hive crate
-
-`crates/tinyhivemind-hive` is opt-in and answers a different question from the
-other two: not *who responds to this message* but *how does a room of agents
-reach a decision*. It is **pure and defines no port** — an episode is
-`step(state, transcript, roster, desks, policy) -> HiveStep`, a fold over
-arguments the caller already holds, and the host does its waiting through the
-session log and turn scheduler it already implements. It
-is in the `pure_crates` list in `.github/scripts/assert-pure.sh` for that
-reason.
-
-`HiveStep::Speak` carries a **round** — the turns authorized to run
-concurrently, at most `round_width` while blind or `revealed_width` when
-revealed, plus the single state the episode takes once all of them are
-appended. Independence is still a visibility filter
-rather than a hope: members writing simultaneously cannot read each other, so a
-concurrent round *is* a blind round. `round_width: 1` is the sequential episode
-and reproduces every recorded number bit-for-bit. See
-[`docs/specs/concurrent-rounds.md`](docs/specs/concurrent-rounds.md) and
-[`docs/adr/0014-a-round-authorizes-concurrent-turns.md`](docs/adr/0014-a-round-authorizes-concurrent-turns.md).
-
-All arithmetic in it is fixed-point integer, so every payload derives `Eq` and
-every fold is reproducible.
-
-Add a crate by creating `crates/<name>/` — `members = ["crates/*"]` picks it up
-by existing. Inherit `version`, `edition`, `rust-version`, `license`, and
-`repository` from `[workspace.package]`, take shared dependencies from
-`[workspace.dependencies]`, and opt into the shared lint set with:
-
-```toml
-[lints]
-workspace = true
-```
+`tinyhivemind-tools` depends on core and `tinytools` to render served tools as
+`tinytools::ToolSpec`. The OpenHuman adapter depends on core and tools. The
+host owns agent sessions, the transcript, durable appends, and scheduling.
 
 Each feature area belongs in a focused module directory under a crate's `src/`.
 A module root explains the module, wires its pieces together, and exposes the
@@ -185,10 +108,9 @@ broad ones.
 No source file exceeds **700 lines**. Split along a real seam — a cohesive group
 of functions or types — never at an arbitrary line count.
 
-Keep public exports centralized in each crate's `src/lib.rs` so downstream users
-have one predictable surface. Put shared error variants in
-`crates/tinyhivemind-core/src/error/mod.rs` and return the crate-wide `Result<T>` from
-fallible public APIs.
+Keep the public module surface in each crate's `src/lib.rs`; expose feature
+items deliberately from their module roots. Core retains typed feature errors
+under those modules, while new shared algebra errors go in `src/error/mod.rs`.
 
 ## Build And Test
 
@@ -208,29 +130,29 @@ Supporting commands:
 - `cargo test <filter>` — run a focused subset while iterating.
 - `cargo test -p tinyhivemind-core` — run one crate's suite.
 - `cargo run -p tinyhivemind-core --example basic` — run the bundled example.
-- `cargo run -p tinyhivemind-hive --example hive` — print one deliberation episode.
-- `cargo run --release -p tinyhivemind-hive --example bench -- --grid` — walk
+- `cargo run -p tinyhivemind-core --example hive` — print one deliberation episode.
+- `cargo run --release -p tinyhivemind-core --example bench -- --grid` — walk
   the benchmark matrix: the cross product of `--topic`, `--scale`,
   `--complexity` and `--concurrency`, reporting the same six columns —
   quality, speed, throughput, concurrency, tokens per episode, tokens per
   second — for every system in every cell. A bare `--grid` is one cell.
-- `cargo run --release -p tinyhivemind-hive --example bench` — the same six
+- `cargo run --release -p tinyhivemind-core --example bench` — the same six
   columns for every mechanism probe, at one point of that grid: the responder
   ladder, a matched-budget vote, and each deliberation variant. `-- --sweep`
   tunes the episode policy, `-- --trace` prints one episode, `-- --swarm` runs
   a federation of desks that can only reach each other by a referral, and
   `-- --agent-cmd "opencode run"` drives one through a real agent CLI.
-- `cargo run --release -p tinyhivemind-hive --example bench -- --calibrate
+- `cargo run --release -p tinyhivemind-core --example bench -- --calibrate
   --api-base <url>` — measure the cost model's four constants against a live
   endpoint and print the flags that pin a run to them. Five of the six columns
-  are computed from those constants; `crates/tinyhivemind-hive/examples/bench/COST.md`
+  are computed from those constants; `crates/tinyhivemind-core/examples/bench/COST.md`
   says what they do and do not claim.
-- `cargo run --release -p tinyhivemind-driver --example bench -- --episodes 2000`
+- `cargo run --release -p tinyhivemind-core --example driver_bench -- --episodes 2000`
   — price the completion driver's policy with no model: the same seeded rooms
   per arm, queue depth and broadcast budget and width varied one at a time.
   Findings in `docs/experiments/2026-09-22-the-driver-under-the-benchmark.md`.
 
-  The harness is documented in `crates/tinyhivemind-hive/examples/bench/README.md`,
+  The harness is documented in `crates/tinyhivemind-core/examples/bench/README.md`,
   its accepted behaviour in `docs/specs/benchmark-matrix.md`, and its findings
   on the wiki's `Benchmarks` page (`wiki/Benchmarks.md`).
 - `.github/scripts/assert-pure.sh` — assert the pure crates took on no
@@ -262,9 +184,9 @@ Use standard `rustfmt` output and Rust 2024 idioms. Do not hand-format around
 
 ### Errors
 
-- One crate-wide `Error` enum per crate, in `src/error/mod.rs`, built with
-  `thiserror`.
-- Fallible public functions return `Result<T>`, the crate alias.
+- Use typed `thiserror` errors. Existing core feature modules have scoped
+  error enums; add shared algebra variants to `src/error/mod.rs`.
+- Fallible public functions return their module's `Result<T>` alias.
 - Add a specific variant instead of stuffing context into a string; error
   messages are lowercase, without trailing punctuation.
 - Do not `unwrap()`, `expect()`, or `panic!` in library code paths. They are
@@ -298,7 +220,7 @@ releases are reproducible.
 
 ### Vendored dependencies
 
-No pure or runtime crate vendors a dependency inside its own directory. The
+No library crate vendors a dependency inside its own directory. The
 OpenHuman adapter links the pinned harness through workspace Git dependencies
 patched to `vendor/openhuman`. The standalone OpenHuman example and hive
 benchmark use vendored harness or Jev code without making those dependencies

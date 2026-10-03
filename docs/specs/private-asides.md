@@ -271,7 +271,7 @@ Three bounds hold, and they are what keep this inside the charter's third rule:
 `HiveStep::Speak` still carries exactly one turn and no two participants ever
 hold the floor: what rides alongside a turn is a row, not a turn. See
 [ADR 0011](../adr/0011-an-aside-rides-alongside-a-turn.md), and the invariants
-pinned in `episode::test` and `crates/tinyhivemind-hive/tests/fuzz_invariants.rs`.
+pinned in `episode::test` and `crates/tinyhivemind-core/tests/migrated_hive/fuzz_invariants.rs`.
 
 ## Invariants and constraints
 

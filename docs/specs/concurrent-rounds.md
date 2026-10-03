@@ -200,7 +200,7 @@ See [`../experiments/2026-09-09-depth-and-width.md`](../experiments/2026-09-09-d
 2. **Round ≡ sequence.** For an arbitrary transcript and policy, the standings,
    consensus and directory folded over a round's rows are identical to those
    folded over the same rows appended one at a time. Asserted in
-   `crates/tinyhivemind-hive/tests/fuzz_invariants.rs`, red before the change.
+   `crates/tinyhivemind-core/tests/migrated_hive/fuzz_invariants.rs`, red before the change.
 3. A round is never wider than `round_width`, never empty when `Speak`, and
    never contains the same member twice.
 4. `next_state.spent` equals `state.spent + turns.len()`, and every speaker in

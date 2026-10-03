@@ -5,7 +5,7 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
-use tinyhivemind::speech::{CallArguments, ToolCall, Utterance, interpret};
+use tinyhivemind_core::runtime::speech::{CallArguments, ToolCall, Utterance, interpret};
 
 use super::sandbox::{DockerSandbox, SandboxConfig};
 

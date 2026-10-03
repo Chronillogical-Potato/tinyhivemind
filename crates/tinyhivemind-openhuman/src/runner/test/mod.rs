@@ -10,9 +10,9 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use openhuman_core::agent::tinyagents::host::LastTurnUsage;
 use openhuman_embed::{Access, Provider, Runtime, ServiceSet, Workspace};
-use tinyhivemind::speech::{ToolCall, Utterance};
-use tinyhivemind::{SESSION_WINDOW, Sequence, SessionLog};
-use tinyhivemind_driver::standing_contract;
+use tinyhivemind_core::driver::standing_contract;
+use tinyhivemind_core::runtime::speech::{ToolCall, Utterance};
+use tinyhivemind_core::runtime::{SESSION_WINDOW, Sequence, SessionLog};
 use tinyhivemind_tools::{Dispatch, EpisodeTools, SeatEvent, served_specs};
 
 use super::{Lane, RunnerKind, SeatRunner};
@@ -22,7 +22,7 @@ use crate::{
     LibraryHost, Route, TurnResult, offline, register_seats,
 };
 use openhuman_embed::Agent;
-use tinyhivemind_driver::{Commit, Note};
+use tinyhivemind_core::driver::{Commit, Note};
 
 /// A host with no agents of its own: its seats are library sessions, its
 /// log is in memory, and its wrapper is the core context a library session
@@ -675,6 +675,16 @@ async fn native_runners() {
     let library = LibraryHost::boot(&config, &backend.uri(), &route, workspace.path())
         .await
         .expect("the library boots");
+    assert_eq!(library.model(), offline::MODEL);
+    let _session = library
+        .session(
+            "lead",
+            "You lead the desk.",
+            Vec::new(),
+            Arc::new(openhuman_core::agent::tool_policy::AllowAllToolPolicy),
+        )
+        .expect("a library host builds a native session");
+    assert_eq!(library.scope(async { 7usize }).await, 7);
     let (host, hosted) = hosted(library, &runtime, &contract(RunnerKind::Hosted));
 
     let (embed_reply, embed_events) = one_turn(&embed, None).await;

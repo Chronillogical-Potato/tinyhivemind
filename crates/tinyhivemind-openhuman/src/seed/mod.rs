@@ -6,8 +6,8 @@
 //! journal is the only history a seat has, and two runners reading the same
 //! log show the same seat the same thing.
 
-use tinyhivemind::aside::Viewer;
-use tinyhivemind::{
+use tinyhivemind_core::runtime::aside::Viewer;
+use tinyhivemind_core::runtime::{
     Conversation, Sequence, SessionAuthor, SessionLog, SessionMessage, SessionQuery,
     project_session,
 };
@@ -77,8 +77,11 @@ fn turn(
     let content = row.readable()?;
     // The seat's own rows are its turns, and a model needs no telling that
     // it spoke in confidence; only what reaches it from someone else does.
-    let confided =
-        mark_aside && matches!(row.audience, tinyhivemind::aside::Audience::Aside { .. });
+    let confided = mark_aside
+        && matches!(
+            row.audience,
+            tinyhivemind_core::runtime::aside::Audience::Aside { .. }
+        );
     let said = |author: &str| {
         if confided {
             format!("{author} (privately): {content}")

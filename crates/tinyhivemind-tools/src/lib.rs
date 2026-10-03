@@ -1,9 +1,9 @@
 //! The episode's tools, as a record a host drains.
 //!
-//! `tinyhivemind::speech` states what a seat may say -- once, as data -- and
+//! `tinyhivemind_core::runtime::speech` states what a seat may say -- once, as data -- and
 //! asks a host to render `tool_specs()` into its own tool language and map its
 //! own call arguments onto `CallArguments`. This crate provides the served
-//! specs as JSON tool definitions
+//! specs as native `tinytools::ToolSpec` values
 //! ([`tool_definitions`]), and [`EpisodeTools`], which holds per seat the turn
 //! the host opened, the rows it may `read`, and the calls it made -- and
 //! decides each call in [`EpisodeTools::call`]: check the turn, check the

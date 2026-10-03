@@ -11,7 +11,7 @@
 //! error the day one of them changes. Hand-written arms would silently drop a
 //! field instead.
 
-use tinyhivemind_typesafe::{
+use tinyhivemind_core::typesafe::{
     SystemOneRequest, SystemOneResponse, SystemOneTransport, SystemOneTransportFuture,
     TransportError,
 };

@@ -15,3 +15,10 @@ compiles them and `cargo clippy --all-targets` lints them.
   ```sh
   cargo run -p tinyhivemind-core --example basic
   ```
+
+- `hive.rs` — a small deliberation episode. Run with
+  `cargo run -p tinyhivemind-core --example hive`.
+- `bench/` — deterministic deliberation and routing benchmark harness. Run with
+  `cargo run -p tinyhivemind-core --example bench -- --episodes 25`.
+- `driver_bench/` — completion-driver policy benchmark. Run with
+  `cargo run -p tinyhivemind-core --example driver_bench -- --episodes 25`.

@@ -13,8 +13,10 @@
 
 use std::sync::{Mutex, PoisonError};
 
-use tinyhivemind::aside::Audience;
-use tinyhivemind::{LogMessage, Sequence, SessionAuthor, SessionFuture, SessionLog, SessionPage};
+use tinyhivemind_core::runtime::aside::Audience;
+use tinyhivemind_core::runtime::{
+    LogMessage, Sequence, SessionAuthor, SessionFuture, SessionLog, SessionPage,
+};
 
 /// One row of the journal.
 #[derive(Clone, Debug, Eq, PartialEq)]

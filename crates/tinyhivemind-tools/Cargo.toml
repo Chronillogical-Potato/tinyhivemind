@@ -17,7 +17,8 @@ description = "The episode's tools as a record a host drains: what a seat may ca
 # The tool vocabulary this crate renders and the fold that reads a call.
 # Nothing here invents a tool: `speech::tool_specs()` states them and
 # `interpret` reads them.
-tinyhivemind.workspace = true
+tinyhivemind-core.workspace = true
+tinytools.workspace = true
 # A tool definition is JSON Schema and a call's arguments arrive as JSON,
 # whichever native harness supplied them.
 serde_json.workspace = true

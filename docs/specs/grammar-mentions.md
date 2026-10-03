@@ -125,7 +125,7 @@ nothing; the scanner steps past it and continues.
 
 `code_ranges` and `fenced_ranges` both live in
 `tinyhivemind_core::masking`, the one scanner every authored grammar in this
-workspace shares — this grammar, the trace grammar of `tinyhivemind-hive`, and
+workspace shares — this grammar, the trace grammar of `tinyhivemind_core::hive`, and
 the pin directives of `tinyhivemind`. All three read `code_ranges`: a
 multi-line inline span quotes whole lines it did not open, so even a
 line-leading marker needs inline spans masked, not only a mention that can sit

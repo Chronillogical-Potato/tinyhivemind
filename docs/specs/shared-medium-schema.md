@@ -194,7 +194,7 @@ Per change, and each change is separately acceptable:
 1. **The `SharingState` migration.** Does a legacy single-conversation payload
    deserialize into a one-key map, or is it rejected? This blocks acceptance of
    the P12 half.
-2. Does the sidecar belong on `SessionMessage`, or on a wrapper the hive crate
+2. Does the sidecar belong on `SessionMessage`, or on a wrapper the `hive` module
    owns? Putting it on `SessionMessage` makes every host pay for a field only
    deliberation uses.
 3. Does a digest need an author? `SessionAuthor::System { kind, label }` can

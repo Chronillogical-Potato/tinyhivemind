@@ -25,7 +25,7 @@ loses *who spoke*; thread collapse loses *which conversation*.
 
 ## What this repository already has
 
-More than the phase list suggests. `crates/tinyhivemind/src/session/mod.rs`
+More than the phase list suggests. `crates/tinyhivemind-core/src/runtime/session/mod.rs`
 already carries #1890 A verbatim:
 
 ```rust
@@ -218,7 +218,7 @@ adapter landing first.
 2. **`read_before`'s cost, in the port's docs** — *done.* No code. It stops
    the next host from paying what `opencompany` paid.
 3. **A thread index over the projection** — *done.* E's fold, in
-   `crates/tinyhivemind/src/threads`, with the host-supplied landing an option
+   `crates/tinyhivemind-core/src/runtime/threads`, with the host-supplied landing an option
    on the row.
 4. **Host-supplied briefing context** — *done.* `SessionContext` on
    `SessionInitialization` carries the index and host `BriefingNote`s beside the
@@ -245,7 +245,7 @@ back.
 
 ## Resolved while implementing
 
-- **The index lives in the runtime crate, not `-core`.** The fold is pure, but
+- **The index lives in core's `runtime` module.** The fold is pure, but
   its input is `LogMessage` — the port's own row type, and the only shape that
   still carries `parent`. Moving it to core would move the port's row type with
   it. The charter's rule is applied *inside* the module instead:

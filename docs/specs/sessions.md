@@ -29,7 +29,7 @@ description of its teammates and the rules of the shared room.
 
 ## Proposed behavior
 
-The `tinyhivemind` runtime crate depends on and re-exports `tinyhivemind-core`.
+The `runtime` module lives in `tinyhivemind-core` alongside the pure algebra.
 `Sequence(u64)` identifies host log rows. `Conversation` names a desk by its
 canonical id and display name and optionally names a thread root. `LogMessage`
 contains its sequence, optional stored chat id, optional direct parent,

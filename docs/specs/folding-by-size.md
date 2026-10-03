@@ -140,7 +140,7 @@ whose first turn is on a room of hundreds of rows.
    **Met** — `a_token_budget_becomes_a_character_threshold_and_nothing_else`.
 4. A seat taking its first turn on a folded room is handed the account, proven
    by a host-level test rather than by inspection. **Met** —
-   `crates/tinyhivemind/tests/joining_a_folded_room.rs`.
+   `crates/tinyhivemind-core/tests/migrated_runtime/joining_a_folded_room.rs`.
 5. No account contains a non-desk row, at any size. Carried from
    [`thoughts-and-channels.md`](thoughts-and-channels.md) criterion 4. **Met**
    — `collect_digest_input` is unchanged, and the host's character count skips

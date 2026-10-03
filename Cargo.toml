@@ -4,10 +4,10 @@ resolver = "3"
 # package, each directory named for the package it holds. There is no root
 # package: the crate a host links is `crates/tinyhivemind-core`, the same as any
 # other member. Keeping the root virtual is what makes that uniform.
-members = ["crates/*"]
+members = ["crates/tinyhivemind-core", "crates/tinyhivemind-tools", "crates/tinyhivemind-openhuman"]
 # `worktrees/` holds `git worktree` checkouts of this same repository; each
-# contains a full copy of this manifest and every crate under it, so without
-# this entry cargo walks into them and reports duplicate packages.
+# contains a full copy of this manifest. Keep them excluded from Cargo
+# workspace discovery.
 exclude = ["vendor", "worktrees"]
 
 # Shared package metadata. A member inherits a field with `field.workspace =
@@ -22,34 +22,10 @@ license = "GPL-3.0-only"
 repository = "https://github.com/tinyhumansai/tinyhivemind"
 
 [workspace.dependencies]
-# The pure half: the desk/roster/mention/session algebra. `crates/tinyhivemind`
-# (the session runtime, added in P4) depends on it and re-exports it, so a host
-# that only needs the algebra takes this crate alone.
-# No `version` requirement on purpose: the workspace version can move on any
-# commit, and a pinned requirement here would stop resolving the moment it did.
-# Nothing in this workspace is published, so the path is the whole address.
+# Host-neutral grammar, session ports, routing, hive folds, and driver.
 tinyhivemind-core = { path = "crates/tinyhivemind-core" }
-# The session runtime: the host ports, attributed projection, and continuous
-# sharing. `crates/tinyhivemind-hive` folds over its session types and depends on
-# it directly; a host that wants group deliberation takes the hive crate and
-# gets both of the others transitively.
-tinyhivemind = { path = "crates/tinyhivemind" }
-# Bounded group deliberation over a shared desk: traces, salience, quorum with
-# cross-inhibition, and the attention market. Pure, and opt-in — a host that
-# only wants one-responder routing never links it.
-tinyhivemind-hive = { path = "crates/tinyhivemind-hive" }
-# Host-facing conversation surfaces and Jev-first routing composition. This
-# remains transport-neutral so OpenCompany can embed it without host types.
-tinyhivemind-embed = { path = "crates/tinyhivemind-embed" }
-# Exact System One wire types and Jev question construction behind one host
-# transport port; it deliberately contains no HTTP client or async runtime.
-tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
-# The episode's tools as a record a host drains, and their definitions. Opens
-# nothing; a host exposes the definitions through its own tool interface.
+# Native tool specifications and the episode call record.
 tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
-# The completion driver over a handle the host binds. Names no harness and
-# sits in the pure list; `tinyhivemind-openhuman` is its OpenHuman adapter.
-tinyhivemind-driver = { path = "crates/tinyhivemind-driver" }
 # The harness, for `tinyhivemind-openhuman` and nothing else under `crates/*`.
 # `openhuman-embed` is the `AgentSpec` seat; `openhuman` (the core) is the raw
 # session one level down; `tinytools` and `tinytools-agent` are the `Tool` a

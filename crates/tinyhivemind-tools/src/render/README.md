@@ -1,6 +1,6 @@
 # `render`
 
-`tool_specs()` as JSON tool definitions, and call arguments onto `CallArguments`.
+`tool_specs()` as native `tinytools::ToolSpec` definitions, and call arguments onto `CallArguments`.
 
 | file | holds |
 | --- | --- |

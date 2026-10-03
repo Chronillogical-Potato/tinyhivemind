@@ -11,17 +11,17 @@ use openhuman_embed::{
     ServiceSet, ToolScopeSpec, Workspace,
 };
 use serde_json::json;
-use tinyhivemind::desk::{Desk, ResponderMode};
-use tinyhivemind_driver::{
+use tinyhivemind_core::runtime::desk::{Desk, ResponderMode};
+use tinyhivemind_core::driver::{
     AgentBinding, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph,
     HostAction,
 };
-use tinyhivemind_hive::{
+use tinyhivemind_core::hive::{
     CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
     completion_status,
 };
 use tinyhivemind_openhuman::EmbedSeat;
-use tinyhivemind_typesafe::JevRouter;
+use tinyhivemind_core::typesafe::JevRouter;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -246,7 +246,7 @@ async fn run() -> anyhow::Result<()> {
     let initial_request = hive.desk_request(
         task,
         thread_context.clone(),
-        Some(tinyhivemind::Sequence(1)),
+        Some(tinyhivemind_core::runtime::Sequence(1)),
         roster_version,
         routing_policy.clone(),
     );
@@ -276,19 +276,19 @@ async fn run() -> anyhow::Result<()> {
     let mut visibility = Visibility::default();
     let mut snapshots = TurnSnapshots::new(&run_dir)?;
     let mut episode = CompletionEpisodeState {
-        conversation: tinyhivemind::Conversation {
+        conversation: tinyhivemind_core::runtime::Conversation {
             desk_id: format!("pe{problem}"),
             desk_name: format!("PE{problem}"),
             thread_root: None,
         },
-        watermark: tinyhivemind::Sequence(0),
+        watermark: tinyhivemind_core::runtime::Sequence(0),
         participants: team
             .iter()
             .map(|id| ParticipantCompletion {
                 agent_id: (*id).into(),
-                assignments: vec![tinyhivemind_hive::AssignmentRecord {
-                    assigned_at: tinyhivemind::Sequence(0),
-                    completed_at: Some(tinyhivemind::Sequence(0)),
+                assignments: vec![tinyhivemind_core::hive::AssignmentRecord {
+                    assigned_at: tinyhivemind_core::runtime::Sequence(0),
+                    completed_at: Some(tinyhivemind_core::runtime::Sequence(0)),
                 }],
             })
             .collect(),
@@ -297,7 +297,7 @@ async fn run() -> anyhow::Result<()> {
     episode = apply_assignment(
         &episode,
         selected.iter().map(String::as_str),
-        tinyhivemind::Sequence(sequence),
+        tinyhivemind_core::runtime::Sequence(sequence),
     )?;
     let driver = CompletionDriver::new(&hive, routing_policy.round_width)?;
     let mut driver_state = driver.start(episode)?;
@@ -396,12 +396,12 @@ async fn run() -> anyhow::Result<()> {
             sequence = sequence.saturating_add(1);
             if matches!(
                 &utterance,
-                tinyhivemind::speech::Utterance::Broadcast { .. }
+                tinyhivemind_core::runtime::speech::Utterance::Broadcast { .. }
             ) {
                 roster_version = roster_version.saturating_add(1);
             }
             match &utterance {
-                tinyhivemind::speech::Utterance::Broadcast { message } => {
+                tinyhivemind_core::runtime::speech::Utterance::Broadcast { message } => {
                     let index = transcript.len();
                     transcript.push(DeskMessage {
                         author: id.clone(),
@@ -409,7 +409,7 @@ async fn run() -> anyhow::Result<()> {
                     });
                     visibility.mark_own(id, index);
                 }
-                tinyhivemind::speech::Utterance::CompleteEpisode { message } => {
+                tinyhivemind_core::runtime::speech::Utterance::CompleteEpisode { message } => {
                     let index = transcript.len();
                     transcript.push(DeskMessage {
                         author: id.clone(),
@@ -417,28 +417,28 @@ async fn run() -> anyhow::Result<()> {
                     });
                     visibility.mark_own(id, index);
                 }
-                tinyhivemind::speech::Utterance::Post { .. }
-                | tinyhivemind::speech::Utterance::Dm { .. }
-                | tinyhivemind::speech::Utterance::Ask { .. } => {
+                tinyhivemind_core::runtime::speech::Utterance::Post { .. }
+                | tinyhivemind_core::runtime::speech::Utterance::Dm { .. }
+                | tinyhivemind_core::runtime::speech::Utterance::Ask { .. } => {
                     anyhow::bail!("MCP completion surface emitted an unsupported utterance")
                 }
             }
             if !matches!(
                 &utterance,
-                tinyhivemind::speech::Utterance::Broadcast { .. }
+                tinyhivemind_core::runtime::speech::Utterance::Broadcast { .. }
             ) {
                 println!("[complete_episode] @{id}");
             }
             committed.push(CommittedUtterance {
                 author_id: id.clone(),
-                sequence: tinyhivemind::Sequence(sequence),
+                sequence: tinyhivemind_core::runtime::Sequence(sequence),
                 utterance,
             });
         }
         let routing = committed.iter().any(|event| {
             matches!(
                 &event.utterance,
-                tinyhivemind::speech::Utterance::Broadcast { .. }
+                tinyhivemind_core::runtime::speech::Utterance::Broadcast { .. }
             )
         });
         let transition = driver

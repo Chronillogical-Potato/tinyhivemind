@@ -3,8 +3,10 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use serde_json::json;
-use tinyhivemind::{Sequence, SessionLog};
-use tinyhivemind_driver::{BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Door, Note};
+use tinyhivemind_core::driver::{
+    BroadcastRouting, Commit, CompletionDriver, ConductPolicy, Door, Note,
+};
+use tinyhivemind_core::runtime::{Sequence, SessionLog};
 
 use super::super::{Journal, run_episode};
 use super::support::{BareJournal, ScriptRunner, complete, hive, policy, run};

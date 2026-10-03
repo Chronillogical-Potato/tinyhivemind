@@ -351,7 +351,7 @@ pub trait ApprovalGate: Send + Sync {
 }
 ```
 
-It goes in the runtime crate rather than being left to each host because the
+It goes in the `runtime` module rather than being left to each host because the
 contract it needs is the one two existing ports already state and hosts already
 implement: atomically re-read the committed request and current policy,
 authorize, and durably record at most once under a key. The key is

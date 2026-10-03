@@ -2,7 +2,7 @@
 
 This example builds one real OpenHuman `Runtime`, instantiates two independent
 OpenHuman `Agent`s on it, and hands those existing handles to the first-class
-`tinyhivemind-driver` binding. The same `BoundHive` binding now
+`tinyhivemind_core::driver` binding. The same `BoundHive` binding now
 backs the routing proof, the PE1006/PE1008 completion experiment, and the
 DeepSWE binary; none of them maintains a second session registry.
 
@@ -14,7 +14,7 @@ It is deterministic and offline:
   OpenAI-compatible model call;
 - one ephemeral, read-only OpenHuman runtime owns the `engineering` and `legal`
   agents, their transcripts, session continuation, and compaction;
-- `tinyhivemind-driver` validates one `HiveGraph`, binds canonical ids to
+- `tinyhivemind_core::driver` validates one `HiveGraph`, binds canonical ids to
   those instances, and resolves accepted routes without constructing agents or
   storing session state;
 - the engineering agent handles a routed desk turn and a deterministic DM turn
@@ -108,8 +108,8 @@ than answer quality. Each arm has one warm-up episode that is not counted.
 CONDUCTED_BENCH=5 cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin conducted
 ```
 
-The driver's own benchmark, `cargo run --release -p tinyhivemind-driver
---example bench`, measures policy decisions without an agent runtime.
+The driver's own benchmark, `cargo run --release -p tinyhivemind-core
+--example driver_bench`, measures policy decisions without an agent runtime.
 
 ## Hermetic DeepSWE adapter
 

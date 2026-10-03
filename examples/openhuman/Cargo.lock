@@ -3378,51 +3378,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyhivemind"
-version = "0.2.1"
-dependencies = [
- "serde",
- "thiserror",
- "tinyhivemind-core",
-]
-
-[[package]]
 name = "tinyhivemind-core"
 version = "0.2.1"
 dependencies = [
  "serde",
+ "serde_json",
  "thiserror",
-]
-
-[[package]]
-name = "tinyhivemind-driver"
-version = "0.2.1"
-dependencies = [
- "serde",
- "thiserror",
- "tinyhivemind",
- "tinyhivemind-core",
- "tinyhivemind-embed",
- "tinyhivemind-hive",
-]
-
-[[package]]
-name = "tinyhivemind-embed"
-version = "0.2.1"
-dependencies = [
- "serde",
- "thiserror",
- "tinyhivemind",
-]
-
-[[package]]
-name = "tinyhivemind-hive"
-version = "0.2.1"
-dependencies = [
- "serde",
- "thiserror",
- "tinyhivemind",
- "tinyhivemind-core",
 ]
 
 [[package]]
@@ -3435,8 +3396,7 @@ dependencies = [
  "openhuman-embed",
  "serde_json",
  "thiserror",
- "tinyhivemind",
- "tinyhivemind-driver",
+ "tinyhivemind-core",
  "tinyhivemind-tools",
  "tinytools",
  "tinytools-agent",
@@ -3457,13 +3417,9 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "tinyhivemind",
- "tinyhivemind-driver",
- "tinyhivemind-embed",
- "tinyhivemind-hive",
+ "tinyhivemind-core",
  "tinyhivemind-openhuman",
  "tinyhivemind-tools",
- "tinyhivemind-typesafe",
  "tinyjevclient",
  "tokio",
  "wait-timeout",
@@ -3475,18 +3431,8 @@ name = "tinyhivemind-tools"
 version = "0.2.1"
 dependencies = [
  "serde_json",
- "tinyhivemind",
-]
-
-[[package]]
-name = "tinyhivemind-typesafe"
-version = "0.2.1"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "tinyhivemind",
- "tinyhivemind-embed",
+ "tinyhivemind-core",
+ "tinytools",
 ]
 
 [[package]]

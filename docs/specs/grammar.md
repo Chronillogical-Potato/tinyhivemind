@@ -12,7 +12,7 @@ past the 500-line limit this repository keeps on a Markdown file.
   addressing, code masking, normalization, and which mention wins for each
   consumer.
 - [`grammar-traces.md`](grammar-traces.md) — the `!marker` grammar of
-  `tinyhivemind-hive`: the eight kinds, the `#topic`, `>target` and `^cite`
+  `tinyhivemind_core::hive`: the eight kinds, the `#topic`, `>target` and `^cite`
   qualifiers, fence masking, and the two markers that fail closed.
 
 The third is the `!pin` / `!unpin` directive grammar of `tinyhivemind::pins`,
@@ -108,7 +108,7 @@ Each was resolved in favour of the parser.
    `mention/mod.rs` implementing CommonMark's indent limit, info-string rule
    and closing-run rules while `trace/mod.rs` toggled on any line beginning
    ` ``` ` or `~~~`, so one body could mask differently in the two crates. It
-   also missed a third copy, in `crates/tinyhivemind/src/pins/mod.rs`. There is
+   also missed a third copy, in `crates/tinyhivemind-core/src/runtime/pins/mod.rs`. There is
    now one scanner — `tinyhivemind_core::masking` — and all three grammars call
    `code_ranges`, on CommonMark's rules throughout. An earlier draft had the
    trace and pin grammars take `fenced_ranges` instead, on the reasoning that a

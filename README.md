@@ -109,7 +109,7 @@ to exactly the same standing as one that watched live. This is how
 [honeybee swarms](https://en.wikipedia.org/wiki/Swarming_%28honey_bee%29)
 settle a nest site.
 
-With a typed model, `standings_with_evaluations` uses fixed-point Choice × Score after a Noul gate; see the [quorum module](crates/tinyhivemind-hive/src/quorum/README.md).
+With a typed model, `standings_with_evaluations` uses fixed-point Choice × Score after a Noul gate; see the [quorum module](crates/tinyhivemind-core/src/hive/quorum/README.md).
 
 ```text
 1 planner  !propose #stage Stage the rollout.
@@ -352,9 +352,9 @@ explains the decision protocol.
 ## Boundaries
 
 The host owns the journal, agent sessions, authorization, and scheduling.
-`tinyhivemind-core` and `tinyhivemind-hive` are pure folds over supplied
-data. `tinyhivemind` adds host ports for reading the journal and folding a
-digest, plus attributed projection and the utterance surface.
+`tinyhivemind-core` holds the grammar, pure folds, host-supplied session ports,
+semantic routing, TypeSafe System One adapter, and completion driver in focused
+modules. It opens no storage or transport.
 
 A normal message selects one responder. A mention or referral can authorize at
 most one child turn from a committed reply. A hive episode may authorize a
@@ -362,10 +362,8 @@ bounded round of concurrent turns: `round_width` limits blind rounds and
 `revealed_width` limits rounds that can read previous peer work. The host
 commits the round's state after all authorized turns are appended.
 
-The optional `tinyhivemind-embed` and `tinyhivemind-typesafe` crates handle
-semantic routing. `tinyhivemind-driver` conducts completion episodes, and
-`tinyhivemind-openhuman` binds canonical hive identities to existing OpenHuman
-agents. `tinyhivemind-tools` defines episode tool events for a host to expose. The
+`tinyhivemind-tools` renders native `tinytools::ToolSpec` definitions and
+records episode calls. `tinyhivemind-openhuman` runs seats on OpenHuman. The
 [architecture guide](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture)
 and [crate dependency map](docs/crate-dependencies.md) show their boundaries.
 
@@ -374,7 +372,7 @@ and [crate dependency map](docs/crate-dependencies.md) show their boundaries.
 ### Does tinyhivemind create a new language or literally share agents' minds?
 
 No. It is a Rust library, not a programming language or a model. Agents still
-write normal natural language. The optional hive crate recognizes a small,
+write normal natural language. The `hive` module recognizes a small,
 line-leading marker grammar inside those messages — for example `!propose`,
 `!support`, `!object`, and `!commit` — so it can audit a decision from the
 transcript. The agents do not share hidden thoughts, memory, or a model
@@ -425,7 +423,7 @@ the library asks the host to reinitialize instead of silently skipping history.
 No. The host owns the agent lifecycle, model calls, queueing, storage, and
 authorization. The core mention fold resolves a direct addressee; the host can
 use that decision to schedule one turn. The optional embedding layer can
-recommend a primary and bounded specialist set; the optional hive crate can
+recommend a primary and bounded specialist set; the `hive` module can
 select a round inside a
 bounded deliberation. The host decides whether to run those turns, what models
 to use, what long-term memory or search to provide, and how to persist the
@@ -444,7 +442,7 @@ tinyhivemind = { path = "vendor/tinyhivemind/crates/tinyhivemind" }
 ```
 
 ```sh
-cargo run --release -p tinyhivemind-hive --example bench -- --trace
+cargo run --release -p tinyhivemind-core --example bench -- --trace
 ```
 
 That prints one deliberation episode turn by turn—the fastest way to see the mechanics.

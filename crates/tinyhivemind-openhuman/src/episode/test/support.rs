@@ -8,14 +8,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::{Value, json};
-use tinyhivemind::desk::{Desk, ResponderMode};
-use tinyhivemind::responder::Probability;
-use tinyhivemind::{Conversation, Sequence, SessionFuture, SessionLog};
-use tinyhivemind_driver::ConductorState;
-use tinyhivemind_driver::{
+use tinyhivemind_core::driver::ConductorState;
+use tinyhivemind_core::driver::{
     AgentBinding, BoundAgent, BoundHive, Commit, Door, EpisodeBrief, Event, HiveGraph, Note,
 };
-use tinyhivemind_embed::{RouteCandidate, RoutingPolicy};
+use tinyhivemind_core::embed::{RouteCandidate, RoutingPolicy};
+use tinyhivemind_core::runtime::desk::{Desk, ResponderMode};
+use tinyhivemind_core::runtime::responder::Probability;
+use tinyhivemind_core::runtime::{Conversation, Sequence, SessionFuture, SessionLog};
 use tinyhivemind_tools::{EpisodeTools, Refusal};
 
 use super::super::{Journal, Released};

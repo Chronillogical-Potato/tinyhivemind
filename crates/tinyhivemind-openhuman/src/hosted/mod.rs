@@ -6,7 +6,7 @@
 //! re-expressed as configuration here. This runner asks the host for exactly
 //! three things, through [`EpisodeHost`]:
 //!
-//! - **Its log**, a [`SessionLog`](tinyhivemind::SessionLog) over the host's own journal, which is the
+//! - **Its log**, a [`SessionLog`](tinyhivemind_core::runtime::SessionLog) over the host's own journal, which is the
 //!   only history there is. Each turn is seeded from it as the seat.
 //! - **A seat**, built by the host with the episode's tools on its belt.
 //!   `OpenHuman` fixes a session's belt when it is built, so the host builds
@@ -39,8 +39,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use openhuman_core::agent::tinyagents::host::LastTurnUsage;
 use openhuman_core::agent::tool_policy::ToolPolicy;
 use openhuman_embed::Agent;
-use tinyhivemind::{Conversation, Sequence};
-use tinyhivemind_driver::{AgentBinding, BoundAgent};
+use tinyhivemind_core::driver::{AgentBinding, BoundAgent};
+use tinyhivemind_core::runtime::{Conversation, Sequence};
 use tinyhivemind_tools::EpisodeTools;
 use tinytools::Tool;
 
@@ -382,7 +382,7 @@ impl<H: EpisodeHost> HostedRunner<H> {
     ///
     /// `desk` names the desk every turn runs on or in a thread of, as the
     /// host's log knows it. `window` bounds how many rows a turn is seeded
-    /// with; `tinyhivemind::SESSION_WINDOW` is the default the rest of the
+    /// with; `tinyhivemind_core::runtime::SESSION_WINDOW` is the default the rest of the
     /// crate reads with.
     ///
     /// # Errors

@@ -1,7 +1,7 @@
 //! Routing candidates and confidence thresholds for the example desks.
 
-use tinyhivemind::responder::Probability;
-use tinyhivemind_embed::{RouteCandidate, RoutingPolicy};
+use tinyhivemind_core::runtime::responder::Probability;
+use tinyhivemind_core::embed::{RouteCandidate, RoutingPolicy};
 
 pub(crate) fn candidate(id: &str, role: &str) -> RouteCandidate {
     RouteCandidate {
