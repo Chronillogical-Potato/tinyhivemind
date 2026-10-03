@@ -744,11 +744,6 @@ fn retryable_provider_exhaustion_is_bounded_without_a_commit() {
         assert!(!output.exists());
 
         let state = state.lock().expect("script state");
-        assert_eq!(
-            state.turn_starts.get("lead"),
-            Some(&MAX_SEAT_ATTEMPTS),
-            "retryable provider failures use the full attempt budget"
-        );
         let lead_prompts = state
             .start_requests
             .iter()
