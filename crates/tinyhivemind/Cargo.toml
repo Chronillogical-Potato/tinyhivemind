@@ -9,44 +9,16 @@ publish = false
 description = "Runtime-neutral session coordination ports for tinyhivemind"
 
 [dependencies]
-# Optional: compiles `SearchPattern::Regex`, so a transcript search can be
-# spelled as an expression. Off by default; a search that carries one without
-# it fails with a typed error rather than quietly matching something else.
-regex = { workspace = true, optional = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tinyhivemind-core = { workspace = true }
 
 [features]
 default = []
-# Regular-expression search, here and in the core selection ranking.
-regex = ["dep:regex", "tinyhivemind-core/regex"]
 
 [dev-dependencies]
 serde_json = { workspace = true }
 tokio = { workspace = true }
-# The `desk` example only. Neither may become a dependency above: `tinytools`
-# pulls `anyhow` and `tinyinference` pulls `reqwest`, both forbidden here, and
-# `.github/scripts/assert-pure.sh` reads `cargo tree -e normal,build` so this
-# section is outside the boundary it guards. See
-# ../../docs/adr/0013-a-vendored-crate-is-an-example-dependency.md.
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-tinyinference-llm = { workspace = true }
-tinytools = { workspace = true }
-
-# `cargo test` does not test an example unless the example says so, and the
-# desk example carries unit tests over its event parsing, its tool surface, and
-# what it asks the folder. Declaring the target is what puts them in the
-# contract command rather than behind `--example desk`.
-[[example]]
-name = "desk"
-path = "examples/desk/main.rs"
-test = true
-
-[[example]]
-name = "crosstalk"
-path = "examples/crosstalk/main.rs"
 
 [lints]
 workspace = true

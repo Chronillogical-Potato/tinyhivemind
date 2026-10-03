@@ -16,14 +16,6 @@ pub(super) struct Totals {
     pub(super) hive_default: Aggregate,
     /// The same at the tuned policy the sweep picked.
     pub(super) hive_tuned: Aggregate,
-    /// The tuned policy with `refutation_cap` on.
-    pub(super) hive_refuting: Aggregate,
-    /// The same, plus `require_evidential`.
-    pub(super) hive_evidential: Aggregate,
-    /// The tuned policy with the folded directory on.
-    pub(super) hive_knowing: Aggregate,
-    /// The tuned policy with `!defer` bounded, and no directory.
-    pub(super) hive_deferring: Aggregate,
     /// The tuned policy, with a member that cannot separate its two best
     /// options spending a turn asking one peer — privately.
     pub(super) hive_aside: Aggregate,
@@ -77,8 +69,6 @@ pub(super) struct Totals {
     /// or not it runs concurrently, so this should score what `hive+` scores
     /// and wait fewer times.
     pub(super) hive_blind_wide: Aggregate,
-    /// Both delegation mechanisms at once.
-    pub(super) hive_both: Aggregate,
     /// The tuned policy in a room that puts every seat on the expensive
     /// tier. Only filled under `--cost-tiers`.
     pub(super) all_reasoning: Aggregate,
@@ -86,8 +76,6 @@ pub(super) struct Totals {
     pub(super) vote: Aggregate,
     /// One responder off the real ladder, chosen without information.
     pub(super) ladder: Aggregate,
-    /// The same ladder, given a directory the room earned.
-    pub(super) ladder_directed: Aggregate,
 }
 
 impl Totals {
@@ -101,27 +89,15 @@ impl Totals {
         for arm in totals.arms_mut() {
             arm.model = model;
         }
-        // `ladder_directed` sits outside `arms_mut`'s array for the same
-        // reason `merge` handles it explicitly (see below), but it is priced
-        // like every other row: left out here, it would keep
-        // `Aggregate::default()`'s model -- `CostModel::DEFAULT` -- instead
-        // of the model a `--tokens-per-*`, `--ttft` or `--decode-rate` flag
-        // asked for, and its row would silently report tokens computed at
-        // the wrong point while the header above it claimed the flag's.
-        totals.ladder_directed.model = model;
         totals
     }
 
     /// Every arm's totals, in one array, so a fold over all of them does not
     /// have to name each one twice.
-    fn arms_mut(&mut self) -> [&mut Aggregate; 24] {
+    fn arms_mut(&mut self) -> [&mut Aggregate; 19] {
         [
             &mut self.hive_default,
             &mut self.hive_tuned,
-            &mut self.hive_refuting,
-            &mut self.hive_evidential,
-            &mut self.hive_knowing,
-            &mut self.hive_deferring,
             &mut self.hive_aside,
             &mut self.hive_ask,
             &mut self.hive_aside_informed,
@@ -136,7 +112,6 @@ impl Totals {
             &mut self.hive_pooled,
             &mut self.hive_wide,
             &mut self.hive_blind_wide,
-            &mut self.hive_both,
             &mut self.all_reasoning,
             &mut self.vote,
             &mut self.ladder,
@@ -144,14 +119,10 @@ impl Totals {
     }
 
     /// The same array, borrowed.
-    fn arms(&self) -> [&Aggregate; 24] {
+    fn arms(&self) -> [&Aggregate; 19] {
         [
             &self.hive_default,
             &self.hive_tuned,
-            &self.hive_refuting,
-            &self.hive_evidential,
-            &self.hive_knowing,
-            &self.hive_deferring,
             &self.hive_aside,
             &self.hive_ask,
             &self.hive_aside_informed,
@@ -166,7 +137,6 @@ impl Totals {
             &self.hive_pooled,
             &self.hive_wide,
             &self.hive_blind_wide,
-            &self.hive_both,
             &self.all_reasoning,
             &self.vote,
             &self.ladder,
@@ -179,15 +149,10 @@ impl Totals {
     /// [`Aggregate::merge`] for why folding out of order would leave every
     /// paired interval in the second table quietly wrong.
     ///
-    /// `ladder_directed` sits outside the arrays above because it is the one
-    /// arm whose per-room work depends on a directory earned over `--history`
-    /// prior episodes of the *same* room, so it is merged explicitly here
-    /// rather than being reachable through an index.
     pub(super) fn merge(&mut self, other: &Self) {
         for (mine, theirs) in self.arms_mut().into_iter().zip(other.arms()) {
             mine.merge(theirs);
         }
-        self.ladder_directed.merge(&other.ladder_directed);
     }
 }
 

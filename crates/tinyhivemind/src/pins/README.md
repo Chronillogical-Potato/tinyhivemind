@@ -4,7 +4,7 @@ The small set of messages every turn sees, whatever else it misses.
 
 ## Why it exists
 
-[`../search`](../search) makes an old message *reachable*. A pin makes it
+The host log keeps an old message reachable. A pin makes it
 *unavoidable*: the constraint the room agreed two hundred messages ago arrives
 in the turn's context without anybody thinking to look for it. Together they
 are why the window can stay small — what matters is either pinned or findable,

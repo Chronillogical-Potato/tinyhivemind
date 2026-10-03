@@ -1,5 +1,9 @@
 # Delegation, measured
 
+> Historical results from benchmark arms retired in October 2026. The current
+> benchmark no longer runs these arms. The `ladder+dir` arm received the true
+> topic from `room.truth`, so its routing scores include an oracle leak.
+
 The delegation half of [the deliberation benchmark](README.md): what
 `--specialists`, `--hidden-profile`, `--defer-cap`, `--history`,
 `--cost-tiers` and `--blind-evidence` are for, and what they scored.

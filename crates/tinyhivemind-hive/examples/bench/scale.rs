@@ -235,7 +235,6 @@ fn one_room(options: &Options, room: &Room, tuned: &EpisodePolicy) -> Result<Roo
             tuned,
             TASK,
             false,
-            0,
             AsideMode::Private,
             options.aside_cap,
             CheckStyle::FACT,

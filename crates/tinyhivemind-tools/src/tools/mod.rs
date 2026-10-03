@@ -149,7 +149,7 @@ impl EpisodeTools {
         served_specs().filter(|spec| !self.withheld.contains(spec.name))
     }
 
-    /// The served tools as MCP tool definitions, with the asking tools'
+    /// The served tools as JSON tool definitions, with the asking tools'
     /// recipients described by name beside the ids a call must carry.
     #[must_use]
     pub fn tool_definitions(&self) -> Vec<Value> {
@@ -320,10 +320,8 @@ impl EpisodeTools {
     /// One call from `seat`, however it arrived: check the caller, check the
     /// turn, read the call, record it.
     ///
-    /// This is the whole of what `tools/call` does; the server is HTTP and
-    /// JSON-RPC framing around it. A host whose harness takes native tools
-    /// calls this directly, so an in-process seat and an MCP seat are refused
-    /// and acknowledged in the same words.
+    /// A host's native tool calls this directly, so every seat receives the
+    /// same acknowledgements and refusals.
     ///
     /// `arguments` is the call's argument object, carrying `chat` and
     /// `parent` beside the tool's own parameters. `Ok` is the text the seat

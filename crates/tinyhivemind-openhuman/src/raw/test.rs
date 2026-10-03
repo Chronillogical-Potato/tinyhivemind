@@ -1,17 +1,14 @@
-//! The raw runner's pure pieces: the belt and the gate.
+//! Native episode tools, inert memory, and library-host setup.
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::sync::Arc;
 
-use openhuman_core::agent::tool_policy::{
-    ToolCallContext, ToolPolicy, ToolPolicyDecision, ToolPolicyRequest,
-};
 use serde_json::json;
 use tinyhivemind_tools::{Dispatch, EpisodeTools};
 use tinytools::PermissionLevel;
 
-use super::policy::{EpisodeGate, NoMemory};
+use super::policy::NoMemory;
 use super::tools;
 
 #[test]
@@ -78,29 +75,6 @@ async fn a_native_call_is_recorded_through_the_shared_record() {
     );
 }
 
-fn request(tool: &str) -> ToolPolicyRequest {
-    ToolPolicyRequest::new(
-        tool,
-        json!({}),
-        ToolCallContext::session("session", "internal", "lead", "call-1", 1),
-    )
-}
-
-#[tokio::test]
-async fn the_gate_admits_the_belt_and_denies_the_rest() {
-    let gate = EpisodeGate::new(vec!["complete_episode".into(), "read".into()]);
-    assert_eq!(gate.name(), "episode_gate");
-    assert!(format!("{gate:?}").contains("complete_episode"));
-    assert!(matches!(
-        gate.check(&request("complete_episode")).await,
-        ToolPolicyDecision::Allow
-    ));
-    assert!(matches!(
-        gate.check(&request("shell")).await,
-        ToolPolicyDecision::Deny { .. }
-    ));
-}
-
 #[tokio::test]
 async fn the_memory_keeps_nothing_and_never_errors() {
     use openhuman_core::memory::{Memory, MemoryCategory, RecallOpts};
@@ -131,10 +105,7 @@ async fn the_memory_keeps_nothing_and_never_errors() {
 
 #[tokio::test]
 async fn a_route_without_a_key_is_refused_before_the_core_is_asked() {
-    let refused = super::RawRunner::seat(
-        Arc::new(EpisodeTools::new(["lead"])),
-        &std::collections::BTreeMap::new(),
-        "",
+    let refused = super::LibraryHost::boot(
         &crate::offline::config(),
         "http://127.0.0.1:1",
         &super::Route {

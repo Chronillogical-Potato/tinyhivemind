@@ -8,10 +8,9 @@
 //! itself when it boots. Nothing else is asked of the core: no domain, no
 //! service, no store.
 //!
-//! [`RawRunner`](super::RawRunner) seats on one of these, and so can any host
-//! that has no core of its own to build sessions on: [`LibraryHost::session`]
-//! builds one from the objects a spec cannot carry, and
-//! [`LibraryHost::scope`] runs a turn under the context.
+//! A host with no core of its own can use [`LibraryHost::session`] to build
+//! sessions from a belt, a policy, and a prompt. [`LibraryHost::scope`] runs
+//! a turn under the library context.
 
 use std::future::Future;
 use std::path::{Path, PathBuf};

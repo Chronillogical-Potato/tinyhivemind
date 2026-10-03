@@ -1,15 +1,15 @@
-//! Desks, rosters, mentions and shared session transcripts — the pure algebra
-//! behind the room a hive of agents shares.
+//! Desks, rosters, mentions, approval, and routing decisions for a shared room.
 //!
-//! This crate answers four questions, and holds no state while doing it:
+//! This crate answers decisions from data the caller supplies and holds no
+//! state while doing it:
 //!
 //! - **Who is here?** A roster of teammates and the people signed in with them.
 //! - **What is a desk, and who is on it?** A blueprint-declared room merged
 //!   with the operator's runtime additions, retirements and ordering.
 //! - **Who does a name address?** The mention grammar, and the resolution of a
 //!   name against the roster and the desks.
-//! - **What does one participant see of the shared transcript?** The projection
-//!   of a multi-speaker session into one viewer's turn history.
+//! - **Who may act next?** The bounded responder, mention, and referral folds.
+//! - **Is an action allowed?** A total approval decision over supplied policy.
 //!
 //! # No IO, and why it matters
 //!
@@ -19,24 +19,22 @@
 //! transcript read and hands the results in.
 //!
 //! That is not an aesthetic preference. This crate sits on the hot path of
-//! every agent turn — addressing a message, resolving a mention, projecting a
-//! transcript — so it has to be cheap, and it has to compile in a host's
+//! every agent turn: addressing a message and resolving a mention. It has to
+//! be cheap, and it has to compile in a host's
 //! default build with no feature flags behind it. It is also what keeps the
 //! dependency arrow pointing one way: a crate that cannot call out cannot grow
 //! a path back into its host. `.github/scripts/assert-pure.sh` asserts it.
 //!
-//! The waiting half — the paging walk over a session log, the optional model
-//! selector call, and the mention-dispatch edge — lives in the sibling
-//! `tinyhivemind` crate, which owns the ports a host implements. The responder
-//! ladder's decisions remain pure here.
+//! The session paging and projection work lives in the sibling `tinyhivemind`
+//! crate behind a log port. Hosts bind the pure routing decisions here to
+//! their own queues and model clients.
 //!
 //! # Layout
 //!
 //! Each feature area lives in its own module directory with a `mod.rs` module
 //! root, an optional `types.rs`, and a `test.rs` holding its unit tests. The
 //! public surface is namespaced by module rather than flattened here: this
-//! crate grows to hold desks, rosters, mentions and session projection, and a
-//! flat root would stop reading as four separable concerns.
+//! crate holds distinct desk, roster, mention, and policy concerns.
 //!
 //! # Modules
 //!
@@ -46,7 +44,6 @@
 //! - [`desk`] — host-compatible desk records and the borrowed overlay fold.
 //! - [`dispatch`] — bounded selection of at most one mentioned child turn.
 //! - [`error`] — typed failures from malformed records or unresolved desks.
-//! - [`find`] — name searches over a roster snapshot and a desk snapshot.
 //! - [`masking`] — the one code scanner every authored grammar shares: which
 //!   spans of a body are fenced or inline code, and so carry no grammar.
 //! - [`mention`] — authored mention parsing and pure routing choices.
@@ -55,7 +52,6 @@
 //! - [`roster`] — borrowed agent and person identity snapshots, and the
 //!   three states an agent can be in: active, retired, or tombstoned.
 //! - [`responder`] — deterministic selection of one agent for one message.
-//! - [`select`] — the one ranking used by every picker in this workspace.
 //!
 //! # Example
 //!
@@ -108,10 +104,8 @@ pub mod chat;
 pub mod desk;
 pub mod dispatch;
 pub mod error;
-pub mod find;
 pub mod masking;
 pub mod mention;
 pub mod referral;
 pub mod responder;
 pub mod roster;
-pub mod select;

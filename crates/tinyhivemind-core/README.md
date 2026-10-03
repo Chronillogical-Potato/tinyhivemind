@@ -3,7 +3,7 @@
 The pure decisions behind a shared agent room live here. Given borrowed desk
 and roster snapshots, the crate resolves mentions, plans a responder, decides
 whether a reply may trigger a child turn or referral, and evaluates approval
-rules. It also handles asides, conversation identity, and bounded selection.
+rules. It also handles asides and conversation identity.
 
 All of those operations use data the caller already holds. There is no log
 reader, executor, transport, or callback into a host. The sibling

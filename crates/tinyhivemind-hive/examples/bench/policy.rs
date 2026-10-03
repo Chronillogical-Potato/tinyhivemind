@@ -1,13 +1,13 @@
 //! Episode policy construction for the bench binary.
 //!
 //! Each arm the comparison runs is a small variation on one tuned policy —
-//! refutation on, the directory folded, `!defer` bounded, both at once — and
+//! wider rounds and the other retained controls — and
 //! keeping the variations together here makes the relationship between arms
 //! visible in one place rather than scattered through `compare.rs`'s totals.
 //! [`turn_budget`] and [`quorum_threshold`] are the two knobs every policy
 //! here scales with the size of the desk.
 
-use tinyhivemind_hive::{DirectoryPolicy, EpisodePolicy, QuorumPolicy};
+use tinyhivemind_hive::{EpisodePolicy, QuorumPolicy};
 
 /// The crate's own conservative default, with the window widened to cover a
 /// whole episode so the two hive arms differ only in the knobs the sweep moved.
@@ -70,60 +70,8 @@ pub(crate) fn tuned_policy(agents: usize) -> EpisodePolicy {
             threshold: quorum_threshold(agents),
             window: 100,
             require_grounded: true,
-            // Refutation is off in both control arms, which is the crate
-            // default. No topic is ever capped *and* the simulated members
-            // never spend a turn on the move, so `hive+ref` differs from
-            // `hive+` in exactly one thing rather than in two.
-            refutation_cap: None,
-            ..QuorumPolicy::DEFAULT
         },
         ..EpisodePolicy::DEFAULT
-    }
-}
-
-/// The tuned policy with the negative evidence-to-topic link switched on.
-///
-/// A cap of two is the crate default: one member's assertion should not kill a
-/// hypothesis, and two distinct grounded refuters should. This is the arm the
-/// mechanism has to earn its place against, and it can lose.
-pub(crate) fn refuting_policy(tuned: &EpisodePolicy) -> EpisodePolicy {
-    EpisodePolicy {
-        quorum: QuorumPolicy {
-            refutation_cap: Some(2),
-            ..tuned.quorum
-        },
-        ..*tuned
-    }
-}
-
-/// The tuned policy with the folded transactive-memory directory switched on.
-///
-/// One field moves. `directory: Some(DirectoryPolicy::DEFAULT)` is what makes
-/// [`BidReason::Knows`] reachable at all: without it there is no contested
-/// topic and no holder to promote, so the attention market routes on recency
-/// and trace importance exactly as it did before. Nothing else about the
-/// episode changes, which is what lets the difference between this arm and
-/// `hive+` be attributed to the directory rather than to a second knob.
-///
-/// [`BidReason::Knows`]: tinyhivemind_hive::BidReason::Knows
-pub(crate) fn knowing_policy(tuned: &EpisodePolicy) -> EpisodePolicy {
-    EpisodePolicy {
-        directory: Some(DirectoryPolicy::DEFAULT),
-        ..*tuned
-    }
-}
-
-/// The tuned policy with `!defer` bounded at `cap`, and no directory.
-///
-/// This is the honest control for the deferring arm: a room where members may
-/// stand aside on a topic that is not theirs, but where nothing folds a
-/// directory to route the vacated turn anywhere in particular. If `!defer`
-/// pays for itself only in the presence of a directory, that is worth knowing
-/// separately from whether it pays for itself at all.
-pub(crate) fn deferring_policy(tuned: &EpisodePolicy, cap: u32) -> EpisodePolicy {
-    EpisodePolicy {
-        defer_cap: Some(cap.max(1)),
-        ..*tuned
     }
 }
 
@@ -165,31 +113,6 @@ pub(crate) fn blind_wide_policy(tuned: &EpisodePolicy, width: u32) -> EpisodePol
         round_width: width,
         revealed_width: SEQUENTIAL,
         ..*tuned
-    }
-}
-
-/// Both mechanisms at once: the directory folded, and `!defer` bounded.
-///
-/// This is the arrangement `docs/specs/expert-delegation.md` describes end to
-/// end — a member says "not mine", that promotes the topic to the contested
-/// one, and the directory decides who the vacated turn goes to.
-pub(crate) fn knowing_deferring_policy(tuned: &EpisodePolicy, cap: u32) -> EpisodePolicy {
-    EpisodePolicy {
-        directory: Some(DirectoryPolicy::DEFAULT),
-        defer_cap: Some(cap.max(1)),
-        ..*tuned
-    }
-}
-
-/// The refuting policy with grounds weighed by evidential depth as well.
-pub(crate) fn evidential_policy(tuned: &EpisodePolicy) -> EpisodePolicy {
-    let refuting = refuting_policy(tuned);
-    EpisodePolicy {
-        quorum: QuorumPolicy {
-            require_evidential: true,
-            ..refuting.quorum
-        },
-        ..refuting
     }
 }
 

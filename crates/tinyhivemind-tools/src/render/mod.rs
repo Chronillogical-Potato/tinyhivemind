@@ -1,16 +1,16 @@
-//! `tool_specs()` as MCP tool definitions, and MCP arguments back onto
+//! `tool_specs()` as JSON tool definitions, and call arguments back onto
 //! `CallArguments`.
 //!
 //! Everything a seat reads about a tool -- its name, what it does, what it
 //! takes -- comes from `tinyhivemind::speech`, verbatim. This module adds
-//! exactly two arguments to every tool, `chat` and `parent`, because the server
+//! exactly two arguments to every tool, `chat` and `parent`, because the record
 //! checks each call against the turn the host registered, and the seat has to
 //! say which turn it thinks it is in for that check to mean anything.
 
 use serde_json::{Map, Value, json};
 use tinyhivemind::speech::{CallArguments, ParameterKind, ToolSpec, tool_specs};
 
-/// The vocabulary tools this server does not serve.
+/// The vocabulary tools a completion episode does not serve.
 ///
 /// In a completion episode every call has a consequence: `ask` opens a
 /// question, `broadcast` hands work off, `complete_episode` concludes and its
@@ -20,14 +20,14 @@ use tinyhivemind::speech::{CallArguments, ParameterKind, ToolSpec, tool_specs};
 /// is two ways to say nearly the same thing.
 const UNSERVED: &[&str] = &["dm", "post"];
 
-/// The specs this server serves, in the order a seat should meet them.
+/// The specs a completion episode serves, in the order a seat should meet them.
 pub(crate) fn served() -> impl Iterator<Item = &'static ToolSpec> {
     tool_specs()
         .iter()
         .filter(|spec| !UNSERVED.contains(&spec.name))
 }
 
-/// The specs this server serves, for a host that renders the standing
+/// The specs a completion episode serves, for a host that renders the standing
 /// contract from the same list the seats are offered.
 ///
 /// A host that withholds a tool renders its contract from
@@ -48,12 +48,12 @@ pub(crate) fn serves(name: &str) -> bool {
     served().any(|spec| spec.name == name)
 }
 
-/// Every served tool as an MCP tool definition.
+/// Every served tool as a JSON tool definition.
 ///
 /// `seats` are the choices the asking tools' `to` offers: a seat that can read
 /// the alternatives does not guess eight ids and learn nothing from eight
 /// refusals.
-/// The served tools as MCP tool definitions: name, description and an
+/// The served tools as JSON tool definitions: name, description and an
 /// `inputSchema` that carries the vocabulary's parameters plus the `chat` and
 /// `parent` every call must name. `seats` fills `ask`'s recipient enumeration.
 ///
@@ -197,12 +197,10 @@ pub(crate) fn arguments(params: &Value) -> Arguments {
     parse_arguments(&raw_arguments(params))
 }
 
-/// The `arguments` object of a `tools/call`, whether the client sent it as an
-/// object or as a JSON-encoded string; the params themselves when it sent
-/// neither.
+/// Extract an `arguments` object or JSON-encoded string from a call payload.
+/// If neither is present, return the payload itself.
 ///
-/// Public for the MCP server, which frames a `tools/call` over
-/// [`EpisodeTools::call`](crate::EpisodeTools::call) and hands it this.
+/// A host can pass the result to [`EpisodeTools::call`](crate::EpisodeTools::call).
 #[must_use]
 pub fn raw_arguments(params: &Value) -> Value {
     match params.get("arguments") {

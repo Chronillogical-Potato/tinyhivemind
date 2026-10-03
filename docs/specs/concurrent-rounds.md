@@ -1,5 +1,8 @@
 # Concurrent rounds
 
+> **Current API note.** This proposal may mention the retired directory, deferral, refutation, or evidential policy paths. [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md) records their removal. Use the current crate API for active policy fields.
+
+
 **Status:** Accepted
 **Owner:** tinyhivemind maintainers
 - **Decision:** [ADR 0014](../adr/0014-a-round-authorizes-concurrent-turns.md),

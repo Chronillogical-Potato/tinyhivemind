@@ -1,5 +1,9 @@
 # The evidence-first opening
 
+> Historical results from benchmark arms retired in October 2026. The current
+> benchmark no longer runs these arms. The `ladder+dir` arm received the true
+> topic from `room.truth`, so its routing scores include an oracle leak.
+
 What `--blind-evidence` changes about a member's first turn, and why a deposit
 is not a position. Split out of [`README.md`](README.md) when that file passed
 the repository's 500-line cap; nothing here changed with the move.

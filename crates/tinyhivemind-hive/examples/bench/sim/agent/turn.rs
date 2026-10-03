@@ -15,9 +15,7 @@ use tinyhivemind_hive::{HiveTurn, Phase, SessionAuthor, SessionMessage, Visibili
 use super::SimAgent;
 use crate::run::ASIDE_MARKER;
 use crate::sim::view::{View, parse_reading, parse_readings, parse_ruled_out, parse_topic};
-use crate::sim::{
-    ASIDE_READS, ASIDE_UNCERTAINTY, NONCOMPLIANCE, REACHABLE_REFUTATION_CAP, RULES_OUT, Role,
-};
+use crate::sim::{ASIDE_READS, ASIDE_UNCERTAINTY, NONCOMPLIANCE, RULES_OUT, Role};
 
 impl SimAgent {
     /// Spend this turn on a pairwise check, if this member wants one.
@@ -311,29 +309,8 @@ impl SimAgent {
             return line;
         }
 
-        // A hypothesis this member rates *clearly* below its own — the same
-        // 60-point gap that separates the genuinely best option from a decoy —
-        // is not a tie to be broken but a claim to be killed. Objecting would
-        // cost one turn per advocate and grow with every new supporter;
-        // refuting costs one turn and caps the topic for the whole room. The
-        // gap is what separates the two moves: a merely weaker contender still
-        // gets an objection, below.
-        if self
-            .quorum
-            .refutation_cap
-            .is_some_and(|cap| cap <= REACHABLE_REFUTATION_CAP)
-            && let Some((topic, grounds)) = view.refutable(self)
-        {
-            return format!("!refute #{topic} ^{grounds} The grounds I hold rule this one out.");
-        }
-
-        // This member holds the one fact that rules a hidden-profile decoy
-        // out, and it is on the floor: deposit it. Unlike `!refute`, above,
-        // this never caps the topic outright -- it only discounts it, in
-        // `View::posterior`, for every member who reads the deposit -- so it
-        // is available whether or not the room's policy ever turns
-        // `refutation_cap` on. Depositing it twice would spend a turn saying
-        // nothing new.
+        // A member holding the fact that rules out a hidden-profile decoy
+        // deposits it once. Readers apply it to their own posterior.
         if let Some(topic) = self.refutes.clone()
             && let Some(proposal) = view.proposal(&topic)
             && !view.has_deposited(&self.id, &topic)
@@ -376,14 +353,8 @@ impl SimAgent {
         if self.blind_evidence
             && let Some(topic) = view.better_than_floor(self)
         {
-            // Deliberately uncited. A proposal is a conclusion, and citing the
-            // deposit it happens to agree with would earn its author directory
-            // weight on the topic for the act of arguing it -- which is
-            // precisely the circularity the directory exists to avoid, and
-            // which measurably kills `BidReason::Knows`: it fires in four
-            // episodes in five with the proposal uncited and in fewer than one
-            // in ten with it cited. The grounds go on the *support* instead,
-            // below, where a member is answering something already said.
+            // The proposal states a conclusion. Its grounds belong on a
+            // later support, where a member answers a claim already made.
             return format!(
                 "!propose #{topic} It rates highest once I weigh what the room has stated \
                  against my own read."
@@ -397,11 +368,7 @@ impl SimAgent {
             && !view.has_backed(&self.id, topic)
         {
             // Under the evidence-first opening the grounds are the deposit
-            // the room actually stated about this option, where there is one,
-            // rather than the proposal restating a preference. That is the
-            // only thing in this file that puts a stated fact at the end of a
-            // citation chain, which is exactly what `require_evidential` asks
-            // a support to have.
+            // the room actually stated about this option, where there is one.
             let grounds = if self.blind_evidence {
                 view.grounds_for(&self.id, topic).unwrap_or(grounds)
             } else {
@@ -422,22 +389,6 @@ impl SimAgent {
         if let Some((topic, grounds)) = view.closable(self) {
             return format!(
                 "!support #{topic} ^{grounds} Close enough to my own read to settle it here."
-            );
-        }
-
-        // A topic outside this member's own specialty is contested, and
-        // somebody else on the room owns it: yield the turn to them rather
-        // than arguing a read that is not this member's strong suit. The cap
-        // keeps a deferring member from stalling the room forever; `0` turns
-        // the whole move off, which is every room today until an episode
-        // policy grows a field `Room::generate_with` can wire a real cap
-        // from.
-        if self.defer_cap > self.deferred
-            && let Some(topic) = view.deferrable(self)
-        {
-            self.deferred = self.deferred.saturating_add(1);
-            return format!(
-                "!defer #{topic} Not my area — somebody who owns this should weigh in."
             );
         }
 
@@ -475,8 +426,7 @@ impl SimAgent {
     /// favourite — "what I know best" in each of the three shapes the
     /// benchmark generates. There is no citation, because nothing is visible
     /// to cite: an uncited `!evidence` is still a full-weight deposit in the
-    /// directory, which is what gives `BidReason::Knows` something to route
-    /// on later.
+    /// directory, which also makes the deposit available to task division.
     ///
     /// `None` once this member has already deposited on that topic, which
     /// cannot happen inside a blind round that ends when every member has

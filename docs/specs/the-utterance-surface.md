@@ -1,8 +1,10 @@
 # The utterance surface: speaking is a request, not a string
 
-**Status:** Implemented — `tinyhivemind::speech`, with the `desk` example
-reduced to transport. The live run that exercises the in-turn refusal is
-pending
+> **Current integration note.** The `desk` example and TinyHiveMind MCP adapter mentioned below were retired by [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md). Native `EpisodeTools` remains the integration path.
+
+
+**Status:** Implemented in `tinyhivemind::speech`. The `desk` transport
+example and MCP adapter described below were later retired.
 **Owner:** tinyhivemind maintainers
 **Reading:** [`thoughts-and-channels.md`](thoughts-and-channels.md),
 [`private-asides.md`](private-asides.md)
@@ -78,9 +80,9 @@ as targets rather than as prose to be re-parsed.
 ## Non-goals
 
 - **Transport in `tinyhivemind::speech`.** This runtime module defines the
-  utterance request and validation. The separate `tinyhivemind-mcp` crate now
-  serves episode tools over a loopback socket; the host still owns the session
-  transcript and durable append.
+  utterance request and validation. The former `tinyhivemind-mcp` crate served episode tools over a
+  loopback socket. It was retired; the host still owns the session transcript
+  and durable append.
 - **Replacing the mention grammar.** See above.
 - **Adding rows to an accepted utterance.** One accepted utterance is one row.
 - **`tinyhivemind-core` gaining anything.** Every type here needs `Audience`,

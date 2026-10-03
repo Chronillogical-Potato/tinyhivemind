@@ -181,8 +181,8 @@ pub struct SessionMessage {
 impl SessionMessage {
     /// The authored text, or `None` when this row was elided for the viewer.
     ///
-    /// Every caller that quotes content goes through this. A search excerpt, a
-    /// pin excerpt and a thread opening are all verbatim slices of a message,
+    /// Every caller that quotes content goes through this. A pin excerpt and
+    /// a thread opening are verbatim slices of a message,
     /// and each of them reaches an agent's prompt, so the check has to be in
     /// the type rather than in a reviewer's memory.
     #[must_use]

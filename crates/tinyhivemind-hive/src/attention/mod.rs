@@ -1,4 +1,4 @@
-//! The attention market: every member bids, and exactly one takes the floor.
+//! The attention market: members bid for places in a bounded round.
 //!
 //! This is Pandemonium's decision demon and the response-threshold model of
 //! division of labour, which are the same mechanism arrived at from the AI and
@@ -18,11 +18,6 @@
 //!   robust predictors of a group's collective performance. Share here is
 //!   measured over *grounded, surviving* contributions rather than raw message
 //!   count, because raw count is a proxy an agent inflates for free.
-//! - **Delegation.** When the caller folds a directory, the member the
-//!   transcript says holds the contested topic — and has not said so yet —
-//!   gets one bonus to bring it out. It is off unless a directory is supplied,
-//!   and it stops the moment its holder deposits on the topic, so it cannot
-//!   compound. See [`mod@crate::directory`].
 //! - **Repetition.** Once a topic has `repetition_cap` distinct supporters,
 //!   restating it scores nothing — the rumour has met enough peers who already
 //!   know it. Step repetition is among the most common observed multi-agent
@@ -33,9 +28,6 @@ mod test;
 
 mod types;
 
-mod budget;
-
-pub use budget::{BudgetPolicy, BudgetRequest, BudgetShare, BudgetVerdict, allocate_chars};
 pub use types::{AgentThreshold, Bid, BidContext, BidReason};
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -44,7 +36,7 @@ use crate::{
     error::{Error, Result},
     quorum::TopicStanding,
     salience::{standing, with_relevance},
-    trace::{TopicId, Trace, TraceKind},
+    trace::{Trace, TraceKind},
 };
 use tinyhivemind::Sequence;
 
@@ -52,11 +44,6 @@ use tinyhivemind::Sequence;
 const ADDRESSED_BONUS: i64 = 2_000;
 /// Bonus applied to a member that has backed neither deadlocked side.
 const DISSENT_BONUS: i64 = 1_500;
-/// Bonus applied to the directory's holder of the contested topic.
-///
-/// Between [`DISSENT_BONUS`] and [`QUIET_BONUS`], so the ordering of the
-/// bonuses matches the ordering of the reasons.
-const KNOWS_BONUS: i64 = 1_250;
 /// Bonus applied to the least-heard member when the room is lopsided.
 const QUIET_BONUS: i64 = 1_000;
 /// Penalty applied to a member holding more than `dominance_cap` of the share.
@@ -83,7 +70,6 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
     let total: u32 = shares.values().sum();
     let quiet = quietest(context.members, &shares);
     let deadlocked = deadlocked_topics(context.standings);
-    let contested = contested_topic(context, &live);
     let addressed = addressed_members(&live);
 
     // Saturation and the recency-and-importance half of salience are
@@ -118,9 +104,6 @@ pub fn bids(context: &BidContext<'_>) -> Result<Vec<Bid>> {
         } else if !deadlocked.is_empty() && !backs_any(&deadlocked, member) {
             urge += DISSENT_BONUS;
             reason = BidReason::Dissent;
-        } else if contested.is_some_and(|topic| holds_uncited(context, &live, member, topic)) {
-            urge += KNOWS_BONUS;
-            reason = BidReason::Knows;
         } else if quiet == Some(*member) && is_lopsided(&shares, total, context.dominance_cap) {
             urge += QUIET_BONUS;
             reason = BidReason::Quiet;
@@ -268,94 +251,6 @@ fn dominates(shares: &BTreeMap<&str, u32>, member: &str, total: u32, cap: u32) -
 
 fn exceeds(share: u32, total: u32, cap: u32) -> bool {
     total > 0 && share * 100 > total * cap
-}
-
-/// The topic the room is currently stuck on, if the caller folded a directory.
-///
-/// A live deferral names it outright: a member saying "not mine" is the
-/// clearest possible statement of what the room needs somebody else for. The
-/// deferrals are counted over `live`, which is already sorted and deduplicated
-/// by `(sequence, offset)`, so a redelivered deferral counts once and the
-/// winner is the deferral with the highest address rather than whichever the
-/// medium happened to hand over last. Below `defer_cap` distinct live
-/// deferrals the latest one wins; at or above it the promotion stops, so a
-/// chain of members deferring to each other terminates instead of spending the
-/// whole budget on it.
-///
-/// Failing that it is the standing with the most support that has not yet
-/// carried — the live argument, rather than the settled one — with ties broken
-/// by first-advocated order.
-fn contested_topic<'a>(context: &BidContext<'a>, live: &[&'a Trace]) -> Option<&'a TopicId> {
-    context.directory?;
-    let deferrals: Vec<&&Trace> = live
-        .iter()
-        .filter(|trace| trace.kind == TraceKind::Defer)
-        .filter(|trace| context.at.within(trace.sequence, context.quorum.window))
-        .collect();
-    let under_cap = context
-        .defer_cap
-        .is_none_or(|cap| u32::try_from(deferrals.len()).is_ok_and(|live| live < cap));
-    if under_cap
-        && let Some(deferred) = deferrals
-            .iter()
-            .rev()
-            .find_map(|trace| trace.topic.as_ref())
-    {
-        return Some(deferred);
-    }
-    context
-        .standings
-        .iter()
-        .filter(|standing| !standing.carried(context.quorum))
-        .reduce(|held, next| {
-            if next.support > held.support {
-                next
-            } else {
-                held
-            }
-        })
-        .map(|standing| &standing.topic)
-}
-
-/// Whether the directory names this member on the contested topic and the
-/// member has taken no position on it.
-///
-/// The last clause is what makes this delegation rather than amplification.
-/// The bonus buys an unheard fact its hearing and stops paying the moment its
-/// holder argues the topic, so it cannot compound within an episode.
-///
-/// *Position*, not *trace*: a member whose only deposit on the topic is a
-/// stated fact is exactly the member this exists for. In a hidden profile the
-/// holder has already put the fact on the floor, nobody cited it, and the
-/// salience field never points at that member again — treating the fact itself
-/// as having spoken would make the mechanism unreachable in the one case it
-/// was built for.
-fn holds_uncited(context: &BidContext<'_>, live: &[&Trace], member: &str, topic: &TopicId) -> bool {
-    let (Some(directory), Some(policy)) = (context.directory, context.directory_policy) else {
-        return false;
-    };
-    directory.top_among(topic, context.members) == Some(member)
-        && directory.knows(member, topic, policy)
-        && !live
-            .iter()
-            .any(|trace| trace.agent_id() == Some(member) && argues(trace, topic))
-}
-
-/// Whether a trace takes a position on a topic, rather than supplying grounds
-/// for one or asking about it.
-fn argues(trace: &Trace, topic: &TopicId) -> bool {
-    if trace.topic.as_ref() != Some(topic) {
-        return false;
-    }
-    match trace.kind {
-        TraceKind::Propose
-        | TraceKind::Support
-        | TraceKind::Object
-        | TraceKind::Refute
-        | TraceKind::Commit
-        | TraceKind::Defer => true,
-        TraceKind::Evidence | TraceKind::Question => false,
-    }
 }
 
 /// Which members some other member's trace cited or objected to.

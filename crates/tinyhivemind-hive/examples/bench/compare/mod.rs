@@ -12,9 +12,7 @@ mod totals;
 
 use std::time::Instant;
 
-use tinyhivemind_hive::{
-    Directory, DirectoryPolicy, EpisodePolicy, Sequence, directory, trace::Trace,
-};
+use tinyhivemind_hive::EpisodePolicy;
 
 use crate::TASK;
 use crate::arms;
@@ -24,14 +22,9 @@ use crate::metrics::{
     library_row, paired_against, paired_diff_line,
 };
 use crate::parallel;
-use crate::policy::{
-    blind_wide_policy, default_policy, deferring_policy, evidential_policy,
-    knowing_deferring_policy, knowing_policy, refuting_policy, widened_policy,
-};
+use crate::policy::{blind_wide_policy, default_policy, widened_policy};
 use crate::rng::mix;
-use crate::run::{
-    AsideMode, run_episode, run_episode_checking, run_episode_exchanging_with, run_episode_with,
-};
+use crate::run::{AsideMode, run_episode, run_episode_checking, run_episode_exchanging_with};
 use crate::sim::{CheckStyle, Room, SPECIALIST_COST_UNIT};
 use totals::Totals;
 
@@ -54,20 +47,14 @@ pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
     );
 
     let (totals, wall) = run_arms(options, rooms)?;
-    let arms: [(&str, &Aggregate); 24] = [
+    let arms: [(&str, &Aggregate); 18] = [
         ("ladder", &totals.ladder),
         ("vote", &totals.vote),
         ("hive", &totals.hive_default),
         ("hive+", &totals.hive_tuned),
-        ("hive+ref", &totals.hive_refuting),
-        ("hive+ev", &totals.hive_evidential),
         // Appended rather than interleaved: the six rows above are the
-        // published table, and the paired-bootstrap seed below is derived
+        // previous table, and the paired-bootstrap seed below is derived
         // from an arm's index in this list.
-        ("hive+dir", &totals.hive_knowing),
-        ("hive+defer", &totals.hive_deferring),
-        ("hive+dir+defer", &totals.hive_both),
-        ("ladder+dir", &totals.ladder_directed),
         ("hive+aside", &totals.hive_aside),
         ("hive+ask", &totals.hive_ask),
         ("hive+aside!", &totals.hive_aside_informed),
@@ -125,9 +112,7 @@ pub(crate) fn compare(options: &Options, rooms: &[Room]) -> Result<(), String> {
         cost_table(&[
             ("vote", &totals.vote),
             ("ladder", &totals.ladder),
-            ("ladder+dir", &totals.ladder_directed),
             ("hive+", &totals.hive_tuned),
-            ("hive+dir+defer", &totals.hive_both),
             ("all-reasoning", &totals.all_reasoning),
         ]);
     }
@@ -227,7 +212,7 @@ fn run_check_arms(
     totals: &mut Totals,
 ) -> Result<(), String> {
     let check = |mode: AsideMode, style: CheckStyle| {
-        run_episode_checking(room, tuned, TASK, false, 0, mode, options.aside_cap, style)
+        run_episode_checking(room, tuned, TASK, false, mode, options.aside_cap, style)
     };
     // The pair that isolates privacy. Both spend a turn asking and a turn
     // answering; they differ in who may read the answer, and in nothing
@@ -348,11 +333,6 @@ fn run_check_arms(
 fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Duration), String> {
     let tuned = options.policy;
     let default = default_policy();
-    let refuting = refuting_policy(&tuned);
-    let evidential = evidential_policy(&tuned);
-    let knowing = knowing_policy(&tuned);
-    let deferring = deferring_policy(&tuned, options.defer_cap);
-    let both = knowing_deferring_policy(&tuned, options.defer_cap);
     let wall = Instant::now();
     // Each room is decided into totals of its own, in a worker, and those are
     // merged here in room order. The body below is exactly the sequential
@@ -372,32 +352,6 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
         totals
             .hive_tuned
             .add(&run_episode(room, &tuned, TASK, false)?);
-        totals
-            .hive_refuting
-            .add(&run_episode(room, &refuting, TASK, false)?);
-        totals
-            .hive_evidential
-            .add(&run_episode(room, &evidential, TASK, false)?);
-        // The three delegation arms. Only the deferring two hand their members
-        // a non-zero cap, so `hive+dir` differs from `hive+` in the policy
-        // field alone and in nothing a participant does.
-        totals
-            .hive_knowing
-            .add(&run_episode(room, &knowing, TASK, false)?);
-        totals.hive_deferring.add(&run_episode_with(
-            room,
-            &deferring,
-            TASK,
-            false,
-            options.defer_cap,
-        )?);
-        totals.hive_both.add(&run_episode_with(
-            room,
-            &both,
-            TASK,
-            false,
-            options.defer_cap,
-        )?);
         if options.cost {
             totals.all_reasoning.add(&run_episode(
                 &room.at_cost(SPECIALIST_COST_UNIT),
@@ -409,10 +363,6 @@ fn run_arms(options: &Options, rooms: &[Room]) -> Result<(Totals, std::time::Dur
         run_check_arms(options, room, &tuned, &mut totals)?;
         let seed = mix(options.seed, u64::try_from(index).unwrap_or(0));
         totals.ladder.add_arm(&arms::run_ladder(room, seed)?);
-        let earned = earn_directory(room, &tuned, options.history, mix(seed, 0x6869_7374))?;
-        totals
-            .ladder_directed
-            .add_arm(&arms::run_ladder_directed(room, &earned, seed)?);
         // The control is given the whole budget, which is more turns than the
         // deliberation actually spends. It is the arm to beat, so it gets
         // every advantage.
@@ -435,87 +385,11 @@ fn endings(totals: &Totals) {
     for (name, arm) in [
         ("hive ", &totals.hive_default),
         ("hive+", &totals.hive_tuned),
-        ("hive+ref", &totals.hive_refuting),
-        ("hive+ev", &totals.hive_evidential),
-        ("hive+dir+defer", &totals.hive_both),
     ] {
         println!(
             "{name} endings: converged {} · deadlocked {} · exhausted {} · idle {}",
             arm.converged, arm.deadlocked, arm.exhausted, arm.idle,
         );
-    }
-}
-
-/// Earn a directory for one room by running `--history` prior episodes of
-/// `hive+` on it and folding the whole record once.
-///
-/// The `ladder+dir` arm is not allowed to be handed the answer. A directory
-/// invented by the harness, or read off `Room::experts`, would measure the
-/// harness rather than the mechanism, so this earns one the only way the
-/// library offers: it deliberates the same room several times and folds what
-/// those transcripts recorded.
-///
-/// The several episodes are *concatenated with renumbered sequences* and
-/// folded once, rather than folded separately and merged by summing weights.
-/// Both were available; this one is chosen because it is the fold the library
-/// actually defines. Summing weights across separate folds would double-count
-/// the `WEIGHT_CEILING` clamp and would apply each episode's decay from its
-/// own end, so a member's total would depend on how the history happened to
-/// be cut into episodes. One fold over one renumbered record has one decay
-/// origin and one clamp. It also means [`DirectoryPolicy::DEFAULT`]'s
-/// `window` of 30 sequences applies to the *whole* history: past about four
-/// episodes of a five-member room the earliest ones fall out of window, which
-/// is why `--history 5` is not simply a stronger `--history 3`.
-///
-/// Each replay is [`Room::resampled`] — the same members and the same private
-/// evaluations, with only the noncompliance draw reseeded — because the
-/// simulated participants are otherwise deterministic and replaying a room
-/// would produce the same transcript N times. `seed` is this room's own
-/// stream, so two rooms do not share a resampling.
-///
-/// # Errors
-///
-/// Returns the library's own error text from an episode or from the fold.
-fn earn_directory(
-    room: &Room,
-    tuned: &EpisodePolicy,
-    history: u32,
-    seed: u64,
-) -> Result<Directory, String> {
-    let mut record: Vec<Trace> = Vec::new();
-    let mut offset = 0_u64;
-    for episode in 0..history {
-        let seed = mix(seed, u64::from(episode));
-        let report = run_episode(&room.resampled(seed), tuned, TASK, false)?;
-        let mut highest = 0_u64;
-        for trace in report.traces {
-            highest = highest.max(trace.sequence.0);
-            record.push(shift(trace, offset));
-        }
-        offset = offset.saturating_add(highest);
-    }
-    let at = Sequence(offset);
-    directory(&record, at, &DirectoryPolicy::DEFAULT, &[]).map_err(|error| error.to_string())
-}
-
-/// Move one trace, and every sequence it names, forward by `offset`.
-///
-/// A citation names a sequence, so renumbering a trace without renumbering
-/// what it cites would silently break every credibility term in the fold —
-/// the citation would land on whatever the earlier episode happened to have
-/// at that number.
-fn shift(trace: Trace, offset: u64) -> Trace {
-    Trace {
-        sequence: Sequence(trace.sequence.0.saturating_add(offset)),
-        target: trace
-            .target
-            .map(|target| Sequence(target.0.saturating_add(offset))),
-        cites: trace
-            .cites
-            .into_iter()
-            .map(|cited| Sequence(cited.0.saturating_add(offset)))
-            .collect(),
-        ..trace
     }
 }
 

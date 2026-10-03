@@ -27,12 +27,6 @@
 //! - `hive` — a deliberation episode at [`EpisodePolicy::DEFAULT`].
 //! - `hive+` — the same, at the tuned policy: a majority quorum that is never
 //!   unanimity, and three turns of budget per member, both scaled to the desk.
-//! - `hive+dir`, `hive+defer`, `hive+dir+defer` — the tuned policy with the
-//!   folded transactive-memory directory on, with `!defer` bounded, and with
-//!   both. See the README's "Delegation" section.
-//! - `ladder+dir` — the responder ladder again, this time given a directory
-//!   the room earned over `--history` prior episodes of `hive+`.
-//!
 //! # The six columns
 //!
 //! Every arm reports the same six, and each is a quantity somebody pays or
@@ -97,11 +91,10 @@
 //! | `--seat-model agent_id=model`, `--seat-cmd agent_id="command"` | per-seat backend override |
 //! | `--specialist-model NAME` | model for a seat the scenario marks as a specialist |
 //! | `--specialists N`, `--hidden-profile` | how expertise is distributed |
-//! | `--defer-cap N`, `--history N`, `--cost-tiers` | the delegation arms |
+//! | `--cost-tiers` | price specialist turns |
 //! | `--aside-cap N` | pairwise checks one member may open (default 1); `0` makes every on-floor and alongside aside arm identical to `hive+` |
 //! | `--exchange-cap N` | private rows one member may write off the floor (default 4); `0` disables `hive+rounds` |
 //! | `--blind-evidence` | members open the blind round with a deposit, not a position |
-//! | `--directory` | fold the directory into the traced episode's own policy |
 //! | `--jobs N` | threads the per-room loops spread over (default: one per core) |
 //! | `--ask-cap N` | cross-channel questions one desk may ask off the floor (default 2); `0` puts asking back on the floor |
 //! | `--thinking on\|off` | whether the HTTP backend reasons before answering |

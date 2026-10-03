@@ -1,6 +1,6 @@
 # The episode
 
-An episode is a bounded deliberation over one desk: a sequence of single turns
+An episode is a bounded deliberation over one desk: a sequence of bounded rounds
 that ends when the room converges, deadlocks with nobody left to break the tie,
 runs out of budget, or falls silent.
 
@@ -23,8 +23,7 @@ validate roster + desks + policy
      └─ fold standings at the horizon the policy's `distance` selects
         ├─ budget spent?         → Exhausted (with those standings,
         │                          and the visibility it ended at)
-        └─ fold the directory when `directory` is set, at the same
-           sequence; take consensus
+        └─ take consensus
            ├─ Quorum & Commit & !commit recorded → Converged
            ├─ Quorum & Deliberate    → flip phase, emit one commit turn
            ├─ Deadlock & no free member         → Deadlocked
@@ -34,8 +33,7 @@ validate roster + desks + policy
 ```
 
 Standings are folded **before** the budget check so an exhausted episode can
-say what its budget bought. The directory is not: an exhausted episode
-authorizes nobody, so there is no bid to route and nothing to route it with.
+say what its budget bought. The fold does not store a directory in episode state.
 
 ### A round of bounded width
 
@@ -67,27 +65,6 @@ this turn's decision. If nobody records it after the boundary, the episode
 runs on and stops at its budget — bounded either way, and never silently
 converged on a decision nobody wrote down.
 
-### Who knows what
-
-When `policy.directory` is `Some`, `step` folds a `Directory` from the same
-traces at the same sequence as the standings, and hands it to the attention
-market. The member the transcript says holds the contested topic — and has
-taken no position on it — bids `BidReason::Knows`, between `Dissent` and
-`Quiet`.
-
-Nothing is stored. The directory dies with the step that folded it, so a wrong
-estimate cannot follow a member into the next turn, let alone the next episode.
-`policy.defer_cap` bounds a chain of `!defer` turns; `None` leaves deferral
-promotion uncapped by `defer_cap` specifically, bounded only by `turn_budget`,
-which is finite either way — `None` is uncapped, not off. `Some(0)` is
-rejected as `Error::ZeroDeferCap` rather than read as a quieter way of turning
-deferral off.
-
-Both knobs are `None` in `EpisodePolicy::DEFAULT`, and both are
-required-but-nullable on the wire, so a policy serialized before they existed
-fails to decode rather than quietly acquiring a default. See
-[`../directory/README.md`](../directory/README.md).
-
 ### The watermark
 
 Only messages *strictly above* `state.watermark` are folded into traces.
@@ -103,16 +80,16 @@ settled must not reopen because a late trace arrived or because old support
 decayed out of the window. Unawareness of termination conditions is one of the
 most common observed multi-agent failures; this is the guard against it.
 
-### Visibility, not concurrency
+### Blind visibility
 
 Independence — Surowiecki's condition that a shared transcript destroys, because
-the third speaker reads the first two before answering — is bought here with
-`Visibility::Blind` and `project_for`, not with parallel execution. During the
+the third speaker reads the first two before answering — is enforced here with
+`Visibility::Blind` and `project_for`. During the
 opening round, until every member has been heard once, a turn sees the operator,
 system and person messages plus its own work, but not a peer's position.
 
-That is the whole answer to "but a hive mind needs fan-out". See
-[`../../../../docs/adr/0002-hive-episodes-are-sequential.md`](../../../../docs/adr/0002-hive-episodes-are-sequential.md).
+Concurrent rounds preserve the same blind visibility rule. See
+[ADR 0014](../../../../docs/adr/0014-a-round-authorizes-concurrent-turns.md).
 
 ## Public surface
 
@@ -120,7 +97,7 @@ That is the whole answer to "but a hive mind needs fan-out". See
 | --- | --- |
 | `step` | The fold. Returns exactly one outcome. |
 | `project_for` | Filters a transcript to what one authorized turn may see. |
-| `EpisodePolicy` | Budget, blind round, dominance and repetition caps, directory, defer cap, distance basis, quorum, weights. |
+| `EpisodePolicy` | Budget, round widths, blind opening, dominance and repetition caps, distance basis, quorum, and weights. |
 | `EpisodePolicy::for_room` | The policy a desk of *N* should carry, with every absolute bound scaled to it. |
 | `EpisodeState` | Conversation, spend, phase, thresholds, watermark, commit boundary. |
 | `HiveTurn` | The authorized turn, and the state to commit after it lands. |
@@ -143,7 +120,6 @@ area rather than one 1,000-plus-line file:
 | `test/deadlock.rs` | Deadlock and cross-inhibition through the whole machine. |
 | `test/turn_dynamics.rs` | Blind visibility and the threshold charge carried across turns. |
 | `test/failure_paths.rs` | Malformed roster, desk, threshold, and policy inputs. |
-| `test/expert_delegation.rs` | The directory and defer-cap knobs, on and off. |
 | `test/off_floor_asides.rs` | An aside carries information, never support, for every reader alike. |
 | `test/concurrent_asides.rs` | The concurrent-aside cost guarantee and its sequence-shift limit. |
 
@@ -180,8 +156,5 @@ what a test may reach, only where it lives.
 - **Thresholds must name active desk members.** A stale threshold record for a
   retired agent is rejected rather than ignored, so a roster change cannot
   silently alter who gets the floor.
-- **The directory is refolded, never carried.** It is not in `EpisodeState`,
-  because an iterated per-turn update would not be commutative and stored state
-  would have to be invalidated whenever the transcript is re-paged.
 - **Nothing here uses floating point.** Every score is fixed-point integer, so
   the fold is reproducible and every payload derives `Eq`.

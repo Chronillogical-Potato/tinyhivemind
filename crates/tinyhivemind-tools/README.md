@@ -6,12 +6,9 @@ decides each call in `call`: the turn, the thread, `interpret`, then the
 event or the refusal. `tool_definitions` renders the served specs as JSON
 tool definitions.
 
-It accepts JSON call arguments without owning a transport. A harness that
-takes native tools wraps the definitions in its own tool type and calls
-`EpisodeTools::call` in process; a harness that can only dial MCP reaches it through
-[`tinyhivemind-mcp`](../tinyhivemind-mcp/README.md), which depends on this
-crate and is the one socket the repository opens. Either way a seat is
-refused, acknowledged and recorded in the same words.
+It accepts JSON call arguments without owning a transport. A host wraps the
+definitions in its tool type and calls `EpisodeTools::call` in process. The
+record supplies the same acknowledgement and refusal text to every seat.
 
 | Path | Purpose |
 | --- | --- |
@@ -33,11 +30,9 @@ single vocabulary as JSON tool definitions and records accepted or refused
 calls in `EpisodeTools`. It does not decide what a recorded event means for
 the episode.
 
-[`tinyhivemind-mcp`](../tinyhivemind-mcp/README.md) depends on this crate
-to serve those definitions and calls over a socket, and re-exports its main
-types. [`tinyhivemind-openhuman`](../tinyhivemind-openhuman/README.md)
-also depends on it directly so native and MCP runners drain the same
-`SeatEvent` and `Refusal` records. The driver consumes the resulting
+[`tinyhivemind-openhuman`](../tinyhivemind-openhuman/README.md) depends on
+this crate so its native runners drain the same `SeatEvent` and `Refusal`
+records. The driver consumes the resulting
 committed events through the host, without depending on this tool crate.
 
 See the [workspace dependency map](../../docs/crate-dependencies.md).

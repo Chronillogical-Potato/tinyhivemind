@@ -12,8 +12,6 @@ fn a_policy_and_standing_pin_their_wire_forms() {
             "threshold": 2,
             "window": 30,
             "require_grounded": true,
-            "refutation_cap": null,
-            "require_evidential": false,
         }),
     );
     assert_eq!(
@@ -73,8 +71,4 @@ fn consensus_pins_its_tagged_wire_form() {
 fn the_default_policy_is_the_conservative_one() {
     assert_eq!(QuorumPolicy::default(), QuorumPolicy::DEFAULT);
     assert_eq!(QuorumPolicy::default().threshold, 2);
-    // Both narrowing knobs are off by default, because the benchmark scored
-    // them and they lost. See `docs/experiments/`.
-    assert_eq!(QuorumPolicy::default().refutation_cap, None);
-    assert!(!QuorumPolicy::default().require_evidential);
 }

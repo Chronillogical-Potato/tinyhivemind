@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    directory::{Directory, DirectoryPolicy},
     horizon::Horizon,
     quorum::{QuorumPolicy, TopicStanding},
     salience::SalienceWeights,
@@ -18,12 +17,8 @@ use crate::{
 ///
 /// `affinity` is a **host-supplied prior** — a diffuse cue, in Hollingshead's
 /// sense, of the kind a role label carries. It is read and never written. The
-/// estimate that is actually earned from the transcript lives in
-/// [`Directory`], which folds grounded deposits and the citations they drew
-/// into a per-topic weight; `affinity` enters that fold as one term among
-/// three rather than as an authority.
-///
-/// [`Directory`]: crate::directory::Directory
+/// standalone [`directory`](crate::directory::directory) fold can use it as a prior when
+/// assigning independent work to seats.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct AgentThreshold {
@@ -91,17 +86,6 @@ pub enum BidReason {
     Addressed,
     /// The room is deadlocked and this member has backed neither side.
     Dissent,
-    /// The directory says this member holds the contested topic, and it has
-    /// not said so yet.
-    ///
-    /// Below [`Dissent`] because an unbroken deadlock terminates the episode:
-    /// a routing preference must never be able to suppress the one member who
-    /// could break it. Above [`Quiet`] because "this member knows and has not
-    /// said so" is a stronger reason than "somebody has not spoken".
-    ///
-    /// [`Dissent`]: BidReason::Dissent
-    /// [`Quiet`]: BidReason::Quiet
-    Knows,
     /// The equality guard lifted the least-heard member.
     Quiet,
     /// Ordinary pull from the salience field.
@@ -122,10 +106,6 @@ pub struct Bid {
 
 /// Everything the attention market reads, borrowed from the caller.
 ///
-/// The directory and its policy are a matched pair: both `Some` enables
-/// [`BidReason::Knows`], and either alone leaves it unreachable. That is what
-/// makes the mechanism opt-in without a flag — a caller that folded no
-/// directory cannot accidentally route on one.
 #[derive(Clone, Copy, Debug)]
 pub struct BidContext<'a> {
     /// Traces folded from the projected transcript.
@@ -150,24 +130,6 @@ pub struct BidContext<'a> {
     pub repetition_cap: u32,
     /// When a topic is entitled to carry, and how far back support counts.
     ///
-    /// Its `window` is also the window share and deferral are measured over.
-    /// One window rather than two here: a second one beside it would be a
-    /// second thing to tune and the two would drift.
-    ///
-    /// [`DirectoryPolicy::window`] is a *different* window, bounding what the
-    /// directory folds rather than what the market counts, so a `Defer`
-    /// outside this one but inside that one still zeroes its author's weight
-    /// without promoting its topic. Both default to `30`; a host that widens
-    /// one should know why it is not widening the other.
+    /// Its `window` also bounds the grounded-share calculation.
     pub quorum: &'a QuorumPolicy,
-    /// Who the transcript says knows what, when the caller folded one.
-    pub directory: Option<&'a Directory>,
-    /// How to read that directory. `None` leaves [`BidReason::Knows`]
-    /// unreachable.
-    pub directory_policy: Option<&'a DirectoryPolicy>,
-    /// Live deferrals after which a deferred topic stops being promoted.
-    ///
-    /// `None` is unbounded, and the chain is then bounded only by the
-    /// episode's turn budget.
-    pub defer_cap: Option<u32>,
 }

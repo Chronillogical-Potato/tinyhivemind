@@ -46,27 +46,17 @@ pub enum Error {
     /// A quorum window of zero would admit no support at all.
     #[error("quorum window must not be zero")]
     ZeroQuorumWindow,
-    /// A refutation cap of zero would cap every topic before anyone spoke.
-    #[error("refutation cap must not be zero")]
-    ZeroRefutationCap,
     /// A directory half-life of zero would make deposit decay undefined.
     #[error("directory half life must not be zero")]
     ZeroDirectoryHalfLife,
     /// A directory window of zero would admit no deposit at all.
     #[error("directory window must not be zero")]
     ZeroDirectoryWindow,
-    /// A defer cap of zero would cap deferral before anyone could use it.
-    ///
-    /// `None` is how a host switches deferral promotion off; `Some(0)` is a
-    /// configuration error rather than a quieter way of saying the same thing.
-    #[error("defer cap must not be zero")]
-    ZeroDeferCap,
     /// A round width of zero would authorize nobody to speak, ever.
     ///
     /// `1` is how a host runs a sequential episode; `0` would cap the round
     /// before anyone could be in one, which is a configuration error rather
-    /// than a quieter way of saying the same thing. The precedent is
-    /// [`Self::ZeroDeferCap`].
+    /// than a quieter way of saying the same thing.
     #[error("round width must not be zero")]
     ZeroRoundWidth,
     /// A decision evaluation carried a probability above the fixed-point scale.

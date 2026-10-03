@@ -68,7 +68,6 @@ use generation::{
 };
 
 pub(crate) use agent::{CheckStyle, SimAgent};
-use naming::MAX_MEMBERS_U32;
 pub(crate) use naming::{MAX_MEMBERS, MAX_TOPICS, MEMBER_ROLES, Role, member_at, topic_at};
 pub(crate) use view::check_selfcheck;
 
@@ -111,7 +110,6 @@ const SOCIAL_WEIGHT: i32 = 25;
 /// has nothing to do with the room being larger. The recorded numbers at five
 /// members are unaffected either way, because every cap the arms actually pass
 /// is far below both.
-const REACHABLE_REFUTATION_CAP: u32 = MAX_MEMBERS_U32;
 /// How far below its own choice a participant will still close a decision out.
 ///
 /// A room whose members each hold out for a private preference nobody else
@@ -171,8 +169,7 @@ const HIDDEN_LIFT: i32 = 100;
 
 /// How much one deposited refuting fact discounts a topic's posterior.
 ///
-/// Distinct from `refutation_cap`, which caps a topic outright: this is the
-/// softer discount a member applies on its own account, and it is inert
+/// This is a discount a member applies on its own account, and it is inert
 /// whenever nobody deposits a refuting fact — which is every room outside
 /// `Expertise::HiddenProfile`, so no published uniform number moves with it.
 ///
@@ -592,25 +589,6 @@ impl Room {
         }
     }
 
-    /// The same room, same private evaluations, with every member's
-    /// noncompliance draw reseeded.
-    ///
-    /// `--history` needs several *different* episodes of one room to earn a
-    /// directory from. The simulated participants are otherwise fully
-    /// deterministic given the room, so replaying it would produce the same
-    /// transcript N times and a directory N times as heavy but no better
-    /// informed. Reseeding the one stream that is genuinely a sample — which
-    /// turns come out as prose rather than as a marker — resamples the
-    /// transcript without touching a single private evaluation.
-    pub(crate) fn resampled(&self, seed: u64) -> Self {
-        let mut room = self.clone();
-        for (index, agent) in room.agents.iter_mut().enumerate() {
-            agent.rng = Rng::seeded(mix(seed, 0x000A_11CE ^ index as u64));
-        }
-        room
-    }
-
-    ///
     /// A convenience for a caller that only holds an id and not a
     /// [`Participant`](crate::run::Participant) reference -- the vote arm
     /// charges its matched budget this way, one member at a time, without

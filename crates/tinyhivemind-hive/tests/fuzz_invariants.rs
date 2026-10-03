@@ -69,13 +69,6 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
         threshold: 2,
         window: 100,
         require_grounded: true,
-        ..QuorumPolicy::DEFAULT
-    };
-    // The same corpus under the narrowing policy, so citation-chain resolution
-    // is fuzzed for termination on cycles and self-citations too.
-    let evidential = QuorumPolicy {
-        require_evidential: true,
-        ..policy
     };
 
     let people = roster_members();
@@ -120,10 +113,6 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
             standings(&traces, at, &policy).expect("valid policy"),
             standings(&doubled_and_reversed, at, &policy).expect("valid policy"),
         );
-        assert_eq!(
-            standings(&traces, at, &evidential).expect("valid policy"),
-            standings(&doubled_and_reversed, at, &evidential).expect("valid policy"),
-        );
         // The directory is folded on the same address and must be just as
         // order-independent: a redelivered or reordered medium folds to the
         // same estimate of who knows what.
@@ -144,7 +133,6 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
         let members: Vec<&str> = MEMBERS.to_vec();
         let market = |folded: &[tinyhivemind_hive::Trace]| {
             let standings = standings(folded, at, &policy).expect("valid policy");
-            let folded_directory = directory(folded, at, &known, &[]).expect("valid policy");
             bids(&BidContext {
                 traces: folded,
                 standings: &standings,
@@ -155,9 +143,6 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
                 dominance_cap: 50,
                 repetition_cap: 3,
                 quorum: &policy,
-                directory: Some(&folded_directory),
-                directory_policy: Some(&known),
-                defer_cap: Some(2),
             })
             .expect("valid policy")
         };
@@ -169,11 +154,7 @@ fn arbitrary_transcripts_have_stable_well_formed_and_idempotent_folds() {
             .iter()
             .flat_map(|message| [message.clone(), message.clone()])
             .collect();
-        let episode = EpisodePolicy {
-            directory: Some(known),
-            defer_cap: Some(2),
-            ..EpisodePolicy::DEFAULT
-        };
+        let episode = EpisodePolicy::DEFAULT;
         assert_eq!(
             step(&opened(), &messages, &roster, &desk_set, &episode).expect("valid policy"),
             step(&opened(), &redelivered, &roster, &desk_set, &episode).expect("valid policy"),
@@ -205,11 +186,7 @@ fn asides_interleaved_into_an_arbitrary_transcript_do_not_move_the_episode() {
     let retired: Vec<String> = Vec::new();
     let roster = Roster::new(&people, &[], &retired);
     let desk_set = DeskSet::new(&rooms, &[], &[], &[], &retired);
-    let episode = EpisodePolicy {
-        directory: Some(DirectoryPolicy::DEFAULT),
-        defer_cap: Some(2),
-        ..EpisodePolicy::DEFAULT
-    };
+    let episode = EpisodePolicy::DEFAULT;
 
     for case in 0..256_u64 {
         // Desk rows on even sequences, so an aside always has an odd sequence
@@ -532,7 +509,7 @@ fn a_round_of_one_is_the_sequential_episode() {
 }
 
 /// `round_width: 0` is a configuration error, not a quiet way to switch the
-/// mechanism off — the precedent `defer_cap: Some(0)` set.
+/// mechanism off.
 #[test]
 fn a_zero_round_width_is_rejected() {
     let people = roster_members();

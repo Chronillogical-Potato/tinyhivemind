@@ -328,33 +328,11 @@ pub(crate) fn run_episode(
     task: &str,
     keep_trace: bool,
 ) -> Result<EpisodeReport, String> {
-    run_episode_with(room, policy, task, keep_trace, 0)
-}
-
-/// Run one full episode, letting every member spend up to `defer_cap` turns
-/// on `!defer` instead of arguing outside its own specialty.
-///
-/// `0` turns the move off, which is what every arm that is not a deferring
-/// arm passes: a member that never defers behaves exactly as it did before
-/// the move existed, so a deferring arm differs from its control in one thing
-/// rather than in two.
-///
-/// # Errors
-///
-/// Returns the library's own error text if a snapshot or policy is malformed.
-pub(crate) fn run_episode_with(
-    room: &Room,
-    policy: &EpisodePolicy,
-    task: &str,
-    keep_trace: bool,
-    defer_cap: u32,
-) -> Result<EpisodeReport, String> {
     run_episode_checking(
         room,
         policy,
         task,
         keep_trace,
-        defer_cap,
         AsideMode::Off,
         0,
         CheckStyle::PLAIN,
@@ -390,7 +368,6 @@ pub(crate) fn run_episode_exchanging_with(
     let mut agents: Vec<SimAgent> = room.agents.clone();
     for agent in &mut agents {
         agent.set_quorum(policy.quorum);
-        agent.set_defer_cap(0);
         // The cap on the participant side is the library's, so a member never
         // wants a row the round would not have authorized.
         agent.set_aside_cap(contact_cap, style);
@@ -427,7 +404,7 @@ pub(crate) fn run_episode_exchanging_with(
 ///
 /// `AsideMode::Off` with `aside_cap: 0` is what every other arm passes, and a
 /// member that opens no check behaves exactly as it did before the move
-/// existed — the same discipline `defer_cap` follows.
+/// existed.
 ///
 /// # Errors
 ///
@@ -438,7 +415,6 @@ pub(crate) fn run_episode_checking(
     policy: &EpisodePolicy,
     task: &str,
     keep_trace: bool,
-    defer_cap: u32,
     aside_mode: AsideMode,
     aside_cap: u32,
     style: CheckStyle,
@@ -448,7 +424,6 @@ pub(crate) fn run_episode_checking(
     for agent in &mut agents {
         agent.set_quorum(policy.quorum);
         agent.set_budget(room.budget);
-        agent.set_defer_cap(defer_cap);
         agent.set_aside_cap(aside_cap, style);
         agent.set_peers(&ids);
     }

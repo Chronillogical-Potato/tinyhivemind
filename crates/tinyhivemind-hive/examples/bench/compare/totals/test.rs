@@ -15,15 +15,9 @@ const MOVED: CostModel = CostModel {
     decode_tok_s: 11,
 };
 
-/// `ladder_directed` sits outside [`Totals::arms_mut`]'s array because its
-/// per-room work depends on a directory earned over prior episodes, and
-/// `priced_at` used to price only that array -- leaving `ladder_directed` at
-/// `Aggregate::default()`'s model, `CostModel::DEFAULT`, regardless of what a
-/// `--tokens-per-*`, `--ttft` or `--decode-rate` flag asked for. Every row
-/// the table prints, this one included, must be priced at the model
-/// `priced_at` was actually given.
+/// Every active arm uses the selected cost model.
 #[test]
-fn priced_at_reaches_every_arm_ladder_directed_included() {
+fn priced_at_reaches_every_active_arm() {
     let totals = Totals::priced_at(MOVED);
     for arm in totals.arms() {
         assert_eq!(
@@ -31,8 +25,4 @@ fn priced_at_reaches_every_arm_ladder_directed_included() {
             "an arm in Totals::arms() was not priced at the model priced_at was given",
         );
     }
-    assert_eq!(
-        totals.ladder_directed.model, MOVED,
-        "ladder_directed must be priced at the model priced_at was given, not left at the default",
-    );
 }

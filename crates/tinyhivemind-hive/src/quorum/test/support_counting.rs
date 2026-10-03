@@ -22,13 +22,6 @@ fn a_zero_threshold_or_window_is_rejected() {
     };
     let error = standings(&[], Sequence(1), &zero_window).expect_err("zero window");
     assert_eq!(error.to_string(), "quorum window must not be zero");
-
-    let zero_cap = QuorumPolicy {
-        refutation_cap: Some(0),
-        ..QuorumPolicy::DEFAULT
-    };
-    let error = standings(&[], Sequence(1), &zero_cap).expect_err("zero refutation cap");
-    assert_eq!(error.to_string(), "refutation cap must not be zero");
 }
 
 #[test]

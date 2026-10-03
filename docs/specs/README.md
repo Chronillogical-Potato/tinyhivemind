@@ -22,7 +22,12 @@ the contract; production code still belongs under `src/`.
 
 See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 
-## Accepted specifications
+## Current specifications
+
+[ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md)
+retires several optional mechanisms and waiting wrappers. Older specifications
+remain here as design records; their API sketches are not current usage guides.
+
 
 - [`chat-identity.md`](chat-identity.md) — the four stored spellings of the
   General conversation.
@@ -35,7 +40,7 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
     lexical rules, the alias table, resolution, normalization, and which
     mention wins for each consumer.
   - [`grammar-traces.md`](grammar-traces.md) — the complete `!marker` grammar:
-    the eight kinds, the `#topic`, `>target` and `^cite` qualifiers, fence
+    the eight parsed kinds, including two whose policy effects were retired, the `#topic`, `>target` and `^cite` qualifiers, fence
     masking, and the markers that fail closed.
 - [`mentions.md`](mentions.md) — roster records, mention grammar, normalization,
   and pure routing decisions.
@@ -44,22 +49,20 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 - [`continuous-sharing.md`](continuous-sharing.md) — caller-owned watermarks
   and stateless attributed transcript deltas.
 - [`responders.md`](responders.md) — deterministic one-responder selection and
-  the model selector boundary.
+  the model selector boundary. The waiting selector wrapper was retired.
 - [`mention-dispatch.md`](mention-dispatch.md) — bounded one-target dispatch,
-  the atomic host enqueue contract, and the sentences a refusal comes back in.
+  the former atomic host enqueue contract, and refusal sentences. The runtime
+  wrapper was retired.
 - [`cross-desk-referral.md`](cross-desk-referral.md) — one bounded child turn
-  that may run on another channel, and the one answer that comes back.
+  that may run on another channel, and the one answer that comes back. The
+  runtime queue wrapper was retired.
 - [`hive-mind.md`](hive-mind.md) — bounded group deliberation: traces, salience,
-  quorum with cross-inhibition, and the attention market.
-- [`refutation-and-grounds.md`](refutation-and-grounds.md) — a negative
-  evidence-to-topic link, grounds weighed by evidential depth, and grounded
-  objections.
+  quorum with cross-inhibition, and the attention market. Its optional
+  character allocator was retired.
 - [`recall.md`](recall.md) — one selection ranking, the roster and desk
   pickers, bounded transcript search with optional regular expressions,
-  pinning as a fold, and the stated per-message budget.
-- [`expert-delegation.md`](expert-delegation.md) — a transactive-memory
-  directory folded from grounded deposits and the citations they drew,
-  `BidReason::Knows`, and `!defer`.
+  pinning as a fold, and the stated per-message budget. Standalone
+  find/select/search entry points were retired.
 - [`jev-integration.md`](jev-integration.md) — typed routing distributions,
   admission-gated probabilistic quorum, approval narrowing, and paired Jev
   versus strict-JSON evaluation.
@@ -72,9 +75,23 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 - [`opencompany-routing-compatibility.md`](opencompany-routing-compatibility.md)
   — the snapshot boundary for a later storage-preserving host adapter.
 - [`approval.md`](approval.md) — a pure gate for a side-effecting action:
-  total approval, standing grants, and epoch-scoped consent.
+  total approval, standing grants, and epoch-scoped consent. The runtime
+  waiting wrapper was retired.
   - [`approval-testing.md`](approval-testing.md) — the full failure-path test
     matrix, split out to keep the specification within its line budget.
+
+## Superseded experimental specifications
+
+- [`refutation-and-grounds.md`](refutation-and-grounds.md) — a negative
+  evidence-to-topic link, grounds weighed by evidential depth, and grounded
+  objections.
+- [`expert-delegation.md`](expert-delegation.md) — a transactive-memory
+  directory folded from grounded deposits and the citations they drew,
+  `BidReason::Knows`, and `!defer`.
+
+The directory fold remains available. Its episode attention wiring and the
+other optional mechanisms were measured and retired by
+[ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md).
 
 ## Draft and proposed specifications
 
@@ -89,14 +106,14 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
   owes the room when it ends.
 - [`seat-continuity.md`](seat-continuity.md) — draft: the private, superseding
   notebook a seat carries between turns, the one feedthrough row a turn that
-  wrote files leaves behind, and the brief appended once. First slice lives in
-  the `desk` example.
+  wrote files leaves behind, and the brief appended once. The `desk` example
+  used during exploration has been retired.
 - [`folding-by-size.md`](folding-by-size.md) — draft: the standing account
   folds when the room is large rather than only when it is long, stated as a
   character budget a host writes as a token budget, so a seat joining a big
   room is always handed an account of it.
 - [`the-utterance-surface.md`](the-utterance-surface.md) — draft: the algebra of
-  what a seat says moves out of the `desk` example and into
+  what a seat says; this was first explored in the retired `desk` example and moved into
   `tinyhivemind::speech` — the tool descriptions as data, one fold from an
   utterance to a row, and a policy refusal that reaches its author while the
   turn is still running. The mention grammar keeps the routing.

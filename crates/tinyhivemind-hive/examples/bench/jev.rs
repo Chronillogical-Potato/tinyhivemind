@@ -5,92 +5,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 use tinyhivemind_hive::{
     DecisionEvaluation, Sequence, TopicId, TopicProbability,
-    approval::Effect,
-    responder::{
-        CandidateProbability, PROBABILITY_SCALE, Probability, SelectionEvaluation,
-        SelectionRequest, Selector, SelectorFuture,
-    },
+    responder::{PROBABILITY_SCALE, Probability},
 };
-use tinyjevclient::{Answer, Choice, Client, EvaluationRequest, Noul, Question, Score};
+use tinyjevclient::{Answer, Choice, EvaluationRequest, Noul, Question, Score};
 
 const STANCE: &str = "Which proposed topic does this worker output support?";
 const EVIDENCE: &str = "How strongly is the recommendation supported by evidence?";
 const VIOLATION: &str = "Does this output violate an explicit safety or approval constraint?";
-
-/// A [`Selector`] backed by one native Jev Choice request.
-#[derive(Clone, Debug)]
-pub(crate) struct JevSelector {
-    client: Client,
-}
-
-impl JevSelector {
-    /// Wrap a configured native client.
-    pub(crate) const fn new(client: Client) -> Self {
-        Self { client }
-    }
-}
-
-impl Selector for JevSelector {
-    fn select<'a>(&'a self, request: &'a SelectionRequest) -> SelectorFuture<'a> {
-        Box::pin(async move {
-            let criteria = request
-                .candidates
-                .iter()
-                .map(|candidate| {
-                    (
-                        candidate.id.clone(),
-                        Some(json!({
-                            "label": candidate.label,
-                            "role": candidate.role,
-                            "description": candidate.description,
-                        })),
-                    )
-                })
-                .collect();
-            let evaluation = EvaluationRequest::jev(
-                json!({
-                    "message": request.message,
-                    "desk_id": request.desk_id,
-                    "candidates": request.candidates,
-                }),
-                BTreeMap::from([(
-                    "responder".to_owned(),
-                    Question::Choice(Choice {
-                        instructions: json!("Which candidate is best suited to answer `message`?"),
-                        criteria,
-                    }),
-                )]),
-            );
-            let result = self
-                .client
-                .evaluate(&evaluation)
-                .await
-                .map_err(|error| -> tinyhivemind_hive::BoxError { Box::new(error) })?;
-            let Some(Answer::Choice(answer)) = result.response.answers.get("responder") else {
-                return Err("Jev response omitted the responder Choice".into());
-            };
-            let allowed: BTreeSet<String> = request
-                .candidates
-                .iter()
-                .map(|candidate| candidate.id.clone())
-                .collect();
-            let probabilities = fixed_distribution(&answer.probabilities, &answer.choice, &allowed)
-                .map_err(|message| -> tinyhivemind_hive::BoxError { message.into() })?;
-            Ok(SelectionEvaluation {
-                choice: answer.choice.clone(),
-                probabilities: probabilities
-                    .into_iter()
-                    .map(|(candidate_id, probability)| CandidateProbability {
-                        candidate_id,
-                        probability,
-                    })
-                    .collect(),
-                confidence: fixed(answer.confidence)
-                    .map_err(|message| -> tinyhivemind_hive::BoxError { message.into() })?,
-            })
-        })
-    }
-}
 
 /// Build the batched Choice, Score, and Noul request for one worker output.
 pub(crate) fn turn_request(state: Value, topics: &[TopicId]) -> EvaluationRequest {
@@ -169,42 +90,6 @@ pub(crate) fn decision_from_response(
         evidence_quality: fixed(evidence.score / 2.0)?,
         violation_probability: fixed(violation.noul)?,
     })
-}
-
-/// Semantic assessment used only to narrow a deterministic approval request.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ActionAssessment {
-    /// Jev's classified effect.
-    pub(crate) effect: Effect,
-    /// Choice distribution concentration.
-    pub(crate) confidence: Probability,
-    /// Normalized severity Score.
-    pub(crate) severity: Probability,
-    /// Noul probability of a stated policy violation.
-    pub(crate) violation: Probability,
-}
-
-/// Combine host knowledge and Jev so semantic inference can only narrow.
-pub(crate) fn narrow_effect(
-    host: Effect,
-    assessment: ActionAssessment,
-    minimum_confidence: Probability,
-    maximum_violation: Probability,
-    maximum_severity: Probability,
-) -> Effect {
-    if assessment.confidence < minimum_confidence
-        || assessment.violation > maximum_violation
-        || assessment.severity > maximum_severity
-        || host == Effect::Unclassified
-        || assessment.effect == Effect::Unclassified
-    {
-        return Effect::Unclassified;
-    }
-    if host == Effect::Mutating || assessment.effect == Effect::Mutating {
-        Effect::Mutating
-    } else {
-        Effect::ReadOnly
-    }
 }
 
 fn fixed_distribution(
@@ -310,39 +195,5 @@ mod test {
         };
         assert!(choice.criteria.contains_key("__abstain"));
         assert!(choice.criteria.contains_key("__abstain_"));
-    }
-
-    #[test]
-    fn semantic_assessment_can_only_preserve_or_raise_risk() {
-        let safe = ActionAssessment {
-            effect: Effect::ReadOnly,
-            confidence: Probability::ONE,
-            severity: Probability::ZERO,
-            violation: Probability::ZERO,
-        };
-        assert_eq!(
-            narrow_effect(
-                Effect::Mutating,
-                safe,
-                Probability::ONE,
-                Probability::ZERO,
-                Probability::ZERO,
-            ),
-            Effect::Mutating
-        );
-        let risky = ActionAssessment {
-            violation: Probability::ONE,
-            ..safe
-        };
-        assert_eq!(
-            narrow_effect(
-                Effect::ReadOnly,
-                risky,
-                Probability::ZERO,
-                Probability::ZERO,
-                Probability::ONE,
-            ),
-            Effect::Unclassified
-        );
     }
 }

@@ -44,16 +44,12 @@ tinyhivemind-embed = { path = "crates/tinyhivemind-embed" }
 # Exact System One wire types and Jev question construction behind one host
 # transport port; it deliberately contains no HTTP client or async runtime.
 tinyhivemind-typesafe = { path = "crates/tinyhivemind-typesafe" }
-# The room's tools served over MCP, for a harness that cannot be handed a native
-# tool. The one socket the repository opens -- see ADR 0022 -- and therefore a
-# separate, explicit dependency that no pure or runtime crate may take.
 # The episode's tools as a record a host drains, and their definitions. Opens
-# nothing; `tinyhivemind-mcp` is the wire over it.
+# nothing; a host exposes the definitions through its own tool interface.
 tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
 # The completion driver over a handle the host binds. Names no harness and
 # sits in the pure list; `tinyhivemind-openhuman` is its OpenHuman adapter.
 tinyhivemind-driver = { path = "crates/tinyhivemind-driver" }
-tinyhivemind-mcp = { path = "crates/tinyhivemind-mcp" }
 # The harness, for `tinyhivemind-openhuman` and nothing else under `crates/*`.
 # `openhuman-embed` is the `AgentSpec` seat; `openhuman` (the core) is the raw
 # session one level down; `tinytools` and `tinytools-agent` are the `Tool` a
@@ -88,36 +84,21 @@ serde = { version = "1", features = ["derive"] }
 # Pins the exact JSON object shape and required fields of host-facing DTOs in
 # unit tests without adding JSON handling to the runtime dependency graph.
 serde_json = "1"
-# Optional, and off by default. Powers the `regex` feature of the `select`
-# module: a search that cannot be spelled as a substring is spelled as an
-# expression instead. Default features are off because a picker needs matching
-# and case folding, not the whole crate's optional syntax surface.
-regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-case", "unicode-perl"] }
 # Drives only the runtime crate's async unit tests. The library itself remains
 # executor-neutral and exposes boxed futures at its host port.
 tokio = { version = "1", features = ["macros", "rt", "sync"] }
-# EXAMPLE-ONLY, and it must stay that way. The provider layer the `desk`
-# example reaches a model through: a `ChatModel` with streaming, OpenAI-shaped
-# adapters, and normalized provider failures, in place of the `curl`
-# subprocess and hand-written request body it used before. It pulls `reqwest`,
-# `tokio` and `futures`, so no library crate may take it — see
-# docs/adr/0013-a-vendored-crate-is-an-example-dependency.md. A consumer builds
-# `crates/*` and never the examples, so it never resolves this.
-tinyinference-llm = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-llm" }
 # `tinytools::Tool`, OpenHuman's `ToolPolicy` and its `Memory` are async
-# traits. The `desk` example and the OpenHuman adapter implement them; no
-# other crate may take this.
+# traits. The OpenHuman adapter implements them.
 async-trait = "0.1"
 # `tinytools::Tool::execute` returns `anyhow::Result`, so implementing it
 # means naming the type, and every OpenHuman entry point returns it too. It
-# is forbidden in every crate `assert-pure.sh` guards and reaches only the
-# `desk` example (a dev-dependency edge) and `tinyhivemind-openhuman`, the
-# one crate that links the harness.
+# is forbidden in every crate `assert-pure.sh` guards and reaches only
+# `tinyhivemind-openhuman`, the one crate that links the harness.
 anyhow = "1"
 # The adapter's scripted model and backend stub, behind its `offline`
 # feature, and its own tests.
 wiremock = "0.6"
-# A workspace to seat raw sessions in, for the adapter's tests.
+# Temporary workspaces for adapter tests.
 tempfile = "3"
 # EXAMPLE-ONLY. The benchmark's Jev arm uses the native System One client;
 # library crates keep only provider-neutral fixed-point decision snapshots.

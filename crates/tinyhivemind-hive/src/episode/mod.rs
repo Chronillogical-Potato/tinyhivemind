@@ -21,7 +21,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     attention::{AgentThreshold, BidContext, bids, floor_round},
-    directory::{Directory, directory, validate_policy as validate_directory_policy},
     error::{Error, Result},
     horizon::{Basis, Horizon},
     quorum::{
@@ -44,14 +43,11 @@ const SPEAK_COST: i64 = 500;
 /// 1. the roster, desk snapshots and policy are validated;
 /// 2. traces and standings are folded from the transcript;
 /// 3. a spent budget returns [`HiveStep::Exhausted`], carrying those
-///    standings — and returns *before* the directory is folded, since an
-///    exhausted episode authorizes nobody and so has no bid to route;
-/// 4. when `policy.directory` is set, the directory is folded at the same
-///    sequence as the standings, on every path that reaches a bid;
-/// 5. quorum in [`Phase::Commit`] returns [`HiveStep::Converged`];
-/// 6. quorum in [`Phase::Deliberate`] flips the phase and emits one commit turn;
-/// 7. a deadlock nobody can break returns [`HiveStep::Deadlocked`];
-/// 8. otherwise the highest bid takes the floor, or [`HiveStep::Idle`].
+///    standings;
+/// 4. quorum in [`Phase::Commit`] returns [`HiveStep::Converged`];
+/// 5. quorum in [`Phase::Deliberate`] flips the phase and emits one commit turn;
+/// 6. a deadlock nobody can break returns [`HiveStep::Deadlocked`];
+/// 7. otherwise the highest bid takes the floor, or [`HiveStep::Idle`].
 ///
 /// `transcript` is the projection of the episode's conversation. Messages at or
 /// below `state.watermark` are context and are not folded into traces, so an
@@ -61,8 +57,7 @@ const SPEAK_COST: i64 = 500;
 ///
 /// Returns [`Error::Core`] for a malformed roster or desk snapshot,
 /// [`Error::UnknownThresholdMember`] for a threshold naming a non-member,
-/// [`Error::ZeroDeferCap`] for `defer_cap: Some(0)`, or a policy error from the
-/// quorum, salience and directory folds.
+/// or a policy error from the quorum and salience folds.
 pub fn step(
     state: &EpisodeState,
     transcript: &[SessionMessage],
@@ -111,14 +106,8 @@ fn step_inner(
 ) -> Result<HiveStep> {
     roster.validate()?;
     desks.validate()?;
-    if policy.defer_cap == Some(0) {
-        return Err(Error::ZeroDeferCap);
-    }
     if policy.round_width == 0 || policy.revealed_width == 0 {
         return Err(Error::ZeroRoundWidth);
-    }
-    if let Some(directory_policy) = &policy.directory {
-        validate_directory_policy(directory_policy)?;
     }
     let members = active_members(roster, desks, state)?;
 
@@ -176,26 +165,7 @@ fn step_inner(
         ConsensusState::Deliberating => {}
     }
 
-    // The directory is folded at the same sequence as the standings, so the
-    // bid reads one consistent view of the transcript rather than two.
-    let known = match &policy.directory {
-        Some(directory_policy) => Some(directory(
-            &traces,
-            horizon,
-            directory_policy,
-            &state.thresholds,
-        )?),
-        None => None,
-    };
-    let context = context(
-        &traces,
-        &standings,
-        &members,
-        state,
-        policy,
-        horizon,
-        known.as_ref(),
-    );
+    let context = context(&traces, &standings, &members, state, policy, horizon);
     let bids = bids(&context)?;
     let phase = if matches!(consensus, ConsensusState::Quorum { .. }) {
         Phase::Commit
@@ -582,7 +552,6 @@ fn context<'a>(
     state: &'a EpisodeState,
     policy: &'a EpisodePolicy,
     at: Horizon<'a>,
-    known: Option<&'a Directory>,
 ) -> BidContext<'a> {
     BidContext {
         traces,
@@ -594,9 +563,6 @@ fn context<'a>(
         dominance_cap: policy.dominance_cap,
         repetition_cap: policy.repetition_cap,
         quorum: &policy.quorum,
-        directory: known,
-        directory_policy: policy.directory.as_ref(),
-        defer_cap: policy.defer_cap,
     }
 }
 

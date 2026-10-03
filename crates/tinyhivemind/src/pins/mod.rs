@@ -1,10 +1,9 @@
 //! Pinning: the small set of messages every turn sees, whatever else it misses.
 //!
 //! A turn reads a bounded window of a busy desk, so the decision that was
-//! settled two hundred messages ago is, by default, gone. [Search](crate::search)
-//! makes it *reachable*; a pin makes it *unavoidable*. The two together are why
-//! the window can stay small: what matters is either pinned or findable, and
-//! everything else is allowed to scroll away.
+//! settled two hundred messages ago is, by default, outside that window. A
+//! host may read the original row from its log; a pin puts it in every turn's
+//! briefing. This keeps the working set visible without growing the window.
 //!
 //! # The grammar
 //!

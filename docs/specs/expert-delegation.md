@@ -1,5 +1,8 @@
 # Expert delegation: a folded directory, `BidReason::Knows`, and `!defer`
 
+> **Historical specification.** This optional mechanism was retired by [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md). Its API sketches describe the experiment, not the current crate.
+
+
 - **Status:** Implemented; both episode knobs are off by default
 - **Owner:** `crates/tinyhivemind-hive`
 - **Reading:** [`../research/delegation.md`](../research/delegation.md)

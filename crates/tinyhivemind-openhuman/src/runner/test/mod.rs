@@ -1,13 +1,15 @@
-//! The seam: which runner the environment names, and both runners through it.
+//! The runner seam through native embedded and hosted seats.
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+
+mod plain;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use openhuman_core::agent::tinyagents::host::LastTurnUsage;
-use openhuman_embed::{Access, Provider, Runtime, Workspace};
+use openhuman_embed::{Access, Provider, Runtime, ServiceSet, Workspace};
 use tinyhivemind::speech::{ToolCall, Utterance};
 use tinyhivemind::{SESSION_WINDOW, Sequence, SessionLog};
 use tinyhivemind_driver::standing_contract;
@@ -17,7 +19,7 @@ use super::{Lane, RunnerKind, SeatRunner};
 use crate::MemoryLog;
 use crate::{
     Disposition, EmbedRunner, EpisodeBeltSource, EpisodeHost, HostedRunner, HostedTurn, Journal,
-    LibraryHost, RawRunner, Route, TurnResult, offline, register_seats,
+    LibraryHost, Route, TurnResult, offline, register_seats,
 };
 use openhuman_embed::Agent;
 use tinyhivemind_driver::{Commit, Note};
@@ -126,16 +128,12 @@ impl EpisodeHost for TestHost {
 
 #[test]
 fn the_runner_is_named_by_the_environment_and_defaults_to_embed() {
-    // Not set, empty, and each spelling -- read through the same parser the
-    // binary uses, without touching the process environment.
+    // Read every spelling through the parser without changing the process environment.
     assert_eq!(RunnerKind::parse(None), Ok(RunnerKind::Embed));
     assert_eq!(RunnerKind::parse(Some("")), Ok(RunnerKind::Embed));
     assert_eq!(RunnerKind::parse(Some("embed")), Ok(RunnerKind::Embed));
-    assert_eq!(
-        RunnerKind::parse(Some("embed-mcp")),
-        Ok(RunnerKind::EmbedMcp)
-    );
-    assert_eq!(RunnerKind::parse(Some("raw")), Ok(RunnerKind::Raw));
+    assert!(RunnerKind::parse(Some("embed-mcp")).is_err());
+    assert!(RunnerKind::parse(Some("raw")).is_err());
     assert_eq!(RunnerKind::parse(Some("hosted")), Ok(RunnerKind::Hosted));
     assert!(
         RunnerKind::parse(Some("rae")).is_err(),
@@ -147,32 +145,20 @@ fn the_runner_is_named_by_the_environment_and_defaults_to_embed() {
     assert_eq!(
         from_env.map_err(|error| error.to_string()),
         RunnerKind::parse(value.as_deref()).map_err(|other| format!(
-            "TINYHIVEMIND_RUNNER must be `embed`, `embed-mcp`, `raw` or `hosted`, not `{other}`"
+            "TINYHIVEMIND_RUNNER must be `embed` or `hosted`, not `{other}`"
         ))
     );
 }
 
 #[test]
-fn each_runner_states_its_own_mechanics_and_nothing_else() {
-    assert!(RunnerKind::EmbedMcp.how_to_call().contains("mcp_call_tool"));
-    assert!(
-        !RunnerKind::Embed.how_to_call().contains("mcp"),
-        "an embed seat's belt is its own; only the MCP road says otherwise"
-    );
-    assert_eq!(
-        RunnerKind::Embed.how_to_call(),
-        RunnerKind::Hosted.how_to_call(),
-        "a native belt is called the same way whoever built the agent"
-    );
-    assert!(!RunnerKind::Raw.how_to_call().contains("mcp"));
+fn both_runners_offer_native_tools() {
     assert_eq!(RunnerKind::Embed.name(), "embed");
-    assert_eq!(RunnerKind::EmbedMcp.name(), "embed-mcp");
-    assert_eq!(RunnerKind::Raw.name(), "raw");
     assert_eq!(RunnerKind::Hosted.name(), "hosted");
     assert_eq!(
-        RunnerKind::Hosted.how_to_call(),
-        RunnerKind::Raw.how_to_call()
+        RunnerKind::Embed.how_to_call(),
+        RunnerKind::Hosted.how_to_call()
     );
+    assert!(RunnerKind::Embed.how_to_call().contains("call directly"));
 }
 
 /// One turn through the seam: open, run, close.
@@ -202,36 +188,15 @@ async fn one_turn<R: SeatRunner>(runner: &R, since: Option<Sequence>) -> (String
     (reply, runner.close("lead"))
 }
 
-/// **Where a seat learns who is on the desk.**
-///
-/// The invented teammates -- `@backend`, `@frontend`, `@qa` on a desk of
-/// five, and a made-up `teammates` for the group -- were both embed seats
-/// over MCP, and this is why: the roster lives in the asking tools' `to`
-/// enumeration, and an MCP seat is not offered those tools at all. It is
-/// offered three dispatchers, and the tools are behind a call it has to
-/// think to make. A seat that reaches straight for `mcp_call_tool` has never
-/// been shown a seat id, so it writes one that sounds right.
-///
-/// A native belt puts the tools in the first request, schemas and all, so
-/// there is nothing to fetch and nothing to guess.
+/// A native belt includes the roster in the first model request.
 async fn where_the_roster_is(
     runtime: &Arc<Runtime>,
     briefs: &BTreeMap<String, String>,
-    contract: &dyn Fn(RunnerKind) -> String,
+    contract: &str,
     metrics: &offline::Metrics,
 ) {
-    let seats_in = |tools: &serde_json::Value| -> bool {
-        serde_json::to_string(tools).is_ok_and(|rendered| rendered.contains("\"lead\""))
-    };
-
     metrics.reset();
-    let (_, native) = embedded(
-        RunnerKind::Embed,
-        runtime,
-        briefs,
-        &contract(RunnerKind::Embed),
-    )
-    .await;
+    let (_, native) = embedded(runtime, briefs, contract);
     one_turn(&native, None).await;
     let offered = metrics.snapshot().first_tools.expect("the model saw tools");
     let names: Vec<String> = offered
@@ -243,89 +208,19 @@ async fn where_the_roster_is(
                 .collect()
         })
         .unwrap_or_default();
+    assert!(names.iter().any(|name| name == "ask"), "{names:?}");
     assert!(
-        names.iter().any(|name| name == "ask"),
-        "a native belt offers the vocabulary itself: {names:?}"
-    );
-    assert!(
-        seats_in(&offered),
-        "and the asking tools carry the roster as their choices: {offered}"
-    );
-
-    metrics.reset();
-    let (_, over_mcp) = embedded(
-        RunnerKind::EmbedMcp,
-        runtime,
-        briefs,
-        &contract(RunnerKind::EmbedMcp),
-    )
-    .await;
-    one_turn(&over_mcp, None).await;
-    let offered = metrics.snapshot().first_tools.expect("the model saw tools");
-    let names: Vec<String> = offered
-        .as_array()
-        .map(|tools| {
-            tools
-                .iter()
-                .filter_map(|tool| tool["function"]["name"].as_str().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default();
-    let mut names = names;
-    names.sort();
-    // OpenHuman advertises its discovery and memory tools intrinsically when a
-    // run has deferred tools. Those are available to every seat independently
-    // of the MCP binding, so keep the assertion explicit about the entire set.
-    assert_eq!(
-        names,
-        [
-            "juice_extract",
-            "juice_find",
-            "juice_retrieve",
-            "juice_summarize",
-            "mcp_call_tool",
-            "mcp_list_servers",
-            "mcp_list_tools",
-            "tool_search"
-        ],
-        "an MCP seat is offered the road, not the tools"
-    );
-    assert!(
-        !seats_in(&offered),
-        "so no seat id reaches it through its tools at all: {offered}"
+        serde_json::to_string(&offered).is_ok_and(|rendered| rendered.contains("\"lead\"")),
+        "the asking tool should offer a real seat id: {offered}"
     );
     metrics.reset();
 }
 
-/// Both embed arms, each seated on a journal of its own.
-async fn embed_arms(
-    runtime: &Arc<Runtime>,
-    briefs: &BTreeMap<String, String>,
-    contract: &dyn Fn(RunnerKind) -> String,
-) -> (Arc<PlainHost>, EmbedRunner, EmbedRunner) {
-    let (host, native) = embedded(
-        RunnerKind::Embed,
-        runtime,
-        briefs,
-        &contract(RunnerKind::Embed),
-    )
-    .await;
-    let (_, mcp) = embedded(
-        RunnerKind::EmbedMcp,
-        runtime,
-        briefs,
-        &contract(RunnerKind::EmbedMcp),
-    )
-    .await;
-    (host, native, mcp)
-}
-
-/// The embed runner over a journal of its own, on the road `kind` names.
+/// The embed runner over a journal of its own.
 ///
 /// An embed seat seeds from its host's journal exactly as a hosted one does,
 /// so it takes one; the operator's row is what its first turn is shown.
-async fn embedded(
-    kind: RunnerKind,
+fn embedded(
     runtime: &Arc<Runtime>,
     briefs: &BTreeMap<String, String>,
     contract: &str,
@@ -339,33 +234,17 @@ async fn embedded(
     let journal = Arc::clone(&host) as Arc<dyn Journal>;
     let tools = Arc::new(EpisodeTools::new(["lead"]));
     let run_id = format!("test-{}", seating());
-    let runner = match kind {
-        RunnerKind::EmbedMcp => {
-            EmbedRunner::seat_over_mcp(
-                journal,
-                runtime,
-                tools,
-                briefs,
-                contract,
-                "engineering",
-                "Engineering",
-                SESSION_WINDOW,
-                &run_id,
-            )
-            .await
-        }
-        _ => EmbedRunner::seat(
-            journal,
-            runtime,
-            tools,
-            briefs,
-            contract,
-            "engineering",
-            "Engineering",
-            SESSION_WINDOW,
-            &run_id,
-        ),
-    };
+    let runner = EmbedRunner::seat(
+        journal,
+        runtime,
+        tools,
+        briefs,
+        contract,
+        "engineering",
+        "Engineering",
+        SESSION_WINDOW,
+        &run_id,
+    );
     (host, runner.expect("embed seats"))
 }
 
@@ -434,9 +313,8 @@ fn seat_agent(
 ) -> crate::Result<Agent> {
     Ok(runtime.agent(
         // Not the bare seat id. A runtime id is unique per process, and this
-        // one is taken twice over: `register_seats` registered `lead` for the
-        // raw runner, and both hosted hosts in this file seat a `lead` of
-        // their own. The hive still knows the seat as `lead` -- that is the
+        // both hosted hosts in this file seat a `lead` of their own. The hive
+        // still knows the seat as `lead` -- that is the
         // binding's id, not the runtime's, and only the latter has to be
         // unique here.
         openhuman_embed::AgentSpec::new(format!("{seat}-hosted-{}", seating()))
@@ -447,62 +325,6 @@ fn seat_agent(
                 openhuman_embed::HostTurnTools::advertised(belt.tools).with_policy(policy)
             }),
     )?)
-}
-
-/// A hosted seat on a host that keeps every default, run once on the desk
-/// and once in a thread it is not in: the defaults hold, the thread turn is
-/// seeded from the thread, and a call outside its thread is refused.
-async fn plain(runtime: &Arc<Runtime>) {
-    let log = MemoryLog::new("engineering");
-    log.append("operator", "state the root cause", None, &[]);
-    let host = Arc::new(PlainHost {
-        log,
-        runtime: Arc::clone(runtime),
-    });
-    let runner = HostedRunner::seat(
-        Arc::clone(&host),
-        Arc::new(EpisodeTools::new(["lead"])),
-        &["lead".to_owned()],
-        "engineering",
-        "Engineering",
-        SESSION_WINDOW,
-    )
-    .expect("hosted seats");
-    assert_eq!(
-        runner.tools().display_name("lead"),
-        "lead",
-        "a host that names nobody leaves the record's seats by id"
-    );
-    let (reply, events) = one_turn(&runner, host.log.latest()).await;
-    assert!(!reply.is_empty(), "{reply:?}");
-    assert_eq!(
-        events.len(),
-        1,
-        "the bare-named belt is admitted by default"
-    );
-    runner.open(
-        "lead",
-        Vec::new(),
-        Dispatch {
-            chat: "engineering".into(),
-            parent: Some("1".into()),
-        },
-    );
-    let (_, lane, outcome) = runner
-        .turn(
-            "lead".into(),
-            Lane::Thread(Sequence(1)),
-            Some(Sequence(1)),
-            "In the thread.".into(),
-        )
-        .await;
-    assert_eq!(lane, Lane::Thread(Sequence(1)));
-    assert!(matches!(outcome, TurnResult::Replied(_)), "{outcome:?}");
-    assert!(
-        runner.close("lead").is_empty(),
-        "the scripted call names no thread, so the record refused it"
-    );
-    assert_eq!(runner.tools().drain_refusals("lead").len(), 1);
 }
 
 /// A failed turn reports what the session counted, and leaves no stale
@@ -623,33 +445,16 @@ fn one_completion(name: &str, events: &[SeatEvent]) {
     );
 }
 
-/// A second turn on every runner: raw is seeded with what it said, embed and
-/// hosted clear and reseed the session they reuse, and all three call again.
-///
-/// Embed is here because it once was not. It held a session across the
-/// episode and *resumed* it, which binds that session's transcript on the
-/// first committed turn and refuses the next one whose target is not the same
-/// binding -- so every embed seat failed on its second turn, and nothing in
-/// this file ran one. A seat speaks twice whenever it asks and is woken by
-/// the answer.
+/// Both runners can run a second turn after the first tool call.
 async fn again(
     embed: &EmbedRunner,
     embed_log: &MemoryLog,
-    raw: &RawRunner,
     host: &TestHost,
     hosted: &HostedRunner<TestHost>,
 ) {
     embed_log.append("lead", "COMPLETE: done", None, &[]);
     let (_, again) = one_turn(embed, embed_log.latest()).await;
-    assert_eq!(
-        again.len(),
-        1,
-        "the embed seat ran a second turn and called again"
-    );
-    // A second raw turn is seeded with the first: what the seat said is what
-    // it is shown, and the record starts empty again.
-    let (_, again) = one_turn(raw, None).await;
-    assert_eq!(again.len(), 1);
+    assert_eq!(again.len(), 1, "the embed seat called again");
     host.log.append("lead", "COMPLETE: done", None, &[]);
     host.log.append("peer", "I found a clue", None, &[]);
     host.park.store(true, Ordering::SeqCst);
@@ -677,12 +482,9 @@ async fn again(
     assert_eq!(host.wrapped.load(Ordering::SeqCst), 2);
 }
 
-/// A seat none of the runners seated is a failed turn, not a panic; and a
-/// seat registered after the process registry is set is refused by name
-/// rather than seated as a ghost.
-async fn ghosts(embed: &EmbedRunner, raw: &RawRunner, hosted: &HostedRunner<TestHost>) {
+/// An unseated id returns a failed turn instead of panicking.
+async fn ghosts(embed: &EmbedRunner, hosted: &HostedRunner<TestHost>) {
     for outcome in [
-        raw.turn("ghost".into(), Lane::Desk, None, "?".into()).await,
         hosted
             .turn("ghost".into(), Lane::Desk, None, "?".into())
             .await,
@@ -695,12 +497,6 @@ async fn ghosts(embed: &EmbedRunner, raw: &RawRunner, hosted: &HostedRunner<Test
             "{outcome:?}"
         );
     }
-    let elsewhere = tempfile::tempdir().expect("a workspace");
-    let ghost = register_seats(elsewhere.path(), &[("ghost", "Nobody.")], &[]);
-    assert!(
-        matches!(&ghost, Err(crate::Error::SeatNotRegistered { seat }) if seat == "ghost"),
-        "{ghost:?}"
-    );
 }
 
 /// The hook halting is the turn failing: the host loop sees an error where
@@ -774,7 +570,7 @@ async fn runtime(
         Runtime::builder()
             .config(config.clone())
             .workspace(Workspace::dir(workspace.to_path_buf()))
-            .services(EmbedRunner::services())
+            .services(ServiceSet::none())
             .backend_url(backend.uri())
             .provider(
                 Provider::openai_compatible(route.endpoint.clone(), route.api_key.clone())
@@ -787,16 +583,14 @@ async fn runtime(
     .expect("the runtime boots")
 }
 
-/// Every runner, offline, against one scripted model: the same call lands in
-/// the record the same way, whichever road it took. One test rather than
-/// two because the runtime and the definition registry are process-wide, and
-/// the raw seats must be registered before the runtime boots.
+/// Both native runners land the scripted call in the same record. One test
+/// keeps the process-wide runtime and definition registry together.
 ///
 /// On its own thread with a wide stack: an `OpenHuman` turn is a deep
 /// composition of `async fn`s, and the two megabytes libtest gives a test
 /// thread overflow on Linux before the first reply lands.
 #[test]
-fn both_runners_land_the_same_scripted_call_in_the_record() {
+fn native_runners_land_the_same_scripted_call_in_the_record() {
     std::thread::Builder::new()
         .stack_size(WIDE_STACK)
         .spawn(|| {
@@ -805,7 +599,7 @@ fn both_runners_land_the_same_scripted_call_in_the_record() {
                 .thread_stack_size(WIDE_STACK)
                 .build()
                 .expect("a runtime")
-                .block_on(both_runners());
+                .block_on(native_runners());
         })
         .expect("a thread")
         .join()
@@ -842,7 +636,7 @@ async fn watching<T>(host: &Arc<TestHost>, turn: impl Future<Output = T>) -> (T,
     (out, reader.await.expect("the reader ran"))
 }
 
-async fn both_runners() {
+async fn native_runners() {
     let workspace = tempfile::tempdir().expect("a workspace");
     let metrics = Arc::new(offline::Metrics::default());
     let faults = Arc::new(offline::Faults::default());
@@ -869,36 +663,13 @@ async fn both_runners() {
         )
     };
 
-    // One definition for `lead` names every tool either native runner hands
-    // it: the served belt for raw, and the host's prefixed one for hosted.
     let named: Vec<String> = served_specs()
-        .flat_map(|spec| [spec.name.to_owned(), format!("desk_{}", spec.name)])
+        .map(|spec| format!("desk_{}", spec.name))
         .collect();
     register_seats(workspace.path(), &[("lead", "You lead the desk.")], &named)
         .expect("seats register");
     let runtime = Arc::new(runtime(&config, &backend, &route, workspace.path()).await);
-    // Both embed roads: the native belt, and the same seat over the socket.
-    // The second keeps ADR 0022's server exercised, and the two together
-    // prove a road is a road -- the same call lands in the same record.
-    let (embed_host, embed, mcp) = embed_arms(&runtime, &briefs, &contract).await;
-    let raw = RawRunner::seat(
-        Arc::new(EpisodeTools::new(["lead"])),
-        &briefs,
-        &contract(RunnerKind::Raw),
-        &config,
-        &backend.uri(),
-        &route,
-        workspace.path(),
-    )
-    .await
-    .expect("raw seats");
-    assert_eq!(raw.model(), offline::MODEL);
-    let shown = format!("{:?}", raw.bindings()[0].agent);
-    assert!(
-        shown.contains("lead") && shown.contains(offline::MODEL),
-        "{shown}"
-    );
-    assert!(format!("{raw:?}").contains("lead"));
+    let (embed_host, embed) = embedded(&runtime, &briefs, &contract(RunnerKind::Embed));
     assert!(format!("{embed:?}").contains("lead"));
 
     let library = LibraryHost::boot(&config, &backend.uri(), &route, workspace.path())
@@ -907,8 +678,6 @@ async fn both_runners() {
     let (host, hosted) = hosted(library, &runtime, &contract(RunnerKind::Hosted));
 
     let (embed_reply, embed_events) = one_turn(&embed, None).await;
-    let (mcp_reply, mcp_events) = one_turn(&mcp, None).await;
-    let (raw_reply, raw_events) = one_turn(&raw, None).await;
     // Seeded from the host's log: the operator's row is history, not brief.
     let ((hosted_reply, hosted_events), watched) =
         watching(&host, one_turn(&hosted, host.log.latest())).await;
@@ -921,31 +690,21 @@ async fn both_runners() {
     assert!(hosted.usage("lead").is_some(), "the turn's usage is kept");
     assert_eq!(host.after.load(Ordering::SeqCst), 1, "the hook ran once");
     assert!(host.metered.load(Ordering::SeqCst), "and saw the usage");
-    assert_eq!(hosted_reply, raw_reply);
-    for (name, events) in [
-        ("embed", &embed_events),
-        ("embed-mcp", &mcp_events),
-        ("raw", &raw_events),
-        ("hosted", &hosted_events),
-    ] {
+    for (name, events) in [("embed", &embed_events), ("hosted", &hosted_events)] {
         one_completion(name, events);
     }
     assert_eq!(
-        embed_reply, mcp_reply,
-        "the two roads reach the same tools and land the same call"
-    );
-    assert_eq!(
-        embed_reply, raw_reply,
-        "the closing sentence is the model's"
+        embed_reply, hosted_reply,
+        "both seats heard the scripted model"
     );
     let seen = metrics.snapshot();
-    assert_eq!(seen.round_trips.len(), 4, "one receipted call per runner");
-    assert!(seen.requests >= 8, "each turn is a call and a receipt");
+    assert_eq!(seen.round_trips.len(), 2, "one receipted call per runner");
+    assert!(seen.requests >= 4, "each turn is a call and a receipt");
 
-    again(&embed, &embed_host.log, &raw, &host, &hosted).await;
-    where_the_roster_is(&runtime, &briefs, &contract, &metrics).await;
-    ghosts(&embed, &raw, &hosted).await;
-    plain(&runtime).await;
+    again(&embed, &embed_host.log, &host, &hosted).await;
+    where_the_roster_is(&runtime, &briefs, &contract(RunnerKind::Embed), &metrics).await;
+    ghosts(&embed, &hosted).await;
+    plain::run(&runtime).await;
     halts(&host, &hosted).await;
     spent(&faults, &host, &hosted).await;
     metrics.reset();

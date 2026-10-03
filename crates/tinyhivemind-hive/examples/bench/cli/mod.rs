@@ -131,10 +131,6 @@ pub(crate) struct Options {
     /// Whether a member's first turn, while the room is still blind, is a
     /// deposit rather than a position. See `sim.rs`.
     pub(crate) blind_evidence: bool,
-    /// Turns a member may spend deferring to a topic's expert instead of
-    /// arguing outside its own specialty. Read by the deferring arms, and by
-    /// the `defer_cap` those arms put in their episode policy.
-    pub(crate) defer_cap: u32,
     /// Turns a member may spend asking one peer for a second reading before
     /// committing to a position. Read by the two aside arms, which differ from
     /// each other only in who may read the answer. `0` turns both off, and
@@ -167,9 +163,6 @@ pub(crate) struct Options {
     /// mechanism and misprice the comparison. `0` disables the exchange
     /// entirely, leaving `hive+rounds` bit-identical to `hive+`.
     pub(crate) exchange_cap: u32,
-    /// Prior episodes of `hive+` the `ladder+dir` arm earns its directory
-    /// from, on the same room.
-    pub(crate) history: u32,
     /// Print one flat JSON object per arm, ahead of the tables.
     pub(crate) json: bool,
     /// Questions one desk may put to other channels, off the floor.
@@ -336,14 +329,12 @@ impl Options {
             fidelity: FOLD_FIDELITY,
             cost: false,
             blind_evidence: false,
-            defer_cap: 1,
             aside_cap: 1,
             // A round of four is the width `EpisodePolicy::DEFAULT` runs at.
             round_width: tinyhivemind_hive::DEFAULT_ROUND_WIDTH,
             context: 0,
             rot: 0.0,
             exchange_cap: 4,
-            history: 3,
             json: false,
             // Two, because one outside reading is already enough to overturn
             // a desk's decoy at the default bias — see `SWARM_BIAS` above —

@@ -1,5 +1,5 @@
 //! Shared fixtures for the quorum test suite: transcript builders, the
-//! refutation-enabled policy most tests fold under, and the `fold`/`standing`
+//! shared policy most tests fold under, and the `fold`/`standing`
 //! helpers that turn a transcript into the one standing a test cares about.
 
 use super::super::*;
@@ -21,18 +21,12 @@ pub(super) fn said(sequence: u64, author: &str, content: &str) -> SessionMessage
     }
 }
 
-/// The shared policy for these tests, with refutation switched on.
-///
-/// The crate default leaves `refutation_cap` at `None` because the benchmark
-/// scored the mechanism and it lost. Every test below that exercises the
-/// mechanism has to turn it on, and the ones that check it is off say so.
+/// The shared policy for these tests.
 pub(super) fn policy(threshold: u32) -> QuorumPolicy {
     QuorumPolicy {
         threshold,
         window: 100,
         require_grounded: true,
-        refutation_cap: Some(2),
-        ..QuorumPolicy::DEFAULT
     }
 }
 
@@ -79,12 +73,4 @@ pub(super) fn contested_transcript() -> Vec<SessionMessage> {
             "!evidence The staging environment was retired in March.",
         ),
     ]
-}
-
-/// `policy(2)` with `require_evidential` switched on.
-pub(super) fn evidential() -> QuorumPolicy {
-    QuorumPolicy {
-        require_evidential: true,
-        ..policy(2)
-    }
 }

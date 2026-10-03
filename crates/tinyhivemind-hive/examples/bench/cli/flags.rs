@@ -12,7 +12,6 @@ use super::{Mode, Options};
 use crate::http::{Thinking, Wire};
 use crate::sim::Expertise;
 use tinyhivemind_hive::Basis;
-use tinyhivemind_hive::DirectoryPolicy;
 
 /// Promote the parser's default mode to [`Mode::Live`] when a live-backend
 /// flag is given, without clobbering a mode the operator already chose
@@ -140,7 +139,6 @@ pub(super) fn apply_expertise_flag(
             options.expertise = Expertise::Specialists { count };
         }
         "--hidden-profile" => options.expertise = Expertise::HiddenProfile,
-        "--defer-cap" => options.defer_cap = next_number(args).unwrap_or(1).max(1),
         "--aside-cap" => options.aside_cap = next_number(args).unwrap_or(1),
         "--round-width" => {
             options.round_width =
@@ -216,14 +214,8 @@ pub(super) fn apply_expertise_flag(
             }
         }
         "--exchange-cap" => options.exchange_cap = next_number(args).unwrap_or(4),
-        "--history" => options.history = next_number(args).unwrap_or(3),
         "--cost-tiers" => options.cost = true,
         "--blind-evidence" => options.blind_evidence = true,
-        // `--trace` prints one episode at `options.policy`, so without this
-        // there is no way to watch the delegation arm run: `BidReason::Knows`
-        // is unreachable unless a directory is folded, and only an arm sets
-        // that. It moves the same single field `knowing_policy` moves.
-        "--directory" => options.policy.directory = Some(DirectoryPolicy::DEFAULT),
         _ => return false,
     }
     true

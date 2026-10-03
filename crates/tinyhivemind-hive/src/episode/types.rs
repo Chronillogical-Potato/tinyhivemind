@@ -1,10 +1,9 @@
 //! Stable episode policy, state, and step outcomes.
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     attention::{AgentThreshold, BidReason},
-    directory::DirectoryPolicy,
     horizon::Basis,
     quorum::{QuorumPolicy, TopicStanding},
     salience::SalienceWeights,
@@ -74,7 +73,7 @@ pub struct EpisodePolicy {
     /// in a round at all, so a round is often narrower than this and is never
     /// wider. `1` is the sequential episode and reproduces every number
     /// recorded before rounds existed, bit for bit. `0` is
-    /// [`Error::ZeroRoundWidth`] at step time, on the `defer_cap` precedent.
+    /// [`Error::ZeroRoundWidth`] at step time.
     ///
     /// Widening a round does not buy turns — `turn_budget` still bounds the
     /// total — it spends them in fewer, deeper rounds. What it buys is depth,
@@ -107,26 +106,6 @@ pub struct EpisodePolicy {
     pub dominance_cap: u32,
     /// Distinct supporters after which restating a topic scores nothing.
     pub repetition_cap: u32,
-    /// How to read the transcript for who knows what, if at all.
-    ///
-    /// `None` folds no directory, leaves [`BidReason::Knows`] unreachable, and
-    /// is what [`EpisodePolicy::DEFAULT`] carries. It is off for the same
-    /// reason `refutation_cap` is: the benchmark has not scored the arm yet,
-    /// and two mechanisms in this crate have already been measured, lost, and
-    /// been left opt-in rather than quietly defaulted on. See
-    /// `docs/adr/0007-the-directory-is-folded-from-citations.md`.
-    #[serde(deserialize_with = "deserialize_required_directory")]
-    pub directory: Option<DirectoryPolicy>,
-    /// Live deferrals after which a deferred topic stops being promoted.
-    ///
-    /// `None` leaves the chain bounded only by `turn_budget`. `Some(0)` is
-    /// [`Error::ZeroDeferCap`] at step time: it would cap the mechanism before
-    /// anyone could use it, which is a configuration error rather than a
-    /// quieter way of switching it off.
-    ///
-    /// [`Error::ZeroDeferCap`]: crate::error::Error::ZeroDeferCap
-    #[serde(deserialize_with = "deserialize_required_defer_cap")]
-    pub defer_cap: Option<u32>,
     /// How the window and the decay measure distance back through the
     /// transcript.
     ///
@@ -146,30 +125,6 @@ pub struct EpisodePolicy {
     pub weights: SalienceWeights,
 }
 
-/// Require `directory` to be written out, even when it is `null`.
-///
-/// The convention `refutation_cap` established: an absent key would silently
-/// mean "off", and off is the shipping setting, so a host that means to leave
-/// the mechanism off has to say so rather than inherit it. An
-/// [`EpisodePolicy`] serialized before this field existed fails to decode
-/// rather than quietly acquiring a default.
-fn deserialize_required_directory<'de, D>(
-    deserializer: D,
-) -> Result<Option<DirectoryPolicy>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    Option::<DirectoryPolicy>::deserialize(deserializer)
-}
-
-/// Require `defer_cap` to be written out, even when it is `null`.
-fn deserialize_required_defer_cap<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    Option::<u32>::deserialize(deserializer)
-}
-
 impl EpisodePolicy {
     /// A conservative default.
     ///
@@ -177,8 +132,6 @@ impl EpisodePolicy {
     /// models rises with interaction time, so a long episode buys correlated
     /// error rather than better judgement.
     ///
-    /// Expert delegation is off: `directory` and `defer_cap` are both `None`
-    /// pending the benchmark arm that scores them.
     pub const DEFAULT: Self = Self {
         turn_budget: 12,
         round_width: DEFAULT_ROUND_WIDTH,
@@ -186,8 +139,6 @@ impl EpisodePolicy {
         blind_round: true,
         dominance_cap: 50,
         repetition_cap: 3,
-        directory: None,
-        defer_cap: None,
         distance: Basis::Sequence,
         quorum: QuorumPolicy::DEFAULT,
         weights: SalienceWeights::DEFAULT,

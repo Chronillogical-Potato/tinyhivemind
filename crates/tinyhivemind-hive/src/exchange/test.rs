@@ -123,7 +123,7 @@ fn the_default_policy_opens_no_round() {
 
 #[test]
 fn a_zero_cap_closes_the_round_rather_than_erroring() {
-    // Unlike `defer_cap`, zero is a configuration a host may hold on purpose —
+    // Zero is a configuration a host may hold on purpose:
     // it is how the budget runs out — so it closes the round rather than
     // reporting a malformed policy.
     for policy in [

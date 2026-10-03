@@ -144,10 +144,6 @@ fn debug_check(report: &EpisodeReport, member_ids: &[&str], room: &Room) {
         "speech counts must add up to the turns actually taken"
     );
     debug_assert!(
-        report.defers <= report.turns,
-        "cannot defer more turns than were taken"
-    );
-    debug_assert!(
         report.turns == 0 || report.cost_units >= u64::from(report.turns),
         "every turn costs at least one unit"
     );
@@ -170,10 +166,6 @@ fn debug_check(report: &EpisodeReport, member_ids: &[&str], room: &Room) {
     } else {
         debug_assert!(!report.fact_deposited, "fact_deposited without fact_at");
     }
-    debug_assert!(
-        report.knows_turns <= report.turns,
-        "cannot hand out more Knows turns than were taken"
-    );
     if let Some(proposer) = &report.proposer {
         debug_assert!(
             member_ids.contains(&proposer.as_str()),

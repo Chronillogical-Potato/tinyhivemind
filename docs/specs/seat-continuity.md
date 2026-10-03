@@ -1,5 +1,8 @@
 # Seat continuity: the fold a seat carries, and the feedthrough it emits
 
+> **Historical example note.** The `desk` example used in this proposal was retired. See the current crate documentation for available APIs.
+
+
 **Status:** Draft — first slice implemented in the `desk` example, nothing in
 the library yet
 **Owner:** tinyhivemind maintainers

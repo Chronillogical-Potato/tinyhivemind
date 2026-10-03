@@ -101,7 +101,7 @@ fn an_in_process_call_is_checked_interpreted_and_recorded() {
 }
 
 #[test]
-fn an_in_process_call_is_refused_where_the_wire_would_refuse_it() {
+fn invalid_native_calls_are_refused_by_the_shared_record() {
     let tools = EpisodeTools::new(["lead", "solver"]);
     let good = |name: &str| {
         args(serde_json::json!({"message": "x", "to": name, "chat": "engineering", "parent": null}))
@@ -124,7 +124,7 @@ fn an_in_process_call_is_refused_where_the_wire_would_refuse_it() {
         )
         .expect_err("wrong chat");
     assert!(refusal.contains("\"chat\": \"engineering\" and \"parent\": null"));
-    // A tool the vocabulary has but this server does not serve.
+    // A tool the vocabulary has but the completion episode does not serve.
     assert!(tools.call("lead", "dm", &good("solver")).is_err());
     // Asking oneself, and asking a stranger.
     assert!(tools.call("lead", "ask", &good("lead")).is_err());

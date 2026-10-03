@@ -1,26 +1,25 @@
 # `tinyhivemind`
 
-The session runtime defines the host's log and selection ports. It projects
-attributed conversation history, validates speech, and provides bounded
-reads for threads, pins, and search.
+The session runtime defines a host log port, projects attributed conversation
+history, validates speech, and provides bounded reads for threads and pins.
 
 See the [repository root README](../../README.md) for what `tinyhivemind` is
 and why it exists. `tinyhivemind-core` answers what can be decided from
 supplied desk and roster data. This crate handles operations that wait on a
-host: paging through its session log, building a turn briefing, optionally
-asking a selector, and dispatching a mention or referral through a queue.
-The responder and dispatch paths remain public APIs; the completion driver
-uses the session and speech types from this crate for its own episode loop.
+host: paging through its session log, building a turn briefing, and asking a
+digester to compact older history. The completion driver uses this crate's
+session and speech types for its episode loop. A host can bind core routing
+decisions to its own queues and model clients.
 
 `tinyhivemind` depends on `tinyhivemind-core` and re-exports its entire public
 surface (`pub use tinyhivemind_core::*;` in [`src/lib.rs`](src/lib.rs)), so a
 host takes one dependency rather than two, and the types a host handles are
 the same types, not structural twins.
 
-Crate-level docs, the runnable example, and the full module list live in
+Crate-level docs and the full module list live in
 [`src/lib.rs`](src/lib.rs). Feature-module documentation is indexed in
-[`src/README.md`](src/README.md); the example harnesses are indexed in
-[`examples/README.md`](examples/README.md).
+[`src/README.md`](src/README.md). The runnable host integration lives in the
+[OpenHuman example](../../examples/openhuman/README.md).
 
 ## How it relates to the other crates
 

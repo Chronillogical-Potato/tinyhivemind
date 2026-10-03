@@ -16,21 +16,8 @@
 //! between two equally supported options; silencing an advocate can, and that
 //! asymmetry is the entire reason the mechanism is shaped this way.
 //!
-//! **Refutation targets the option, not the advocate.** That is the other half
-//! of the same model, and the library shipped without it. In the bee model this
-//! crate borrows from, the stop signal is one term and a scout's own assessment
-//! of the site's *value* is another; evidence bearing on a site lowers what
-//! every scout would independently conclude about it, rather than silencing any
-//! one dancer. `!refute #topic ^N` is that term. It caps rather than debits,
-//! because `carried` reads a supporter count and a debit against the weight
-//! would change nothing. See
-//! `docs/adr/0003-refutation-links-evidence-to-a-topic.md`.
-//!
-//! **Grounds are weighed, not counted.** A support citing another support is a
-//! citation of an opinion, which is exactly the condition under which an
-//! information cascade forms. Under `require_evidential` a support counts only
-//! if its citation chain reaches a stated fact. See
-//! `docs/adr/0004-grounds-are-weighed-by-evidential-depth.md`.
+//! Refutations remain in [`TopicStanding::refuted_by`] for audit. They do not
+//! change whether a topic carries.
 
 #[cfg(test)]
 mod test;
@@ -62,26 +49,18 @@ pub use tinyhivemind::responder::PROBABILITY_SCALE;
 /// `policy.require_grounded`, support that cites nothing is ignored entirely:
 /// it joins neither the supporter set nor the weight.
 ///
-/// Under `policy.require_evidential`, which implies `require_grounded`, support
-/// counts only when its citation chain reaches a [`TraceKind::Evidence`], and
-/// an objection silences nobody unless its own author deposited evidence in the
-/// window.
-///
 /// A [`TraceKind::Refute`] naming a topic adds its author to that topic's
 /// `refuted_by`. It attaches only to a topic some member actually advocated:
 /// refuting something nobody put on the floor is inert, so one member cannot
-/// manufacture a standing. A member that both supports and refutes the same
-/// topic in window is counted as a refuter only — the more specific move is the
-/// one it meant.
+/// manufacture a standing. Refutation is recorded without changing support.
 ///
 /// Objections and refutations are applied after all support, so the result does
 /// not depend on the order traces arrived in.
 ///
 /// # Errors
 ///
-/// Returns [`Error::ZeroQuorumThreshold`], [`Error::ZeroQuorumWindow`], or
-/// [`Error::ZeroRefutationCap`] when the policy would make the count
-/// meaningless.
+/// Returns [`Error::ZeroQuorumThreshold`] or [`Error::ZeroQuorumWindow`]
+/// when the policy would make the count meaningless.
 pub fn standings<'a>(
     traces: &[Trace],
     at: impl Into<Horizon<'a>>,
@@ -94,10 +73,6 @@ pub fn standings<'a>(
     if policy.window == 0 {
         return Err(Error::ZeroQuorumWindow);
     }
-    if policy.refutation_cap == Some(0) {
-        return Err(Error::ZeroRefutationCap);
-    }
-
     let mut live: Vec<&Trace> = traces
         .iter()
         .filter(|trace| at.within(trace.sequence, policy.window))
@@ -110,14 +85,7 @@ pub fn standings<'a>(
     live.sort_by_key(|trace| (trace.sequence, trace.offset));
     live.dedup_by_key(|trace| (trace.sequence, trace.offset));
 
-    // `require_evidential` is the stronger claim and subsumes the weaker one:
-    // an uncited support has no chain to resolve, so requiring the chain to
-    // reach a fact already requires a chain.
-    let require_grounded = policy.require_grounded || policy.require_evidential;
-
-    let by_sequence = index_by_sequence(&live);
-    let evidenced = evidenced_authors(&live);
-    let refuters = refuter_pairs(&live);
+    let require_grounded = policy.require_grounded;
 
     // Every `(agent, topic)` a message advocated, keyed by that message's
     // sequence. One message can carry several propose/support traces at
@@ -146,15 +114,6 @@ pub fn standings<'a>(
         if require_grounded && trace.kind == TraceKind::Support && !trace.grounded() {
             continue;
         }
-        if policy.require_evidential
-            && trace.kind == TraceKind::Support
-            && !reaches_evidence(trace, &by_sequence)
-        {
-            continue;
-        }
-        if refuters.contains(&(agent, topic)) {
-            continue;
-        }
         if !ordered.contains(&topic) {
             ordered.push(topic);
         }
@@ -169,15 +128,7 @@ pub fn standings<'a>(
         *weight.entry(topic).or_default().entry(agent).or_default() += importance(trace.kind);
     }
 
-    let mut silenced = silenced_advocates(
-        &live,
-        &advocacy,
-        &Gate {
-            require_grounded,
-            require_evidential: policy.require_evidential,
-            evidenced: &evidenced,
-        },
-    );
+    let mut silenced = silenced_advocates(&live, &advocacy, require_grounded);
 
     let mut refuted = refutations(&live, &ordered);
 
@@ -226,9 +177,9 @@ fn count_probability_support(supporters: &[String]) -> u64 {
 /// Fold traces and replace count-equivalent support with evaluated probability.
 ///
 /// Each member contributes at most its latest admitted in-window evaluation.
-/// Missing or rejected evaluations contribute nothing. Cross-inhibition and
-/// refutation remain structural properties of the trace fold and are applied
-/// before probabilistic support is summed.
+/// Missing or rejected evaluations contribute nothing. Cross-inhibition is
+/// applied before probabilistic support is summed; refutations remain audit
+/// data in the standing.
 ///
 /// # Errors
 ///
@@ -336,16 +287,6 @@ fn validate_evaluation(
     Ok(())
 }
 
-/// What a negative move must satisfy before it counts.
-struct Gate<'a> {
-    /// Whether it must cite anything at all.
-    require_grounded: bool,
-    /// Whether its author must also have put a fact on the floor.
-    require_evidential: bool,
-    /// The authors who have.
-    evidenced: &'a BTreeSet<&'a str>,
-}
-
 /// Apply cross-inhibition: which advocates an objection removes, per topic.
 ///
 /// An objection cannot silence its own author. That would let an agent retract
@@ -353,21 +294,14 @@ struct Gate<'a> {
 fn silenced_advocates<'a>(
     live: &[&'a Trace],
     advocacy: &BTreeMap<Sequence, Vec<(&'a str, &'a TopicId)>>,
-    gate: &Gate<'_>,
+    require_grounded: bool,
 ) -> BTreeMap<&'a TopicId, Vec<&'a str>> {
     let mut silenced: BTreeMap<&'a TopicId, Vec<&'a str>> = BTreeMap::new();
     for trace in live {
         if trace.kind != TraceKind::Object {
             continue;
         }
-        if gate.require_grounded && !trace.grounded() {
-            continue;
-        }
-        if gate.require_evidential
-            && !trace
-                .agent_id()
-                .is_some_and(|agent| gate.evidenced.contains(agent))
-        {
+        if require_grounded && !trace.grounded() {
             continue;
         }
         let Some(target) = trace.target else { continue };
@@ -385,41 +319,6 @@ fn silenced_advocates<'a>(
         }
     }
     silenced
-}
-
-/// Index every live trace by the sequence a citation would name.
-///
-/// One message can carry several traces at different offsets, so a citation
-/// resolves to a list rather than to a single trace.
-fn index_by_sequence<'a>(live: &[&'a Trace]) -> BTreeMap<Sequence, Vec<&'a Trace>> {
-    let mut by_sequence: BTreeMap<Sequence, Vec<&'a Trace>> = BTreeMap::new();
-    for trace in live {
-        by_sequence.entry(trace.sequence).or_default().push(trace);
-    }
-    by_sequence
-}
-
-/// Which members have put a fact on the floor at all.
-///
-/// Under `require_evidential` this gates objecting as well as supporting: the
-/// bee stop signal is delivered by a scout who inspected the rival site.
-fn evidenced_authors<'a>(live: &[&'a Trace]) -> BTreeSet<&'a str> {
-    live.iter()
-        .filter(|trace| trace.kind == TraceKind::Evidence)
-        .filter_map(|trace| trace.agent_id())
-        .collect()
-}
-
-/// Every `(agent, topic)` pair some member refuted in window.
-///
-/// Identified before support is folded, because a member that both supported
-/// and refuted one topic is a refuter and not a supporter. Attachment to a
-/// standing happens separately, in [`refutations`].
-fn refuter_pairs<'a>(live: &[&'a Trace]) -> BTreeSet<(&'a str, &'a TopicId)> {
-    live.iter()
-        .filter(|trace| trace.kind == TraceKind::Refute && trace.grounded())
-        .filter_map(|trace| Some((trace.agent_id()?, trace.topic.as_ref()?)))
-        .collect()
 }
 
 /// Distinct refuters per advocated topic, in first-refutation order.
@@ -448,36 +347,6 @@ fn refutations<'a>(
         }
     }
     refuted
-}
-
-/// Return whether a trace's citation chain reaches a stated fact.
-///
-/// The chain is followed transitively through traces *inside the window* only.
-/// A citation that leaves the window is not chased: a member's standing must
-/// not depend on how far back it happened to have paged, which is the same
-/// locality the window buys everywhere else in this fold.
-///
-/// The visited set is over sequences, so two supports that cite each other
-/// terminate rather than recurring, and the whole pass is linear in the
-/// citations present in the window.
-fn reaches_evidence(trace: &Trace, by_sequence: &BTreeMap<Sequence, Vec<&Trace>>) -> bool {
-    let mut visited: BTreeSet<Sequence> = BTreeSet::new();
-    let mut pending: Vec<Sequence> = trace.cites.clone();
-    while let Some(sequence) = pending.pop() {
-        if !visited.insert(sequence) {
-            continue;
-        }
-        let Some(cited) = by_sequence.get(&sequence) else {
-            continue;
-        };
-        for trace in cited {
-            if trace.kind == TraceKind::Evidence {
-                return true;
-            }
-            pending.extend(trace.cites.iter().copied());
-        }
-    }
-    false
 }
 
 /// Decide what the standings add up to.

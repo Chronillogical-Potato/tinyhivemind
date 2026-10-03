@@ -7,7 +7,7 @@
 //! and the first and last are the same for every embedding, because
 //! [`EpisodeTools`](tinyhivemind_tools::EpisodeTools) is where a call lands
 //! whichever road it took. What genuinely varies is [`SeatRunner::turn`],
-//! and there are three answers:
+//! and there are two answers:
 //!
 //! - [`HostedRunner`]: a seat is the host's own agent -- its model, tools,
 //!   approval gate, memory and prompt -- built by the host through
@@ -17,13 +17,7 @@
 //! - [`EmbedRunner`]: a seat is an `openhuman-embed` `AgentSpec` agent on a
 //!   runtime the host booted, holding one session across the episode that it
 //!   seeds from the host's journal every turn. Its belt is the episode's
-//!   tools, handed to the spec directly through `AgentSpec::tools`; the same
-//!   seats reach the same tools over `tinyhivemind-mcp`'s server instead
-//!   through [`EmbedRunner::seat_over_mcp`].
-//! - [`RawRunner`]: a seat is an `OpenHumanSessionHost` this crate builds on
-//!   a [`LibraryHost`] every turn, handed the same tools natively, with a
-//!   gate and a memory that keeps nothing, and seeded from a per-seat log it
-//!   keeps itself.
+//!   tools, handed to the spec directly through `AgentSpec::tools`.
 //!
 //! All three land every call in the same record, so the driver drains
 //! identical events and a seat is refused and acknowledged in the same
@@ -152,5 +146,5 @@ pub use hosted::{
     Narrowing, TurnProgressSink,
 };
 pub use journal::MemoryLog;
-pub use raw::{LibraryHost, RawRunner, RawSeat, Route, register_seats};
+pub use raw::{LibraryHost, Route, register_seats};
 pub use runner::{Lane, RunnerKind, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult};

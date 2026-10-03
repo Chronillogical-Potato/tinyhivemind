@@ -86,11 +86,6 @@ pub(crate) struct SimAgent {
     /// `pub(crate)` for the same reason `specialty` is, and so
     /// [`Room::pooled`](super::Room::pooled) can read it off a peer.
     pub(crate) refutes: Option<TopicId>,
-    /// Topics some *other* member specialises in. Never contains this
-    /// member's own `specialty`.
-    ///
-    /// `pub(crate)` for the same reason `specialty` is.
-    pub(crate) expert_elsewhere: Vec<TopicId>,
     /// What this member's own turn costs, charged by the vote arm and summed
     /// into a deliberation's `cost_units`. `1` unless `Room::generate_with`
     /// was asked for `cost_tiers` and this member is a specialist.
@@ -98,11 +93,6 @@ pub(crate) struct SimAgent {
     /// `pub(crate)` so [`Room::at_cost`](super::Room::at_cost) and room
     /// generation can set it directly.
     pub(crate) cost_unit: u32,
-    /// Turns this member may defer instead of arguing outside its specialty.
-    /// `0` turns the move off.
-    defer_cap: u32,
-    /// Turns this member has already deferred.
-    deferred: u32,
     /// Whether this member opens with a deposit rather than a position, and
     /// puts its own best option on the floor rather than backing a worse one
     /// somebody else got there first with. See the module docs: it is a

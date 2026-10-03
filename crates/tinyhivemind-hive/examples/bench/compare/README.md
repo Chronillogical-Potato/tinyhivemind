@@ -16,8 +16,6 @@ one, and [`../grid/`](../grid/) answers it over a cross product instead.
 ## Operational constraints
 
 - **Every arm in one run is priced at one cost model.** `Totals::priced_at`
-  sets it on each aggregate, `ladder_directed` included — it sits outside
-  `arms_mut`'s array and has to be set explicitly, or its row would report
-  against different constants from the header printed above it.
+  sets it on each aggregate before any room is folded.
 - **The merge is order-independent.** Rooms are decided in workers and folded
   in room order, so `--jobs` never moves a printed number.

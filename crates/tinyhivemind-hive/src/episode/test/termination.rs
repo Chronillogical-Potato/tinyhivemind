@@ -1,7 +1,5 @@
-//! The single-turn invariant and termination: every step either authorizes
-//! exactly one turn or returns a terminal outcome, `spent` strictly advances
-//! and the budget check runs before it can overflow, so the loop cannot run
-//! past its budget.
+//! Sequential-round and termination checks. These fixtures set the round
+//! width to one; the episode budget still bounds total turns.
 
 use super::super::*;
 use super::support::{MEMBERS, Room, converging, operator, run, said, sequential, spoke, state};

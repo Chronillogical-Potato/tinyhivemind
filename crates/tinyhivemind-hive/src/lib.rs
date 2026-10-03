@@ -89,8 +89,7 @@
 //!
 //! - **A port.** There is no trait here for a host to implement. An episode is
 //!   [`step`], a fold over a transcript the caller already holds, and the host
-//!   does its waiting through the [`SessionLog`], [`Selector`] and
-//!   [`MentionTurnQueue`] ports `tinyhivemind` already defines.
+//!   does its waiting through host-owned storage and scheduling.
 //! - **Storage.** [`EpisodeState`] is returned, never applied. The caller
 //!   commits it after its turn is durably appended.
 //! - **Floating point.** Every score is fixed-point integer, so every payload
@@ -99,15 +98,10 @@
 //!   here is shown to make answers better, and almost every positive
 //!   multi-agent result in the literature is confounded by compute.
 //!
-//! [`SessionLog`]: tinyhivemind::SessionLog
-//! [`Selector`]: tinyhivemind::Selector
-//! [`MentionTurnQueue`]: tinyhivemind::MentionTurnQueue
 //!
 //! # Modules
 //!
-//! - [`attention`] — the bid each member makes for the floor, and the argmax,
-//!   and the max-min fair split of a character budget across the context
-//!   sources a turn carries.
+//! - [`attention`] — the bid each member makes for the floor, and the argmax.
 //! - [`mod@directory`] — who knows what, folded from grounded deposits and the
 //!   citations they drew.
 //! - [`division`] — a task's facets, split across the seats that own them, and
@@ -157,12 +151,7 @@
 //! // Two distinct grounded supporters carry `stage`; `ship` has none.
 //! assert_eq!(consensus(&settled, &policy), ConsensusState::Quorum { topic: "stage".into() });
 //!
-//! // A cited fact argues against the option rather than against a person.
-//! // The cap is `None` by default — the benchmark scored the mechanism and it
-//! // lost — so a room that wants it says so. Two distinct refuters then cap
-//! // `stage` out of contention, and neither supporter is silenced: the
-//! // standing records both sides.
-//! let policy = QuorumPolicy { refutation_cap: Some(2), ..policy };
+//! // Refutations remain on the standing for audit; they do not alter quorum.
 //! let mut contested = transcript.to_vec();
 //! contested.extend([
 //!     said(5, agent("auditor"), "!evidence Staging needs a second environment we do not have."),
@@ -171,7 +160,7 @@
 //! ]);
 //! let contested_transcript = contested.clone();
 //! let contested = standings(&read(&contested), Sequence(7), &policy)?;
-//! assert_eq!(consensus(&contested, &policy), ConsensusState::Deliberating);
+//! assert_eq!(consensus(&contested, &policy), ConsensusState::Quorum { topic: "stage".into() });
 //! assert_eq!(contested[0].refuted_by, ["auditor", "scout"]);
 //! assert_eq!(contested[0].supporters, ["planner", "critic"]);
 //!
@@ -202,10 +191,7 @@ pub mod quorum;
 pub mod salience;
 pub mod trace;
 
-pub use attention::{
-    AgentThreshold, Bid, BidReason, BudgetPolicy, BudgetRequest, BudgetShare, BudgetVerdict,
-    allocate_chars, bids, floor_holder, floor_round,
-};
+pub use attention::{AgentThreshold, Bid, BidReason, bids, floor_holder, floor_round};
 pub use completion::{
     AssignmentRecord, CompletionEpisodeState, CompletionStep, ParticipantCompletion,
     apply_assignment, apply_completion, status as completion_status,

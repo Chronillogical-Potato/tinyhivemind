@@ -18,9 +18,9 @@ sees of the shared transcript.
 
 Three rules decide what belongs here:
 
-1. **The host owns storage.** This repository never opens a database, a file, or
-   a socket. `crates/tinyhivemind-core` is a pure algebra; `crates/tinyhivemind` owns
-   *ports* a host implements, and nothing more. In particular there is no second
+1. **The host owns storage.** The core mechanics open no database, file, or
+   socket. `crates/tinyhivemind-core` is a pure algebra; `crates/tinyhivemind` owns
+   *ports* a host implements. In particular there is no second
    append-only journal: messages are addressed by sequence number across
    surfaces the host owns, so a second log could not be made consistent with the
    first.
@@ -67,8 +67,8 @@ crates/
 │           ├── types.rs      # substantial type definitions
 │           └── test.rs       # module-local unit tests, or a test/ directory
 │                             # of behavior-grouped submodules once it grows
-├── tinyhivemind/          # session runtime: ports, projection, recall, digest,
-│                         # approval, responder and dispatch edges
+├── tinyhivemind/          # session runtime: ports, projection, digest,
+│                         # sharing, speech, and threads
 ├── tinyhivemind-hive/     # pure task division, explicit completion, and bounded
 │                         # group deliberation
 ├── tinyhivemind-embed/    # host-neutral conversation surfaces and validated
@@ -78,12 +78,10 @@ crates/
 ├── tinyhivemind-driver/   # the completion driver over a handle the host binds:
 │                       # who runs next, what a committed row means, and the
 │                       # conducted episode: conversations and nudges. Pure.
-├── tinyhivemind-openhuman/ # the OpenHuman adapter: both runners behind one seam;
+├── tinyhivemind-openhuman/ # the OpenHuman adapter: native-tool runners behind one seam;
 │                       # the one crate that links a harness, by ADR 0025
-├── tinyhivemind-tools/    # the episode's tools as a record a host drains:
-│                       # definitions, the call gate, the events. Pure.
-└── tinyhivemind-mcp/      # that record served over MCP; the one socket the
-                        # repository opens, by ADR 0022
+└── tinyhivemind-tools/    # the episode's tools as a record a host drains:
+                        # definitions, the call gate, the events. Pure.
 docs/
 ├── specs/              # behavior and architecture specifications
 ├── plans/              # test-first implementation plans
@@ -101,9 +99,8 @@ mention grammar and its resolution, approval decisions, and responder plans.
 Every function there is a fold over data the caller already holds. The
 attributed `SessionMessage` and paging projection live in `crates/tinyhivemind`.
 
-`crates/tinyhivemind` holds the parts that must wait on something — the paging walk
-over a session log, the responder ladder's selector call, digest generation,
-human approval, and the dispatch edges — expressed
+`crates/tinyhivemind` holds the parts that must wait on something, including the
+paging walk over a session log and digest generation, expressed
 against ports a host implements. It depends on the core crate and re-exports it,
 so a host takes one dependency rather than two and the types are the *same*
 types rather than structural twins.
@@ -136,7 +133,7 @@ other two: not *who responds to this message* but *how does a room of agents
 reach a decision*. It is **pure and defines no port** — an episode is
 `step(state, transcript, roster, desks, policy) -> HiveStep`, a fold over
 arguments the caller already holds, and the host does its waiting through the
-`SessionLog`, `Selector` and `MentionTurnQueue` ports it already implements. It
+session log and turn scheduler it already implements. It
 is in the `pure_crates` list in `.github/scripts/assert-pure.sh` for that
 reason.
 
@@ -211,12 +208,6 @@ Supporting commands:
 - `cargo test <filter>` — run a focused subset while iterating.
 - `cargo test -p tinyhivemind-core` — run one crate's suite.
 - `cargo run -p tinyhivemind-core --example basic` — run the bundled example.
-- `cargo run -p tinyhivemind --example crosstalk -- --api-base <url> --model <id>`
-  — drive one desk of real agents through the responder ladder and the
-  mention-dispatch edge, and print what each turn saw. `-- --aside` adds
-  private asides and prints what each reader was handed. Needs a live endpoint
-  or `--agent-cmd`; documented in
-  `crates/tinyhivemind/examples/crosstalk/README.md`.
 - `cargo run -p tinyhivemind-hive --example hive` — print one deliberation episode.
 - `cargo run --release -p tinyhivemind-hive --example bench -- --grid` — walk
   the benchmark matrix: the cross product of `--topic`, `--scale`,
@@ -307,24 +298,16 @@ releases are reproducible.
 
 ### Vendored dependencies
 
-No library crate has one, and that is deliberate. This repository is itself
-vendored — a consumer pins it as a submodule and takes it as a path dependency —
-so anything a library crate vendored in turn would become a nested submodule in
-every consumer.
+No pure or runtime crate vendors a dependency inside its own directory. The
+OpenHuman adapter links the pinned harness through workspace Git dependencies
+patched to `vendor/openhuman`. The standalone OpenHuman example and hive
+benchmark use vendored harness or Jev code without making those dependencies
+part of the pure crates. See [ADR 0020](docs/adr/0020-openhuman-embed-is-a-git-dependency-patched-locally.md).
 
-An **example** may take one, as a `[dev-dependencies]` git dependency pinned by
-revision. A consumer builds `crates/*` and never the examples, so it never
-resolves them, and `assert-pure.sh` reads `cargo tree -e normal,build` and so
-guards the same boundary unchanged. `tinytools` and `tinyinference` back the
-`desk` example on those terms; see
-[ADR 0013](docs/adr/0013-a-vendored-crate-is-an-example-dependency.md). Neither
-could be a library dependency: `tinytools` pulls `anyhow` and `tinyinference`
-pulls `reqwest`, and both are forbidden in every crate here.
-
-The one submodule here is `wiki/`, the GitHub wiki repository
-(`tinyhumansai/tinyhivemind.wiki`). It carries no code and nothing builds
-against it, so a clone that skips it still compiles. Run
-`git submodule update --init` when you need to edit documentation.
+The top-level submodules are the wiki, OpenHuman, and TinyJevClient. OpenHuman
+has its own nested submodules. Initialize recursively before building the
+adapter or examples. The wiki carries no code; a clone that skips it still
+compiles.
 
 ## Testing
 

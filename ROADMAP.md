@@ -16,21 +16,21 @@ consumer builds.
 | P3 | The `@` grammar, `Mention`/`MentionTarget`, and resolution over `Roster`/`Person` | **done** |
 | P4 | `crates/tinyhivemind`: the `SessionLog` port, the paging walk, and the **attributed** transcript projection | **done** |
 | P5 | Continuous sharing — re-seed on a watermark rather than only on a rebind | **done** |
-| P6 | The responder ladder, with the model-backed rung behind a `Selector` port | **done** |
-| P7 | The mention-dispatch edge, bounded by a host-supplied finite configurable `max_hops` (OpenCompany defaults to 2), with no library hard cap, and explicitly enabled by host policy | **done** |
+| P6 | The responder ladder and a model-backed `Selector` port | **core plan retained**; unused waiting port retired |
+| P7 | A bounded mention-dispatch edge | **core decision retained**; unused queue wrapper retired |
 | P8 | `crates/tinyhivemind-hive`: bounded group deliberation — the trace grammar, salience, quorum with cross-inhibition, the attention market, and the episode state machine | **done** |
-| P9 | `!refute`, evidential grounding, grounded objections, and the benchmark arm that scored them | **done**, both knobs **off by default** — see below |
-| P10 | A transactive-memory directory folded from traces, `BidReason::Knows`, and `!defer` | **done**, both knobs **off by default** — see below |
+| P9 | `!refute`, evidential grounding, grounded objections, and the benchmark arm that scored them | Historical experiment; refutation trace retained, losing quorum knobs retired |
+| P10 | A transactive-memory directory folded from traces, `BidReason::Knows`, and `!defer` | Directory retained for division; losing delegation and deferral paths retired |
 | P11 | `SessionMessage.parent` and the structured trace sidecar | planned |
 | P12 | Per-conversation read state | planned |
 | P13 | Digests and supersession | planned |
-| P15 | Cross-desk referral: one child turn that may run on another channel, the answer that comes back, and the federated benchmark that scored it | **done**, every knob **off by default** |
-| P14 | Recall: one selection ranking, roster and desk pickers, bounded transcript search with optional regular expressions, pinning as a fold, and a stated per-message budget | **done** |
-| P16 | Approval: a pure gate for a side-effecting action — `approve` as a total fold, standing grants, and epoch-scoped consent, with the waiting behind one `ApprovalGate` port | **done** |
+| P15 | Cross-desk referral and the federated benchmark that scored it | Core referral decision retained; unused queue wrapper retired |
+| P14 | Selection ranking, bounded transcript search, pinning, and a stated per-message budget | Pinning and budget retained; unused selection and search APIs retired |
+| P16 | A pure approval gate and a waiting `ApprovalGate` port | Pure approval fold retained; unused waiting port retired |
 | P17 | Private asides: an audience on a stored row, a viewer on a query, the collapsed redaction stub and its settlement pointer, and the rule that an aside carries information rather than support | **done**, **off by default** — the benchmark arm says asides do not improve a decision, see below |
 | P18 | The utterance surface: a seat speaks by calling a tool rather than emitting a fence — the tool descriptions, the validation and the utterance-to-row fold live in `tinyhivemind::speech`, and a refused aside reaches its author inside the turn | **done** — see [`docs/specs/the-utterance-surface.md`](docs/specs/the-utterance-surface.md) |
 | P19 | Folding by size: the standing account triggers on the characters of foldable content as well as its row count, stated by a host as a token budget, and the fold is told which messages the room pinned so it cannot drop one | **done** — see [`docs/specs/folding-by-size.md`](docs/specs/folding-by-size.md) |
-| P20 | A real provider layer for the `desk` example: `tinyinference` behind the `Digester` and wrap-up paths in place of a `curl` subprocess, with classified provider failures, and `tinytools` rendering the room's tool surface — both example-only dev-dependencies, no library crate touched | **done** — see [ADR 0013](docs/adr/0013-a-vendored-crate-is-an-example-dependency.md) |
+| P20 | A provider layer for the former `desk` example | Example retired; [ADR 0013](docs/adr/0013-a-vendored-crate-is-an-example-dependency.md) records the earlier dependency boundary |
 | P21 | Concurrent rounds: a step authorizes a bounded *round* of turns rather than one, `next_state` moves onto the round, and a peer row written in the same round is invisible to it — depth becomes rounds rather than turns | **done** — see [`docs/specs/concurrent-rounds.md`](docs/specs/concurrent-rounds.md) and [ADR 0014](docs/adr/0014-a-round-authorizes-concurrent-turns.md) |
 | P22 | A task with a horizon: `--stages` runs a chain of decisions on one accumulating window, against a soloist handed the whole brief that compacts by eviction or by a superseding account | **done** — see [`docs/specs/long-horizon-tasks.md`](docs/specs/long-horizon-tasks.md) and [the experiment](docs/experiments/2026-09-09-the-long-horizon.md) |
 | P23 | A task with variety: `--facets` runs several independent sub-decisions belonging to one task, each with an owner, against the soloist that won the horizon — and the room wins from two facets on | **done** — see [`docs/specs/task-variety.md`](docs/specs/task-variety.md) and [the experiment](docs/experiments/2026-09-09-variety-and-roles.md) |
@@ -73,13 +73,10 @@ error. Privacy itself did not change the measured outcome. An off-floor aimed
 check gained 3.2 points on that hidden profile, while costing additional model
 calls. See [the follow-up](docs/experiments/2026-09-07-why-asides-lose.md).
 
-P14 is out of order on purpose. It is not a wire-format change and does not
-wait on P11 through P13: it answers the same pressure they do — a bounded
-window over an unbounded log — with the two mechanisms that need no new port
-and no new stored state. Search makes the transcript queryable rather than
-something a turn must hold, pinning keeps a small working set arriving whether
-or not anybody asked, and `BrevityPolicy` states the budget every message is
-spending out of. See [`docs/specs/recall.md`](docs/specs/recall.md).
+P14 addressed the bounded-window problem without storing a second index.
+Pinning still keeps a small working set in view, and `BrevityPolicy` states
+the budget each message spends. The unused selection and search APIs were
+retired. The [original spec](docs/specs/recall.md) records the broader design.
 
 P16 is the next number free, and it sits after the phases that have landed
 rather than inside the P11 through P13 block for the same reason P14 and P15
@@ -108,8 +105,8 @@ advocate rather than debiting an option, and an attention market that ranks
 eligible speakers. A later step may authorize a bounded round of them.
 
 It adds **no port**. An episode is a pure fold, and the host does its waiting
-through `SessionLog`, `Selector` and `MentionTurnQueue` — the ports it already
-implements. `crates/tinyhivemind-hive` is in the `pure_crates` list in
+through the session log and turn scheduler it already implements.
+`crates/tinyhivemind-hive` is in the `pure_crates` list in
 `.github/scripts/assert-pure.sh`.
 
 It is also not a claim that group deliberation produces better answers. Almost
@@ -120,81 +117,25 @@ nothing more. See
 [ADR 0014](docs/adr/0014-a-round-authorizes-concurrent-turns.md), which
 supersedes the original sequential episode decision.
 
-## What P9 adds, and why it is off
+## Retired P9 and P10 experiments
 
-P9 answers the second finding of
-[the live hidden-profile run](docs/experiments/2026-09-01-live-hidden-profile.md):
-support is counted and grounds are not weighed, so a fact that refutes a
-hypothesis has no way to say so and killing one costs a turn per advocate.
-
-It adds `!refute #topic ^N`, which caps a topic once `refutation_cap` distinct
-grounded members have argued a cited fact against it, and `require_evidential`,
-under which a support counts only if its citation chain reaches a stated fact.
-Both are pure folds. Both are recorded in
-[ADR 0003](docs/adr/0003-refutation-links-evidence-to-a-topic.md) and
-[ADR 0004](docs/adr/0004-grounds-are-weighed-by-evidential-depth.md).
-
-**Both remain off in `QuorumPolicy::DEFAULT`.** On the original 5,000-room
-benchmark, `hive+ref` scored 75.0% against 82.1% without the cap, and
-`hive+ev` scored 55.9%. That experiment did not test a hidden profile, which
-was its stated limit. A later hidden-profile run with an evidence-first opening
-also found losses: 53.3% for `hive+ref` and 26.0% for `hive+ev`, against 66.3%
-for `hive+`. These optional knobs remain implemented, but neither result
-supports turning them on as general guidance. See the
+P9 tested a refutation cap and evidential quorum. Both were off by default
+because they reduced accuracy in the original uniform benchmark. A later
+hidden-profile run with an evidence-first opening also found losses: `hive+`
+scored 66.3%, against 53.3% for the refutation cap and 26.0% for evidential
+quorum. The optional quorum rules have been removed. `!refute` remains a trace
+that records disagreement without changing whether a topic carries. The
 [original experiment](docs/experiments/2026-09-01-refutation-and-grounds.md)
-and the [later matrix](docs/experiments/2026-09-05-expert-delegation.md).
+and [later matrix](docs/experiments/2026-09-05-expert-delegation.md) retain the
+measurements.
 
-## What P10 adds, and why it is off
-
-P10 answers the first finding of
-[the live hidden-profile run](docs/experiments/2026-09-01-live-hidden-profile.md):
-the member holding the fact that overturns the decoy is in the room, has
-already deposited it, and never wins another turn to press it. Before this the
-library could say *who is here* and *who spoke*, and had no way to say *who
-knows*: the one expertise-shaped field, `AgentThreshold.affinity`, was
-host-supplied and never written by anything in the workspace.
-
-It adds `directory`, a pure fold estimating one weight per `(agent, topic)`
-from grounded deposits and the citations they drew — Wegner's transactive
-memory, with Lewis's specialisation and credibility as the two estimators the
-transcript can support. It feeds `BidReason::Knows`, which sits between
-`Dissent` and `Quiet` and gives the floor to the member the transcript says
-holds the contested topic and who has taken no position on it. It also adds
-`!defer #topic`, an abstention that can promote a member who holds the topic,
-bounded by `defer_cap`. Nothing is stored: the directory is refolded on every
-step. Recorded in
-[`docs/specs/expert-delegation.md`](docs/specs/expert-delegation.md) and
-[ADR 0007](docs/adr/0007-the-directory-is-folded-from-citations.md), with the
-reading in [`docs/research/delegation.md`](docs/research/delegation.md).
-
-**Both are off in `EpisodePolicy::DEFAULT`, because the benchmark scored them
-and they did not win.** The acceptance criteria were written before any
-numbers: the mechanism must be able to lose and the loss must be published;
-`vote` gets the same turn budget; a mechanism that helps hidden profiles but
-costs more than two points on the uniform 5000-room bench ships off; and
-directory circularity is reported as the rank correlation between directory
-weight and speech share.
-
-The uniform bench predicted zero and delivered zero: `hive+dir` is `hive+` to
-the digit at 82.1% over 5000 rooms, and `BidReason::Knows` never fires there at
-all. On a hidden profile with an evidence-first opening it scores **65.8%
-against `hive+`'s 66.3%** with `Knows` winning the floor in 77.5% of episodes,
-and `hive+defer` moves within 0.5 points and never leaves the interval. A
-*directed* router reaches 45.1% with two specialists against the uninformed
-ladder's 52.6%, while routing to the decisive member more often (22.3% against
-18.9%). That arm receives the correct topic in its prompt, so its score does
-not establish how a router would perform without that information. The one
-thing that moves a hidden profile is when a member speaks:
-depositing facts before taking positions takes the same rooms from 15.3% to
-66.3%, `+51.3 [+49.8, +52.8]` over the matched-budget vote, which is a finding
-about participants rather than about this fold. The circularity number `rho`
-falls from `0.83` to `0.07` across those same arms, so the estimator can be
-made to stop measuring speech — it just does not buy accuracy when it does.
-Twenty-seven live rounds add the participant half of the same answer: the
-fact-holder spoke before the commit in every room that had one and fourteen of
-twenty-three were still wrong, no turn was ever awarded on `BidReason::Knows`,
-and `!defer` was used on none of 266 turns.
-See [`docs/experiments/2026-09-05-expert-delegation.md`](docs/experiments/2026-09-05-expert-delegation.md).
+P10 tested a transcript-folded directory, `BidReason::Knows`, and `!defer`.
+Neither delegation nor deferral improved the measured decisions. The live
+matrix recorded no `Knows` floor award and no deferral use across 27 rounds.
+The directory fold remains because task division uses its expertise estimate;
+the episode's delegation bonus and deferral path have been removed. See the
+[experiment](docs/experiments/2026-09-05-expert-delegation.md) and
+[division decision](docs/adr/0015-the-division-of-labour-is-the-default-shape.md).
 
 ## What P16 adds, and what it deliberately does not
 
@@ -216,11 +157,10 @@ epoch-scoped consent, under which a grant issued later cannot cover a request
 minted earlier. `Ask` names exactly one person, resolved through the existing
 roster and desk algebra, and never an agent.
 
-It adds **one port**, `ApprovalGate`, in `crates/tinyhivemind`, sibling to
-`MentionTurnQueue` and `ReferralQueue`. Approval *decides*; every wait for a
-person is IO and belongs there or in the host. That is the ADR: the contested
-choice was not that the fold decides rather than enacts, but that it is total —
-a gate that can fail is a gate that can be bypassed by failing, so `approve`
+The original phase also added an `ApprovalGate` waiting port in
+`crates/tinyhivemind`. That unused wrapper has since been retired; a host
+handles the wait after the pure decision. The ADR's lasting choice is that the
+fold is total: a gate that can fail can be bypassed by failing, so `approve`
 returns no `Result` and adds no `Error` variant. See
 [ADR 0008](docs/adr/0008-an-approval-decision-is-total.md).
 

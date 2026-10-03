@@ -96,7 +96,6 @@ fn arms(
                 policy,
                 task,
                 false,
-                0,
                 AsideMode::Alongside,
                 aside_cap,
                 CheckStyle::ALONGSIDE,

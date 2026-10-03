@@ -1,11 +1,10 @@
-//! The room's tools as a raw session's own, over the shared record.
+//! The episode tools as native `OpenHuman` tools over the shared call record.
 //!
 //! `tinyhivemind-tools` renders the vocabulary into tool definitions and
 //! checks a call in `EpisodeTools::call`. This module takes those definitions
 //! as they are -- name, description, the schema with `chat` and `parent` --
 //! and wraps each in a `tinytools::Tool` whose `execute` is that same call.
-//! Nothing about a tool is restated here, so an in-process seat and an MCP
-//! seat read the same descriptions and the same refusals.
+//! A hosted or embedded seat receives the same definitions and refusals.
 
 use std::sync::Arc;
 
