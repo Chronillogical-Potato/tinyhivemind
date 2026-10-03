@@ -1,12 +1,11 @@
-//! Refutation: the mechanism that caps a topic out of contention on cited
-//! evidence, without touching the advocate cross-inhibition already silences.
+//! Refutations record cited disagreement without changing support or quorum.
 
 use super::super::*;
 use super::support::{contested_transcript, fold, policy, said, standing};
 use crate::trace::read;
 
 #[test]
-fn refutations_are_recorded_but_cap_nothing_under_the_default_policy() {
+fn refutations_are_recorded_without_changing_quorum() {
     let transcript = [
         said(1, "planner", "!propose #stage Stage the rollout."),
         said(
@@ -24,8 +23,7 @@ fn refutations_are_recorded_but_cap_nothing_under_the_default_policy() {
     };
     let standings = fold(&transcript, &default);
     let held = standing(&standings, "stage");
-    // The room's disagreement is on the record either way. Only the *effect*
-    // is opt-in.
+    // The room's disagreement is on the record, while quorum stays carried.
     assert_eq!(held.refuted_by, ["auditor", "scout"]);
     assert!(held.carried(&default));
 }
@@ -33,7 +31,7 @@ fn refutations_are_recorded_but_cap_nothing_under_the_default_policy() {
 #[test]
 fn a_refutation_needs_both_a_topic_and_a_citation() {
     // The marker parses only with both qualifiers. Without either it deposits
-    // nothing at all, rather than a trace that could cap a topic on nothing.
+    // nothing at all, rather than an incomplete audit record.
     let traces = read(&[
         said(1, "auditor", "!refute #stage ^0 Grounded and named."),
         said(2, "auditor", "!refute #stage Names a topic, cites nothing."),
@@ -47,21 +45,20 @@ fn a_refutation_needs_both_a_topic_and_a_citation() {
 }
 
 #[test]
-fn refuters_below_the_cap_leave_a_carried_topic_carried() {
+fn a_refuter_does_not_remove_support_or_carried_status() {
     let mut transcript = contested_transcript();
     transcript.push(said(4, "auditor", "!refute #stage ^3 Nowhere to stage it."));
     let standings = fold(&transcript, &policy(2));
     let held = standing(&standings, "stage");
 
     assert_eq!(held.refuted_by, ["auditor"]);
-    // One refuter is below the default cap of two, so nothing is capped, and
-    // no supporter was removed: refutation never silences anybody.
+    // Refutation records disagreement but does not silence an advocate.
     assert_eq!(held.supporters, ["planner", "critic"]);
     assert!(held.carried(&policy(2)));
 }
 
 #[test]
-fn repeated_refutation_by_one_member_counts_once() {
+fn repeated_refutation_by_one_member_is_recorded_once() {
     let mut transcript = contested_transcript();
     transcript.push(said(4, "auditor", "!refute #stage ^3 Nowhere to stage it."));
     transcript.push(said(5, "auditor", "!refute #stage ^3 Still nowhere."));
@@ -86,7 +83,7 @@ fn refuting_a_topic_nobody_advocated_is_inert() {
 }
 
 #[test]
-fn a_member_that_both_supports_and_refutes_a_topic_is_only_a_refuter() {
+fn a_member_that_both_supports_and_refutes_remains_a_supporter() {
     let standings = fold(
         &[
             said(1, "planner", "!propose #stage Stage the rollout."),
@@ -97,9 +94,12 @@ fn a_member_that_both_supports_and_refutes_a_topic_is_only_a_refuter() {
         &policy(2),
     );
     let held = standing(&standings, "stage");
-    assert_eq!(held.supporters, ["planner"]);
+    assert_eq!(held.supporters, ["planner", "critic"]);
     assert_eq!(held.refuted_by, ["critic"]);
-    assert_eq!(held.support, importance(TraceKind::Propose));
+    assert_eq!(
+        held.support,
+        importance(TraceKind::Propose) + importance(TraceKind::Support)
+    );
 }
 
 #[test]
