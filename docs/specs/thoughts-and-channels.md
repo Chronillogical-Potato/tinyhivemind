@@ -48,11 +48,13 @@ parsing.
 
 ## Non-goals
 
-- **Relaxing one message, one turn.** A seat still speaks once per turn.
+- **Adding messages to one turn.** A seat still makes one accepted room post
+  per turn.
 - **A model in the chair.** The controller stays deterministic. The one model
   call this adds writes an account nobody is quoted in.
 - **A second journal.** The account supersedes itself and is not in the log.
-- **Concurrency.** Nothing here lets two seats run at once.
+- **Scheduling concurrency.** This feature does not choose turn width;
+  [`concurrent-rounds.md`](concurrent-rounds.md) defines episode rounds.
 
 ## Proposed behavior
 
@@ -136,8 +138,8 @@ what makes it safe to be lossy.
 
 ## Invariants and constraints
 
-- One message, one turn. `desk_post` produces one row; a second call replaces
-  the first rather than adding a turn.
+- One accepted room post per turn. `desk_post` produces one row; a second call
+  replaces the first rather than adding a turn.
 - The transcript is append-only and never condensed. Nothing here edits or
   removes a row.
 - The library holds no notebook, no outbox, and no account — all three are host

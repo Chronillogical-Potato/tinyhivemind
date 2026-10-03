@@ -1,13 +1,16 @@
 # `tinyhivemind`
 
-The session runtime: the ports a host implements, the paging walk over a
-session log, the responder ladder, and the mention-dispatch edge.
+The session runtime defines the host's log and selection ports. It projects
+attributed conversation history, validates speech, and provides bounded
+reads for threads, pins, and search.
 
 See the [repository root README](../../README.md) for what `tinyhivemind` is
 and why it exists. `tinyhivemind-core` answers what can be decided from
-supplied desk and roster data. This crate handles the operations that wait on
-a host: paging through its session log, building a turn briefing, optionally
+supplied desk and roster data. This crate handles operations that wait on a
+host: paging through its session log, building a turn briefing, optionally
 asking a selector, and dispatching a mention or referral through a queue.
+The responder and dispatch paths remain public APIs; the completion driver
+uses the session and speech types from this crate for its own episode loop.
 
 `tinyhivemind` depends on `tinyhivemind-core` and re-exports its entire public
 surface (`pub use tinyhivemind_core::*;` in [`src/lib.rs`](src/lib.rs)), so a

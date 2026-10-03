@@ -7,6 +7,10 @@ router with deterministic eligibility, escalation, and fallback rules. It owns
 no storage, transport, credentials, or OpenCompany/OpenHuman types. A host can
 place already-instantiated agent handles in `AgentRegistry<A>` and resolve an
 accepted routing plan without TinyHiveMind constructing or recreating agents.
+For a completion episode, `tinyhivemind-driver` binds those handles through
+`BoundHive<A>`; its graph also checks that desk members and route candidates
+match. `AgentRegistry<A>` remains available to hosts that use routing without
+the completion driver.
 
 See [`src/README.md`](src/README.md) and
 [`docs/specs/jev-first-routing.md`](../../docs/specs/jev-first-routing.md).

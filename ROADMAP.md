@@ -1,13 +1,12 @@
 # Roadmap
 
-`tinyhivemind` is being built by moving the shared-conversation layer out of
+`tinyhivemind` began by moving the shared-conversation layer out of
 [`opencompany`](https://github.com/tinyhumansai/opencompany) and fixing two
-defects that layer has, in that order. Roughly 60% of the substrate already
-exists there and moves; 40% is capability that does not exist yet.
+transcript defects. This table records the order in which that work landed.
 
-Phases land one at a time. Each is a pair of pull requests — this repository
-first, then the `vendor/tinyhivemind` pointer bump in `opencompany` — so the
-dependency direction is enforced by construction.
+For changes used by OpenCompany, this repository lands first. OpenCompany then
+updates its pinned `vendor/tinyhivemind` submodule. The pin is the version that
+consumer builds.
 
 | Phase | What lands | State |
 | --- | --- | --- |
@@ -65,14 +64,14 @@ addressee-based. See [`docs/specs/private-asides.md`](docs/specs/private-asides.
 [ADR 0010](docs/adr/0010-an-aside-carries-information-never-support.md) and
 [the reading](docs/research/context-in-agent-teams.md).
 
-The arm that measures it **lost**, and the loss is published:
+The on-floor check **lost**, and the loss is published:
 [`docs/experiments/2026-09-07-do-asides-help.md`](docs/experiments/2026-09-07-do-asides-help.md)
-records −2.5 points at the tuned turn budget, nothing once the budget stops
-binding, and −15.3 on a hidden profile, where averaging with a peer inside one
-correlated desk imports the shared bias instead of cancelling noise. The
-matched public control settles the narrower question: privacy is worth nothing
-to a decision either way. P17 therefore rests on auditability and bounded
-independence, and claims nothing about answer quality.
+records a 2.5-point loss at the tuned turn budget and a 15.3-point loss on a
+hidden profile. The later matched-turn control found that spending a floor turn
+caused the loss; it retracted the earlier explanation about averaging correlated
+error. Privacy itself did not change the measured outcome. An off-floor aimed
+check gained 3.2 points on that hidden profile, while costing additional model
+calls. See [the follow-up](docs/experiments/2026-09-07-why-asides-lose.md).
 
 P14 is out of order on purpose. It is not a wire-format change and does not
 wait on P11 through P13: it answers the same pressure they do — a bounded
@@ -89,10 +88,8 @@ or on read state, and it answers a pressure none of them address. It also needs
 nothing from the hive crate. See [`docs/specs/approval.md`](docs/specs/approval.md)
 and [ADR 0008](docs/adr/0008-an-approval-decision-is-total.md).
 
-The next work is the paired OpenCompany adapter integration, followed by a
-gated live-provider verification in which two agents exchange an attributed
-turn. The adapter initially remains disabled and uses two hops when enabled.
-The hive crate is opt-in and is not part of that first adapter.
+The phase table is a historical record. Current crate roles and their direct
+dependencies are in the [workspace dependency map](docs/crate-dependencies.md).
 
 P11 through P13 come out of a survey of the biology, the group-decision
 literature, and the open-source landscape of shared agent memory, recorded in
@@ -107,8 +104,8 @@ P8 answers a question the first seven phases do not: how a *room* of agents
 reaches a decision, rather than how one message finds its one responder. It adds
 a trace grammar over the shared transcript, a decaying salience field, quorum
 counted as distinct grounded supporters, cross-inhibition that silences an
-advocate rather than debiting an option, and an attention market whose argmax
-yields exactly one speaker.
+advocate rather than debiting an option, and an attention market that ranks
+eligible speakers. A later step may authorize a bounded round of them.
 
 It adds **no port**. An episode is a pure fold, and the host does its waiting
 through `SessionLog`, `Selector` and `MentionTurnQueue` — the ports it already
@@ -120,7 +117,8 @@ every positive multi-agent result in the literature is confounded by compute,
 and self-consistency at a matched token budget is the honest control. P8 is a
 protocol for bounded deliberation with an auditable termination reason, and
 nothing more. See
-[`docs/adr/0002-hive-episodes-are-sequential.md`](docs/adr/0002-hive-episodes-are-sequential.md).
+[ADR 0014](docs/adr/0014-a-round-authorizes-concurrent-turns.md), which
+supersedes the original sequential episode decision.
 
 ## What P9 adds, and why it is off
 
@@ -136,15 +134,15 @@ Both are pure folds. Both are recorded in
 [ADR 0003](docs/adr/0003-refutation-links-evidence-to-a-topic.md) and
 [ADR 0004](docs/adr/0004-grounds-are-weighed-by-evidential-depth.md).
 
-**Both are off in `QuorumPolicy::DEFAULT`, because the benchmark scored them and
-they lost.** `hive+ref` reaches 75.0% against 82.1% for the same policy without
-it — below even the matched-budget vote — `hive+ev` reaches 55.9%, and no policy with either knob on appears in the
-top twelve of an 864-point grid search. The spec's acceptance criterion required
-the arm to be able to lose; it did, and the result is written up rather than
-buried. The mechanism stays in the library, opt-in, because the case it was
-built for — a hidden profile, where one member holds the fact that overturns a
-decoy — is not what the simulated benchmark measures. See
-[`docs/experiments/2026-09-01-refutation-and-grounds.md`](docs/experiments/2026-09-01-refutation-and-grounds.md).
+**Both remain off in `QuorumPolicy::DEFAULT`.** On the original 5,000-room
+benchmark, `hive+ref` scored 75.0% against 82.1% without the cap, and
+`hive+ev` scored 55.9%. That experiment did not test a hidden profile, which
+was its stated limit. A later hidden-profile run with an evidence-first opening
+also found losses: 53.3% for `hive+ref` and 26.0% for `hive+ev`, against 66.3%
+for `hive+`. These optional knobs remain implemented, but neither result
+supports turning them on as general guidance. See the
+[original experiment](docs/experiments/2026-09-01-refutation-and-grounds.md)
+and the [later matrix](docs/experiments/2026-09-05-expert-delegation.md).
 
 ## What P10 adds, and why it is off
 
@@ -162,7 +160,7 @@ memory, with Lewis's specialisation and credibility as the two estimators the
 transcript can support. It feeds `BidReason::Knows`, which sits between
 `Dissent` and `Quiet` and gives the floor to the member the transcript says
 holds the contested topic and who has taken no position on it. It also adds
-`!defer #topic`, the abstention that hands a topic to whoever does hold it,
+`!defer #topic`, an abstention that can promote a member who holds the topic,
 bounded by `defer_cap`. Nothing is stored: the directory is refolded on every
 step. Recorded in
 [`docs/specs/expert-delegation.md`](docs/specs/expert-delegation.md) and
@@ -181,11 +179,12 @@ The uniform bench predicted zero and delivered zero: `hive+dir` is `hive+` to
 the digit at 82.1% over 5000 rooms, and `BidReason::Knows` never fires there at
 all. On a hidden profile with an evidence-first opening it scores **65.8%
 against `hive+`'s 66.3%** with `Knows` winning the floor in 77.5% of episodes,
-and `hive+defer` moves `±0.5` and never leaves the interval. A *directed*
-router is worse still — `ladder+dir` reaches 45.1% with two specialists against
-the uninformed ladder's 52.6%, while routing to the decisive member more often
-(22.3% against 18.9%) — and it degrades with shared history rather than
-sharpening. The one thing that moves a hidden profile is when a member speaks:
+and `hive+defer` moves within 0.5 points and never leaves the interval. A
+*directed* router reaches 45.1% with two specialists against the uninformed
+ladder's 52.6%, while routing to the decisive member more often (22.3% against
+18.9%). That arm receives the correct topic in its prompt, so its score does
+not establish how a router would perform without that information. The one
+thing that moves a hidden profile is when a member speaks:
 depositing facts before taking positions takes the same rooms from 15.3% to
 66.3%, `+51.3 [+49.8, +52.8]` over the matched-budget vote, which is a finding
 about participants rather than about this fold. The circularity number `rho`
@@ -228,10 +227,10 @@ returns no `Result` and adds no `Error` variant. See
 It does **not** execute anything, define a tool surface, embed a policy
 language, store an audit trail, handle a credential, or sandbox a command. The
 resource predicate is lexical path containment, not a kernel boundary, and the
-spec says so where a reader would otherwise assume otherwise. It does not relax
-one message, one turn: no decision variant carries a turn, an `Ask` is not a
-mention and never becomes a `MentionTurnRequest`, and approval expresses no
-edge to the dispatch or referral folds in either direction.
+spec says so where a reader would otherwise assume otherwise. An approval
+decision authorizes no turn: no variant carries one, an `Ask` is not a mention
+and never becomes a `MentionTurnRequest`, and approval expresses no edge to the
+dispatch or referral folds in either direction.
 
 ## The two defects P4 and P5 fix
 

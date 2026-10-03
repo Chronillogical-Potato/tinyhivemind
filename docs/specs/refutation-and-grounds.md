@@ -8,7 +8,11 @@
 > therefore `false`/`None` in `QuorumPolicy::DEFAULT` and are not taught in the
 > live protocol prompt. See
 > [`../experiments/2026-09-01-refutation-and-grounds.md`](../experiments/2026-09-01-refutation-and-grounds.md)
-> for the numbers and for what the benchmark does not test.
+> for the original numbers. A later hidden-profile run with an evidence-first
+> opening also found losses: 53.3% with `refutation_cap`, 26.0% with
+> `require_evidential`, and 66.3% without either. See the
+> [later matrix](../experiments/2026-09-05-expert-delegation.md). The knobs
+> remain opt-in; neither result establishes an accuracy benefit.
 
 ## Problem
 

@@ -7,10 +7,11 @@ performs no IO and retains no state.
 
 `crate::dispatch::mention_dispatch` answers *who replies next*, bound to the
 conversation the trigger was committed on. This module answers the question a
-second desk makes possible: *whose channel does the reply run in* — and, once
-it has run there, *how does the answer come back*. Everything here is still
-one message, one turn: a desk mention resolves to exactly one agent before it
-leaves the fold, and `ReferralDecision` has no variant carrying two.
+second desk makes possible: *whose channel does the reply run in*, and how
+does the answer come back? A referral decision authorizes at most one child
+turn. A desk mention resolves to one agent before it leaves the fold, and
+`ReferralDecision` has no variant carrying two. An episode can still authorize
+a bounded concurrent round of several turns.
 
 ## Public surface
 

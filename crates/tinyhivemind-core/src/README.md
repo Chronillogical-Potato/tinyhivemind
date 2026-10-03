@@ -1,9 +1,9 @@
 # Feature modules
 
 One directory per feature area, each answering one question from a fold over
-arguments the caller supplies. `lib.rs` re-exports all of them and carries the
-crate-level overview; this file is just an index pointing at each module's own
-README.
+arguments the caller supplies. `lib.rs` exposes the modules and carries the
+crate-level overview; this file points to each module's own README. The public
+API stays under module names such as `desk` and `mention`.
 
 | module | question it answers |
 | --- | --- |

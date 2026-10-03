@@ -363,9 +363,9 @@ That port is the second half of this phase and is specified here only in
 outline; the pure algebra lands first and is useful without it, because a host
 that already has an approval UI needs only the decision.
 
-### One message, one turn
+### Approval does not dispatch a turn
 
-This does not relax the invariant, and it cannot:
+An approval decision authorizes no turn:
 
 - `ApprovalDecision` has no variant that carries a turn, a mention, or a
   `MentionTurnRequest`.

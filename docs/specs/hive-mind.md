@@ -1,7 +1,13 @@
 # Hive mind
 
-**Status:** Accepted
+**Status:** Implemented; episode scheduling superseded by
+[`concurrent-rounds.md`](concurrent-rounds.md) and
+[ADR 0014](../adr/0014-a-round-authorizes-concurrent-turns.md).
 **Owner:** tinyhivemind maintainers
+
+The single-turn `HiveStep` sketch below records the original P8 design. The
+current `Speak` variant carries a bounded round of turns and one `next_state`
+to commit after all those turns have been appended.
 
 ## Problem
 
@@ -147,9 +153,9 @@ pub enum BidReason { Addressed, Dissent, Knows, Quiet, Salience }
 pub struct Bid { pub agent_id: String, pub urge: i64, pub reason: BidReason }
 ```
 
-Every active desk member bids; `floor_holder` takes the argmax, and ties break
-by roster order. Taking the argmax rather than everything above threshold is
-what enforces one message, one turn.
+Every active desk member bids; `floor_holder` takes one highest bid and
+`floor_round` takes a bounded set of bids in desk order. The host controls the
+width with `round_width` while blind and `revealed_width` after reveal.
 
 Two adjustments fold into the bid:
 
@@ -323,7 +329,8 @@ establishes.
 
 ## Invariants and constraints
 
-- `HiveStep::Speak` carries exactly one turn. There is no representation of two.
+- The original P8 `HiveStep::Speak` carried one turn. ADR 0014 replaced it with
+  a bounded round; the host commits `next_state` after appending every turn.
 - `standings` is commutative and idempotent over its trace input.
 - No floating point anywhere in the crate.
 - The crate names no host type, defines no trait a host implements, and performs

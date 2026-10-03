@@ -6,9 +6,9 @@ decides each call in `call`: the turn, the thread, `interpret`, then the
 event or the refusal. `tool_definitions` renders the served specs as JSON
 tool definitions.
 
-It is the half of the room's edge that does not depend on a wire. A harness
-that takes native tools wraps the definitions in its own tool type and calls
-in-process; a harness that can only dial MCP reaches the same `call` through
+It accepts JSON call arguments without owning a transport. A harness that
+takes native tools wraps the definitions in its own tool type and calls
+`EpisodeTools::call` in process; a harness that can only dial MCP reaches it through
 [`tinyhivemind-mcp`](../tinyhivemind-mcp/README.md), which depends on this
 crate and is the one socket the repository opens. Either way a seat is
 refused, acknowledged and recorded in the same words.
