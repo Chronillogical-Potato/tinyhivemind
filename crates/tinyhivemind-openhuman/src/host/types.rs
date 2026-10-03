@@ -85,7 +85,7 @@ impl TurnHooks for DefaultHooks {}
 ///
 /// For hosts driving the pure completion driver directly. The trait's historical
 /// `runtime_id` method returns this agent's ID; it is distinct from
-/// [`Agent::runtime_id`], which identifies the shared OpenHuman runtime.
+/// [`Agent::runtime_id`], which identifies the shared `OpenHuman` runtime.
 #[derive(Clone, Debug)]
 pub struct RegisteredAgent(pub Agent);
 impl tinyhivemind_core::driver::BoundAgent for RegisteredAgent {
