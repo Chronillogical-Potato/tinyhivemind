@@ -51,8 +51,8 @@ tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
 # host writes the same four lines against its own. `tinytools` is pinned at
 # the commit OpenHuman's own tree vendors, which is what makes the unification
 # exact; `.github/scripts/assert-openhuman-pin.sh` checks all three revs.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "04fe04cc9111c73870861311f0c6df0b5d6c38be", default-features = false }
-openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "04fe04cc9111c73870861311f0c6df0b5d6c38be", default-features = false }
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "c49537dc31720243f2d7710edbd03fa063f09ca0", default-features = false }
+openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "c49537dc31720243f2d7710edbd03fa063f09ca0", default-features = false }
 tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "8e5008c375f9e717e6cbb81fa9532599b98ff0a8" }
 tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "8e5008c375f9e717e6cbb81fa9532599b98ff0a8" }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
