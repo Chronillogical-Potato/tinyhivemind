@@ -58,7 +58,10 @@ as an upstream dependency change before OpenHuman's integration change.
 The normal family supports hive/agent discovery, hive reads, hive sends, direct
 agent sends, asks, broadcasts, posts, and completion. Sender identity comes from
 the bound agent, never a model-supplied field. Tools validate visibility,
-membership, destination, episode, and thread attribution.
+membership, destination, episode, and thread attribution. `hivemind_read`
+accepts exactly one hive or peer destination; peer reads expose only the caller's
+durable direct conversation, including returned replies. The optional `after`
+cursor is exclusive. Returned replies do not schedule automatic return turns.
 
 Public APIs always support creating hives, registering supplied agents, and
 joining/leaving hives while scheduling runs. Empty hives can exist, but delivery

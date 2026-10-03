@@ -114,6 +114,35 @@ impl Coordinator {
             })
         })
     }
+    /// Read the caller's direct conversation with a registered peer in durable
+    /// sequence order, including replies returned by the peer's runner.
+    /// `after` excludes that sequence. Returned replies do not schedule another
+    /// turn; callers can send an explicit follow-up when needed.
+    /// # Errors
+    /// Returns unknown caller/peer or a poisoned shared lock.
+    pub fn read_direct(
+        &self,
+        agent_id: &str,
+        peer_id: &str,
+        after: Option<u64>,
+    ) -> Result<Vec<Message>> {
+        let live = self.lock()?;
+        known_agent(&live.durable, agent_id)?;
+        known_agent(&live.durable, peer_id)?;
+        Ok(live
+            .durable
+            .messages
+            .iter()
+            .filter(|message| {
+                after.is_none_or(|cursor| message.sequence > cursor)
+                    && ((message.sender == agent_id
+                        && message.destination == Destination::Agent(peer_id.into()))
+                        || (message.sender == peer_id
+                            && message.destination == Destination::Agent(agent_id.into())))
+            })
+            .cloned()
+            .collect())
+    }
     /// Read only accessible rows of a hive in durable sequence order.
     /// `after` is exclusive; a thread read includes its root and replies.
     /// # Errors

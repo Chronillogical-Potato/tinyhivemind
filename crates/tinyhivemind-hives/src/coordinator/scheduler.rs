@@ -142,6 +142,7 @@ impl Coordinator {
         }
         let mut live = self.lock()?;
         let mut next = live.durable.clone();
+        let pruned = conduct::prune_pending(&mut next, &self.inner.options)?;
         let candidates = candidates(&next);
         let mut selected = BTreeSet::new();
         let mut claims = Vec::new();
@@ -225,7 +226,7 @@ impl Coordinator {
                 .pending
                 .retain(|turn| turn.seat != agent_id);
         }
-        if !claims.is_empty() {
+        if pruned || !claims.is_empty() {
             self.commit(&mut live, next)?;
         }
         Ok(claims)

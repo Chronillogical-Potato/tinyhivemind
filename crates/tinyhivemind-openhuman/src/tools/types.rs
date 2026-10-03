@@ -61,7 +61,7 @@ impl Kind {
             Self::ListHives => "List hives you have joined. Hive and desk have one hive_id.",
             Self::ListAgents => "List registered agent IDs for direct messages across hives.",
             Self::Read => {
-                "Read visible messages of a joined hive, optionally after a sequence and within a thread."
+                "Read a joined hive (hive_id, optional thread) or your direct transcript with a peer (agent_id), including replies. Supply exactly one destination. after is an exclusive sequence cursor. Reading never schedules a turn."
             }
             Self::SendHive => {
                 "Enqueue a message to a joined hive; message_id deduplicates retries. Does not wait for a reply."
@@ -89,7 +89,8 @@ impl Kind {
         match self {
             Self::ListHives | Self::ListAgents => vec![],
             Self::Read => vec![
-                ("hive_id", "string", true),
+                ("hive_id", "string", false),
+                ("agent_id", "string", false),
                 ("after", "integer", false),
                 ("thread", "integer", false),
             ],
@@ -141,7 +142,14 @@ impl Kind {
                 required.push(name);
             }
         }
-        json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
+        let mut schema = json!({"type":"object","properties":properties,"required":required,"additionalProperties":false});
+        if matches!(self, Self::Read) {
+            schema["oneOf"] = json!([
+                {"required":["hive_id"], "not":{"required":["agent_id"]}},
+                {"required":["agent_id"], "not":{"anyOf":[{"required":["hive_id"]},{"required":["thread"]}]}}
+            ]);
+        }
+        schema
     }
     pub(super) fn validate(self, args: &Value) -> anyhow::Result<()> {
         let obj = args
@@ -169,6 +177,16 @@ impl Kind {
                 _ => false,
             };
             anyhow::ensure!(valid, "invalid {name}: expected {ty}");
+        }
+        if matches!(self, Self::Read) {
+            anyhow::ensure!(
+                obj.contains_key("hive_id") != obj.contains_key("agent_id"),
+                "supply exactly one of hive_id or agent_id"
+            );
+            anyhow::ensure!(
+                !obj.contains_key("agent_id") || !obj.contains_key("thread"),
+                "thread is only valid for hive reads"
+            );
         }
         Ok(())
     }

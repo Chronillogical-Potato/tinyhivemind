@@ -19,7 +19,10 @@ agents retain their queued positions and never run two turns concurrently.
 Each hive has one active episode; the real conductor supplies child conversations,
 nudges, broadcasts, completion admission, approval parking, and turn walls.
 Normal runner return means its turn ended; only `EpisodeAction::Complete` closes
-an assignment. A reply is recorded as a post.
+an assignment. A reply is recorded as a post. For standalone direct turns, `read_direct`
+exposes both sent messages and returned replies only to the two participants,
+with an exclusive `after` cursor. Returned replies do not enqueue return turns;
+an agent sends an explicit follow-up to continue the exchange.
 
 `register_agent` accepts handles from the current runtime. Existing durable IDs
 are reattached after restart without overwriting session bindings. Optional
@@ -30,7 +33,12 @@ runner. `bind_session` remains available for separately registered agents before
 their first claim.
 Joining/leaving affects later turns; active turns retain captured membership.
 Removing membership cancels unstarted deliveries while preserving transcript.
+Claims revalidate pending seats under the reservation lock and retire removed
+seats through conductor bookkeeping, including a leave after wave preparation.
 
+An initiating private message bounds ordinary posts, completions, runner replies,
+and public system notes to its sender and named readers. Explicit asks and
+broadcasts retain their deliberate delegation audience.
 Private child posts and completions inherit the ask root's participant list.
 Reads also verify every ancestor thread's visibility. Messages addressed to an
 existing thread keep that root in the execution context and all ordinary outputs;

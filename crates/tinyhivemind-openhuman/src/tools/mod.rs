@@ -81,12 +81,19 @@ impl HiveTool {
                     .collect::<Vec<_>>(),
             )?),
             Kind::ListAgents => Ok(serde_json::to_value(coordinator.list_agents()?)?),
-            Kind::Read => Ok(serde_json::to_value(coordinator.read_hive(
-                actor,
-                &text("hive_id"),
-                args["after"].as_u64(),
-                args["thread"].as_u64(),
-            )?)?),
+            Kind::Read => {
+                let rows = if let Some(peer) = args["agent_id"].as_str() {
+                    coordinator.read_direct(actor, peer, args["after"].as_u64())?
+                } else {
+                    coordinator.read_hive(
+                        actor,
+                        &text("hive_id"),
+                        args["after"].as_u64(),
+                        args["thread"].as_u64(),
+                    )?
+                };
+                Ok(serde_json::to_value(rows)?)
+            }
             Kind::SendHive | Kind::SendAgent => {
                 let destination = match self.kind {
                     Kind::SendHive => Destination::Hive(text("hive_id")),
@@ -159,6 +166,8 @@ impl HiveTool {
         }
     }
 }
+#[cfg(test)]
+mod direct_test;
 #[cfg(test)]
 mod test;
 

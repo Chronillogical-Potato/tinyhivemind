@@ -122,10 +122,14 @@ fn append(
     sender: String,
     body: String,
     thread: Option<Sequence>,
-    only_for: Vec<String>,
+    mut only_for: Vec<String>,
+    inherit_audience: bool,
 ) -> Result<Sequence> {
     let destination = Destination::Hive(episode.hive.hive_id.clone());
     let thread = thread.map(|s| s.0).or(episode.thread);
+    if inherit_audience && only_for.is_empty() && thread == episode.thread {
+        only_for = narrow_readers(state, &destination, Some(episode.opened_at), only_for)?;
+    }
     let only_for = narrow_readers(state, &destination, thread, only_for)?;
     let sequence = next_sequence(state)?;
     state.messages.push(Message {
@@ -149,6 +153,7 @@ fn note(state: &mut StoredState, episode: &EpisodeRecord, step: Step) -> Result<
             note.body,
             note.thread,
             note.only_for.into_iter().collect(),
+            true,
         )?;
     }
     Ok(())
@@ -167,6 +172,10 @@ async fn drain(
                 commit.utterance.message().into(),
                 commit.thread,
                 commit.only_for,
+                !matches!(
+                    commit.utterance,
+                    Utterance::Ask { .. } | Utterance::Broadcast { .. }
+                ),
             )?;
             conductor.committed(sequence).await?;
         } else {
@@ -428,4 +437,17 @@ fn prune_removed(
         checkpoint(&conductor, episode)?;
     }
     Ok(())
+}
+
+/// Revalidate pending reservations under the same lock that starts runners.
+pub(super) fn prune_pending(state: &mut StoredState, options: &CoordinatorOptions) -> Result<bool> {
+    let mut changed = false;
+    for index in 0..state.episodes.len() {
+        let mut episode = state.episodes[index].clone();
+        let previous = episode.pending.len();
+        prune_removed(state, &mut episode, options)?;
+        changed |= previous != episode.pending.len();
+        state.episodes[index] = episode;
+    }
+    Ok(changed)
 }

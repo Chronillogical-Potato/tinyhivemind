@@ -275,4 +275,5 @@ mod finalization;
 mod lifecycle;
 mod privacy;
 mod registration;
+mod review_regressions;
 mod scheduling;
