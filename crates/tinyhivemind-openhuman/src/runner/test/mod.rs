@@ -456,8 +456,29 @@ async fn again(
     let (_, again) = one_turn(embed, embed_log.latest()).await;
     assert_eq!(again.len(), 1, "the embed seat called again");
     host.log.append("lead", "COMPLETE: done", None, &[]);
-    let (_, again) = one_turn(hosted, host.log.latest()).await;
-    assert_eq!(again.len(), 1, "the hosted seat called again");
+    host.log.append("peer", "I found a clue", None, &[]);
+    host.park.store(true, Ordering::SeqCst);
+    hosted.open(
+        "lead",
+        vec!["    1  @operator: state the root cause".into()],
+        Dispatch {
+            chat: "engineering".into(),
+            parent: None,
+        },
+    );
+    let (seat, lane, parked) = hosted
+        .turn_only(
+            "lead".into(),
+            Lane::Desk,
+            host.log.latest(),
+            "Your turn.".into(),
+            vec!["desk_complete_episode".into()],
+        )
+        .await;
+    assert_eq!(seat, "lead");
+    assert_eq!(lane, Lane::Desk);
+    assert_eq!(parked, TurnResult::Parked);
+    assert_eq!(hosted.close("lead").len(), 1);
     assert_eq!(host.wrapped.load(Ordering::SeqCst), 2);
 }
 

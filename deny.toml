@@ -62,7 +62,7 @@ skip = [
     # Same narrowness as the entry above: this skips one package's
     # manifest-level wildcard finding, and its dependency tree stays subject to
     # every other ban.
-    { name = "tinyjuice", version = "0.4.0" },
+    { name = "tinyjuice", version = "0.6.0" },
 ]
 # Crates that must never enter the dependency graph.
 deny = []

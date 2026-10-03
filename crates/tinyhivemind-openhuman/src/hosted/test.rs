@@ -14,7 +14,7 @@ use serde_json::json;
 use tinyhivemind::{Conversation, Sequence, SessionLog};
 use tinyhivemind_tools::{Dispatch, EpisodeTools, served_specs};
 
-use super::EpisodeBelt;
+use super::{EpisodeBelt, EpisodeBeltSource, Narrowing};
 use crate::MemoryLog;
 use crate::seed::{history, with_persona};
 
@@ -36,6 +36,40 @@ fn named(id: &str) -> String {
         "three" => "Theo".to_owned(),
         other => other.to_owned(),
     }
+}
+
+#[test]
+fn narrowing_restores_once_and_none_does_nothing() {
+    let restored = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let none = Narrowing::none();
+    assert!(format!("{none:?}").contains("false"));
+    drop(none);
+    assert_eq!(restored.load(std::sync::atomic::Ordering::SeqCst), 0);
+
+    let restored_on_drop = Arc::clone(&restored);
+    let narrowing = Narrowing::until(move || {
+        restored_on_drop.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    });
+    assert!(format!("{narrowing:?}").contains("true"));
+    drop(narrowing);
+    assert_eq!(restored.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn belt_source_rebuilds_its_prefixed_belt_for_its_seat() {
+    let tools = Arc::new(EpisodeTools::new(["lead"]));
+    let source = EpisodeBeltSource {
+        seat: "lead".into(),
+        tools,
+        prefix: "desk_".into(),
+    };
+
+    assert_eq!(source.seat(), "lead");
+    let belt = source.belt();
+    assert!(belt.names().iter().all(|name| name.starts_with("desk_")));
+    let debug = format!("{source:?}");
+    assert!(debug.contains("lead"));
+    assert!(debug.contains("desk_"));
 }
 
 /// The task, a desk post, an ask from one to two and its answer in the
@@ -201,16 +235,11 @@ async fn the_memory_log_pages_newest_first_and_says_when_it_is_done() {
 }
 
 fn request(tool: &str) -> ToolPolicyRequest {
-    #[allow(deprecated)]
-    ToolPolicyRequest {
-        tool_name: tool.to_owned(),
-        arguments: json!({}),
-        context: ToolCallContext::session("session", "internal", "lead", "call-1", 1),
-        generated_tool: None,
-        session_id: String::new(),
-        channel: String::new(),
-        agent_definition_id: String::new(),
-    }
+    ToolPolicyRequest::new(
+        tool,
+        json!({}),
+        ToolCallContext::session("session", "internal", "lead", "call-1", 1),
+    )
 }
 
 /// A host policy that allows everything, so a denial can only be the
