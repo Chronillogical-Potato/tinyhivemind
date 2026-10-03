@@ -1,42 +1,26 @@
 # tinyhivemind-hive
 
-Bounded group deliberation for agent group chats: traces, salience, quorum
-with cross-inhibition, and the attention market — all pure.
+This crate folds a transcript into bounded group decisions. It contains the
+trace grammar, salience, quorum, attention bids, task division, and two kinds of
+episode state. It is pure: the host supplies a transcript and owns the returned
+state. The crate defines no storage or runtime port.
 
-`tinyhivemind-hive` answers a different question from the other two crates in
-this workspace: not *who responds to this message* but *how does a room of
-agents reach a decision*. See the [repository root README](../../README.md)
-for the three-crate split and the charter that governs all of it.
+The usual entry point for deliberation is `step`. A `HiveStep::Speak` contains
+one round of turns. The host may run those turns concurrently, up to
+`EpisodePolicy::round_width` while the round is blind or
+`EpisodePolicy::revealed_width` after it becomes visible. It appends every turn
+before applying the round's `next_state`. A width of one gives sequential
+behavior. See [ADR 0014](../../docs/adr/0014-a-round-authorizes-concurrent-turns.md)
+and the [concurrent rounds spec](../../docs/specs/concurrent-rounds.md).
 
-## What it is
+`division::divide` assigns independent task facets to seats. The
+`completion` module tracks explicit completion and newly assigned work; it
+does not infer completion from ordinary prose. These are separate uses of the
+crate from quorum deliberation. The [crate docs](src/lib.rs) contain a runnable
+quorum example and describe the measured tradeoffs behind the defaults.
 
-- **Pure, and defines no port.** An episode is
-  `step(state, transcript, roster, desks, policy) -> HiveStep`, a fold over
-  arguments the caller already holds. The host does its waiting through the
-  `SessionLog`, `Selector` and `MentionTurnQueue` ports `tinyhivemind` already
-  defines — nothing here is awaited, and nothing here is a trait a host
-  implements.
-- **One message, one turn, still.** `HiveStep::Speak` carries exactly one
-  `HiveTurn`; there is no variant that carries two. Independence between
-  participants is bought as a visibility filter on the projection, never as
-  concurrency. See
-  [ADR 0002](../../docs/adr/0002-hive-episodes-are-sequential.md).
-- **Fixed-point throughout.** Every score is integer arithmetic, so every
-  payload derives `Eq` and every fold is reproducible — the same transcript
-  folds to the same step on any machine.
-- **Opt-in.** A host that never calls into this crate gets exactly today's
-  behaviour: one responder off the ladder, one turn, done.
-
-The full crate-level overview — the module list, what the crate deliberately
-does not hold, and a runnable example — is in
-[`src/lib.rs`](src/lib.rs). Start there for the API; start here only for
-orientation.
-
-## Where things live
-
-- [`src/README.md`](src/README.md) indexes the feature modules.
-- [`examples/README.md`](examples/README.md) covers the runnable examples,
-  including the benchmark harness.
-- [`docs/specs/hive-mind.md`](../../docs/specs/hive-mind.md) and
-  [`docs/adr/`](../../docs/adr/) hold the behavioral spec and the design
-  decisions this crate implements.
+The host still owns the log, model calls, scheduling, and durable state. Every
+score is fixed-point integer arithmetic so a given input folds to the same
+result. The module index is in [`src/README.md`](src/README.md), and the
+scripted episode and benchmark are indexed in
+[`examples/README.md`](examples/README.md).
