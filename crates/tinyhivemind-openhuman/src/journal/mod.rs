@@ -240,3 +240,6 @@ impl SessionLog for MemoryLog {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

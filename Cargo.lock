@@ -1847,6 +1847,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "tinymcp-bus",
  "tokio",
  "url",
  "uuid",
@@ -3312,9 +3313,7 @@ dependencies = [
  "thiserror",
  "tinyhivemind-core",
  "tinyhivemind-hives",
- "tinyhivemind-tools",
  "tinytools",
- "tinytools-agent",
  "tokio",
  "wiremock",
 ]

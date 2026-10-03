@@ -1,14 +1,13 @@
-# Source layout
+# Adapter modules
 
-| Path | Purpose |
-|---|---|
-| `lib.rs` | Crate overview and the public surface: `run_episode`, `Journal`, `Report`, `SeatRunner`, `RunnerKind`, `HostedRunner`, `EpisodeHost`, `EpisodeBelt`, `EmbedRunner`, `EmbedSeat`, `LibraryHost`, `Route`, `register_seats`, `offline`. |
-| `error/` | What seating or running a seat, or an episode, can fail with. |
-| `episode/` | `run_episode` over a `Journal`: one episode from its door to quiescence. |
-| `runner/` | The seam: open, run, close; `Lane`, `TurnJob`; which runner the environment names. |
-| `journal/` | `MemoryLog`, an in-memory journal that is a real `SessionLog`; always compiled. |
-| `hosted/` | Seats as the host's own agents, built through `EpisodeHost`, seeded from the host's log. |
-| `embed/` | Seats as `openhuman-embed` agents with native tools. Each turn is seeded from the host's journal. |
-| `seed/` | A seat's history as it reads it, and its persona at the head: what `hosted` and `embed` give a turn instead of resuming one. |
-| `raw/` | Library-host setup and the native episode tool belt. |
-| `offline/` | The scripted model, the backend stub and the offline config, behind the `offline` feature and in tests. |
+| Path | Responsibility |
+| --- | --- |
+| `host/` | Supplied handle registration, continuing sessions, host hooks and management |
+| `tools/` | Stable native specifications, argument validation and bound execution |
+| `journal/` | Optional in-memory host log used by standalone research examples |
+| `offline/` | Feature gated loopback backend and host runtime configuration fixtures |
+| `error.rs` | Typed adapter errors |
+| `lib.rs` | Public exports and registration example |
+
+Agent construction, MCP connections, skills, memory and original prompts belong
+to the host. Durable scheduling and episode state belong to `tinyhivemind-hives`.

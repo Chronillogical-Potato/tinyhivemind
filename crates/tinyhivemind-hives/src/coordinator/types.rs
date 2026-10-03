@@ -67,7 +67,7 @@ pub struct TurnRequest {
 /// Successfully returned runner state.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TurnOutcome {
-    /// Continuing host session identity.
+    /// Committed host session identity, retained even when finalization failed.
     pub session_id: String,
     /// Optional reply, recorded as a post rather than implicit completion.
     pub reply: Option<String>,
@@ -81,7 +81,9 @@ pub enum TurnDisposition {
     Completed,
     /// Awaiting an explicit host release, normally for approval.
     Parked,
-    /// Host failed with an explanation; uncertain effects are not replayed.
+    /// Host finalization failed; a usable matching session is retained.
+    /// Input is interrupted, and replies and staged episode actions are discarded.
+    /// Uncertain external effects are not replayed.
     Failed(String),
 }
 /// Active episode and channel bound to one turn.

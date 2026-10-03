@@ -1,66 +1,42 @@
-# `tinyhivemind-openhuman`
+# TinyHivemind OpenHuman adapter
 
-The OpenHuman adapter. `tinyhivemind_core::driver` says who runs next and what a
-committed row means, over a handle the host binds, and never runs a turn.
-This crate is the host's side of that seam for OpenHuman, with two runners:
+The host constructs configured `Agent` instances on one OpenHuman `Runtime`.
+`OpenHumanHost` receives those handles, attaches permanent hive tools, and hands
+continuing turns to the durable `tinyhivemind-hives` coordinator.
 
-| Runner | Seat | Tools | Context between turns |
-| --- | --- | --- | --- |
-| `HostedRunner` | the host's own agent, built by the host through `EpisodeHost` with the episode's tools added | the served tools in process, admitted over the host's own gate | seeded every turn from the host's log, as the seat, up to its watermark |
-| `EmbedRunner` | an `openhuman-embed` `AgentSpec` agent on a runtime the host booted | native tools through `AgentSpec::tools` | one session per seat, seeded from the host's journal each turn |
+```rust,ignore
+let coordinator = Coordinator::new(
+    runtime.runtime_id().into(), Arc::new(MemoryStorage::new()),
+    CoordinatorOptions::default(),
+)?;
+let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator)?;
+host.register_agent(agent)?;
+```
 
-`run_episode` runs one episode from its door to quiescence over either runner
-and a `Journal` the host implements -- its log, and how it appends the
-conductor's rows -- so a host builds a driver, a door and a runner and calls
-one function. Both implement `SeatRunner`, the seam: open a turn, run it, close it and
-take what was called. Open and close are the same for every runner, because
-every call lands in the same `EpisodeTools`, so the driver drains identical
-events and a seat is refused and acknowledged in the same words whichever
-runs it.
+Register an existing conversation with `register_agent_in_session(agent, session_id)`.
+Repeated clones are idempotent. Failed durable registrations retain the same
+attachment source for retries, while tool execution stays disabled until
+registration succeeds. Agents from another runtime are rejected.
+The adapter never reconstructs an agent or clears its conversation.
 
-The hosted runner is the one for a host that already has agents. It asks the
-host, through `EpisodeHost`, for three things: its log, a seat built with the
-episode's belt, and a wrapper around each turn. `OpenHuman` fixes a session's
-belt when it is built, so the host builds each seat once per episode, and the
-runner reuses it: each turn it clears the session, seeds it from the host's
-log up to the seat's watermark, runs the brief, keeps the turn's usage, and
-hands it to the host's after-turn hook, where approvals are parked and spend
-is metered. A host with tools of its own prefixes the episode's, so none
-shares a name with its own and is admitted past its gate. Nothing about the
-host's agent -- model, tools, gate, memory, prompt -- is re-expressed here. `RunnerKind`
-names one, from `TINYHIVEMIND_RUNNER` or directly.
+The native tools cover discovery, reads, hive and direct messaging, and explicit
+episode actions. All schemas bind the sender to the supplied agent. Tools remain
+in the system catalogue and provider schemas, even when unrelated tools use deferred
+discovery. Membership changes do not multiply definitions.
 
-For a host that builds core sessions, `LibraryHost` supplies the library
-context and `register_seats` writes each seat's tool allowlist before the
-process registry is read. The hosted runner uses these helpers in the
-standalone example.
+Configure `with_management(factory, authorizer)` before registering or cloning
+the host to enable the four management tools. The host factory creates fully
+configured agents from nonsecret template references. Authorization runs before
+factory or coordinator mutations.
 
-This is the one crate in the workspace that links a harness. It takes
-`openhuman-embed`, `openhuman`, `tinytools` and `tinytools-agent` as git
-dependencies pinned by rev and patched onto `vendor/openhuman` (ADR 0020), so
-a host that vendors this repository writes the same patches against its own
-tree and links one OpenHuman. The `offline` feature ships the scripted model
-and backend stub the runners are proven against, and the metrics the
-example's bench reads.
+`TurnHooks` provides progress, a scoped turn wrapper, and usage/approval
+finalization on both successful and failed turns. The default wall is 300 seconds.
+Return `TurnDisposition::Parked` to hold the agent until coordinator `release`.
 
-See [`src/README.md`](src/README.md) for the source layout, and
-[`examples/openhuman/src/bin/conducted.rs`](../../examples/openhuman/src/bin/conducted.rs) for a host stepping an episode
-through a native runner.
+The host must keep its `OpenHumanHost` alive while attached tools are in use.
+Attachments keep weak service references; dropping it releases the coordinator
+without retaining an agent/attachment cycle. Definitions remain available on a
+surviving agent, and execution reports unavailable services.
 
-## How it relates to the other crates
-
-This adapter depends directly on three TinyHiveMind crates.
-[`tinyhivemind_core::driver`](../tinyhivemind-core/src/driver/README.md) supplies the
-pending rounds, bound-agent seam, conductor, and committed-event transitions.
-[`tinyhivemind-tools`](../tinyhivemind-tools/README.md) supplies the common
-call record used by every runner.
-[`tinyhivemind`](../tinyhivemind/README.md) supplies session log and
-projection types for turns.
-
-The adapter also links the external OpenHuman harness and its tool packages.
-It has no normal dependency on the hive, embed, or TypeSafe crates. Its tests
-use `tinyhivemind_core::embed` to build a sample hive. The driver uses hive and
-embed in production, and a host may supply a TypeSafe router through the
-embed port. No other workspace library depends on this adapter.
-
-See the [workspace dependency map](../../docs/crate-dependencies.md).
+Runnable host construction and topology proofs are in
+[`examples/openhuman`](../../examples/openhuman/README.md).

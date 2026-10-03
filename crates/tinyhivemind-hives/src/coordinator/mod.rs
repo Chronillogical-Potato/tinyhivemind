@@ -98,22 +98,50 @@ impl Coordinator {
     /// # Errors
     /// Returns invalid ID, runtime mismatch, handle conflict or storage errors.
     pub fn register_agent(&self, registration: AgentRegistration) -> Result<()> {
+        self.register(registration, None)
+    }
+    /// Atomically bind a host conversation before publishing its runner.
+    /// Pending recovered work and concurrent schedulers can only claim the
+    /// runner after its continuing session is committed. Identical handles
+    /// and session bindings are idempotent.
+    /// # Errors
+    /// Returns invalid IDs, runtime/handle/session conflicts or storage errors.
+    /// Failure publishes neither a runner nor a changed session binding.
+    pub fn register_agent_in_session(
+        &self,
+        registration: AgentRegistration,
+        session_id: &str,
+    ) -> Result<()> {
+        identifier(session_id, "session id")?;
+        self.register(registration, Some(session_id))
+    }
+    fn register(&self, registration: AgentRegistration, session_id: Option<&str>) -> Result<()> {
         identifier(&registration.agent_id, "agent id")?;
         if registration.runtime_id != self.inner.runtime_id {
             return Err(Error::RuntimeMismatch);
         }
         let mut live = self.lock()?;
         if let Some(existing) = live.runners.get(&registration.agent_id) {
-            return if Arc::ptr_eq(existing, &registration.runner) {
-                Ok(())
-            } else {
-                Err(Error::AgentConflict(registration.agent_id))
-            };
+            if !Arc::ptr_eq(existing, &registration.runner) {
+                return Err(Error::AgentConflict(registration.agent_id));
+            }
+            if session_id.is_none()
+                || live
+                    .durable
+                    .agents
+                    .get(&registration.agent_id)
+                    .is_some_and(|agent| agent.session_id.as_deref() == session_id)
+            {
+                return Ok(());
+            }
         }
         let mut next = live.durable.clone();
         next.agents
             .entry(registration.agent_id.clone())
             .or_insert_with(AgentRecord::default);
+        if let Some(session_id) = session_id {
+            bind_session_state(&mut next, &registration.agent_id, session_id)?;
+        }
         self.commit(&mut live, next)?;
         live.runners
             .insert(registration.agent_id, registration.runner);
@@ -126,28 +154,9 @@ impl Coordinator {
     /// Returns unknown agent, invalid session identity, conflicting binding or storage errors.
     pub fn bind_session(&self, agent_id: &str, session_id: &str) -> Result<()> {
         identifier(session_id, "session id")?;
-        self.update(|state| {
-            known_agent(state, agent_id)?;
-            let agent = state
-                .agents
-                .get(agent_id)
-                .ok_or_else(|| Error::UnknownAgent(agent_id.into()))?;
-            if let Some(existing) = &agent.session_id {
-                return if existing == session_id {
-                    Ok(())
-                } else {
-                    Err(Error::SessionConflict(agent_id.into()))
-                };
-            }
-            if state.running.contains_key(agent_id) {
-                return Err(Error::SessionConflict(agent_id.into()));
-            }
-            if let Some(agent) = state.agents.get_mut(agent_id) {
-                agent.session_id = Some(session_id.into());
-            }
-            Ok(())
-        })
+        self.update(|state| bind_session_state(state, agent_id, session_id))
     }
+
     /// Create an optionally empty hive; identical definitions are idempotent.
     /// # Errors
     /// Returns malformed membership, unknown agents, conflicting IDs or storage errors.
@@ -363,4 +372,26 @@ fn interrupt(state: &mut StoredState, agent_id: &str, reason: &str) {
             .collect(),
         reason: reason.into(),
     });
+}
+
+fn bind_session_state(state: &mut StoredState, agent_id: &str, session_id: &str) -> Result<()> {
+    known_agent(state, agent_id)?;
+    let agent = state
+        .agents
+        .get(agent_id)
+        .ok_or_else(|| Error::UnknownAgent(agent_id.into()))?;
+    if let Some(existing) = &agent.session_id {
+        return if existing == session_id {
+            Ok(())
+        } else {
+            Err(Error::SessionConflict(agent_id.into()))
+        };
+    }
+    if state.running.contains_key(agent_id) {
+        return Err(Error::SessionConflict(agent_id.into()));
+    }
+    if let Some(agent) = state.agents.get_mut(agent_id) {
+        agent.session_id = Some(session_id.into());
+    }
+    Ok(())
 }

@@ -239,10 +239,6 @@ impl Coordinator {
                     return Ok(TurnDisposition::Failed(error.to_string()));
                 }
             };
-            if let TurnDisposition::Failed(reason) = &outcome.disposition {
-                interrupt(state, agent_id, reason);
-                return Ok(outcome.disposition);
-            }
             if outcome.session_id.trim().is_empty() {
                 interrupt(state, agent_id, "runner returned empty session identity");
                 return Ok(TurnDisposition::Failed(
@@ -264,6 +260,22 @@ impl Coordinator {
                     "runner changed continuing session identity".into(),
                 ));
             }
+            if !state.running.contains_key(agent_id) {
+                return Err(Error::InvalidState(
+                    "runner returned without reservation".into(),
+                ));
+            }
+            let agent = state
+                .agents
+                .get_mut(agent_id)
+                .ok_or_else(|| Error::UnknownAgent(agent_id.into()))?;
+            // A completed host turn has already committed its conversation,
+            // even when finalization rejects acknowledgements and episode actions.
+            agent.session_id = Some(outcome.session_id.clone());
+            if let TurnDisposition::Failed(reason) = &outcome.disposition {
+                interrupt(state, agent_id, reason);
+                return Ok(outcome.disposition);
+            }
             let running = state
                 .running
                 .remove(agent_id)
@@ -272,7 +284,6 @@ impl Coordinator {
                 .agents
                 .get_mut(agent_id)
                 .ok_or_else(|| Error::UnknownAgent(agent_id.into()))?;
-            agent.session_id = Some(outcome.session_id.clone());
             agent.parked = outcome.disposition == TurnDisposition::Parked;
             if let Some(sequence) = running.delivery_sequence {
                 for delivery in &mut state.deliveries {

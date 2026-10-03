@@ -10,3 +10,9 @@
 
 Tests use scripted runner futures, barriers, and notifications. They require no
 network, clock-based sleeps, or OpenHuman model calls.
+
+`registration.rs` exercises atomic session adoption with a live scheduler and
+pending recovered work, mismatches and failed storage commits.
+
+`finalization.rs` covers failed finalizers, retained sessions, suppressed staged
+actions, invalid session rejection, and SQLite reopen.

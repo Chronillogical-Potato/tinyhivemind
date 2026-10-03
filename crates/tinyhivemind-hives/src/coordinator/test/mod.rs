@@ -271,6 +271,8 @@ async fn membership_removed_before_claim_prevents_later_delivery() {
     assert_eq!(c.run_until_idle().await.unwrap().completed, 0);
 }
 mod failures;
+mod finalization;
 mod lifecycle;
 mod privacy;
+mod registration;
 mod scheduling;

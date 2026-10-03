@@ -23,7 +23,11 @@ an assignment. A reply is recorded as a post.
 
 `register_agent` accepts handles from the current runtime. Existing durable IDs
 are reattached after restart without overwriting session bindings. Optional
-`bind_session` adopts a host's preexisting conversation before its first claim.
+`register_agent_in_session` atomically commits the host's conversation before
+publishing its runner, including when recovered work is already pending and a
+scheduler is running. A failed commit changes neither the session nor the live
+runner. `bind_session` remains available for separately registered agents before
+their first claim.
 Joining/leaving affects later turns; active turns retain captured membership.
 Removing membership cancels unstarted deliveries while preserving transcript.
 
@@ -37,3 +41,10 @@ retained. `run` waits on notifications. Shutdown stops claims and waits for
 active runner futures to return. Dropping a drain interrupts its durable running
 reservations. Recovery records crashed running turns without replaying uncertain
 external effects; pending turns which never started remain eligible.
+
+A failed host finalizer can follow a successfully committed agent turn. A
+`Failed` outcome with a nonempty matching session binds that conversation in
+the same transaction as interruption. Its input is not acknowledged, and its
+reply and staged episode actions are discarded. Later inputs continue that
+conversation, including after SQLite reopen. Empty or changed session IDs fail
+validation without replacing a prior binding.

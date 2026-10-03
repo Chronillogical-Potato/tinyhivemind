@@ -23,6 +23,8 @@ futures.workspace = true
 rusqlite = { workspace = true, optional = true }
 
 [dev-dependencies]
+# Exercise publication against a scheduler running on another worker thread.
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 tempfile.workspace = true
 
 [lints]
