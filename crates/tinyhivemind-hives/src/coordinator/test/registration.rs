@@ -9,9 +9,7 @@ async fn reattached_pending_work_observes_bound_session_while_scheduler_is_live(
         CoordinatorOptions::default(),
     )
     .unwrap();
-    add(&original, "a", |request| {
-        Box::pin(async move { Ok(done(&request)) })
-    });
+    add(&original, "a", completed_turn);
     original
         .send_as_host(message("pending", Destination::Agent("a".into())))
         .unwrap();
@@ -23,7 +21,7 @@ async fn reattached_pending_work_observes_bound_session_while_scheduler_is_live(
         let seen = seen.clone();
         Box::pin(async move {
             seen.send(request.session_id.clone()).await.unwrap();
-            Ok(done(&request))
+            completed_turn(request).await
         })
     })));
     let scheduler = restored.clone();
@@ -76,9 +74,7 @@ fn session_registration_validates_before_publishing_and_storage_failure_is_atomi
         CoordinatorOptions::default(),
     )
     .unwrap();
-    add(&writer, "a", |request| {
-        Box::pin(async move { Ok(done(&request)) })
-    });
+    add(&writer, "a", completed_turn);
     let stale = Coordinator::new(
         "runtime".into(),
         storage.clone(),
@@ -86,9 +82,7 @@ fn session_registration_validates_before_publishing_and_storage_failure_is_atomi
     )
     .unwrap();
     hive(&writer, "revision", &[]);
-    let runner: Arc<dyn AgentRunner> = Arc::new(Script(Arc::new(|request| {
-        Box::pin(async move { Ok(done(&request)) })
-    })));
+    let runner: Arc<dyn AgentRunner> = Arc::new(Script(Arc::new(completed_turn)));
     let registration = AgentRegistration {
         agent_id: "a".into(),
         runtime_id: "runtime".into(),
@@ -124,9 +118,7 @@ fn session_registration_validates_before_publishing_and_storage_failure_is_atomi
         .register_agent_in_session(registration.clone(), "existing")
         .unwrap();
     let other = AgentRegistration {
-        runner: Arc::new(Script(Arc::new(|request| {
-            Box::pin(async move { Ok(done(&request)) })
-        }))),
+        runner: Arc::new(Script(Arc::new(completed_turn))),
         ..registration
     };
     assert!(matches!(
@@ -146,4 +138,10 @@ fn session_registration_validates_before_publishing_and_storage_failure_is_atomi
         Err(Error::SessionConflict(_))
     ));
     assert!(!restored.lock().unwrap().runners.contains_key("a"));
+}
+
+// One normal completion callback keeps all registration-only handles equivalent
+// in behavior while their outer Arc identities remain deliberately distinct.
+fn completed_turn(request: TurnRequest) -> TurnFuture {
+    Box::pin(async move { Ok(done(&request)) })
 }
