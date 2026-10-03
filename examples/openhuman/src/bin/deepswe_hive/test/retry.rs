@@ -735,22 +735,27 @@ fn retryable_provider_exhaustion_is_bounded_without_a_commit() {
         })
         .await
         .expect("adapter task")
-        .expect_err("a sanitized provider failure must fail closed");
+        .expect_err("retryable provider failures must exhaust the bounded budget");
         let message = error.to_string();
         assert!(
-            message.starts_with("@lead provider failure on attempt 1/3:"),
+            message.starts_with("@lead provider failure on attempt 3/3:"),
             "unexpected error: {message}"
         );
         assert!(!output.exists());
 
         let state = state.lock().expect("script state");
+        assert_eq!(
+            state.turn_starts.get("lead"),
+            Some(&MAX_SEAT_ATTEMPTS),
+            "retryable provider failures use the full attempt budget"
+        );
         let lead_prompts = state
             .start_requests
             .iter()
             .filter(|(seat, _)| seat == "lead")
             .filter_map(|(_, request)| request["messages"].as_array()?.last()?["content"].as_str())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(lead_prompts.len(), 1, "sanitized failures are not retried");
+        assert_eq!(lead_prompts.len(), 1, "each retry uses the frozen prompt");
         for seat in ["implementer", "tester", "reviewer"] {
             assert_eq!(state.turn_starts.get(seat), Some(&1), "@{seat} ran once");
         }
