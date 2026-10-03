@@ -3,14 +3,14 @@
 The room's tools, served over MCP, so an agent harness that cannot be handed a
 native tool can still move a completion episode.
 
-`tinyhivemind::speech` states what a seat may say once, as data, and says a host "renders
-`tool_specs` into its own tool language" and "maps its own wire onto
-`CallArguments`". This crate is that rendering for MCP, and nothing more:
-`tools/list` is `tool_specs()` as JSON Schema, `tools/call` is the wire mapped
-onto `interpret`, and a refusal goes back to the seat as the sentence
-`UtteranceRejection` already wrote for it.
+`tinyhivemind::speech` defines the speech vocabulary and validates one call.
+[`tinyhivemind-tools`](../tinyhivemind-tools/README.md) selects the tools a
+completion episode serves and records their calls. This crate puts that record
+behind an MCP server. `tools/list` returns the served definitions as JSON
+Schema, and `tools/call` passes arguments to `EpisodeTools::call`. Refusals
+return to the seat as tool results.
 
-Three things it is not, and each is a decision:
+The server has a narrow job:
 
 - **It holds no episode state.** Assignments, completions, queues, budgets and
   open questions live in the driver. The server records that a seat called a
@@ -18,9 +18,9 @@ Three things it is not, and each is a decision:
   calls into the host.
 - **It runs no turn.** An `ask` becomes an event the driver schedules; the
   server never holds an agent handle.
-- **It depends on no harness.** `tinyhivemind`, `tokio`, `serde_json`. Any
-  MCP-capable harness gets the same four tools: `broadcast`, `ask`,
-  `complete_episode`, `read`.
+- **It depends on no harness.** Any
+  MCP-capable harness gets the same five tools: `broadcast`, `ask`,
+  `ask_teammates`, `complete_episode`, and `read`.
 
 **Identity is structural.** Each seat is given its own endpoint,
 `/seat/<agent_id>/<capability>`, the capability minted when the server binds,
@@ -44,11 +44,10 @@ native tools wraps the definitions in its own tool type and calls in-process,
 and never links this crate; an MCP seat and a native seat are refused and
 acknowledged in the same words either way.
 
-`post` and `dm` are in the vocabulary and are not served. In a completion
-episode every call has a consequence -- a question opened, work handed off, a
-finding concluded -- and text with no consequence turned out, over five live
-runs, to be status, repetition, and the description of calls never made. A
-fact reaches the desk as a completion's message.
+`post` and `dm` remain in the speech vocabulary, but this server does not
+offer them. In the five live runs described by the tool crate, `post` was
+mostly used for status updates or repeated findings. Completion carries a
+finding to the desk; `ask` handles a question to a named seat.
 
 ## How it relates to the other crates
 

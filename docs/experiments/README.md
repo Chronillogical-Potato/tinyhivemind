@@ -31,12 +31,12 @@ does.
 | [2026-09-01](2026-09-01-live-hidden-profile.md) | Does a live room beat a poll on a problem that has an answer? | The synthetic brief was not enough; a real problem was needed to tell them apart |
 | [2026-09-01](2026-09-01-refutation-and-grounds.md) | Do refutation and evidential grounds earn their place? | The arm was able to lose, and it lost |
 | [2026-09-02](2026-09-02-federated-hidden-profile.md) | Can several channels pool what only one of them knows? | Yes, across one referral hop at a time |
-| [2026-09-05](2026-09-05-expert-delegation.md) | Who knows, and what is that worth? | Directory-folded expertise pays; see the [full matrix](2026-09-05-expert-delegation-live-matrix.md) |
+| [2026-09-05](2026-09-05-expert-delegation.md) | Who knows, and what is that worth? | The directory and deferral did not improve accuracy; the directed ladder arm leaks the correct topic. See the [full live matrix](2026-09-05-expert-delegation-live-matrix.md) |
 | [2026-09-07](2026-09-07-do-asides-help.md) | Do private asides help a room decide? | No — a pairwise check is pure cost, and privacy is never the variable. Partly superseded |
 | [2026-09-07](2026-09-07-private-asides.md) | What does an aside look like on a live desk? | Three agents, one desk, recorded end to end |
 | [2026-09-07](2026-09-07-why-asides-lose.md) | Why did asides lose, and what is peer information actually worth? | +9 to +31 points for the information; the floor turn was what cost too much |
 | [2026-09-07](2026-09-07-pe1006-desk.md) | Can a desk of real agents close one genuinely hard problem? | The harness works; the problem is not closed |
-| [2026-09-09](2026-09-09-topology-at-scale.md) | At what room size does the channel start to matter, and which channel? | Every floor-bound mechanism reaches 0% on a hidden profile by 32 members; only an off-floor aimed check survives, and a federation of twelve desks exhausts itself answering referrals |
+| [2026-09-09](2026-09-09-topology-at-scale.md) | At what room size does the channel start to matter, and which channel? | Floor-bound mechanisms reach 0% on this hidden profile by 32 members; an off-floor aimed check retains a small gain. A twelve-desk federation exhausts turns asking for referrals |
 | [2026-09-09](2026-09-09-run29-narration-as-speech.md) | Does the account fold on a live run? | Aborted at turn 2: a router rung advance killed both turns, and the host delivered their narration as speech. Both fixed; nothing about folding established |
 | [2026-09-09](2026-09-09-desk-lessons.md) | What should be built next after PE 1006? | Working notes and measurements from runs 21–27 |
 | [2026-09-08](2026-09-08-pe1006-tool-room.md) | Does a tool-call room with a standing account beat a fenced one? | PE 1006 solved; re-reading fell to 3% of calls, but no fold ever fired |

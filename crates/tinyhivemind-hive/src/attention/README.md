@@ -1,8 +1,8 @@
 # The attention market
 
-Every member bids; exactly one takes the floor. This is Pandemonium's decision
-demon and the response-threshold model of division of labour, arrived at from
-the AI side and the entomology side and landing on the same mechanism.
+Eligible members bid for a place in the next round. The attention score draws
+on response thresholds and the room's traces. A policy width of one selects a
+single floor holder; wider rounds may authorize several members.
 
 The design and the tuning are specified in [`docs/specs/hive-mind.md`][spec]
 under "The attention market"; this module is its implementation.
@@ -10,13 +10,17 @@ under "The attention market"; this module is its implementation.
 ## Design
 
 `bids(context)` scores every eligible member and returns one [`Bid`] per
-member whose urge reaches its own threshold — an empty result is a real
-outcome, not a bug: nobody has anything to say. `floor_holder(bids)` then
-takes the argmax, ties breaking by desk order.
+member whose urge reaches its own threshold. An empty result means nobody has
+anything to say. `floor_holder(bids)` takes the highest bid, with ties broken
+by desk order. `floor_round(bids, width)` selects up to `width` highest bids,
+resolves ties by desk order, and returns the selected bids in desk order. The
+episode chooses the width from `round_width` or `revealed_width`, depending on
+visibility.
 
-Taking the argmax rather than "everyone above threshold" is precisely what
-enforces the charter's *one message, one turn*: the bound is not checked
-after the fact, there is no way for the type to express two winners.
+The width limits how many members a step authorizes. With width one,
+`floor_round` makes the same choice as `floor_holder`. See
+[ADR 0014](../../../../docs/adr/0014-a-round-authorizes-concurrent-turns.md)
+for the concurrent round contract.
 
 Per member, the urge is [`salience::standing`] and [`salience::with_relevance`]
 summed over every live, unsaturated trace, folded once per trace rather than
@@ -75,6 +79,7 @@ above has already decided who speaks. See its own
 | --- | --- |
 | `bids` | Compute one bid per eligible member from a `BidContext`. |
 | `floor_holder` | Take the single highest bid; ties break by desk order. |
+| `floor_round` | Take up to the requested width of bids, in the same order. |
 | `Bid` | `agent_id`, `urge` (net of threshold), `reason`. |
 | `BidReason` | `Addressed`, `Dissent`, `Knows`, `Quiet`, `Salience` — in bid-precedence order. |
 | `BidContext` | Everything the market reads, borrowed from the caller: traces, standings, members, thresholds, weights, caps, quorum policy, and an optional directory pair. |

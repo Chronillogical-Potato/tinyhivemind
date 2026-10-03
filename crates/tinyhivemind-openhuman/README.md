@@ -6,8 +6,8 @@ This crate is the host's side of that seam for OpenHuman, three ways:
 
 | Runner | Seat | Tools | Context between turns |
 | --- | --- | --- | --- |
-| `HostedRunner` | the host's own agent, built by the host through `EpisodeHost` with the episode's tools added | the four tools in-process, admitted over the host's own gate | seeded every turn from the host's log, as the seat, up to its watermark |
-| `EmbedRunner` | an `openhuman-embed` `AgentSpec` agent on a runtime the host booted | the three MCP dispatchers, dialling `tinyhivemind-mcp`'s server | OpenHuman's own session, stable for the episode |
+| `HostedRunner` | the host's own agent, built by the host through `EpisodeHost` with the episode's tools added | the served tools in process, admitted over the host's own gate | seeded every turn from the host's log, as the seat, up to its watermark |
+| `EmbedRunner` | an `openhuman-embed` `AgentSpec` agent on a runtime the host booted | native tools through `AgentSpec::tools` by default, with MCP available through `seat_over_mcp` | one session per seat, seeded from the host's journal each turn |
 | `RawRunner` | an `OpenHumanSessionHost` built one level down, per turn | the same tools in-process, each calling `EpisodeTools::call` | a per-seat log this crate seeds the next session with |
 
 `run_episode` runs one episode from its door to quiescence over any of them
@@ -47,7 +47,7 @@ and backend stub both runners are proven against, and the metrics the
 example's bench reads.
 
 See [`src/README.md`](src/README.md) for the source layout, and
-`examples/openhuman/src/bin/conducted.rs` for a host stepping an episode
+[`examples/openhuman/src/bin/conducted.rs`](../../examples/openhuman/src/bin/conducted.rs) for a host stepping an episode
 through either runner.
 
 ## How it relates to the other crates
@@ -63,8 +63,9 @@ an embedded seat when the host chooses MCP.
 projection types for turns.
 
 The adapter also links the external OpenHuman harness and its tool packages.
-It has no direct dependency on the hive, embed, or TypeSafe crates: the driver
-uses the first two, and a host may supply a TypeSafe router through the
+It has no normal dependency on the hive, embed, or TypeSafe crates. Its tests
+use `tinyhivemind-embed` to build a sample hive. The driver uses hive and
+embed in production, and a host may supply a TypeSafe router through the
 embed port. No other workspace library depends on this adapter.
 
 See the [workspace dependency map](../../docs/crate-dependencies.md).

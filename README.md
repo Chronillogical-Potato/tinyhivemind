@@ -2,12 +2,12 @@
 
 <h1 align="center">tinyhivemind</h1>
 
-<p align="center"><strong>Hive mind mechanics for agents. A step closer towards AGI</strong></p>
+<p align="center"><strong>Hive mind mechanics for agents</strong></p>
 
 <p align="center">
-Quorum sensing, cross-inhibition, stigmergy, pheromone decay and response
+Quorum sensing, cross-inhibition, stigmergy, salience decay and response
 thresholds, implemented as integer folds over a transcript your application
-already owns. Written in Rust. No storage, no HTTP, no runtime.
+already owns. The optional MCP crate serves episode tools on a loopback socket.
 </p>
 
 <p align="center">
@@ -63,8 +63,9 @@ The shape of it is a loop, and your application holds both ends:
 ```
 
 `Speak { turns }` above is shorthand for `Speak { turns, next_state }`, kept
-off the diagram to stay narrow, not because it stopped mattering. Nothing in
-the box on the right opens a file, a socket or a database — it reads what you hand it and returns what should happen next.
+off the diagram to stay narrow, not because it stopped mattering. The `step`
+fold reads what you hand it and returns what should happen next. The host owns
+the transcript; the optional MCP server is a separate crate.
 
 ## The mechanics
 
@@ -273,7 +274,7 @@ answers is the answer:
 ```text
   step(state, transcript, roster, desks, policy)
     │
-    ├─ budget spent? ─────────────────────────▶ Exhausted { spent }
+    ├─ budget spent? ─────────────────────────▶ Exhausted { spent, standings, visibility }
     ├─ quorum, and phase = Commit? ───────────▶ Converged { topic, .. }
     ├─ quorum, and phase = Deliberate? ───────▶ Speak { turns, next_state }
     │                                           one commit turn; phase flips
@@ -297,7 +298,7 @@ so, instead of emitting an answer nobody actually supported. The turn budget is
 finite, so termination is guaranteed rather than hoped for, and the standing
 that carried is returned alongside the outcome.
 
-## It measurably beats one agent answering alone
+## One synthetic decision task
 
 Five agents choosing between four options, 5000 seeded rooms, on one core:
 
@@ -307,11 +308,11 @@ Five agents choosing between four options, 5000 seeded rooms, on one core:
 | `vote` | independent answers, plurality, matched budget | 15.00 | 78.5% |
 | `hive+` | a tuned deliberation episode | 6.75 | **82.1%** |
 
-The middle row is [self-consistency](https://arxiv.org/abs/2203.11171), the
-control most multi-agent claims are missing. A room that could not beat an
-independent vote at the same budget would not be worth its budget. This one
-does, at every desk size from three to eight, while spending about half the
-turns.
+The middle row is an independent vote at a matched turn budget. On this seeded
+task, tuned deliberation beats that control by 3.6 points while spending fewer
+turns. The participants here are simulated, so the table measures this
+protocol's behavior on the constructed task, not how much better a language
+model will answer in an application.
 
 The
 [benchmark write-up](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks)
@@ -374,10 +375,12 @@ bounded round of concurrent turns: `round_width` limits blind rounds and
 commits the round's state after all authorized turns are appended.
 
 The optional `tinyhivemind-embed` and `tinyhivemind-typesafe` crates handle
-semantic routing. `tinyhivemind-openhuman` binds canonical hive identities
-to existing OpenHuman agents. The
+semantic routing. `tinyhivemind-driver` conducts completion episodes, and
+`tinyhivemind-openhuman` binds canonical hive identities to existing OpenHuman
+agents. `tinyhivemind-tools` defines episode tool events, and
+`tinyhivemind-mcp` serves those tools over MCP. The
 [architecture guide](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture)
-shows all six crates and their boundaries.
+and [crate dependency map](docs/crate-dependencies.md) show their boundaries.
 
 ## Frequently asked questions
 

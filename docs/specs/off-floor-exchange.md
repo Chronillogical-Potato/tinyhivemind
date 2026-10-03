@@ -4,6 +4,12 @@
 **Owner:** tinyhivemind maintainers
 - **Plan:** [`../plans/off-floor-exchange.md`](../plans/off-floor-exchange.md)
 
+This fold is optional and disabled by default. The later
+[room-size experiment](../experiments/2026-09-09-topology-at-scale.md) found
+that continuous exchange reached 4,173 contacts per episode at 64 members
+without improving accuracy on that hidden-profile task. A host enabling it
+should set the caps from its model-call budget.
+
 ## Problem
 
 An aside is free but starved.
@@ -61,7 +67,8 @@ sampled.
 - **A second floor.** An exchange round moves no standing, resolves no counting
   trace and settles nothing. To make a private finding count, a member still
   spends a desk-visible turn saying so in the open.
-- **Relaxing one message, one turn.** No exchange row starts a turn. See below.
+- **Starting a deliberation turn.** No exchange row takes the floor or advances
+  the episode. See below.
 - **Deciding who talks to whom.** Targeting is a participant's judgement. The
   library authorizes and bounds; it does not choose a peer.
 - **Making an exchange mandatory, or on by default.** `ExchangePolicy::DEFAULT`
@@ -71,9 +78,10 @@ sampled.
 
 ### An exchange round
 
-Between two authorized turns, or before the first one, a host may run an
-**exchange round**. Never *during* a turn: a round and a turn do not interleave,
-so the transcript a turn was composed from is never edited underneath it. In a round, each eligible member may append at most one private row. No
+Between episode rounds, or before the first one, a host may run an
+**exchange round**. It does not interleave with an authorized turn, so the
+transcript a turn was composed from is never edited underneath it. In one
+exchange round, each eligible member may append at most one private row. No
 member takes the floor, no `HiveStep` is produced, and `EpisodeState` does not
 advance.
 
@@ -171,7 +179,7 @@ rather than new promises:
    anyone else is the host exceeding its authorization, and the fold that
    counts spend will see it on the next round.
 
-### Why this does not relax one message, one turn
+### Why an exchange round does not expand the episode's turn budget
 
 The charter's third rule names its own failure mode: *"a mention that could
 start N turns without an approval in sight"*. Each clause fails to apply here,

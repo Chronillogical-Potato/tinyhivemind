@@ -46,7 +46,7 @@ awareness mechanisms the same evidence asks for.
 
 ## Non-goals
 
-- Relaxing one message, one turn. A seat still posts exactly one message per
+- Adding messages to one turn. A seat still posts exactly one message per
   turn, and only its first direct mention dispatches.
 - A model in the chair. The controller stays deterministic.
 - A second journal. The fold is superseding per-seat state the host owns, like
@@ -114,8 +114,8 @@ not appended again.
 
 ## Invariants and constraints
 
-- One message, one turn, unchanged: the feedthrough row is authored by the
-  system, carries no mention, and can dispatch nothing.
+- The feedthrough row is authored by the system, carries no mention, and can
+  dispatch nothing.
 - The transcript remains append-only and never condensed. Nothing here edits a
   row or removes one.
 - The library holds no notebook. It is host state. Should the fold move into

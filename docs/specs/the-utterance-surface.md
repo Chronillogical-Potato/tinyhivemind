@@ -77,11 +77,12 @@ as targets rather than as prose to be re-parsed.
 
 ## Non-goals
 
-- **MCP in the library.** JSON-RPC, stdio, the outbox file and the CLI config
-  block are transport and stay in the host. The library never opens a socket or
-  a file; see rule 1 of the charter.
+- **Transport in `tinyhivemind::speech`.** This runtime module defines the
+  utterance request and validation. The separate `tinyhivemind-mcp` crate now
+  serves episode tools over a loopback socket; the host still owns the session
+  transcript and durable append.
 - **Replacing the mention grammar.** See above.
-- **Relaxing one message, one turn.** One accepted utterance is one row.
+- **Adding rows to an accepted utterance.** One accepted utterance is one row.
 - **`tinyhivemind-core` gaining anything.** Every type here needs `Audience`,
   `Sequence` and a transcript view, which live in the runtime crate.
 - **A tool that writes the transcript.** A tool call remains a *request to

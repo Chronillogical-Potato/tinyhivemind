@@ -164,8 +164,8 @@ the selection path, where nothing is withheld at all.
   while nothing else is enqueueing, and the case it has to hold in is precisely
   the opposite one. Decide it in the write — a conditional insert, an upsert, a
   unique index the write races against — and read `Already` off that write's
-  own outcome. One message, one turn makes fan-out unrepresentable here, so the
-  count OpenBot had to move inside its insert is a count this library never
+  own outcome. A committed mention can start at most one child turn here, so
+  the count OpenBot had to move inside its insert is a count this library never
   keeps; the race it lost to survives as the idempotency check, which has the
   same shape and the same failure.
 - **The lease clock is the store's.** Whatever lease or visibility timeout the

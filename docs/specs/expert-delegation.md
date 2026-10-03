@@ -1,9 +1,18 @@
 # Expert delegation: a folded directory, `BidReason::Knows`, and `!defer`
 
-- **Status:** Accepted
+- **Status:** Implemented; both episode knobs are off by default
 - **Owner:** `crates/tinyhivemind-hive`
 - **Reading:** [`../research/delegation.md`](../research/delegation.md)
 - **Decision:** [ADR 0007](../adr/0007-the-directory-is-folded-from-citations.md)
+
+The [measured outcome](../experiments/2026-09-05-expert-delegation.md) did not
+show an accuracy gain from the directory or deferral. On the hidden profile
+with an evidence-first opening, `hive+dir` scored 65.8% against 66.3% for
+`hive+`; deferral stayed within the confidence interval. Across 27 live rounds,
+`BidReason::Knows` won no turn and no member used `!defer`. The `ladder+dir`
+benchmark arm receives the correct topic in its prompt, so its score is not
+evidence of deployable routing quality. The behavior specified below remains
+available to a host that explicitly enables it.
 
 ## Problem
 

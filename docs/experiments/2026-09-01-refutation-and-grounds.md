@@ -2,6 +2,12 @@
 
 Date: 2026-09-01. Branch: `shared-medium`.
 
+> **Later evidence:** The limit described in "What this benchmark does not
+> test" was addressed by a later hidden-profile arm. With an evidence-first
+> opening, `hive+` scored 66.3%, `hive+ref` 53.3%, and `hive+ev` 26.0%.
+> [The later matrix](2026-09-05-expert-delegation.md) leaves both knobs off by
+> default. The results below remain the record of the original experiment.
+
 [`docs/specs/refutation-and-grounds.md`](../specs/refutation-and-grounds.md)
 ends with an acceptance criterion that says the benchmark arm must be able to
 lose. It lost. This is the record.
@@ -134,11 +140,12 @@ Per the spec's acceptance criterion:
   opt-in. Turning the effect off should not erase from the standing that the
   room disagreed.
 
-## Open items
+## Open items recorded on 2026-09-01
 
 1. A simulated hidden-profile arm: members holding disjoint private *facts*
    rather than noisy private *scores*, with a decoy the shared brief plants.
-   Until that exists, the case for refutation is untested rather than refuted.
+   The later [expert-delegation experiment](2026-09-05-expert-delegation.md)
+   added this arm and still measured a loss for both knobs.
 2. Whether a refutation should require the refuter to have deposited the
    evidence it cites. It does not today, and that would bound the blast radius
    the noise table measures — a member could then only cap a topic with a fact
