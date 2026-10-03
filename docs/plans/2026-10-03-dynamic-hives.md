@@ -100,6 +100,10 @@ Expose these operations (all fallible except shutdown request):
 - `register_agent(AgentRegistration) -> Result<()>`: validate runtime; repeat
   registration is idempotent only for the same `Arc` runner. Reattachment after
   restart binds an existing durable agent ID to its supplied runtime handle.
+- `register_agent_in_session(AgentRegistration, session_id: &str) -> Result<()>`:
+  validate and commit an existing conversation binding before publishing the
+  runner or notifying schedulers. `bind_session(agent_id, session_id)` remains
+  available for separately registered runners before their first claim.
 - `create_hive(HiveInfo) -> Result<()>`, `list_hives() -> Result<Vec<HiveInfo>>`,
   `list_agents() -> Result<Vec<String>>`; creation requires known members and
   rejects conflicting IDs; identical hive creation is idempotent.
@@ -112,6 +116,9 @@ Expose these operations (all fallible except shutdown request):
   whose sender is the reserved host identity and cannot be selected by tools.
 - `read_hive(agent_id: &str, hive_id: &str, after: Option<u64>,
   thread: Option<u64>) -> Result<Vec<Message>>` filters visibility.
+- `read_direct(agent_id: &str, peer_id: &str, after: Option<u64>)
+  -> Result<Vec<Message>>` exposes the durable participant pair and returned
+  replies. The exclusive cursor does not schedule automatic return turns.
 - `submit_action(agent_id: &str, episode_id: &str,
   action: EpisodeAction) -> Result<()>` records a validated active-turn action.
   `EpisodeAction` is `Post { body }`, `Ask { agents, body }`,
@@ -160,7 +167,7 @@ snapshot write, with a schema version. Both share the same contract tests.
 
 ### Supplied-agent adapter and management seam
 
-- Export `OpenHumanHost::new(runtime_id: String, coordinator: Coordinator)` and
+- Export `OpenHumanHost::new(runtime_id: String, coordinator: Coordinator) -> Result<Self>` and
   `register_agent(&self, agent: Agent) -> Result<()>`. It validates the actual
   runtime ID, caches handle/runner pairs, installs `hivemind` once, then
   registers. Duplicate supplied clones are idempotent; another handle with
@@ -239,9 +246,17 @@ snapshot write, with a schema version. Both share the same contract tests.
 
 ## Progress tracker
 
-- [ ] TinyAgents opt-in prefix refresh and upstream dependency PR.
-- [ ] OpenHuman attachment/session seam and request-capture regressions.
-- [ ] Coordinator, conductor, storage, and deterministic scheduling contracts.
-- [ ] Supplied-agent adapter, permanent tools, and dynamic management.
-- [ ] Standalone examples, migration docs, full gates, independent verification.
-- [ ] Upstream PRs and consistent dependency pin/gitlink.
+- [x] TinyAgents opt-in prefix refresh and upstream dependency PR (#298).
+- [x] OpenHuman attachment/session seam and request-capture regressions (#6977).
+- [x] Coordinator, conductor, storage, and deterministic scheduling contracts.
+- [x] Supplied-agent adapter, permanent tools, and dynamic management.
+- [x] Standalone examples and native configuration/topology proofs.
+- [x] Migration docs, public API docs, and superseding design links.
+- [x] Independent implementation reviews and recorded verification gates.
+- [ ] Final delivery checks after the last dependency review correction.
+- [ ] TinyHivemind upstream PR and final dependency pin/gitlink publication.
+
+Recorded verification is local evidence, not a claim that upstream CI has passed.
+The final TinyAgents legacy-prefix correction adds first/repeated resume and
+persisted-boundary coverage; it passed independent review and was published
+before the OpenHuman and TinyHivemind dependency pins were updated.

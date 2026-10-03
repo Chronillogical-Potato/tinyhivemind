@@ -8,6 +8,9 @@ pub const TURN_TIMEOUT: Duration = Duration::from_secs(300);
 /// Host factory result future.
 pub type AgentFuture = Pin<Box<dyn Future<Output = Result<Agent>> + Send>>;
 /// Host creates configured agents from nonsecret template references.
+///
+/// The factory owns the runtime and provider credentials. It must return a
+/// configured handle from the host's runtime; the adapter rejects other runtimes.
 pub trait AgentFactory: Send + Sync {
     /// Create on the shared runtime; host validates template and config.
     fn create(&self, template: String, config: serde_json::Value) -> AgentFuture;
@@ -79,6 +82,10 @@ pub trait TurnHooks: Send + Sync {
 pub(super) struct DefaultHooks;
 impl TurnHooks for DefaultHooks {}
 /// An existing agent implementing core's bound-handle trait.
+///
+/// For hosts driving the pure completion driver directly. The trait's historical
+/// `runtime_id` method returns this agent's ID; it is distinct from
+/// [`Agent::runtime_id`], which identifies the shared OpenHuman runtime.
 #[derive(Clone, Debug)]
 pub struct RegisteredAgent(pub Agent);
 impl tinyhivemind_core::driver::BoundAgent for RegisteredAgent {

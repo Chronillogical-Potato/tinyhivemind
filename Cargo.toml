@@ -33,16 +33,16 @@ tinyhivemind-core = { path = "crates/tinyhivemind-core" }
 # Native tool specifications and the episode call record.
 tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
 # The harness, for `tinyhivemind-openhuman` and nothing else under `crates/*`.
-# `openhuman-embed` is the `AgentSpec` seat; `openhuman` (the core) is the raw
-# session one level down; `tinytools` and `tinytools-agent` are the `Tool` a
-# raw session's belt is made of and the dialect it speaks. Default features
+# `openhuman-embed` provides the supplied Agent handle and attachment API;
+# `openhuman` provides usage types. `tinytools` defines the native Tool trait;
+# `tinytools-agent` shares OpenHuman's tool dialect. Default features
 # off: the adapter names the one feature it needs, and the consuming host
 # chooses the rest.
 #
 # Git dependencies on purpose, not the vendored path. A host that vendors this
 # repository as a submodule (OpenCompany) carries its own `vendor/openhuman`
 # and must link ONE copy of OpenHuman: the `Agent` in a binding here has to
-# be the same type the host built, the `Tool` a raw session takes has to be
+# be the same type the host built, the native `Tool` it takes has to be
 # the `Tool` this repository implements, and OpenHuman's process-wide state
 # must exist once. Cargo `[patch]` can redirect a git or registry source onto
 # a path but cannot redirect a path source, so a path here would leave a host
@@ -66,11 +66,10 @@ serde = { version = "1", features = ["derive"] }
 # Pins the exact JSON object shape and required fields of host-facing DTOs in
 # unit tests without adding JSON handling to the runtime dependency graph.
 serde_json = "1"
-# Drives only the runtime crate's async unit tests. The library itself remains
-# executor-neutral and exposes boxed futures at its host port.
+# Drives coordinator scheduling, adapter turn deadlines/progress, and async
+# tests. Pure core remains executor-neutral and exposes boxed host futures.
 tokio = { version = "1", features = ["macros", "rt", "sync"] }
-# `tinytools::Tool`, OpenHuman's `ToolPolicy` and its `Memory` are async
-# traits. The OpenHuman adapter implements them.
+# Implements async native `tinytools::Tool` methods in the OpenHuman adapter.
 async-trait = "0.1"
 # `tinytools::Tool::execute` returns `anyhow::Result`, so implementing it
 # means naming the type, and every OpenHuman entry point returns it too. It

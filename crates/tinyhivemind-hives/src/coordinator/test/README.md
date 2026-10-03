@@ -7,6 +7,7 @@
 | `scheduling.rs` | Concurrent agents, membership snapshots, walls and budgets |
 | `privacy.rs` | Private child reads, SQLite reopen, addressed-thread attribution |
 | `failures.rs` | Boundary errors and failed-runner isolation |
+| `review_regressions.rs` | Leave-before-claim admission, private initial outputs, direct replies |
 
 Tests use scripted runner futures, barriers, and notifications. They require no
 network, clock-based sleeps, or OpenHuman model calls.

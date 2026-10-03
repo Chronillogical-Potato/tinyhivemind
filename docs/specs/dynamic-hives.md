@@ -1,7 +1,9 @@
 # Dynamic hives with supplied OpenHuman agents
 
-Status: accepted, 2026-10-03. Implementation contract:
+Status: implemented; accepted 2026-10-03. Implementation contract:
 [dynamic-hives plan](../plans/2026-10-03-dynamic-hives.md).
+Host usage: [migration guide](../opencompany-migration.md) and
+[standalone example](../../examples/openhuman/README.md).
 
 ## Intended behavior
 
@@ -68,6 +70,8 @@ joining/leaving hives while scheduling runs. Empty hives can exist, but delivery
 to one fails clearly. A membership change affects subsequent turns; an active
 turn finishes against its captured membership/episode snapshot. Removing a
 membership blocks subsequent delivery and keeps already recorded history.
+Pending seats are revalidated under the reservation lock, including a leave
+between wave preparation and claim; active turns keep their captured membership.
 
 Management tools are opt-in. The host supplies authorization and, for creating
 agents, a factory accepting a template plus validated configuration. The
@@ -83,6 +87,8 @@ Stable message IDs deduplicate retries. Storage persists definitions,
 memberships, message order, delivery state, session IDs, conductor checkpoints,
 and pending episode actions. OpenHuman handles and closures are never serialized.
 On restart the host reattaches agent handles before their pending work runs.
+Existing conversations use atomic `register_agent_in_session`: validate and
+commit their binding before publishing a runner or waking the scheduler.
 
 Mark a turn running durably before invoking its runner. Successful closure
 atomically persists the returned session ID, acknowledgements, and episode
@@ -90,6 +96,9 @@ transition. A crashed or cancelled running turn becomes interrupted on recovery;
 do not replay its uncertain external tool effects automatically. Pending turns
 that never started remain eligible. Shutdown stops claiming work and waits for
 active turns; forced cancellation follows the interrupted-turn path.
+If OpenHuman commits successfully but the host finalization hook fails, the
+usable unchanged session binding is persisted with interruption while delivery
+acknowledgements, staged actions, and replies are suppressed.
 
 ## Acceptance
 

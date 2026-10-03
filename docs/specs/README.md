@@ -24,6 +24,11 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a complete sample.
 
 ## Current specifications
 
+- [`dynamic-hives.md`](dynamic-hives.md) — implemented: supplied agents on one
+  runtime, permanent tools, dynamic membership, durable coordination, and
+  continuing sessions. See the [migration guide](../opencompany-migration.md)
+  and [runnable host example](../../examples/openhuman/README.md).
+
 [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md)
 retires several optional mechanisms and waiting wrappers. Older specifications
 remain here as design records; their API sketches are not current usage guides.
@@ -73,7 +78,8 @@ remain here as design records; their API sketches are not current usage guides.
 - [`completion-driven-episodes.md`](completion-driven-episodes.md) — explicit
   per-agent completion and TypeSafe-routed agent broadcasts.
 - [`opencompany-routing-compatibility.md`](opencompany-routing-compatibility.md)
-  — the snapshot boundary for a later storage-preserving host adapter.
+  — the earlier routing boundary; dynamic-hives supersedes its OpenHuman
+  construction and session-seeding sketches.
 - [`approval.md`](approval.md) — a pure gate for a side-effecting action:
   total approval, standing grants, and epoch-scoped consent. The runtime
   waiting wrapper was retired.

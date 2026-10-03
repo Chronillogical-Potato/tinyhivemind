@@ -27,6 +27,10 @@ struct Entry {
     activation: Arc<Activation>,
 }
 /// Shares one coordinator and permanent attachment per supplied agent.
+///
+/// The host configures agents on one runtime before registration. Each handle
+/// keeps one continuing conversation across hives. Keep this host alive while
+/// its tools are used: attachment services hold weak references to it.
 #[derive(Clone)]
 pub struct OpenHumanHost {
     pub(crate) inner: Arc<Inner>,
@@ -92,6 +96,10 @@ impl OpenHumanHost {
         Arc::get_mut(&mut self.inner).ok_or(Error::ManagementAlreadyStarted)
     }
     /// Register an existing handle; repeated clones use the identical factory.
+    ///
+    /// Retains the supplied handle and installs nine permanent tools, or thirteen
+    /// when management was configured. Configuration remains owned by the agent.
+    /// An existing host conversation should use [`Self::register_agent_in_session`].
     /// # Errors
     /// Reject another runtime, conflicting handles, tool collisions or storage failures.
     pub fn register_agent(&self, agent: Agent) -> Result<()> {
@@ -160,6 +168,11 @@ impl OpenHumanHost {
         Ok(())
     }
     /// Bind a supplied agent to an already running host conversation.
+    ///
+    /// Commits the validated session binding before publishing its runner, so
+    /// concurrent claims continue this conversation from their first turn.
+    /// Failed durable registration keeps the identical attachment for retry;
+    /// its tools remain inactive until registration succeeds.
     /// # Errors
     /// Registration failures or conflicting continuing-session bindings.
     pub fn register_agent_in_session(&self, agent: Agent, session_id: &str) -> Result<()> {
