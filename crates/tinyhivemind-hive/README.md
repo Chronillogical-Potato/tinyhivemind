@@ -24,3 +24,19 @@ score is fixed-point integer arithmetic so a given input folds to the same
 result. The module index is in [`src/README.md`](src/README.md), and the
 scripted episode and benchmark are indexed in
 [`examples/README.md`](examples/README.md).
+
+## How it relates to the other crates
+
+This crate depends on [`tinyhivemind`](../tinyhivemind/README.md) for
+attributed messages, conversations, sequences, and audience projection. It
+re-exports that runtime API, so an application using the hive crate receives
+the same types. It also depends directly on
+[`tinyhivemind-core`](../tinyhivemind-core/README.md): trace parsing uses
+core's code masking, and hive errors preserve core errors.
+
+[`tinyhivemind-driver`](../tinyhivemind-driver/README.md) consumes the
+completion episode state and folds from this crate. The driver supplies
+scheduling and committed-event bookkeeping around those pure folds; this crate
+does not depend on the driver.
+
+See the [workspace dependency map](../../docs/crate-dependencies.md).

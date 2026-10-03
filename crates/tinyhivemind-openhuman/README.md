@@ -49,3 +49,22 @@ example's bench reads.
 See [`src/README.md`](src/README.md) for the source layout, and
 `examples/openhuman/src/bin/conducted.rs` for a host stepping an episode
 through either runner.
+
+## How it relates to the other crates
+
+This adapter depends directly on four TinyHiveMind crates.
+[`tinyhivemind-driver`](../tinyhivemind-driver/README.md) supplies the
+pending rounds, bound-agent seam, conductor, and committed-event transitions.
+[`tinyhivemind-tools`](../tinyhivemind-tools/README.md) supplies the common
+call record used by every runner.
+[`tinyhivemind-mcp`](../tinyhivemind-mcp/README.md) serves that record to
+an embedded seat when the host chooses MCP.
+[`tinyhivemind`](../tinyhivemind/README.md) supplies session log and
+projection types for turns.
+
+The adapter also links the external OpenHuman harness and its tool packages.
+It has no direct dependency on the hive, embed, or TypeSafe crates: the driver
+uses the first two, and a host may supply a TypeSafe router through the
+embed port. No other workspace library depends on this adapter.
+
+See the [workspace dependency map](../../docs/crate-dependencies.md).

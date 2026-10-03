@@ -49,3 +49,18 @@ episode every call has a consequence -- a question opened, work handed off, a
 finding concluded -- and text with no consequence turned out, over five live
 runs, to be status, repetition, and the description of calls never made. A
 fact reaches the desk as a completion's message.
+
+## How it relates to the other crates
+
+This crate depends on
+[`tinyhivemind-tools`](../tinyhivemind-tools/README.md) for
+`EpisodeTools`, the served definitions, and call records. It adds the MCP
+server and re-exports the tool crate's main types so an MCP-only host can
+name one crate. It also lists [`tinyhivemind`](../tinyhivemind/README.md)
+as a direct dependency for wire tests that inspect a drained call.
+
+[`tinyhivemind-openhuman`](../tinyhivemind-openhuman/README.md) depends on
+this crate for the optional MCP route used by an embedded seat. Native-tool
+runners call `tinyhivemind-tools` directly and do not need this server.
+
+See the [workspace dependency map](../../docs/crate-dependencies.md).

@@ -44,3 +44,22 @@ append and report the sequence of, and events to log.
 The host still owns the runtime and sessions, the transcript, durable append
 operations, and scheduling. See [`src/README.md`](src/README.md) for the
 source layout, and `examples/bench/` for the driver priced with no model.
+
+## How it relates to the other crates
+
+The driver brings four direct TinyHiveMind dependencies together.
+[`tinyhivemind`](../tinyhivemind/README.md) supplies conversations,
+sequences, and utterances.
+[`tinyhivemind-core`](../tinyhivemind-core/README.md) supplies the desk
+error type.
+[`tinyhivemind-embed`](../tinyhivemind-embed/README.md) supplies routing
+candidates, plans, and the `Router` port.
+[`tinyhivemind-hive`](../tinyhivemind-hive/README.md) supplies completion
+episode state and its pure assignment and completion folds.
+
+[`tinyhivemind-openhuman`](../tinyhivemind-openhuman/README.md) consumes
+`BoundAgent`, `CompletionDriver`, and `Conductor` to run those decisions
+on OpenHuman. The dependency points from the adapter to this crate, so a
+different host can use the driver with its own bound agent type.
+
+See the [workspace dependency map](../../docs/crate-dependencies.md).

@@ -24,3 +24,20 @@ completion's message.
 
 It opens nothing and awaits nothing, and is in the pure list
 `.github/scripts/assert-pure.sh` guards.
+
+## How it relates to the other crates
+
+This crate depends on [`tinyhivemind`](../tinyhivemind/README.md) for
+`speech::tool_specs`, `CallArguments`, and `interpret`. It renders that
+single vocabulary as JSON tool definitions and records accepted or refused
+calls in `EpisodeTools`. It does not decide what a recorded event means for
+the episode.
+
+[`tinyhivemind-mcp`](../tinyhivemind-mcp/README.md) depends on this crate
+to serve those definitions and calls over a socket, and re-exports its main
+types. [`tinyhivemind-openhuman`](../tinyhivemind-openhuman/README.md)
+also depends on it directly so native and MCP runners drain the same
+`SeatEvent` and `Refusal` records. The driver consumes the resulting
+committed events through the host, without depending on this tool crate.
+
+See the [workspace dependency map](../../docs/crate-dependencies.md).
