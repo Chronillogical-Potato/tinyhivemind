@@ -750,7 +750,11 @@ fn retryable_provider_exhaustion_is_bounded_without_a_commit() {
             .filter(|(seat, _)| seat == "lead")
             .filter_map(|(_, request)| request["messages"].as_array()?.last()?["content"].as_str())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(lead_prompts.len(), 1, "each retry uses the frozen prompt");
+        assert_eq!(
+            lead_prompts.len(),
+            MAX_SEAT_ATTEMPTS as usize,
+            "each bounded retry gets its own prompt"
+        );
         for seat in ["implementer", "tester", "reviewer"] {
             assert_eq!(state.turn_starts.get(seat), Some(&1), "@{seat} ran once");
         }
