@@ -278,14 +278,20 @@ async fn run() -> anyhow::Result<()> {
         .received_requests()
         .await
         .ok_or_else(|| anyhow::anyhow!("mock provider did not retain requests"))?;
-    if provider_requests.len() != 2 {
+    let completions: Vec<_> = provider_requests
+        .iter()
+        .filter(|request| {
+            request.method.as_str() == "POST" && request.url.path() == "/v1/chat/completions"
+        })
+        .collect();
+    if completions.len() != 2 {
         anyhow::bail!(
-            "embedded OpenHuman made {} provider calls, expected two",
-            provider_requests.len()
+            "embedded OpenHuman made {} chat completions, expected two",
+            completions.len()
         );
     }
-    let first_body: serde_json::Value = serde_json::from_slice(&provider_requests[0].body)?;
-    let second_body: serde_json::Value = serde_json::from_slice(&provider_requests[1].body)?;
+    let first_body: serde_json::Value = serde_json::from_slice(&completions[0].body)?;
+    let second_body: serde_json::Value = serde_json::from_slice(&completions[1].body)?;
     let first_messages = first_body["messages"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("first OpenHuman request has no message history"))?;

@@ -72,7 +72,7 @@ impl RawSeat {
     ) -> Result<String> {
         let names: Vec<String> = tools.iter().map(|tool| tool.name().to_owned()).collect();
         self.library
-            .scope(async {
+            .scope(Box::pin(async {
                 let mut host = self.library.session(
                     &self.id,
                     &self.system_prompt,
@@ -90,7 +90,7 @@ impl RawSeat {
                         seat: self.id.clone(),
                     })?
                     .map_err(Error::Harness)
-            })
+            }))
             .await
     }
 }
