@@ -11,7 +11,6 @@ use openhuman_embed::{
     ServiceSet, ToolScopeSpec, Workspace,
 };
 use serde_json::json;
-use tinyhivemind_core::runtime::desk::{Desk, ResponderMode};
 use tinyhivemind_core::driver::{
     AgentBinding, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph,
     HostAction,
@@ -20,8 +19,9 @@ use tinyhivemind_core::hive::{
     CompletionEpisodeState, CompletionStep, ParticipantCompletion, apply_assignment,
     completion_status,
 };
-use tinyhivemind_openhuman::EmbedSeat;
+use tinyhivemind_core::runtime::desk::{Desk, ResponderMode};
 use tinyhivemind_core::typesafe::JevRouter;
+use tinyhivemind_openhuman::RegisteredAgent;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -516,7 +516,7 @@ fn instantiated(
     problem: &str,
     id: &'static str,
     role: String,
-) -> anyhow::Result<AgentBinding<EmbedSeat>> {
+) -> anyhow::Result<AgentBinding<RegisteredAgent>> {
     let runtime_id = format!("{id}-pe{problem}-{}", std::process::id());
     let tools = vec![
         "file_read".into(),
@@ -558,7 +558,7 @@ fn instantiated(
                 .mcp(mcp)
                 .action_dir(workspace),
         )
-        .map(|agent| AgentBinding::new(id, EmbedSeat(agent)))
+        .map(|agent| AgentBinding::new(id, RegisteredAgent(agent)))
         .map_err(Into::into)
 }
 

@@ -14,13 +14,13 @@ use openhuman_embed::{
     RuntimeConfig, ToolScopeSpec, Workspace,
 };
 use serde::{Deserialize, Serialize};
-use tinyhivemind_core::runtime::desk::{Desk, ResponderMode};
-use tinyhivemind_core::runtime::responder::Probability;
 use tinyhivemind_core::driver::{
     AgentBinding, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver, HiveGraph,
 };
 use tinyhivemind_core::hive::{CompletionEpisodeState, CompletionStep, completion_status};
-use tinyhivemind_openhuman::EmbedSeat;
+use tinyhivemind_core::runtime::desk::{Desk, ResponderMode};
+use tinyhivemind_core::runtime::responder::Probability;
+use tinyhivemind_openhuman::RegisteredAgent;
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -344,7 +344,11 @@ async fn run_seat(
     delta: String,
     outbox: PathBuf,
     turn_timeout: Duration,
-) -> anyhow::Result<(String, String, tinyhivemind_core::runtime::speech::Utterance)> {
+) -> anyhow::Result<(
+    String,
+    String,
+    tinyhivemind_core::runtime::speech::Utterance,
+)> {
     let mut retry_reason = None;
     mcp::clear(&outbox)?;
     for attempt in 1..=MAX_SEAT_ATTEMPTS {
@@ -490,7 +494,7 @@ fn instantiate(
     outbox_dir: &Path,
     executable: &Path,
     id: &str,
-) -> anyhow::Result<AgentBinding<EmbedSeat>> {
+) -> anyhow::Result<AgentBinding<RegisteredAgent>> {
     let workspace = McpServer::stdio("deepswe", executable.to_string_lossy(), sandbox.mcp_args())
         .allow_tools(["file_read", "file_write", "file_edit", "shell", "test"])
         .description("Docker-confined local checkout tools");
@@ -546,7 +550,7 @@ fn instantiate(
                 .config(move |config| config.agent_registry.entries.push(registry_entry))
                 .action_dir(sandbox.repo_path()),
         )
-        .map(|agent| AgentBinding::new(id, EmbedSeat(agent)))
+        .map(|agent| AgentBinding::new(id, RegisteredAgent(agent)))
         .map_err(Into::into)
 }
 

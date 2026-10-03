@@ -1,7 +1,7 @@
 //! Problem roles, semantic candidates, and completion-tool compatibility.
 
-use tinyhivemind_core::runtime::speech::{CallArguments, ToolCall, Utterance, interpret};
 use tinyhivemind_core::embed::RouteCandidate;
+use tinyhivemind_core::runtime::speech::{CallArguments, ToolCall, Utterance, interpret};
 
 use super::RESEARCH_START;
 

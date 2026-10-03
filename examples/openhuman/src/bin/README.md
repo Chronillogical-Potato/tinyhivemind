@@ -2,11 +2,6 @@
 
 | File | Purpose |
 | --- | --- |
-| `conducted.rs` | One completion episode over native-tool embed and hosted runners, with an offline runner comparison. |
-| `conducted/hosted.rs` | The example's host journal and `EpisodeHost` seat binding. |
-| `conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`. |
-| `conducted/routing.rs` | Routing candidates and policy thresholds for the example desks. |
-| `conducted/scenarios.rs` | Desk definitions and each seat's private facts. |
 | `deepswe_hive.rs` | Hermetic four-agent external software-engineering adapter with host-side OpenHuman and Docker-confined tools. |
 | `deepswe_hive/` | Task validation, MCP tools, Docker confinement, and contract tests for the DeepSWE adapter. |
 | `pe1006_hive.rs` | Web-assisted five-agent experiment driven by `tinyhivemind_core::driver`, with a durable shared workspace, explicit agent memory, and one OpenHuman runtime per run. |

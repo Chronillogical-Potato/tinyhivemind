@@ -3,6 +3,7 @@ name = "tinyhivemind-openhuman-example"
 version = "0.0.0"
 edition = "2024"
 publish = false
+default-run = "tinyhivemind-openhuman-example"
 
 # This is deliberately a standalone crate rather than a workspace member.
 # Its live binaries and independent lockfile keep experiment-only dependencies
@@ -13,7 +14,7 @@ publish = false
 anyhow = "1"
 futures = "0.3"
 # The live hive uses OpenHuman's native runtime, agents, sessions, and TinyCortex module.
-openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed", default-features = false, features = ["mcp", "modules"] }
+openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed", default-features = false, features = ["mcp", "modules", "skills"] }
 # The DeepSWE adapter registers its per-seat definitions with OpenHuman's
 # runtime registry so the current hosted harness can resolve them at turn time.
 openhuman = { path = "../../vendor/openhuman/crates/openhuman-core", default-features = false }
@@ -22,18 +23,11 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tinyhivemind-core = { path = "../../crates/tinyhivemind-core" }
-# The driver: who runs next, and what a committed row means. Names no harness.
-# The OpenHuman adapter: both runners behind the `SeatRunner` seam, and --
-# with `offline` -- the scripted model and backend stub the proofs and the
-# bench run against.
+tinyhivemind-hives = { path = "../../crates/tinyhivemind-hives" }
+# Supplied-agent integration; runtime construction stays in this example.
 tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman", features = ["offline"] }
-# The room's tools as a record, for the `conducted` binary's own bookkeeping.
+# Pure core tool bookkeeping used by the research experiments.
 tinyhivemind-tools = { path = "../../crates/tinyhivemind-tools" }
-# The live Jev transport for `conducted`. Reads `TYPESAFE_API_KEY` and nothing
-# else. The vendored checkout rather than the git source, for the reason ADR
-# 0020 gives for `openhuman-embed`: a host that vendors this repository carries
-# its own copy, and two sources for one crate means two sets of types.
-tinyjevclient = { path = "../../vendor/tinyjevclient/crates/tinyjevclient", default-features = false }
 # Diagnostic only: OpenHuman sanitises a hosted-agent failure into a fixed
 # string, so the underlying reason is only visible through its own logging.
 env_logger = "0.11"
