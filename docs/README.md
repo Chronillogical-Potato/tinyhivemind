@@ -12,6 +12,7 @@ code, where it cannot drift.
 ```text
 docs/
 ├── README.md      # this index
+├── crate-dependencies.md # direct workspace crate dependencies and re-exports
 ├── testing.md     # the deterministic harness, opt-in live tests, coverage
 ├── specs/         # behavior and architecture specifications
 ├── plans/         # implementation plans derived from approved specs
@@ -20,6 +21,8 @@ docs/
 └── experiments/   # what happened when it was actually run
 ```
 
+- [`crate-dependencies.md`](crate-dependencies.md) maps direct dependencies,
+  public re-exports, and the completion path across all workspace crates.
 - [`testing.md`](testing.md) covers the deterministic coordination harness, the
 opt-in OpenRouter tests, and the coverage commands.
 - [`specs/`](specs/README.md) holds one file per feature, module, or subsystem,

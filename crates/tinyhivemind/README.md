@@ -4,13 +4,10 @@ The session runtime: the ports a host implements, the paging walk over a
 session log, the responder ladder, and the mention-dispatch edge.
 
 See the [repository root README](../../README.md) for what `tinyhivemind` is
-and why it exists. This crate is the runtime half of the two-crate split the
-Charter describes: `tinyhivemind-core` answers what can be decided from
-arguments alone (the pure algebra — desks, roster, mention grammar,
-projection fold); this crate holds what must wait on something — the paging
-walk over a live session log, ephemeral team briefings, the responder ladder's
-one optional model call, and the mention/referral dispatch edges — expressed
-against ports a host implements.
+and why it exists. `tinyhivemind-core` answers what can be decided from
+supplied desk and roster data. This crate handles the operations that wait on
+a host: paging through its session log, building a turn briefing, optionally
+asking a selector, and dispatching a mention or referral through a queue.
 
 `tinyhivemind` depends on `tinyhivemind-core` and re-exports its entire public
 surface (`pub use tinyhivemind_core::*;` in [`src/lib.rs`](src/lib.rs)), so a
@@ -21,3 +18,22 @@ Crate-level docs, the runnable example, and the full module list live in
 [`src/lib.rs`](src/lib.rs). Feature-module documentation is indexed in
 [`src/README.md`](src/README.md); the example harnesses are indexed in
 [`examples/README.md`](examples/README.md).
+
+## How it relates to the other crates
+
+This crate depends directly on
+[`tinyhivemind-core`](../tinyhivemind-core/README.md). It uses core's pure
+decisions, adds host ports and attributed session projection, and re-exports
+core's public API. A host can therefore use the same desk and mention types
+through the runtime crate.
+
+The hive, embed, TypeSafe, driver, tools, MCP, and OpenHuman crates all list
+this crate as a direct dependency. The hive reads `SessionMessage` and
+`Sequence`; embed and TypeSafe share responder probabilities; the driver uses
+conversations, sequences, and utterances; tools uses the speech vocabulary;
+OpenHuman uses the session log and projection types. MCP lists the runtime
+for wire tests that inspect a drained call. The runtime has no dependency
+back on any of these crates.
+
+See the [workspace dependency map](../../docs/crate-dependencies.md) for the
+full graph.
