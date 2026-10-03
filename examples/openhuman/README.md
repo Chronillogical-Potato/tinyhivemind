@@ -19,8 +19,9 @@ It is deterministic and offline:
   storing session state;
 - the engineering agent handles a routed desk turn and a deterministic DM turn
   on the same OpenHuman session, while the DM makes no System One call;
-- the second provider request preserves every message from the first request as
-  an exact prefix, maximizing the portion eligible for provider prompt caching;
+- the second turn's provider request preserves every message from the first
+  turn as an exact prefix, maximizing the portion eligible for provider prompt
+  caching;
 - no credential, network provider, inherited workspace, or user data is used.
 
 Run the standalone example from the repository root:

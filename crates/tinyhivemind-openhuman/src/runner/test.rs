@@ -273,18 +273,19 @@ async fn where_the_roster_is(
         .unwrap_or_default();
     let mut names = names;
     names.sort();
-    // `tool_search` and `tool_call` arrived with openhuman v0.64.10, which
-    // advertises them intrinsically whenever a run has a deferred tool. They
-    // belong on this list by the claim it already makes: both are how a seat
-    // *reaches* a tool rather than a tool it was granted, which is the same
-    // reason `mcp_call_tool` is here and `shell` is not.
+    // OpenHuman advertises its discovery and memory tools intrinsically when a
+    // run has deferred tools. Those are available to every seat independently
+    // of the MCP binding, so keep the assertion explicit about the entire set.
     assert_eq!(
         names,
         [
+            "juice_extract",
+            "juice_find",
+            "juice_retrieve",
+            "juice_summarize",
             "mcp_call_tool",
             "mcp_list_servers",
             "mcp_list_tools",
-            "tool_call",
             "tool_search"
         ],
         "an MCP seat is offered the road, not the tools"
@@ -650,8 +651,29 @@ async fn again(
     let (_, again) = one_turn(raw, None).await;
     assert_eq!(again.len(), 1);
     host.log.append("lead", "COMPLETE: done", None, &[]);
-    let (_, again) = one_turn(hosted, host.log.latest()).await;
-    assert_eq!(again.len(), 1, "the reused session ran and called again");
+    host.log.append("peer", "I found a clue", None, &[]);
+    host.park.store(true, Ordering::SeqCst);
+    hosted.open(
+        "lead",
+        vec!["    1  @operator: state the root cause".into()],
+        Dispatch {
+            chat: "engineering".into(),
+            parent: None,
+        },
+    );
+    let (seat, lane, parked) = hosted
+        .turn_only(
+            "lead".into(),
+            Lane::Desk,
+            host.log.latest(),
+            "Your turn.".into(),
+            vec!["desk_complete_episode".into()],
+        )
+        .await;
+    assert_eq!(seat, "lead");
+    assert_eq!(lane, Lane::Desk);
+    assert_eq!(parked, TurnResult::Parked);
+    assert_eq!(hosted.close("lead").len(), 1);
     assert_eq!(host.wrapped.load(Ordering::SeqCst), 2);
 }
 

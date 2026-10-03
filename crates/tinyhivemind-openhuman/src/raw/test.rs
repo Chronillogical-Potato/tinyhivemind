@@ -79,16 +79,11 @@ async fn a_native_call_is_recorded_through_the_shared_record() {
 }
 
 fn request(tool: &str) -> ToolPolicyRequest {
-    #[allow(deprecated)]
-    ToolPolicyRequest {
-        tool_name: tool.to_owned(),
-        arguments: json!({}),
-        context: ToolCallContext::session("session", "internal", "lead", "call-1", 1),
-        generated_tool: None,
-        session_id: String::new(),
-        channel: String::new(),
-        agent_definition_id: String::new(),
-    }
+    ToolPolicyRequest::new(
+        tool,
+        json!({}),
+        ToolCallContext::session("session", "internal", "lead", "call-1", 1),
+    )
 }
 
 #[tokio::test]
