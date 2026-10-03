@@ -39,8 +39,8 @@ pub type ReferralFuture<'a> =
 /// [`EnqueueOutcome::Refused`]. Transaction rollback must leave neither an
 /// idempotency record nor a child turn.
 ///
-/// This port is the only idempotency boundary. `tinyhivemind` owns no journal
-/// and does not retry a failure or refusal.
+/// This port is the idempotency boundary for referrals. `tinyhivemind` owns no
+/// journal and does not retry a failure or refusal.
 pub trait ReferralQueue: Send + Sync {
     /// Atomically enqueue this one canonical referral, or return its final
     /// refusal/duplicate outcome.

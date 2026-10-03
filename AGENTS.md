@@ -24,13 +24,15 @@ Three rules decide what belongs here:
    append-only journal: messages are addressed by sequence number across
    surfaces the host owns, so a second log could not be made consistent with the
    first.
-2. **No host types, ever.** Nothing here may name a type from a consuming
-   application. A snapshot or a borrowed view crosses the boundary, never a
-   callback into the host — a callback seam is how the layering violation this
-   crate exists to fix grew in the first place.
+2. **Keep host types at the adapter boundary.** The core, runtime, hive,
+   embed, and TypeSafe crates do not name types from a consuming application.
+   They accept snapshots, borrowed views, or narrow ports. The
+   `tinyhivemind-openhuman` adapter explicitly names OpenHuman types and keeps
+   that dependency out of the pure crates.
 3. **One message, one round, of bounded width.** A step may authorize several
    turns to run concurrently — seats are async sessions and the algebra says so
-   — but never more than `round_width`, and never without an approval in sight.
+   — but never more than `round_width` while blind or `revealed_width` after
+   peers become visible, and never without an approval in sight.
    The bound is the invariant; the serialization never was. See
    [ADR 0014](docs/adr/0014-a-round-authorizes-concurrent-turns.md), which
    supersedes ADR 0002 on the terms ADR 0002 itself set.
@@ -65,15 +67,16 @@ crates/
 │           ├── types.rs      # substantial type definitions
 │           └── test.rs       # module-local unit tests, or a test/ directory
 │                             # of behavior-grouped submodules once it grows
-├── tinyhivemind/          # the session runtime: ports, the paging walk, the
-│                       # responder ladder. Lands in P4; see ROADMAP.md.
-├── tinyhivemind-hive/     # bounded group deliberation: traces, salience, quorum
-                        # with cross-inhibition, the attention market, and the
-                        # episode state machine. Pure, opt-in; lands in P8.
+├── tinyhivemind/          # session runtime: ports, projection, recall, digest,
+│                         # approval, responder and dispatch edges
+├── tinyhivemind-hive/     # pure task division, explicit completion, and bounded
+│                         # group deliberation
 ├── tinyhivemind-embed/    # host-neutral conversation surfaces and validated
 │                       # Jev-first routing composition
-└── tinyhivemind-typesafe/ # exact System One wires and Jev questions behind
-                        # one transport port; no HTTP client or async runtime
+├── tinyhivemind-typesafe/ # System One wires and Jev questions behind one
+│                         # transport port; no HTTP client or async runtime
+└── tinyhivemind-openhuman/ # bindings to existing OpenHuman agents and the
+                          # completion driver
 docs/
 ├── specs/              # behavior and architecture specifications
 ├── plans/              # test-first implementation plans
@@ -87,16 +90,13 @@ examples/               # standalone integration proofs outside the workspace
 ### The two-crate split
 
 `crates/tinyhivemind-core` holds the algebra: desks and membership, the roster, the
-mention grammar and its resolution, and the fold that projects a shared
-transcript into one viewer's turn history. Every function there is a fold over
-data the caller already holds. P4 (see `ROADMAP.md`) replaces the
-`(role, content)` pair this fold produces with an attributed `SessionMessage`
-in `crates/tinyhivemind` — the projection *algorithm* stays here in core, but the
-richer, attributed shape it produces is assembled by the crate that also owns
-the paging walk over a live session log.
+mention grammar and its resolution, approval decisions, and responder plans.
+Every function there is a fold over data the caller already holds. The
+attributed `SessionMessage` and paging projection live in `crates/tinyhivemind`.
 
 `crates/tinyhivemind` holds the parts that must wait on something — the paging walk
-over a session log, the responder ladder, the mention-dispatch edge — expressed
+over a session log, the responder ladder's selector call, digest generation,
+human approval, and the dispatch edges — expressed
 against ports a host implements. It depends on the core crate and re-exports it,
 so a host takes one dependency rather than two and the types are the *same*
 types rather than structural twins.
@@ -117,6 +117,11 @@ questions for that surface and converts responses to fixed-point evaluations.
 Its `SystemOneTransport` is the only waiting boundary; HTTP, credentials, and
 retry scheduling remain in the host adapter.
 
+`crates/tinyhivemind-openhuman` is the explicit OpenHuman adapter. It binds
+canonical hive identities to already-created agents and folds committed host
+events into caller-owned completion state. The host still owns agent sessions,
+the transcript, durable appends, and scheduling.
+
 ### The hive crate
 
 `crates/tinyhivemind-hive` is opt-in and answers a different question from the
@@ -129,8 +134,9 @@ is in the `pure_crates` list in `.github/scripts/assert-pure.sh` for that
 reason.
 
 `HiveStep::Speak` carries a **round** — the turns authorized to run
-concurrently, at most `round_width` of them, plus the single state the episode
-takes once all of them are appended. Independence is still a visibility filter
+concurrently, at most `round_width` while blind or `revealed_width` when
+revealed, plus the single state the episode takes once all of them are
+appended. Independence is still a visibility filter
 rather than a hope: members writing simultaneously cannot read each other, so a
 concurrent round *is* a blind round. `round_width: 1` is the sequential episode
 and reproduces every recorded number bit-for-bit. See

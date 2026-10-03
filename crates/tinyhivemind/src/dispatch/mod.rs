@@ -32,8 +32,8 @@ pub type MentionTurnFuture<'a> =
 /// live rejection returns [`EnqueueOutcome::Refused`]. Transaction rollback
 /// must leave neither an idempotency record nor a child turn.
 ///
-/// This port is the only idempotency boundary. `tinyhivemind` owns no journal and
-/// does not retry a failure or refusal.
+/// This port is the idempotency boundary for mention dispatch. `tinyhivemind`
+/// owns no journal and does not retry a failure or refusal.
 pub trait MentionTurnQueue: Send + Sync {
     /// Atomically enqueue this one canonical request, or return its final
     /// refusal/duplicate outcome.

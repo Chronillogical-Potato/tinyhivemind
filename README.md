@@ -337,7 +337,7 @@ At one facet they are identical and the room is the wrong tool. From two on, a
 seat's accuracy stays flat in width where the soloist's decays — a seat never
 holds facets it is not deciding — and eight facets cost two rounds, not eight.
 The advantage is the context window, bought by dividing along a line where
-competence differs; divide it anywhere else and it vanishes. [Task variety](https://github.com/tinyhumansai/tinyhivemind/wiki/Task-variety) has the controls.
+competence differs; divide it anywhere else and it vanishes. [Benchmarks: delegation](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks-delegation) has the controls.
 
 ## Not an agent council
 
@@ -357,48 +357,27 @@ Councils are better at open-ended writing, at work that genuinely decomposes,
 and at running on any model with no grammar to learn. Take one when the
 deliverable is prose. Take this when the deliverable is a decision somebody
 will ask you to justify later.
-[The full comparison](https://github.com/tinyhumansai/tinyhivemind/wiki/Agent-councils)
-is honest about both sides.
+[Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes)
+explains the decision protocol.
 
-## Three rules it will not break
+## Boundaries
 
-**The host owns storage.** No database, no file, no socket. Your log stays
-yours and is lent through one port.
+The host owns the journal, agent sessions, authorization, and scheduling.
+`tinyhivemind-core` and `tinyhivemind-hive` are pure folds over supplied
+data. `tinyhivemind` adds host ports for reading that journal, choosing a
+responder, asking for approval, folding a digest, and queueing a child turn.
 
-**No host types, ever.** Nothing here names a type from your application.
+A normal message selects one responder. A mention or referral can authorize at
+most one child turn from a committed reply. A hive episode may authorize a
+bounded round of concurrent turns: `round_width` limits blind rounds and
+`revealed_width` limits rounds that can read previous peer work. The host
+commits the round's state after all authorized turns are appended.
 
-**One message, one turn.** `@everyone` is a list, not a broadcast, and no type
-here can carry two authorized speakers.
-
-They are enforced by the shape of the crates, not by discipline:
-
-```text
-   your application
-   ┌──────────────────────────────────────────────────────────┐
-   │  the session log      model calls        the turn queue   │
-   └────────┬───────────────────┬───────────────────┬─────────┘
-        SessionLog          Selector        MentionTurnQueue    ports you
-   ┌────────▼───────────────────▼───────────────────▼─────────┐  implement
-   │  tinyhivemind        the paging walk, the responder      │
-   │                      ladder, the mention-dispatch edge   │
-   ├──────────────────────────────────────────────────────────┤
-   │  tinyhivemind-core   desks · roster · mention grammar ·  │
-   │                      projection — arguments in, value    │
-   │                      out, no async, no host types        │
-   └──────────────────────────────────────────────────────────┘
-
-   ┌──────────────────────────────────────────────────────────┐
-   │  tinyhivemind-hive   traces · salience · quorum ·        │
-   │  opt-in, and pure    cross-inhibition · attention        │
-   │  enough to define    market · the episode machine        │
-   │  no port of its own  — it waits through the ports above  │
-   └──────────────────────────────────────────────────────────┘
-```
-
-Anything answerable from its arguments lives in a pure crate; anything that has
-to wait lives behind one of the ports. CI asserts the split rather than
-trusting it — the pure crates cannot take on a runtime, a transport, an HTTP
-client, a web framework or a database driver without failing the build.
+The optional `tinyhivemind-embed` and `tinyhivemind-typesafe` crates handle
+semantic routing. `tinyhivemind-openhuman` binds canonical hive identities
+to existing OpenHuman agents. The
+[architecture guide](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture)
+shows all six crates and their boundaries.
 
 ## Frequently asked questions
 
@@ -423,7 +402,7 @@ The bid also gives fixed bonuses when an agent was addressed, can break a
 deadlock, or has been least heard, and applies a penalty to a member dominating
 grounded contributions. Speaking raises that agent's threshold; silence lowers
 the others'. That makes a recent speaker less likely to monopolize the floor.
-Only one bid can win, so one step can authorize only one turn.
+The episode selects up to the policy width from eligible bids. Blind seats can run concurrently; the default revealed width is one.
 
 ### Does a newly joined agent receive the entire transcript?
 
@@ -435,10 +414,10 @@ preserves its original author, so a peer's reply is never presented as the
 viewer's own prior response.
 
 The initialization also returns a separate team briefing and can include an
-index of live threads plus host-supplied notes. It does not automatically
-summarize a 100,000-token history. A host that needs a durable summary or
-retrieval of older material owns that policy and data, then supplies it as
-context or exposes it through its own tools.
+index of live threads plus host-supplied notes. It does not automatically summarize a long history. The optional digest
+module produces a bounded account of older desk-visible rows through a host
+`Digester` port; the host stores that account. Search and pins can bring older
+source rows back into a turn without rewriting the journal.
 
 ### How does an agent see messages added after it starts?
 
@@ -490,7 +469,7 @@ That prints one deliberation episode turn by turn—the fastest way to see the m
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to the size of a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the ports, and what your application owes the library |
-| [Agent councils](https://github.com/tinyhumansai/tinyhivemind/wiki/Agent-councils) | how this differs from a council or crew, and what each does better |
+| [Integration crates](https://github.com/tinyhumansai/tinyhivemind/wiki/Integration-crates) | semantic routing, TypeSafe, and the OpenHuman adapter |
 | [Development](https://github.com/tinyhumansai/tinyhivemind/wiki/Development) | the build contract, testing, and how to contribute |
 | [Glossary](https://github.com/tinyhumansai/tinyhivemind/wiki/Glossary) | every term, what it means here, and where it came from |
 | [Further reading](https://github.com/tinyhumansai/tinyhivemind/wiki/Further-reading) | the swarm biology, the group-decision literature, the papers |
