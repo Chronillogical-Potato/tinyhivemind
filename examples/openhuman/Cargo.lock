@@ -3227,17 +3227,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyhivemind-mcp"
-version = "0.2.1"
-dependencies = [
- "serde_json",
- "thiserror",
- "tinyhivemind",
- "tinyhivemind-tools",
- "tokio",
-]
-
-[[package]]
 name = "tinyhivemind-openhuman"
 version = "0.2.1"
 dependencies = [
@@ -3249,7 +3238,6 @@ dependencies = [
  "thiserror",
  "tinyhivemind",
  "tinyhivemind-driver",
- "tinyhivemind-mcp",
  "tinyhivemind-tools",
  "tinytools 0.5.0",
  "tinytools-agent 0.5.0",

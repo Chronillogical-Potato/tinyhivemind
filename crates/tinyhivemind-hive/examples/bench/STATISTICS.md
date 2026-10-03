@@ -1,5 +1,9 @@
 # Reading the benchmark's second table
 
+> Historical results from benchmark arms retired in October 2026. The current
+> benchmark no longer runs these arms. The `ladder+dir` arm received the true
+> topic from `room.truth`, so its routing scores include an oracle leak.
+
 Split out of [`README.md`](README.md), which is capped at 500 lines. That
 file says what the arms are and what they scored; this one says how to read
 the columns under them and what the intervals do and do not license.

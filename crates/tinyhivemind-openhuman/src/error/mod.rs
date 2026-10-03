@@ -4,7 +4,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// `TINYHIVEMIND_RUNNER` named no runner this crate has.
-    #[error("TINYHIVEMIND_RUNNER must be `embed`, `embed-mcp`, `raw` or `hosted`, not `{0}`")]
+    #[error("TINYHIVEMIND_RUNNER must be `embed` or `hosted`, not `{0}`")]
     UnknownRunner(String),
     /// A route was missing its endpoint or its key.
     #[error("a route needs both an endpoint and a key")]
@@ -33,9 +33,6 @@ pub enum Error {
         /// The seat.
         seat: String,
     },
-    /// The episode's tool server could not bind.
-    #[error(transparent)]
-    Serve(#[from] tinyhivemind_mcp::Error),
     /// A seat definition could not be written.
     #[error("writing a seat definition: {0}")]
     Io(#[from] std::io::Error),

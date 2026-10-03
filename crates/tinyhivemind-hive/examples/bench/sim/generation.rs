@@ -131,14 +131,6 @@ pub(super) fn specialist_agent(
         .iter()
         .position(|holder| *holder == Some(index))
         .and_then(|topic_index| draw.names.get(topic_index).cloned());
-    agent.expert_elsewhere = expert_of
-        .iter()
-        .enumerate()
-        .filter_map(|(topic_index, holder)| match holder {
-            Some(holder) if *holder != index => draw.names.get(topic_index).cloned(),
-            _ => None,
-        })
-        .collect();
     if cost_tiers && agent.specialty.is_some() {
         agent.cost_unit = SPECIALIST_COST_UNIT;
     }
@@ -192,14 +184,6 @@ pub(super) fn roles_agent(
         .iter()
         .position(|holder| *holder == Some(index))
         .and_then(|topic_index| draw.names.get(topic_index).cloned());
-    agent.expert_elsewhere = expert_of
-        .iter()
-        .enumerate()
-        .filter_map(|(topic_index, holder)| match holder {
-            Some(holder) if *holder != index => draw.names.get(topic_index).cloned(),
-            _ => None,
-        })
-        .collect();
     if cost_tiers && agent.specialty.is_some() {
         agent.cost_unit = SPECIALIST_COST_UNIT;
     }
@@ -253,8 +237,6 @@ pub(super) fn hidden_profile_agent(
     if is_decisive {
         agent.refutes.clone_from(&planted);
         agent.specialty = planted;
-    } else {
-        agent.expert_elsewhere = planted.into_iter().collect();
     }
     agent
 }

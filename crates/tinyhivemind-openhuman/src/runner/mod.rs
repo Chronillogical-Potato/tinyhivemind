@@ -3,11 +3,9 @@
 //! The host loop owns the journal, the lanes, the briefs and the driver. It
 //! touches the seat itself at three points only -- open a turn, run it, close
 //! it and take what was called -- and the first and last are the same for
-//! every embedding, because [`EpisodeTools`] is where a call lands whichever
-//! road it took. What genuinely varies is [`SeatRunner::turn`]: whether a
-//! seat is an `openhuman-embed` agent reaching its tools over MCP, or a raw
-//! `OpenHuman` session handed the same tools natively. Both implement this
-//! trait, and the loop cannot tell them apart.
+//! every embedding, because [`EpisodeTools`] is where a call lands. What
+//! varies is [`SeatRunner::turn`]: an `openhuman-embed` agent or a host's own
+//! agent can run the seat. Both receive the episode tools in process.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -92,16 +90,12 @@ pub enum RunnerKind {
     /// `openhuman-embed` agents, the episode's tools on their belt. The
     /// default.
     Embed,
-    /// The same agents, reaching the same tools over MCP instead.
-    EmbedMcp,
-    /// Raw `OpenHumanSessionHost` sessions, tools in-process.
-    Raw,
     /// The host's own agents, tools in-process, seeded from the host's log.
     Hosted,
 }
 
 impl RunnerKind {
-    /// `TINYHIVEMIND_RUNNER=embed` (default), `embed-mcp`, `raw` or `hosted`.
+    /// `TINYHIVEMIND_RUNNER=embed` (default) or `hosted`.
     ///
     /// # Errors
     ///
@@ -119,8 +113,6 @@ impl RunnerKind {
     pub fn parse(value: Option<&str>) -> std::result::Result<Self, String> {
         match value {
             None | Some("" | "embed") => Ok(Self::Embed),
-            Some("embed-mcp") => Ok(Self::EmbedMcp),
-            Some("raw") => Ok(Self::Raw),
             Some("hosted") => Ok(Self::Hosted),
             Some(other) => Err(other.to_owned()),
         }
@@ -131,8 +123,6 @@ impl RunnerKind {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Embed => "embed",
-            Self::EmbedMcp => "embed-mcp",
-            Self::Raw => "raw",
             Self::Hosted => "hosted",
         }
     }
@@ -141,15 +131,7 @@ impl RunnerKind {
     /// Everything else in that contract is the vocabulary's own words.
     #[must_use]
     pub const fn how_to_call(self) -> &'static str {
-        match self {
-            Self::EmbedMcp => {
-                "Use `mcp_call_tool` with `server: \"episode\"`; its `arguments` is a JSON \
-                 object, never a string."
-            }
-            Self::Embed | Self::Raw | Self::Hosted => {
-                "Each tool below is yours to call directly, by its name."
-            }
-        }
+        "Each tool below is yours to call directly, by its name."
     }
 }
 

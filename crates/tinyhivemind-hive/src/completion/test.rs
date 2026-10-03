@@ -228,7 +228,7 @@ fn an_assignment_below_a_recorded_completion_cannot_erase_it() {
 
 #[test]
 fn a_payload_from_before_the_history_fails_to_decode() {
-    // The wire convention `refutation_cap` set: an older payload is an error
+    // The required wire fields establish this convention: an older payload is an error
     // rather than a participant that silently acquires one empty history.
     let legacy = serde_json::json!({
         "conversation": {"desk_id":"math", "desk_name":"Mathematics", "thread_root":null},

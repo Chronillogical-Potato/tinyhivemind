@@ -97,18 +97,8 @@ pub(crate) fn library_row(name: &str, totals: &Aggregate) -> String {
 /// directory-circularity proxy.
 pub(crate) fn detail_header() -> String {
     format!(
-        "{:<8}{:>11}{:>16}{:>8}{:>9}{:>9}{:>11}{:>9}{:>9}{:>10}{:>7}",
-        "arm",
-        "correct %",
-        "95% CI",
-        "fact %",
-        "to-fact",
-        "knows %",
-        "defers/ep",
-        "route %",
-        "cost/ep",
-        "calls/ep",
-        "rho",
+        "{:<8}{:>11}{:>16}{:>8}{:>9}{:>9}{:>9}{:>10}{:>7}",
+        "arm", "correct %", "95% CI", "fact %", "to-fact", "route %", "cost/ep", "calls/ep", "rho",
     )
 }
 
@@ -126,8 +116,6 @@ pub(crate) fn detail_row(name: &str, totals: &Aggregate) -> String {
     let to_fact = dash_unless(hive_like && totals.fact_deposited > 0, || {
         totals.fact_latency()
     });
-    let knows_pct = dash_unless(hive_like, || totals.knows_rate());
-    let defers = dash_unless(hive_like, || totals.defers_per_episode());
     // Only a ladder arm consults the responder ladder at all, and only a
     // room that names an expert on the deciding topic gives it something to
     // be right or wrong about -- so a uniform room prints `—` rather than a
@@ -141,13 +129,11 @@ pub(crate) fn detail_row(name: &str, totals: &Aggregate) -> String {
         totals.mean_rho() / 1000.0
     });
     let rest = format!(
-        "{:>11.1}{:>16}{:>8}{:>9}{:>9}{:>11}{:>9}{:>9.2}{:>10}{:>7}",
+        "{:>11.1}{:>16}{:>8}{:>9}{:>9}{:>9.2}{:>10}{:>7}",
         totals.accuracy(),
         ci,
         fact_pct,
         to_fact,
-        knows_pct,
-        defers,
         route_pct,
         totals.cost_per_episode(),
         // `—` rather than `0.0` for an arm that runs no exchange at all: the
@@ -239,7 +225,6 @@ pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
          \"turns_per_episode\":{},\"rounds_per_episode\":{},\"decision_rate\":{},\
          \"correct_pct\":{},\"ci_low\":{},\"ci_high\":{},\"ns_per_step\":{},\
          \"episodes_per_second\":{},\"fact_pct\":{},\"to_fact\":{},\
-         \"knows_pct\":{},\"defers_per_episode\":{},\
          \"expert_led\":{},\"route_pct\":{},\"cost_per_episode\":{},\
          \"accuracy_per_kilo_unit\":{},\"rho\":{},\"exchange_calls_per_episode\":{}}}",
         // The six headline `arm_row` columns -- quality (`correct_pct`,
@@ -265,8 +250,6 @@ pub(crate) fn json_line(name: &str, totals: &Aggregate) -> String {
             hive_like && totals.fact_deposited > 0,
             totals.fact_latency()
         ),
-        json_f64_if(hive_like, totals.knows_rate()),
-        json_f64_if(hive_like, totals.defers_per_episode()),
         json_f64_if(hive_like && totals.expert_of > 0, totals.expert_led()),
         json_f64_if(totals.routed_of > 0, totals.routing_precision()),
         json_f64(totals.cost_per_episode()),

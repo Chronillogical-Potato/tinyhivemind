@@ -99,6 +99,12 @@ is a change in the library rather than in the weather.
 
 ## The arms
 
+The table below describes the current benchmark. Older runs and their retired
+arms remain in [the delegation report](DELEGATION.md) and
+[the evidence report](EVIDENCE.md). The `ladder+dir` arm is absent from current
+comparisons: it received `room.truth` as its topic, leaking the answer into
+routing.
+
 Every arm decides the same rooms from the same private evaluations.
 
 | arm | what it is |
@@ -107,11 +113,6 @@ Every arm decides the same rooms from the same private evaluations.
 | `vote` | The honest matched-budget control — independent answers decided by plurality, nobody seeing anybody. It is given the *whole* budget, more turns than the deliberation actually spends. |
 | `hive` | A deliberation episode at `EpisodePolicy::DEFAULT`. |
 | `hive+` | The same, at the tuned policy: a majority quorum that is never unanimity, and three turns of budget per member. |
-| `hive+ref` | The tuned policy with `refutation_cap: Some(2)` — a cited fact can cap a hypothesis for the whole room. |
-| `hive+ev` | The same, plus `require_evidential`: support counts only if its citation chain reaches a stated fact. |
-| `hive+dir` | The tuned policy with `directory: Some(DirectoryPolicy::DEFAULT)` — the folded transactive-memory directory on, so `BidReason::Knows` is reachable. |
-| `hive+defer` | The tuned policy with `defer_cap: Some(N)` and no directory: members may stand aside on a topic that is not theirs, with nothing routing the vacated turn. |
-| `hive+dir+defer` | Both at once, which is the arrangement `docs/specs/expert-delegation.md` describes end to end. |
 | `hive+aside` | The tuned policy with `--aside-cap`: a member that cannot separate its two best options spends a turn asking one peer for its reading, privately. Loses; see [the write-up](../../../../docs/experiments/2026-09-07-why-asides-lose.md). |
 | `hive+ask` | The identical exchange in the open — same turns, same words, every member reads it. The control that isolates *privacy* from *asking*. |
 | `hive+aside!` | The private check again, aimed at whoever the transcript shows has grounded the option rather than at whoever spoke first. |
@@ -126,12 +127,7 @@ Every arm decides the same rooms from the same private evaluations.
 | `hive+wide` | The tuned policy run in concurrent rounds of `--round-width`. What concurrency costs: roughly half the wall clock for five points of quality. See [`DEPTH.md`](DEPTH.md). |
 | `hive+blind` | The same, widened **only while the room is blind** — the half of the concurrency that turns out to be free, since members who cannot read each other lose nothing by writing at once. See [`DEPTH.md`](DEPTH.md). |
 | `hive+pooled` | The **ceiling for equal-weight pooling**: every private reading and every fact already in every member's hands, free, averaged with no regard for whose reading it is. No amount of pairwise exchange beats it on the rooms this benchmark measures (uniform and hidden-profile, where every peer's reading is equally reliable) — under `--specialists`, where readings genuinely differ in reliability, a protocol that could tell them apart could in principle beat indiscriminate averaging. |
-| `ladder+dir` | The responder ladder again, with a directory the room *earned* over `--history` prior episodes of `hive+` on the same room. The selector's candidates carry that directory's per-agent lines as their `description`, the request names the topic the call turns on, and a router that reads the descriptions picks the heaviest holder of it. Validated through the real `accept_selection`. |
-| `all-reasoning` | Only under `--cost-tiers`, in the cost table: `hive+dir+defer` (the delegating room) against a policy that puts every seat on the expensive tier. |
-
-The six rows above `hive+dir` are the published table; the delegation arms are
-appended rather than interleaved, so `--seed 1 --episodes 5000` still prints
-them byte for byte.
+| `all-reasoning` | Only under `--cost-tiers`, in the cost table: the tuned room with every seat on the expensive tier. |
 
 Every aside arm that spends a turn loses, and the seven of them together
 settle what the loss is made of. `hive+aside − hive+ask` spans zero in every
@@ -175,11 +171,10 @@ carries the numbers and the argument;
 [`2026-09-07-do-asides-help.md`](../../../../docs/experiments/2026-09-07-do-asides-help.md)
 is the first pass, whose explanation of the hidden-profile loss it retracts.
 
-`hive+ref` and `hive+ev` lose, reproducibly and by a lot, and the write-up in
-[`docs/experiments/2026-09-01-refutation-and-grounds.md`](../../../../docs/experiments/2026-09-01-refutation-and-grounds.md)
-says by how much. The delegation arms mostly draw, and
-[`DELEGATION.md`](DELEGATION.md) says so. They are all here because an arm that
-cannot lose is not evidence.
+The retired refutation and delegation trials remain documented in
+[`docs/experiments/`](../../../../docs/experiments/) and
+[`DELEGATION.md`](DELEGATION.md). Their recorded numbers are historical and
+are not produced by the current benchmark.
 
 A multi-agent result without a matched-budget control is close to meaningless,
 because the multi-agent arm has usually just spent more compute. `vote` is that
@@ -205,14 +200,6 @@ quality. On its turn a participant, seeing exactly what `project_for` allowed:
 5. **proposes** — puts its own favourite on the floor if nobody has;
 6. **objects, or adds evidence**, according to its role.
 
-It also **refutes** — before it objects — when the room is running a policy that
-would let a refutation take effect and it rates an option on the floor clearly
-below its own, by the same 60-point gap that separates the true option from a
-decoy. A `None` or unreachable `refutation_cap` turns both the mechanism and the
-move off together, so a control arm differs from its treatment in one thing
-rather than in two. It **defers** only under `--defer-cap`, on a topic it knows
-another member owns.
-
 Under `--aside-cap` it also **checks**: a member whose two best options sit
 within half the true-to-decoy gap of each other cannot tell them apart, so it
 spends a turn asking one peer what that peer reads, the peer spends a turn
@@ -233,7 +220,10 @@ It reads the medium through the library's own `resolve` and `standings`, not
 through a private imitation of them, and it emits ordinary prose 6% of the time
 so the benchmark measures the protocol rather than a formatter.
 
-## Results
+## Historical results
+
+The table below was recorded before the October 2026 pruning. It includes
+retired arms and cannot be reproduced by the current benchmark command.
 
 5000 rooms, 5 agents, 4 options, `--noise 90`, at the default cost model:
 
@@ -282,8 +272,8 @@ specification predicted for a room of uniform expertise: with nothing to route
 on, a directory routes nowhere. `ladder+dir` is eight points *worse* than the
 uninformed ladder; [`DELEGATION.md`](DELEGATION.md) says why.
 
-The two refutation arms lose, which is why both knobs are off in
-`QuorumPolicy::DEFAULT`. `hive+ref` falls below even the vote control, and
+The two retired refutation arms lost in this run. Their policy fields have
+since been removed. `hive+ref` falls below even the vote control, and
 `hive+ev` starves the room — it fails to decide two episodes in five.
 
 The library's own cost is printed under a heading of its own, and is about
@@ -304,7 +294,7 @@ flat accuracy in width where the soloist decays: [`VARIETY.md`](VARIETY.md).
 ## Statistics
 
 The second table printed under the first — `correct %`, its confidence
-interval, `fact %`, `to-fact`, `knows %`, `defers/ep`, `route %`, `cost/ep`
+interval, `fact %`, `to-fact`, `route %`, `cost/ep`
 and `rho` — is documented in [`STATISTICS.md`](STATISTICS.md), together with
 the paired bootstrap and what its intervals do and do not license.
 
@@ -313,10 +303,14 @@ the paired bootstrap and what its intervals do and do not license.
 `--blind-evidence` makes a member's first turn, while the room is still blind,
 a deposit rather than a position. See [`EVIDENCE.md`](EVIDENCE.md).
 
-## Delegation
+## Historical delegation trials
 
-`--specialists`, `--hidden-profile`, `--defer-cap`, `--history`,
-`--cost-tiers` and `--blind-evidence` measure whether expert delegation earns
+The following trials used retired arms. The current benchmark does not accept
+`--defer-cap` or `--history`. The scenarios remain useful for evaluating
+expertise and information sharing.
+
+The retired runs used `--defer-cap` and `--history` alongside
+`--specialists`, `--hidden-profile`, `--cost-tiers` and `--blind-evidence` to measure whether expert delegation earned
 its place: whether the deciding fact reaches the floor in time, how precisely a
 router routes, and what accuracy costs per unit spent. The arms, the numbers
 they scored, and what makes `BidReason::Knows` reachable at all are in
@@ -417,8 +411,6 @@ defaulted cost constant is worse than a stopped run.
 | `--hidden-profile` | one decoy is planted above every member's own argmax except one member, who alone holds the fact that rules it out |
 | `--cost-tiers` | with `--specialists`, a specialist's own turn costs ten times a lay member's, for the `cost/ep` column |
 | `--blind-evidence` | a member's first turn, while the room is blind, is a deposit rather than a position (off by default) |
-| `--directory` | fold the directory into the traced episode's own policy, so `--trace` can show a `knows` turn |
-| `--defer-cap N` | turns a member may spend deferring to a topic's expert instead of arguing outside its own specialty (default 1, minimum 1); read by `hive+defer` and `hive+dir+defer` |
 | `--context N` | rows each member's window holds; `0` (default) disables the window model entirely |
 | `--rot F` | how hard the middle of that window is discounted, `0.0..=1.0` (default `0.0`) |
 | `--context-sweep` | run the window ladder instead of comparing arms once |
@@ -429,7 +421,6 @@ defaulted cost constant is worse than a stopped run.
 | `--round-width N` | turns one round may authorize concurrently, read by `hive+wide` and `hive+blind` (default 4); `0` makes both bit-identical to `hive+`. Every baseline arm -- everything but `hive+wide` and `hive+blind` -- runs at width one regardless of this flag, so no recorded number for those arms moves with it |
 | `--aside-cap N` | pairwise checks one member may open (default 1); under `hive+share` it caps distinct peers contacted instead; `0` makes every on-floor and alongside aside arm bit-identical to `hive+` |
 | `--exchange-cap N` | private rows one member may write **off the floor** across an episode, read by `hive+rounds` (default 4); a separate knob because it bounds model calls rather than the room's turns; `0` makes `hive+rounds` bit-identical to `hive+` |
-| `--history N` | prior episodes of `hive+` the `ladder+dir` arm earns its directory from (default 3) |
 | `--budget N` `--quorum N` `--window N` | episode policy, overriding the tuned values |
 | `--dominance N` `--repetition N` `--no-blind` | episode policy |
 | `--scale-sweep` | sweep room size against channel topology instead of comparing arms once: seven channels, from nobody talking to everything shared, at every size in `--sizes`. Reports accuracy, floor rows and private contacts separately, because a channel that buys two points by writing four times the traffic has not obviously bought anything |

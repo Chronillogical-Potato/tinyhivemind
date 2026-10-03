@@ -282,7 +282,7 @@ pub fn config() -> RuntimeConfig {
     // the record stayed empty, and the only symptom was a seat that had
     // apparently chosen to say nothing.
     //
-    // `LibraryHost::session` already pins `NativeDialect` for the raw and
+    // `LibraryHost::session` already pins `NativeDialect` for the hosted
     // hosted seats, which is why they were unaffected and the embed seat was
     // not. This is that same pin, for the runner that builds its agent from
     // configuration instead of a session builder. A harness that scripts one

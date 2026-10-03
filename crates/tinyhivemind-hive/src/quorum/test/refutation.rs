@@ -2,7 +2,7 @@
 //! evidence, without touching the advocate cross-inhibition already silences.
 
 use super::super::*;
-use super::support::{contested_transcript, deadlocked_transcript, fold, policy, said, standing};
+use super::support::{contested_transcript, fold, policy, said, standing};
 use crate::trace::read;
 
 #[test]
@@ -58,53 +58,6 @@ fn refuters_below_the_cap_leave_a_carried_topic_carried() {
     // no supporter was removed: refutation never silences anybody.
     assert_eq!(held.supporters, ["planner", "critic"]);
     assert!(held.carried(&policy(2)));
-}
-
-#[test]
-fn the_refutation_cap_takes_a_topic_out_of_contention_without_silencing_anyone() {
-    let mut transcript = contested_transcript();
-    transcript.push(said(4, "auditor", "!refute #stage ^3 Nowhere to stage it."));
-    transcript.push(said(5, "scout", "!refute #stage ^3 Confirmed, it is gone."));
-    let standings = fold(&transcript, &policy(2));
-    let held = standing(&standings, "stage");
-
-    assert_eq!(held.refuted_by, ["auditor", "scout"]);
-    assert!(held.silenced.is_empty(), "{:?}", held.silenced);
-    // Everything the room did survives in the standing. Only `carried` moves.
-    assert_eq!(held.supporters, ["planner", "critic"]);
-    assert_eq!(
-        held.support,
-        importance(TraceKind::Propose) + importance(TraceKind::Support),
-    );
-    assert!(!held.carried(&policy(2)));
-    assert_eq!(
-        consensus(&standings, &policy(2)),
-        ConsensusState::Deliberating,
-    );
-}
-
-#[test]
-fn one_refutation_ends_a_deadlock_that_would_have_cost_a_turn_per_advocate() {
-    // This is the shape the live rooms could not write: a fact that kills one
-    // of two tied hypotheses, in one turn rather than one turn per advocate.
-    let mut transcript = deadlocked_transcript();
-    assert!(matches!(
-        consensus(&fold(&transcript, &policy(2)), &policy(2)),
-        ConsensusState::Deadlocked { .. },
-    ));
-
-    transcript.push(said(5, "auditor", "!evidence The environment was retired."));
-    transcript.push(said(6, "auditor", "!refute #stage ^5 Nowhere to stage it."));
-    let one_refuter = QuorumPolicy {
-        refutation_cap: Some(1),
-        ..policy(2)
-    };
-    assert_eq!(
-        consensus(&fold(&transcript, &one_refuter), &one_refuter),
-        ConsensusState::Quorum {
-            topic: "ship".into()
-        },
-    );
 }
 
 #[test]
@@ -177,7 +130,7 @@ fn refutations_fold_commutatively_and_idempotently() {
 }
 
 #[test]
-fn a_refutation_outside_the_window_stops_capping() {
+fn a_refutation_outside_the_window_is_not_recorded() {
     let mut transcript = contested_transcript();
     transcript.push(said(4, "auditor", "!refute #stage ^3 Nowhere to stage it."));
     transcript.push(said(5, "scout", "!refute #stage ^3 Confirmed."));

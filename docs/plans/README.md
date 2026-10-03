@@ -1,5 +1,11 @@
 # Implementation plans
 
+> Plans record the implementation sequence at the time they were written.
+> Some paths and optional mechanisms in older plans were retired by
+> [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md);
+> use current crate documentation for active APIs.
+
+
 Plans turn an accepted specification into a reviewable sequence of small,
 verifiable changes. They explain how to build the behavior; the linked
 specification remains the source of truth for what the behavior must be.

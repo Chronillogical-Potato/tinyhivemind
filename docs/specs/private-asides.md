@@ -1,5 +1,8 @@
 # Private asides
 
+> **Current API note.** This proposal may mention the retired directory, deferral, refutation, or evidential policy paths. [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md) records their removal. Use the current crate API for active policy fields.
+
+
 **Status:** Draft
 **Owner:** tinyhivemind maintainers
 

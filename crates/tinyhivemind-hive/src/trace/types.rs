@@ -46,10 +46,8 @@ pub enum TraceKind {
     Object,
     /// Argues a cited fact against a topic, rather than against a person.
     ///
-    /// Where [`Object`] removes one advocate, a refutation caps the topic
-    /// itself once `refutation_cap` distinct members have deposited one. It is
-    /// the only marker that requires *both* a topic and a citation, so every
-    /// refutation is grounded by construction.
+    /// A refutation is recorded for audit and does not alter quorum. It
+    /// requires both a topic and a citation, so it is grounded by construction.
     ///
     /// [`Object`]: TraceKind::Object
     Refute,

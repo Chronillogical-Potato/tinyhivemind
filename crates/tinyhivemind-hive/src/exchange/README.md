@@ -129,8 +129,7 @@ diverge exactly when spend is uneven — one member spent out and another
 untouched — which is when a host sizing a batch off the field would overallocate.
 
 `enabled: false`, `contact_cap: 0` and `round_cap: 0` all close every round and a
-`Closed` round names which. Zero is a configuration a host may hold on purpose,
-so unlike `defer_cap` it is not an error.
+`Closed` round names which. Zero is a configuration a host may hold on purpose.
 
 ## Operational constraints
 

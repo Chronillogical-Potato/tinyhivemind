@@ -68,14 +68,10 @@ transcript-folded affinity share this defect: the estimator's input is the
 output of the policy it feeds. Left alone it is an information cascade with a
 routing table attached.
 
-Three things bound it here, and none of them removes it:
-
-1. **Speech is not the estimator.** Only grounds and stated facts deposit, and
-   credibility accrues only from *other* members' citations.
-2. **The bonus stops.** `BidReason::Knows` pays only until the holder takes a
-   position on the topic, so it cannot compound within an episode.
-3. **Nothing persists.** The fold dies with the episode, so a wrong estimate
-   cannot follow a member into the next one.
+The directory remains available to callers, including task division. Only
+grounded deposits and citations from other members earn weight. Hosts decide
+when and whether to use the estimate; the episode no longer routes bids
+through it.
 
 Two things it does not bound: a citation ring between two members raises both
 for free, and a member who wins more turns has more chances to deposit.

@@ -3075,15 +3075,10 @@ dependencies = [
 name = "tinyhivemind"
 version = "0.2.1"
 dependencies = [
- "anyhow",
- "async-trait",
- "regex",
  "serde",
  "serde_json",
  "thiserror",
  "tinyhivemind-core",
- "tinyinference-llm",
- "tinytools 0.5.0",
  "tokio",
 ]
 
@@ -3091,7 +3086,6 @@ dependencies = [
 name = "tinyhivemind-core"
 version = "0.2.1"
 dependencies = [
- "regex",
  "serde",
  "serde_json",
  "thiserror",
@@ -3136,17 +3130,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyhivemind-mcp"
-version = "0.2.1"
-dependencies = [
- "serde_json",
- "thiserror",
- "tinyhivemind",
- "tinyhivemind-tools",
- "tokio",
-]
-
-[[package]]
 name = "tinyhivemind-openhuman"
 version = "0.2.1"
 dependencies = [
@@ -3160,7 +3143,6 @@ dependencies = [
  "tinyhivemind",
  "tinyhivemind-driver",
  "tinyhivemind-embed",
- "tinyhivemind-mcp",
  "tinyhivemind-tools",
  "tinytools 0.5.0",
  "tinytools-agent 0.5.0",

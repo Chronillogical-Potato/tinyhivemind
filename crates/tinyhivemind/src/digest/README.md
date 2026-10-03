@@ -31,8 +31,8 @@ Three rules keep it from becoming a second journal.
    — including one that has never spoken — and no fold can launder a private
    row into a shared summary.
 3. **The rows survive.** Folding changes what a turn is *shown*, never what the
-   log holds. A folded row keeps its sequence and stays reachable through
-   `search_messages`, which is the escape hatch a lossy summary needs.
+   log holds. A folded row keeps its sequence and remains available through
+   the host's log for a reader that needs the original text.
 
 ### Two triggers, and why the second is in characters
 
@@ -94,8 +94,7 @@ even if a host offered it, and the rows themselves have already been filtered to
 - **A missing or failing digester is not an error.** `refold` returns
   `Unavailable`, the held account stands, and the live tail still carries every
   row the fold would have covered. Compaction is an optimization over a
-  projection that is already correct without it, and it is treated like the
-  `Selector` port for the same reason.
+  projection that is already correct without it.
 - **A rejected answer is not an error either.** Empty, over budget, or covering
   no more than what it replaces are `DigestRejection` values, so a host can log
   a bad digester without a failed turn.

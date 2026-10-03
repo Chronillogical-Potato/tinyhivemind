@@ -2,12 +2,8 @@
 //! their belt.
 //!
 //! This is the runner the live episodes in `docs/experiments/` were recorded
-//! with. A seat is an `AgentSpec` on the runtime, and there are two roads to
-//! the same tools: [`EmbedRunner::seat`] hands them to the spec itself
-//! through `AgentSpec::tools`, which is the default, and
-//! [`EmbedRunner::seat_over_mcp`] reaches them through `OpenHuman`'s three
-//! MCP dispatchers against `tinyhivemind-mcp`'s server. The second was the
-//! only road before a spec could carry a belt of its own.
+//! with. A seat is an `AgentSpec` on the runtime. [`EmbedRunner::seat`]
+//! hands the episode tools to the spec through `AgentSpec::tools`.
 //!
 //! A seat keeps one session for the whole episode and **seeds** it every turn
 //! from the host's journal, as [`hosted`](crate::hosted) does: the rows it may
@@ -25,14 +21,8 @@
 //! replaces resume rather than adding to it, so nothing binds and nothing is
 //! compared.
 //!
-//! The runtime is the host's: it chooses the provider, the access tier and
-//! the workspace. One thing it must say is [`EmbedRunner::services`]: without
-//! MCP boot the subsystem never dials the episode's endpoint, and the seats
-//! are never offered a tool at all, which reads exactly like a model
-//! declining to call one.
-
-#[cfg(test)]
-mod test;
+//! The runtime is the host's: it chooses the provider, access tier and
+//! workspace. The native belt needs no MCP service.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -41,14 +31,13 @@ use openhuman_core::agent::registry::types::{
     AgentRegistryEntry, AgentRegistrySource, AgentSubagentPolicy,
 };
 use openhuman_embed::{
-    Agent, AgentDefinitionSpec, AgentSpec, HostTurnTools, McpServer, Runtime, ServiceSet,
-    ToolScopeSpec,
+    Agent, AgentDefinitionSpec, AgentSpec, HostTurnTools, Runtime, ToolScopeSpec,
 };
 use tinyhivemind_driver::{AgentBinding, BoundAgent};
-use tinyhivemind_mcp::{EpisodeTools, Server, serve};
+use tinyhivemind_tools::EpisodeTools;
 
 use crate::episode::Journal;
-use crate::raw::tools::belt_with_prefix;
+use crate::raw::tools::belt;
 use crate::runner::{Lane, SeatRunner, TURN_TIMEOUT, TurnJob, TurnResult, unseated};
 use crate::{Error, Result};
 use tinyhivemind::{Conversation, Sequence};
@@ -81,27 +70,10 @@ pub struct EmbedRunner {
     desk: Conversation,
     window: usize,
     run_id: String,
-    /// Held so the endpoint outlives every turn; dropping it stops the
-    /// server. `None` for a native belt, which opens no socket.
-    _server: Option<Server>,
 }
 
 impl EmbedRunner {
-    /// What an embed seat needs of its runtime's services: MCP boot, and
-    /// nothing else.
-    ///
-    /// Only [`seat_over_mcp`](Self::seat_over_mcp) needs it. A native belt is
-    /// handed to the spec directly and dials nothing, so a runtime built for
-    /// [`seat`](Self::seat) alone may say [`ServiceSet::none`]. A host that
-    /// builds one runtime for both uses this.
-    #[must_use]
-    pub fn services() -> ServiceSet {
-        let mut services = ServiceSet::none();
-        services.mcp_boot = true;
-        services
-    }
-
-    /// Serve the tools and seat every brief as an agent on `runtime`.
+    /// Seat every brief as an agent on `runtime` with native episode tools.
     ///
     /// `journal` is the host's, read as each seat to seed its turn; `desk`
     /// and `desk_name` name the desk those turns run on or in a thread of, as
@@ -125,78 +97,11 @@ impl EmbedRunner {
         window: usize,
         run_id: &str,
     ) -> Result<Self> {
-        Self::build(
-            journal, runtime, tools, briefs, contract, desk, desk_name, window, run_id, None,
-        )
-    }
-
-    /// The same seats, reaching the same tools over MCP instead.
-    ///
-    /// One endpoint per seat on `tinyhivemind-mcp`'s server, dialled through
-    /// `OpenHuman`'s three MCP dispatchers. This was the only road before
-    /// `AgentSpec` could carry a belt of its own, and it stays because it is
-    /// the one thing in this repository that exercises the socket ADR 0022
-    /// opens, and because what a tool call costs over a wire is worth being
-    /// able to measure against what it costs in-process.
-    ///
-    /// The runtime must be built with [`services`](Self::services); without
-    /// MCP boot the subsystem never dials the endpoint and the seats are
-    /// never offered a tool at all, which reads exactly like a model
-    /// declining to call one.
-    ///
-    /// # Errors
-    ///
-    /// The server failing to bind, or an agent failing to instantiate.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn seat_over_mcp(
-        journal: Arc<dyn Journal>,
-        runtime: &Runtime,
-        tools: Arc<EpisodeTools>,
-        briefs: &BTreeMap<String, String>,
-        contract: &str,
-        desk: &str,
-        desk_name: &str,
-        window: usize,
-        run_id: &str,
-    ) -> Result<Self> {
-        // One endpoint per seat: identity is the URL dialled, never a field
-        // filled in.
-        let server = serve(Arc::clone(&tools)).await?;
-        Self::build(
-            journal,
-            runtime,
-            tools,
-            briefs,
-            contract,
-            desk,
-            desk_name,
-            window,
-            run_id,
-            Some(server),
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn build(
-        journal: Arc<dyn Journal>,
-        runtime: &Runtime,
-        tools: Arc<EpisodeTools>,
-        briefs: &BTreeMap<String, String>,
-        contract: &str,
-        desk: &str,
-        desk_name: &str,
-        window: usize,
-        run_id: &str,
-        server: Option<Server>,
-    ) -> Result<Self> {
         let mut agents = BTreeMap::new();
         let mut personas = BTreeMap::new();
         for (id, brief) in briefs {
             let prompt = persona(brief, contract);
-            let agent = match &server {
-                Some(server) => over_mcp(runtime, id, &prompt, run_id, &server.endpoint(id))?,
-                None => natively(runtime, id, &prompt, run_id, &tools)?,
-            };
+            let agent = natively(runtime, id, &prompt, run_id, &tools)?;
             agents.insert(id.clone(), agent);
             personas.insert(id.clone(), prompt);
         }
@@ -212,7 +117,6 @@ impl EmbedRunner {
             },
             window,
             run_id: run_id.to_owned(),
-            _server: server,
         })
     }
 }
@@ -320,40 +224,10 @@ fn natively(
         AgentSpec::new(agent_id)
             .config(move |config| config.agent_registry.entries.push(registry_entry))
             .system_prompt(prompt)
-            .tools(move |_turn| HostTurnTools::advertised(belt_with_prefix(&seat, &belt_tools, "")))
+            .tools(move |_turn| HostTurnTools::advertised(belt(&seat, &belt_tools)))
             .definition(
                 AgentDefinitionSpec::new()
                     .tools(ToolScopeSpec::Named(names))
-                    .max_iterations(16)
-                    .temperature(0.0),
-            ),
-    )?)
-}
-
-/// One seat that reaches the same tools over MCP: three dispatchers and an
-/// endpoint of its own.
-fn over_mcp(
-    runtime: &Runtime,
-    id: &str,
-    prompt: &str,
-    run_id: &str,
-    endpoint: &str,
-) -> Result<Agent> {
-    let agent_id = format!("{id}-{run_id}");
-    let prompt = prompt.to_owned();
-    let registry_entry = registry_entry(&agent_id, id, &prompt, dispatchers());
-    Ok(runtime.agent(
-        AgentSpec::new(agent_id)
-            .config(move |config| config.agent_registry.entries.push(registry_entry))
-            .system_prompt(prompt)
-            .mcp(McpServer::http("episode", endpoint))
-            .definition(
-                AgentDefinitionSpec::new()
-                    // `OpenHuman` does not surface a remote MCP tool as a tool of
-                    // its own. It registers three generic dispatchers and the
-                    // agent reaches a server *through* them; these three are
-                    // the road, and every other built-in stays out.
-                    .tools(ToolScopeSpec::Named(dispatchers()))
                     .max_iterations(16)
                     .temperature(0.0),
             ),
@@ -381,11 +255,4 @@ fn registry_entry(
         tags: Vec::new(),
         metadata: serde_json::Value::Null,
     }
-}
-
-fn dispatchers() -> Vec<String> {
-    ["mcp_list_servers", "mcp_list_tools", "mcp_call_tool"]
-        .into_iter()
-        .map(str::to_owned)
-        .collect()
 }

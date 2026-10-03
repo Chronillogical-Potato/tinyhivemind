@@ -92,14 +92,6 @@ pub(crate) struct Aggregate {
     /// episodes counted in `fact_deposited`; the numerator for
     /// [`Aggregate::fact_latency`].
     pub(crate) fact_turns: u64,
-    /// Episodes in which a [`BidReason::Knows`] bid won the floor at least
-    /// once. Only an arm that folds a directory can ever populate this; the
-    /// mechanism is unreachable without one.
-    ///
-    /// [`BidReason::Knows`]: tinyhivemind_hive::BidReason::Knows
-    pub(crate) knows: u32,
-    /// Turns spent on `!defer` across the sample.
-    pub(crate) defers: u64,
     /// Episodes in which the decisive member also authored the first
     /// `!propose` for the topic the room went on to decide.
     pub(crate) expert_proposed: u32,
@@ -168,8 +160,6 @@ impl Aggregate {
         self.fact_deposited = self.fact_deposited.saturating_add(other.fact_deposited);
         self.expert_of = self.expert_of.saturating_add(other.expert_of);
         self.fact_turns = self.fact_turns.saturating_add(other.fact_turns);
-        self.knows = self.knows.saturating_add(other.knows);
-        self.defers = self.defers.saturating_add(other.defers);
         self.expert_proposed = self.expert_proposed.saturating_add(other.expert_proposed);
         self.routed_right = self.routed_right.saturating_add(other.routed_right);
         self.routed_of = self.routed_of.saturating_add(other.routed_of);
@@ -211,10 +201,6 @@ impl Aggregate {
         self.correct_flags.push(report.correct);
         self.cost_units = self.cost_units.saturating_add(report.cost_units);
         self.contacts = self.contacts.saturating_add(u64::from(report.contacts));
-        self.defers = self.defers.saturating_add(u64::from(report.defers));
-        if report.knows_turns > 0 {
-            self.knows = self.knows.saturating_add(1);
-        }
         if report.has_expert {
             self.expert_of = self.expert_of.saturating_add(1);
         }
@@ -351,17 +337,6 @@ impl Aggregate {
     /// which it landed in time at all.
     pub(crate) fn fact_latency(&self) -> f64 {
         ratio(self.fact_turns, self.fact_deposited.into())
-    }
-
-    /// Share of episodes in which a `BidReason::Knows` bid won the floor at
-    /// least once.
-    pub(crate) fn knows_rate(&self) -> f64 {
-        ratio(self.knows.into(), self.episodes.into()) * 100.0
-    }
-
-    /// Mean turns spent on `!defer` per episode.
-    pub(crate) fn defers_per_episode(&self) -> f64 {
-        ratio(self.defers, self.episodes.into())
     }
 
     /// Share of the episodes it *could* be scored over in which the

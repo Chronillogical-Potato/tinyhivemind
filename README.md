@@ -7,7 +7,7 @@
 <p align="center">
 Quorum sensing, cross-inhibition, stigmergy, salience decay and response
 thresholds, implemented as integer folds over a transcript your application
-already owns. The optional MCP crate serves episode tools on a loopback socket.
+already owns. Hosts expose episode tools through their own tool interface.
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ The shape of it is a loop, and your application holds both ends:
 `Speak { turns }` above is shorthand for `Speak { turns, next_state }`, kept
 off the diagram to stay narrow, not because it stopped mattering. The `step`
 fold reads what you hand it and returns what should happen next. The host owns
-the transcript; the optional MCP server is a separate crate.
+the transcript and exposes the tools seats call.
 
 ## The mechanics
 
@@ -238,7 +238,7 @@ worth when handed over for free.
 It is off by default, and at desks with no blind spot of their own it changes
 no answer and costs twice the turns. That is the honest case for leaving it off.
 
-## The window is a budget, so the transcript is queryable
+## Keep a short working view
 
 That projection is bounded — about thirty messages — and the log behind it is
 not. The obvious fix is to show more, and it is the wrong one:
@@ -247,20 +247,8 @@ middle of a long context is used less reliably than the same fact at the edge
 of a short one, so a bigger window mostly relocates the problem into its own
 middle. It also charges every participant on every turn.
 
-So tinyhivemind does what
-[Recursive Language Models](https://arxiv.org/abs/2512.24601) do to a long
-prompt — treat the context as an environment to interrogate rather than a
-prefix to swallow — except the environment is a shared log rather than one
-model's REPL, and the interrogation is a pure fold rather than a recursive
-model call.
-
-**Search it.** One ranking for every picker — agents, people, desks, threads,
-messages — with an optional regular expression, over the same log port
-everything else uses. No index, no embeddings, no background job.
-
 **Pin what must not be lost.** `!pin` folds out of the transcript, not into a
-second store, and the board rides into every turn whether or not anybody
-searched for it.
+second store, and the board rides into every turn.
 
 **State the budget.** The briefing tells an agent what a message costs the room
 it is written into. Reported, never enforced: nothing here rewrites what
@@ -365,8 +353,8 @@ explains the decision protocol.
 
 The host owns the journal, agent sessions, authorization, and scheduling.
 `tinyhivemind-core` and `tinyhivemind-hive` are pure folds over supplied
-data. `tinyhivemind` adds host ports for reading that journal, choosing a
-responder, asking for approval, folding a digest, and queueing a child turn.
+data. `tinyhivemind` adds host ports for reading the journal and folding a
+digest, plus attributed projection and the utterance surface.
 
 A normal message selects one responder. A mention or referral can authorize at
 most one child turn from a committed reply. A hive episode may authorize a
@@ -377,8 +365,7 @@ commits the round's state after all authorized turns are appended.
 The optional `tinyhivemind-embed` and `tinyhivemind-typesafe` crates handle
 semantic routing. `tinyhivemind-driver` conducts completion episodes, and
 `tinyhivemind-openhuman` binds canonical hive identities to existing OpenHuman
-agents. `tinyhivemind-tools` defines episode tool events, and
-`tinyhivemind-mcp` serves those tools over MCP. The
+agents. `tinyhivemind-tools` defines episode tool events for a host to expose. The
 [architecture guide](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture)
 and [crate dependency map](docs/crate-dependencies.md) show their boundaries.
 
@@ -396,7 +383,8 @@ context; the host gives each turn an attributed view of the same message log.
 ### Who decides which agent speaks next?
 
 No manager model does. In a hive episode, every active desk member gets a
-deterministic bid and the highest bid wins; a tie breaks by desk order. A bid
+deterministic bid. The highest bids take up to the policy's round width, with
+ties broken by desk order. A bid
 is the sum of each trace's salience for that member, minus the member's current
 speaking threshold. A trace is more salient when it is recent, important, and
 relevant to that member's configured topic affinity.
@@ -405,7 +393,8 @@ The bid also gives fixed bonuses when an agent was addressed, can break a
 deadlock, or has been least heard, and applies a penalty to a member dominating
 grounded contributions. Speaking raises that agent's threshold; silence lowers
 the others'. That makes a recent speaker less likely to monopolize the floor.
-The episode selects up to the policy width from eligible bids. Blind seats can run concurrently; the default revealed width is one.
+The episode selects up to the policy width from eligible bids. Blind seats can
+run concurrently; the default revealed width is one.
 
 ### Does a newly joined agent receive the entire transcript?
 
@@ -417,10 +406,11 @@ preserves its original author, so a peer's reply is never presented as the
 viewer's own prior response.
 
 The initialization also returns a separate team briefing and can include an
-index of live threads plus host-supplied notes. It does not automatically summarize a long history. The optional digest
-module produces a bounded account of older desk-visible rows through a host
-`Digester` port; the host stores that account. Search and pins can bring older
-source rows back into a turn without rewriting the journal.
+index of live threads plus host-supplied notes. It does not automatically
+summarize a long history. The optional digest module produces a bounded account
+of older desk-visible rows through a host `Digester` port; the host stores that
+account. Pins can bring older source rows back into a turn without rewriting
+the journal. A host can also provide its own search.
 
 ### How does an agent see messages added after it starts?
 
@@ -433,9 +423,10 @@ the library asks the host to reinitialize instead of silently skipping history.
 ### Does tinyhivemind assign work or run agents?
 
 No. The host owns the agent lifecycle, model calls, queueing, storage, and
-authorization. The normal runtime can resolve a direct mention and produce at
-most one turn request; the optional embedding layer can recommend a primary and
-bounded specialist set; the optional hive crate can select a round inside a
+authorization. The core mention fold resolves a direct addressee; the host can
+use that decision to schedule one turn. The optional embedding layer can
+recommend a primary and bounded specialist set; the optional hive crate can
+select a round inside a
 bounded deliberation. The host decides whether to run those turns, what models
 to use, what long-term memory or search to provide, and how to persist the
 result. A workspace such as Buzz could host these mechanics, but it is a
@@ -465,7 +456,6 @@ That prints one deliberation episode turn by turn—the fastest way to see the m
 | [Quick start](https://github.com/tinyhumansai/tinyhivemind/wiki/Quick-start) | pin it, resolve a mention, read a deliberation |
 | [Architecture](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture) | the crate boundaries and why they are split that way |
 | [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection, and finding your way back into a busy desk |
-| [Recall](https://github.com/tinyhumansai/tinyhivemind/wiki/Recall) | searching the transcript, pinning what must not be lost, and the message budget |
 | [Cross-desk referral](https://github.com/tinyhumansai/tinyhivemind/wiki/Cross-desk-referral) | asking another channel a question, and getting the answer back |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | salience, quorum, cross-inhibition, and the attention market |
 | [Trace grammar](https://github.com/tinyhumansai/tinyhivemind/wiki/Trace-grammar) | what a marker deposits, and what real models get wrong |

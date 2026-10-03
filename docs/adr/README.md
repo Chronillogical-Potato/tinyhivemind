@@ -27,11 +27,11 @@ link any earlier ADR it amends.
 | --- | --- | --- |
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-hive-episodes-are-sequential.md) | Hive episodes are sequential, and visibility is the fan-out knob | Accepted |
-| [0003](0003-refutation-links-evidence-to-a-topic.md) | Refutation links evidence to a topic, and caps rather than debits | Accepted, ships off by default |
-| [0004](0004-grounds-are-weighed-by-evidential-depth.md) | Grounds are weighed by evidential depth, not counted | Accepted, ships off by default |
+| [0003](0003-refutation-links-evidence-to-a-topic.md) | Refutation links evidence to a topic, and caps rather than debits | Accepted, superseded by 0027 |
+| [0004](0004-grounds-are-weighed-by-evidential-depth.md) | Grounds are weighed by evidential depth, not counted | Accepted, superseded by 0027 |
 | [0005](0005-a-blind-round-may-be-concurrent.md) | A blind round may be concurrent | Proposed — amends 0002 |
 | [0006](0006-a-referral-crosses-one-channel-at-a-time.md) | A referral crosses one channel at a time, and carries information rather than a vote | Accepted |
-| [0007](0007-the-directory-is-folded-from-citations.md) | The directory is folded from citations, and the host's affinity is a prior rather than an authority | Accepted |
+| [0007](0007-the-directory-is-folded-from-citations.md) | The directory is folded from citations, and the host's affinity is a prior rather than an authority | Accepted, episode use superseded by 0027 |
 | [0008](0008-an-approval-decision-is-total.md) | An approval decision is total: it denies rather than fails | Accepted |
 | [0009](0009-a-refusal-renders-what-the-caller-already-holds.md) | A refusal renders only what the caller already holds | Accepted |
 | [0010](0010-an-aside-carries-information-never-support.md) | An aside carries information rather than support, and a redaction is a row rather than an absence | Proposed |
@@ -46,17 +46,19 @@ link any earlier ADR it amends.
 | [0019](0019-complete-episodes-with-explicit-agent-events.md) | Complete episodes with explicit agent events | Accepted |
 | [0020](0020-openhuman-embed-is-a-git-dependency-patched-locally.md) | `openhuman-embed` is a git dependency, patched locally | Accepted — amends 0013 |
 | [0021](0021-an-assignment-is-appended-rather-than-overwritten.md) | An assignment is appended rather than overwritten, and a participant holds at most one open | Proposed — amends 0019 |
-| [0022](0022-the-episode-mcp-server-is-the-one-socket.md) | The episode MCP server is the one socket this repository opens | Proposed |
+| [0022](0022-the-episode-mcp-server-is-the-one-socket.md) | The episode MCP server is the one socket this repository opens | Proposed, superseded by 0027 |
 | [0023](0023-an-ask-opens-a-child-conversation.md) | An ask opens a child conversation, a thread of the desk | Proposed — amends review decision D22 |
 | [0024](0024-a-broadcast-completes-its-author.md) | A broadcast completes its author unless it is waiting | Proposed — amends review decision D13 |
 | [0025](0025-the-driver-names-no-harness.md) | The driver names no harness; one crate links it | Proposed |
 | [0026](0026-a-question-to-a-group-is-its-own-tool.md) | A question to a group is its own tool, and the group is one conversation | Proposed — amends 0023 |
+| [0027](0027-retire-unused-adapters-and-optional-mechanisms.md) | Retire unused adapters and optional mechanisms | Accepted — supersedes the MCP adapter and optional hive mechanisms |
 
 ## Reading order
 
-[0002](0002-hive-episodes-are-sequential.md) is the one to read first: it fixes
-*one message, one turn* as a type invariant, and every later record about the
-hive either lives inside that constraint or says explicitly how it amends it.
+[0014](0014-a-round-authorizes-concurrent-turns.md) is the current round rule.
+It supersedes the sequential constraint in [0002](0002-hive-episodes-are-sequential.md).
+[0027](0027-retire-unused-adapters-and-optional-mechanisms.md) identifies retired
+adapters and optional hive mechanisms; read it before applying older records.
 [0010](0010-an-aside-carries-information-never-support.md) →
 [0011](0011-an-aside-rides-alongside-a-turn.md) →
 [0012](0012-an-exchange-round-spends-model-calls-not-turns.md) form one

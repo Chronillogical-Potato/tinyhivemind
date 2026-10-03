@@ -23,12 +23,12 @@
 //!    the channel — including one that has never spoken — and no fold can
 //!    launder a private row into a shared summary.
 //! 3. **The rows survive.** Folding changes what a turn is *shown*, never what
-//!    the log holds. Every folded row keeps its sequence and stays reachable
-//!    through [`search_messages`](crate::search_messages).
+//!    the log holds. Every folded row keeps its sequence and can still be read
+//!    through the host's log.
 //!
-//! The fold itself needs a model, so it is a port — [`Digester`] — in the same
-//! shape as [`Selector`](crate::Selector): a request in, text out, no host
-//! handle and no callback. Everything around it is a pure fold, and a digester
+//! The fold itself needs a model, so it is a port: [`Digester`] takes a
+//! request and returns text without a host handle or callback. Everything
+//! around it is a pure fold, and a digester
 //! that is missing, slow, or wrong costs the room its compaction and nothing
 //! else.
 //!
@@ -92,10 +92,12 @@ pub use types::{
 use crate::{
     Conversation, Error, PAGE_SIZE, Result, SCAN_LIMIT, Sequence, SessionLog, SessionMessage,
     pins::Pin,
-    responder::BoxError,
     session::{matches_conversation, validate_page},
 };
 use std::future::Future;
+
+/// A boxed failure returned by a host digester implementation.
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// The boxed, executor-neutral future returned by [`Digester`].
 pub type DigestFuture<'a> =
@@ -259,9 +261,8 @@ pub fn accept_digest(
 /// Fold one step of a channel, invoking the digester at most once.
 ///
 /// A missing or failing digester yields [`DigestOutcome::Unavailable`] rather
-/// than an error, exactly as an unavailable
-/// [`Selector`](crate::Selector) yields a fallback: compaction is an
-/// optimization over a projection that is already correct without it.
+/// than an error. Compaction is an optimization over a projection that is
+/// already correct without it.
 ///
 /// # Errors
 ///

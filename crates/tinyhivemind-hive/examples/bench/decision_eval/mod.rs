@@ -21,10 +21,10 @@ use serde_json::{Value, json};
 use tinyjevclient::{Answer, Client, EvaluationRequest, EvaluationResponse, Usage};
 
 use crate::cli::Options;
-use crate::jev::{ActionAssessment, JevSelector, decision_from_response, narrow_effect};
+use crate::jev::decision_from_response;
 use case::Case;
 use schema::response_schema;
-use tinyhivemind_hive::{Sequence, approval::Effect, responder::Probability};
+use tinyhivemind_hive::Sequence;
 
 const BASELINE_MODEL: &str = "openai/gpt-5-mini";
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
@@ -47,19 +47,6 @@ async fn run_async(options: &Options) -> Result<(), String> {
     let openrouter_key = std::env::var("OPENROUTER_API_KEY")
         .map_err(|_| "OPENROUTER_API_KEY must be set for --decision-eval".to_owned())?;
     let jev = Client::from_env().map_err(|error| error.to_string())?;
-    let _selector = JevSelector::new(jev.clone());
-    let _narrowed = narrow_effect(
-        Effect::ReadOnly,
-        ActionAssessment {
-            effect: Effect::ReadOnly,
-            confidence: Probability::ONE,
-            severity: Probability::ZERO,
-            violation: Probability::ZERO,
-        },
-        Probability::ONE,
-        Probability::ZERO,
-        Probability::ZERO,
-    );
     let count = options.episodes.max(1);
     let mut baseline = Aggregate::default();
     let mut hybrid = Aggregate::default();

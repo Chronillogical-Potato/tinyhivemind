@@ -1,5 +1,8 @@
 # Hive mind
 
+> **Current API note.** The optional character budget allocator and refutation, evidential, and delegation episode paths described below were retired by [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md). The pure directory fold remains available outside episode attention.
+
+
 **Status:** Implemented; episode scheduling superseded by
 [`concurrent-rounds.md`](concurrent-rounds.md) and
 [ADR 0014](../adr/0014-a-round-authorizes-concurrent-turns.md).

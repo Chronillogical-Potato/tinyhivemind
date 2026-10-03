@@ -23,6 +23,8 @@ docs/
 
 - [`crate-dependencies.md`](crate-dependencies.md) maps direct dependencies,
   public re-exports, and the completion path across all workspace crates.
+  [ADR 0027](adr/0027-retire-unused-adapters-and-optional-mechanisms.md) records
+  the retirement of unused adapters and optional hive mechanisms.
 - [`testing.md`](testing.md) covers the deterministic coordination harness, the
 opt-in OpenRouter tests, and the coverage commands.
 - [`specs/`](specs/README.md) holds one file per feature, module, or subsystem,
@@ -57,7 +59,7 @@ Anything a reader wants before they touch the code:
 | [Cross-desk referral](https://github.com/tinyhumansai/tinyhivemind/wiki/Cross-desk-referral) | asking another channel a question, and the answer coming back |
 | [Transcript projection](https://github.com/tinyhumansai/tinyhivemind/wiki/Transcript-projection) | attribution, the paging walk, continuous sharing |
 | [Threads](https://github.com/tinyhumansai/tinyhivemind/wiki/Threads) | thread-scoped projection and the desk's thread index |
-| [Responder ladder](https://github.com/tinyhumansai/tinyhivemind/wiki/Responder-ladder) | the rungs, the selector, and mention dispatch |
+| [Responder ladder](https://github.com/tinyhumansai/tinyhivemind/wiki/Responder-ladder) | the pure responder rungs and host selector boundary |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | stigmergy, salience decay, quorum, cross-inhibition, the attention market |
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |

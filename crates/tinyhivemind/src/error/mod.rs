@@ -1,6 +1,6 @@
 //! Typed runtime failures.
 
-use crate::{Sequence, SourceError, responder::BoxError};
+use crate::{Sequence, SourceError};
 
 /// A runtime coordination failure.
 #[derive(Debug, thiserror::Error)]
@@ -88,20 +88,6 @@ pub enum Error {
         /// The number of entries supplied by the caller.
         actual: usize,
     },
-    /// A search carried a regular expression that did not compile.
-    #[error("invalid regular expression `{pattern}`: {message}")]
-    InvalidPattern {
-        /// The expression source the caller supplied.
-        pattern: String,
-        /// The engine's own explanation.
-        message: String,
-    },
-    /// A search carried a regular expression and the `regex` feature is off.
-    #[error("regular-expression search requires the `regex` feature (`{pattern}`)")]
-    RegexUnsupported {
-        /// The expression source the caller supplied.
-        pattern: String,
-    },
     /// Host-supplied pure snapshots were invalid.
     #[error("invalid team snapshot")]
     Core {
@@ -125,23 +111,6 @@ pub enum Error {
         /// The channel the caller asked to fold.
         requested: String,
     },
-    /// The host-owned mention turn queue failed unexpectedly.
-    #[error("mention turn enqueue failed")]
-    Enqueue {
-        /// The host's original error.
-        #[source]
-        source: BoxError,
-    },
-    /// The host-owned approval gate failed unexpectedly.
-    #[error("approval gate failed")]
-    ApprovalGate {
-        /// The host's original error.
-        #[source]
-        source: BoxError,
-    },
-    /// A host answer widened or changed the offered approval scope.
-    #[error("approval answer does not match the offered scope")]
-    InvalidApprovalAnswer,
 }
 
 /// A runtime result.

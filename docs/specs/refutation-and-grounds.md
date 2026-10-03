@@ -1,5 +1,8 @@
 # Refutation and grounds
 
+> **Historical specification.** This optional mechanism was retired by [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md). Its API sketches describe the experiment, not the current crate.
+
+
 **Status:** Implemented, and **off by default**
 **Owner:** tinyhivemind maintainers
 

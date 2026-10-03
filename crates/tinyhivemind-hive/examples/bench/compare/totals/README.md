@@ -5,4 +5,4 @@ folds into.
 
 | file | what it holds |
 | --- | --- |
-| `test.rs` | that every arm in a run — `ladder_directed` included, which sits outside `arms_mut`'s array — is priced at the cost model the run selected, so no row can report against different constants from the header printed above it |
+| `test.rs` | that every arm in a run — is priced at the cost model the run selected, so no row can report against different constants from the header printed above it |

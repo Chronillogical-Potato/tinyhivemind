@@ -8,7 +8,7 @@
 /// Width of the arm-name column in every table.
 ///
 /// Wide enough for the longest arm name the comparison prints
-/// (`hive+dir+defer`), so no row has to fall back on [`row`]'s
+/// (`hive+rounds`), so no row has to fall back on [`row`]'s
 /// whitespace-eating. That fallback is still there, and still guards the next
 /// name somebody adds.
 const NAME_WIDTH: usize = 16;
@@ -17,7 +17,7 @@ const NAME_WIDTH: usize = 16;
 ///
 /// A name longer than [`NAME_WIDTH`] eats into the leading whitespace of the
 /// column beside it rather than shoving every column right, so a row for
-/// `hive+defer` still lines up with a row for `hive`. A name that fits
+/// `hive+rounds` still lines up with a row for `hive`. A name that fits
 /// produces exactly what a plain `{:<8}` would, which is what keeps the
 /// published six-row table byte-identical.
 pub(super) fn row(name: &str, rest: &str) -> String {

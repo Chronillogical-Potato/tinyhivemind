@@ -10,7 +10,7 @@
 use std::time::Duration;
 
 use tinyhivemind_hive::{
-    BidReason, Directory, DirectoryPolicy, EpisodeState, HiveTurn, Phase, Sequence, SessionAuthor,
+    Directory, DirectoryPolicy, EpisodeState, HiveTurn, Phase, Sequence, SessionAuthor,
     SessionMessage,
     aside::AsidePolicy,
     directory,
@@ -98,12 +98,8 @@ pub(crate) struct EpisodeReport {
     pub(crate) fact_deposited: bool,
     /// The turn index of that deposit, when it landed in time.
     pub(crate) fact_at: Option<u32>,
-    /// Turns whose content is a `!defer` line.
+    /// Turns containing a `!defer` marker, retained for live trace reporting.
     pub(crate) defers: u32,
-    /// Turns the attention market handed out for [`BidReason::Knows`] -- the
-    /// directory's holder of the contested topic, brought out because the
-    /// transcript says it knows something it has not said.
-    pub(crate) knows_turns: u32,
     /// Turns taken, by speaker, in desk order.
     pub(crate) speech: Vec<(String, u32)>,
     /// The sum of every speaker's own `Participant::cost_unit` across every
@@ -144,9 +140,7 @@ pub(crate) struct EpisodeReport {
     /// Every trace the episode's journal carried, read back through the
     /// library's own [`resolve`] once the episode had ended.
     ///
-    /// Two callers need them: the directory folded below, and `--history`,
-    /// which concatenates several episodes' traces to earn a directory the
-    /// `ladder+dir` arm routes on.
+    /// The directory correlation diagnostic below folds these traces.
     pub(crate) traces: Vec<Trace>,
     /// The episode's directory-circularity number, in thousandths: the
     /// Spearman rank correlation between each member's total weight in the
@@ -193,10 +187,8 @@ pub(super) struct Tally {
     pub(super) first_deposit: Vec<(String, u32)>,
     /// The turn index of the first turn run in [`Phase::Commit`].
     pub(super) commit_at: Option<u32>,
-    /// Turns whose content is a `!defer` line.
+    /// Turns containing a `!defer` marker.
     pub(super) defers: u32,
-    /// Turns handed out for [`BidReason::Knows`].
-    pub(super) knows_turns: u32,
     /// What every turn taken cost, summed.
     pub(super) cost_units: u64,
 }
@@ -210,13 +202,15 @@ impl Tally {
             first_deposit: Vec::new(),
             commit_at: None,
             defers: 0,
-            knows_turns: 0,
             cost_units: 0,
         }
     }
 
     /// Fold one taken turn in, `at` being the index it was taken at.
     pub(super) fn record(&mut self, turn: &HiveTurn, content: &str, cost: u32, at: u32) {
+        if content.trim_start().starts_with("!defer") {
+            self.defers = self.defers.saturating_add(1);
+        }
         if let Some(entry) = self.speech.iter_mut().find(|(id, _)| *id == turn.agent_id) {
             if entry.1 == 0 {
                 self.first_spoke.push((turn.agent_id.clone(), at));
@@ -225,12 +219,6 @@ impl Tally {
         } else {
             self.first_spoke.push((turn.agent_id.clone(), at));
             self.speech.push((turn.agent_id.clone(), 1));
-        }
-        if content.trim_start().starts_with("!defer") {
-            self.defers = self.defers.saturating_add(1);
-        }
-        if turn.reason == BidReason::Knows {
-            self.knows_turns = self.knows_turns.saturating_add(1);
         }
         if turn.phase == Phase::Commit && self.commit_at.is_none() {
             self.commit_at = Some(at);
@@ -397,14 +385,13 @@ pub(super) fn finished(
         decisive: None,
         fact_deposited: false,
         fact_at: None,
-        defers: tally.defers,
-        knows_turns: tally.knows_turns,
         speech: tally.speech,
         cost_units: tally.cost_units,
         contacts: recorded.contacts,
         first_deposit: tally.first_deposit,
         commit_at: tally.commit_at,
         first_spoke: tally.first_spoke,
+        defers: tally.defers,
         traces,
         rho_milli,
     })

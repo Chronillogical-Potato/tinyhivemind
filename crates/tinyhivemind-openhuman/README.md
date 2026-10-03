@@ -2,18 +2,17 @@
 
 The OpenHuman adapter. `tinyhivemind-driver` says who runs next and what a
 committed row means, over a handle the host binds, and never runs a turn.
-This crate is the host's side of that seam for OpenHuman, three ways:
+This crate is the host's side of that seam for OpenHuman, with two runners:
 
 | Runner | Seat | Tools | Context between turns |
 | --- | --- | --- | --- |
 | `HostedRunner` | the host's own agent, built by the host through `EpisodeHost` with the episode's tools added | the served tools in process, admitted over the host's own gate | seeded every turn from the host's log, as the seat, up to its watermark |
-| `EmbedRunner` | an `openhuman-embed` `AgentSpec` agent on a runtime the host booted | native tools through `AgentSpec::tools` by default, with MCP available through `seat_over_mcp` | one session per seat, seeded from the host's journal each turn |
-| `RawRunner` | an `OpenHumanSessionHost` built one level down, per turn | the same tools in-process, each calling `EpisodeTools::call` | a per-seat log this crate seeds the next session with |
+| `EmbedRunner` | an `openhuman-embed` `AgentSpec` agent on a runtime the host booted | native tools through `AgentSpec::tools` | one session per seat, seeded from the host's journal each turn |
 
-`run_episode` runs one episode from its door to quiescence over any of them
+`run_episode` runs one episode from its door to quiescence over either runner
 and a `Journal` the host implements -- its log, and how it appends the
 conductor's rows -- so a host builds a driver, a door and a runner and calls
-one function. All three implement `SeatRunner`, the seam: open a turn, run it, close it and
+one function. Both implement `SeatRunner`, the seam: open a turn, run it, close it and
 take what was called. Open and close are the same for every runner, because
 every call lands in the same `EpisodeTools`, so the driver drains identical
 events and a seat is refused and acknowledged in the same words whichever
@@ -31,34 +30,30 @@ shares a name with its own and is admitted past its gate. Nothing about the
 host's agent -- model, tools, gate, memory, prompt -- is re-expressed here. `RunnerKind`
 names one, from `TINYHIVEMIND_RUNNER` or directly.
 
-The raw runner also carries the two things the current OpenHuman asks of a
-session built outside its product: every seat is registered as a workspace
-definition with its belt named (`RawRunner::prepare`), because the hosted
-turn takes the allowlist from the definition and fails closed on a wildcard;
-and the seats run under a library-host core context (`RawRunner::seat`),
-because with none the core waits on the operator signing in.
+For a host that builds core sessions, `LibraryHost` supplies the library
+context and `register_seats` writes each seat's tool allowlist before the
+process registry is read. The hosted runner uses these helpers in the
+standalone example.
 
 This is the one crate in the workspace that links a harness. It takes
 `openhuman-embed`, `openhuman`, `tinytools` and `tinytools-agent` as git
 dependencies pinned by rev and patched onto `vendor/openhuman` (ADR 0020), so
 a host that vendors this repository writes the same patches against its own
 tree and links one OpenHuman. The `offline` feature ships the scripted model
-and backend stub both runners are proven against, and the metrics the
+and backend stub the runners are proven against, and the metrics the
 example's bench reads.
 
 See [`src/README.md`](src/README.md) for the source layout, and
 [`examples/openhuman/src/bin/conducted.rs`](../../examples/openhuman/src/bin/conducted.rs) for a host stepping an episode
-through either runner.
+through a native runner.
 
 ## How it relates to the other crates
 
-This adapter depends directly on four TinyHiveMind crates.
+This adapter depends directly on three TinyHiveMind crates.
 [`tinyhivemind-driver`](../tinyhivemind-driver/README.md) supplies the
 pending rounds, bound-agent seam, conductor, and committed-event transitions.
 [`tinyhivemind-tools`](../tinyhivemind-tools/README.md) supplies the common
 call record used by every runner.
-[`tinyhivemind-mcp`](../tinyhivemind-mcp/README.md) serves that record to
-an embedded seat when the host chooses MCP.
 [`tinyhivemind`](../tinyhivemind/README.md) supplies session log and
 projection types for turns.
 

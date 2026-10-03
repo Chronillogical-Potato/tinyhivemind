@@ -80,10 +80,7 @@ impl SimAgent {
             quorum: QuorumPolicy::DEFAULT,
             specialty: None,
             refutes: None,
-            expert_elsewhere: Vec::new(),
             cost_unit: 1,
-            defer_cap: 0,
-            deferred: 0,
             blind_evidence: false,
         }
     }
@@ -223,9 +220,6 @@ impl SimAgent {
         }
         self.specialty = self.specialty.as_ref().map(rename);
         self.refutes = self.refutes.as_ref().map(rename);
-        for topic in &mut self.expert_elsewhere {
-            *topic = rename(topic);
-        }
         self.favourite = rename(&self.favourite);
         self.recompute_favourite();
     }
@@ -329,8 +323,7 @@ impl SimAgent {
     /// second reading before committing to a position. `0` turns the move off.
     ///
     /// `Room::generate_with` leaves every member at `0`, so an arm that opens
-    /// no check is bit-identical to one built before the move existed — the
-    /// same discipline `set_defer_cap` follows.
+    /// no check is bit-identical to one built before the move existed.
     ///
     /// Resets only the exchange state a *floor* check creates — it must not
     /// clear `ruled_out`, because `Room::pre_checked` and `Room::pooled`
@@ -368,15 +361,6 @@ impl SimAgent {
     /// topic's expert instead of arguing outside its own specialty. `0`
     /// turns the move off.
     ///
-    /// `Room::generate_with` leaves every member at `0`; the deferring arms
-    /// set a real cap on their own copy of the room through
-    /// [`run_episode_with`](crate::run::run_episode_with), so an arm that
-    /// does not defer is bit-identical to one built before the move existed.
-    pub(crate) fn set_defer_cap(&mut self, cap: u32) {
-        self.defer_cap = cap;
-        self.deferred = 0;
-    }
-
     /// The option this participant would pick with no deliberation at all.
     ///
     /// This is what the single-responder arms of the benchmark get: one

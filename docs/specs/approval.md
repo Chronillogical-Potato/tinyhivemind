@@ -1,5 +1,8 @@
 # Approval: a pure gate for a side-effecting action
 
+> **Current API note.** [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md) retired the runtime waiting wrapper and some standalone query entry points described below. The retained pure folds and transcript views are documented in the current crate READMEs.
+
+
 - **Status:** Implemented
 - **Owner:** `crates/tinyhivemind-core`, with one port in `crates/tinyhivemind`
 - **Reading:** [`../research/grok-bots/README.md`](../research/grok-bots/README.md)

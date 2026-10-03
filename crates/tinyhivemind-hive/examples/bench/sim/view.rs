@@ -205,25 +205,6 @@ impl View {
         i32::try_from(seen.len()).unwrap_or(0)
     }
 
-    /// The topic on the floor this member would rather somebody else spoke
-    /// to: one it knows another member owns, and the one the room is leaning
-    /// hardest on.
-    ///
-    /// Deliberately *not* restricted to a topic that has yet to carry. A
-    /// hidden profile's whole shape is that the option the room has already
-    /// backed is the one nobody has the deciding reading of, so a member that
-    /// may only stand aside on options nobody is winning with can never stand
-    /// aside on the one that matters. Ties break by the order `standings`
-    /// returns, which is stable.
-    pub(crate) fn deferrable(&self, agent: &SimAgent) -> Option<&TopicId> {
-        self.standings
-            .iter()
-            .map(|standing| &standing.topic)
-            .filter(|topic| agent.specialty.as_ref() != Some(*topic))
-            .filter(|topic| agent.expert_elsewhere.contains(topic))
-            .max_by_key(|topic| self.backers(topic))
-    }
-
     /// The grounds this member would cite for a position on `topic`: its own
     /// deposit about it where it has one, and otherwise the first deposit
     /// anybody made about it.
@@ -350,34 +331,6 @@ impl View {
                     .is_some_and(|id| id != agent.id && self.has_backed(id, worst))
         })?;
         Some((worst, target.sequence, self.proposal(best)?))
-    }
-
-    /// A topic on the floor this participant rates clearly below its own best,
-    /// and has not already refuted: the topic, and the grounds to cite.
-    ///
-    /// The threshold is [`CONCESSION`], the same gap that separates the true
-    /// option from a decoy, so a refutation is spent on a hypothesis this
-    /// member believes is wrong rather than on one it merely likes less. Ties
-    /// between two plausible options stay the objection's business.
-    ///
-    /// Grounds are this member's own evidence where it has deposited any, and
-    /// otherwise the proposal being argued against.
-    pub(crate) fn refutable(&self, agent: &SimAgent) -> Option<(&TopicId, Sequence)> {
-        let mine = agent.score(&agent.favourite);
-        let topic = self
-            .standings
-            .iter()
-            .filter(|standing| standing.topic != agent.favourite)
-            .filter(|standing| !standing.refuted_by.contains(&agent.id))
-            .filter(|standing| mine.saturating_sub(agent.score(&standing.topic)) > CONCESSION)
-            .max_by_key(|standing| standing.supporters.len())
-            .map(|standing| &standing.topic)?;
-        let own_evidence = self.traces.iter().find(|trace| {
-            trace.kind == TraceKind::Evidence && trace.agent_id() == Some(agent.id.as_str())
-        });
-        let grounds =
-            own_evidence.map_or_else(|| self.proposal(topic), |trace| Some(trace.sequence))?;
-        Some((topic, grounds))
     }
 
     /// A message advocating a topic this participant rates below its own

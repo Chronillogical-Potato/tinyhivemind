@@ -4,17 +4,16 @@
 //! [`support`] holds the fixtures every other submodule shares — a
 //! three-member `Room`, transcript builders, and the `run`/`speaking` helpers
 //! most tests drive `step` through. The rest follow the seams `step`'s own
-//! doc comment draws: wire-form pins, the single-turn invariant and
+//! doc comment draws: wire-form pins, sequential-round fixtures and
 //! termination, quorum and convergence, deadlock and cross-inhibition,
 //! per-turn attention dynamics (blind visibility and threshold charging),
-//! validation failure paths, expert delegation, and the two aside modules —
+//! validation failure paths and the two aside modules —
 //! off-floor privacy and the concurrent-aside cost guarantee.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod concurrent_asides;
 mod deadlock;
-mod expert_delegation;
 mod failure_paths;
 mod off_floor_asides;
 mod quorum_and_convergence;

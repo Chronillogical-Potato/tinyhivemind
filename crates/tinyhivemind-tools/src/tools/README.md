@@ -6,9 +6,8 @@ during it, and the read window the host last refreshed.
 | file | holds |
 | --- | --- |
 | `mod.rs` | `EpisodeTools`, `Dispatch`, `SeatEvent`; `register`/`clear`, `window`, `drain`, and `call` -- caller, turn, thread, then `interpret`, then the record |
-| `test.rs` | turns are visible until cleared, draining empties, the window is a snapshot, and the in-process call refuses where the wire refuses |
+| `test.rs` | turns are visible until cleared, draining empties, the window is a snapshot, and invalid calls are refused |
 
-The host writes the turn and the window and drains the calls; a call writes
-the record, whether it came over the wire or was made in-process by a host
-whose harness takes native tools. `call` is the one place that decides, so the
-server is framing around it and nothing here reaches into the host.
+The host writes the turn and the window and drains the calls. A native tool
+calls `EpisodeTools::call`, which validates the call and writes the record.
+Nothing here reaches into the host.

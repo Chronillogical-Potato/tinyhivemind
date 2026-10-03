@@ -1,5 +1,11 @@
 # Grammar reference: traces
 
+> **Current behavior note.** The parser still recognizes `refute` and `defer`
+> for wire compatibility. `refute` is recorded in `TopicStanding::refuted_by`
+> for audit but no longer caps a topic. `defer` is parsed but no longer promotes
+> a contested topic or routes a bid. [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md)
+> retired those policy effects.
+
 **Status:** Implemented
 **Owner:** tinyhivemind maintainers
 
@@ -256,11 +262,11 @@ grammar admits it; the fold ignores it.
 | `Propose` | `propose` | puts a new option on the floor |
 | `Support` | `support` | adds the author to a topic's supporter set |
 | `Object` | `object` | silences the advocate of the targeted message |
-| `Refute` | `refute` | caps a topic once `refutation_cap` distinct members deposit one |
+| `Refute` | `refute` | records a cited topic objection in `refuted_by` for audit; does not cap a topic |
 | `Evidence` | `evidence` | supplies grounds without taking a position |
 | `Question` | `question` | asks for something the room has not established |
 | `Commit` | `commit` | records the decision after quorum |
-| `Defer` | `defer` | declines a topic and promotes it as contested |
+| `Defer` | `defer` | parses an abstention; does not promote a topic or route a bid |
 
 `every_marker_spelling_is_recognized` pins the parse of each;
 `every_trace_kind_pins_its_wire_spelling` pins each JSON spelling;

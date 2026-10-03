@@ -2,13 +2,13 @@
 
 | Path | Purpose |
 |---|---|
-| `lib.rs` | Crate overview and the public surface: `run_episode`, `Journal`, `Report`, `SeatRunner`, `RunnerKind`, `HostedRunner`, `EpisodeHost`, `EpisodeBelt`, `EmbedRunner`, `EmbedSeat`, `RawRunner`, `RawSeat`, `LibraryHost`, `Route`, `register_seats`, `offline`. |
+| `lib.rs` | Crate overview and the public surface: `run_episode`, `Journal`, `Report`, `SeatRunner`, `RunnerKind`, `HostedRunner`, `EpisodeHost`, `EpisodeBelt`, `EmbedRunner`, `EmbedSeat`, `LibraryHost`, `Route`, `register_seats`, `offline`. |
 | `error/` | What seating or running a seat, or an episode, can fail with. |
 | `episode/` | `run_episode` over a `Journal`: one episode from its door to quiescence. |
 | `runner/` | The seam: open, run, close; `Lane`, `TurnJob`; which runner the environment names. |
 | `journal/` | `MemoryLog`, an in-memory journal that is a real `SessionLog`; always compiled. |
 | `hosted/` | Seats as the host's own agents, built through `EpisodeHost`, seeded from the host's log. |
-| `embed/` | Seats as `openhuman-embed` agents, with native tools by default or MCP through `seat_over_mcp`. Each turn is seeded from the host's journal. |
+| `embed/` | Seats as `openhuman-embed` agents with native tools. Each turn is seeded from the host's journal. |
 | `seed/` | A seat's history as it reads it, and its persona at the head: what `hosted` and `embed` give a turn instead of resuming one. |
-| `raw/` | Seats as raw sessions, tools in-process: the belt, the gate, the memory that keeps nothing. |
+| `raw/` | Library-host setup and the native episode tool belt. |
 | `offline/` | The scripted model, the backend stub and the offline config, behind the `offline` feature and in tests. |

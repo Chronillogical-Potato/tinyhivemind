@@ -66,7 +66,5 @@ turn can fail without anybody noticing.
 
 The harnesses that produce these numbers are documented in
 [`../../crates/tinyhivemind-hive/examples/bench/README.md`](../../crates/tinyhivemind-hive/examples/bench/README.md)
-and
-[`../../crates/tinyhivemind/examples/crosstalk/README.md`](../../crates/tinyhivemind/examples/crosstalk/README.md),
-and the headline benchmark report lives on the wiki's
+; the historical `crosstalk` harness has been retired. The headline benchmark report lives on the wiki's
 [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) page.
