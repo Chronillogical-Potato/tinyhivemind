@@ -9,21 +9,21 @@ impl Coordinator {
     /// # Errors
     /// Returns unknown sender/destination, missing membership, invalid thread,
     /// conflicting retry identity or persistence errors.
-    pub fn send(&self, request: SendMessage) -> Result<Receipt> {
+    pub async fn send(&self, request: SendMessage) -> Result<Receipt> {
         if request.sender == HOST_ID {
             return Err(Error::InvalidIdentifier("sender"));
         }
-        self.accept(request)
+        self.accept(request).await
     }
     /// Submit through the reserved host identity rather than impersonating an agent.
     /// The request's sender field is overwritten.
     /// # Errors
     /// Returns destination, visibility, retry or storage validation errors.
-    pub fn send_as_host(&self, mut request: SendMessage) -> Result<Receipt> {
+    pub async fn send_as_host(&self, mut request: SendMessage) -> Result<Receipt> {
         request.sender = HOST_ID.into();
-        self.accept(request)
+        self.accept(request).await
     }
-    fn accept(&self, request: SendMessage) -> Result<Receipt> {
+    async fn accept(&self, request: SendMessage) -> Result<Receipt> {
         identifier(&request.message_id, "message id")?;
         if request.message_id.starts_with("hivemind:") {
             return Err(Error::InvalidIdentifier("reserved message id"));
@@ -109,10 +109,11 @@ impl Coordinator {
                 .accepted
                 .insert(request.message_id.clone(), request.clone());
             Ok(Receipt {
-                message_id: request.message_id,
+                message_id: request.message_id.clone(),
                 sequence,
             })
         })
+        .await
     }
     /// Read the caller's direct conversation with a registered peer in durable
     /// sequence order, including replies returned by the peer's runner.
