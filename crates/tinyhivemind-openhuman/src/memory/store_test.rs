@@ -244,13 +244,19 @@ async fn rejoin_leaves_out_the_seat_own_history_and_session_start_does_not() {
         headings(&start).contains(&"This agent's history"),
         "{start:?}"
     );
+    hive.remember(&entries(
+        "builder",
+        &[(EntryKind::Note, "builder's own note")],
+    ))
+    .await
+    .unwrap();
     let rejoin = hive
         .recall(&ask("builder", RecallMoment::Rejoin))
         .await
         .unwrap();
     assert!(
-        !headings(&rejoin).contains(&"This agent's history"),
-        "{rejoin:?}"
+        rejoin.is_empty(),
+        "nothing but its own work exists: {rejoin:?}"
     );
     let peer = hive
         .recall(&ask("critic", RecallMoment::Rejoin))
@@ -305,7 +311,7 @@ async fn two_hive_roots_on_one_engine_do_not_share() {
         assert!(notes.is_empty(), "{notes:?}");
     }
     let own = first
-        .recall(&ask("builder", RecallMoment::Rejoin))
+        .recall(&ask("critic", RecallMoment::Rejoin))
         .await
         .unwrap();
     assert_eq!(headings(&own), ["Learnings", "Team conversations"]);
