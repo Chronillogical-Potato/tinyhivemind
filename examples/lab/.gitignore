@@ -1,0 +1,5 @@
+# Run traces copied or written here for the viewer to browse.
+/runs/
+# Viewer toolchain output.
+/viewer/node_modules/
+/viewer/dist/

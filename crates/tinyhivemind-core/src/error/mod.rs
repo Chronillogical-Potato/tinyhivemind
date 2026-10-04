@@ -6,6 +6,13 @@ mod test;
 /// A typed failure from validating or querying collaboration data.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
+    /// A private utterance was declined by the aside policy and was not
+    /// published to the whole desk in its place.
+    #[error("private message refused ({reason:?}); it was not posted to the desk")]
+    AsideRefused {
+        /// Why the policy declined the aside.
+        reason: crate::aside::NoAsideReason,
+    },
     /// An agent roster member has a blank id.
     #[error("roster member id must not be empty")]
     EmptyRosterMemberId,

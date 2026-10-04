@@ -1,0 +1,32 @@
+//! The completion driver and the conductor, driven by scripted seats.
+//!
+//! `raw` pokes `CompletionDriver` one committed utterance at a time. `routing`
+//! sweeps the router acceptance policy. `conduct` runs whole episodes through
+//! `Conductor`, varies its walls and the driver's knobs, and replays each run
+//! from every snapshot to prove resume is exact.
+//!
+//! Run with `cargo run --bin driver_knobs [-- --trace out.jsonl]`.
+
+mod conduct;
+mod fixture;
+mod fold;
+mod jev;
+mod raw;
+mod replay;
+mod routing;
+
+use tinyhivemind_lab::{Res, TraceRig};
+
+fn main() -> Res {
+    let rig = TraceRig::from_args();
+    raw::run()?;
+    fold::run()?;
+    routing::run()?;
+    jev::run()?;
+    conduct::run(&rig)?;
+    replay::run(&rig)?;
+    if let Some(path) = rig.path() {
+        println!("\ntrace written to {path}");
+    }
+    Ok(())
+}

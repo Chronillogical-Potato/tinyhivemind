@@ -3,7 +3,10 @@
 
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
-use crate::runtime::speech::{CommitRequest, CommittedUtterance, Utterance, commit_utterance};
+use crate::error::Result;
+use crate::runtime::speech::{
+    CommitRequest, CommittedUtterance, Utterance, commit_utterance, commit_utterance_to_room,
+};
 use crate::{
     aside::AsidePolicy,
     desk::{Desk, DeskSet, ResponderMode},
@@ -59,6 +62,20 @@ pub(super) fn commit_with(
     spent: usize,
     unsettled: bool,
 ) -> CommittedUtterance {
+    try_commit_with(speaker, utterance, policy, spent, unsettled, false)
+        .expect("the fixture roster and desks are well formed")
+}
+
+/// Commit one utterance, returning the fail-closed refusal rather than
+/// panicking. `to_room` opts into the room fallback.
+pub(super) fn try_commit_with(
+    speaker: &str,
+    utterance: &Utterance,
+    policy: AsidePolicy,
+    spent: usize,
+    unsettled: bool,
+    to_room: bool,
+) -> Result<CommittedUtterance> {
     let members = members();
     let desks_value = desks();
     let roster = Roster::new(&members, &[], &[]);
@@ -67,7 +84,7 @@ pub(super) fn commit_with(
         desk_id: "pe1006".into(),
         thread_root: None,
     };
-    commit_utterance(&CommitRequest {
+    let request = CommitRequest {
         utterance,
         speaker_id: speaker,
         conversation: &conversation,
@@ -76,8 +93,12 @@ pub(super) fn commit_with(
         unsettled,
         roster: &roster,
         desks: &desks,
-    })
-    .expect("the fixture roster and desks are well formed")
+    };
+    if to_room {
+        commit_utterance_to_room(&request)
+    } else {
+        commit_utterance(&request)
+    }
 }
 
 /// A `dm` to one peer.

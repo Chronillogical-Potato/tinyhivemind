@@ -67,7 +67,7 @@ use crate::{
     aside::{AsideDecision, AsideInput, AsidePolicy, Audience, aside},
     desk::DeskSet,
     dispatch::DispatchConversation,
-    error::Result,
+    error::{Error, Result},
     mention::{Mention, MentionAuthor, MentionTarget, resolve},
     roster::Roster,
 };
@@ -223,17 +223,42 @@ pub struct CommitRequest<'a> {
 ///   `to` field directly. A host that spelled them back into `@a @b` and
 ///   re-read them through the grammar would lose any id the grammar does not
 ///   accept, silently.
-/// - **A refused aside is a desk row.** The refusal is returned beside the
-///   audience rather than in place of it, so the message reaches the room
-///   either way and the seat can be told which way it went.
+/// - **A refused aside is not a row.** A `dm`, `ask`, or aside marker the
+///   desk's policy declines fails closed with
+///   [`Error::AsideRefused`]: a private
+///   message is never published to the whole desk because a check failed. A
+///   host that wants the room to hear it anyway calls
+///   [`commit_utterance_to_room`].
+///
+/// # Errors
+///
+/// Returns [`Error::AsideRefused`] when the
+/// utterance is private and the aside policy declines it, and a typed core
+/// error when the supplied roster or desk snapshot is malformed.
+/// [`UtteranceRejection::UnknownRecipient`] is not among them: a `dm` naming
+/// somebody who cannot receive one is refused as a rejection through
+/// [`check_recipients`] before this is called.
+pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtterance> {
+    commit(request, false)
+}
+
+/// Like [`commit_utterance`], but a refused aside becomes a desk row.
+///
+/// This is the explicit opt-in to the room fallback: the returned
+/// [`CommittedUtterance`] has [`Audience::Desk`] and carries the reason in
+/// `refusal`, so the host can say which way it went. A host that calls this
+/// has decided a private message the policy declines may be heard by everyone
+/// on the desk.
 ///
 /// # Errors
 ///
 /// Returns a typed core error when the supplied roster or desk snapshot is
-/// malformed, and [`Error::UnknownRecipient`](UtteranceRejection) is not
-/// among them: a `dm` naming somebody who cannot receive one is refused as a
-/// rejection through [`check_recipients`] before this is called.
-pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtterance> {
+/// malformed.
+pub fn commit_utterance_to_room(request: &CommitRequest<'_>) -> Result<CommittedUtterance> {
+    commit(request, true)
+}
+
+fn commit(request: &CommitRequest<'_>, room_fallback: bool) -> Result<CommittedUtterance> {
     let content = request.utterance.message().to_string();
     let author = MentionAuthor::Agent {
         id: request.speaker_id.to_string(),
@@ -284,7 +309,8 @@ pub fn commit_utterance(request: &CommitRequest<'_>) -> Result<CommittedUtteranc
     )?;
     let (audience, refusal) = match decision {
         AsideDecision::One { audience } => (audience, None),
-        AsideDecision::None { reason } => (Audience::Desk, Some(reason)),
+        AsideDecision::None { reason } if room_fallback => (Audience::Desk, Some(reason)),
+        AsideDecision::None { reason } => return Err(Error::AsideRefused { reason }),
     };
     // A private row's content is only ever safe with its audience. A `dm`'s
     // body may name a peer the `to` field did not — the check-in above hands

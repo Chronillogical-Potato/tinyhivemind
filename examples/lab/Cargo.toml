@@ -1,0 +1,16 @@
+[package]
+name = "tinyhivemind-lab"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+
+# Standalone workspace: the lab's examples, sinks and runners stay outside the
+# library workspace so core keeps its pure dependency tree.
+[workspace]
+
+[dependencies]
+# The algebra the examples exercise.
+tinyhivemind-core = { path = "../../crates/tinyhivemind-core" }
+# JSONL encoding of telemetry events.
+serde_json = "1"

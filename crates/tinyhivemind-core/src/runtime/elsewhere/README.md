@@ -11,7 +11,8 @@ up reading rows it was never addressed on — so it lives here, over the same
 `SessionLog` port and the same projection as every other read.
 
 `gather_elsewhere` takes an `ElsewhereQuery`: the seat, every conversation
-it is in, the one its turn is in (skipped, and `None` skips nothing), an
+it is in, the one its turn is in (skipped by `Conversation::equivalent_to`, so
+`main` and `General` are one desk, and `None` skips nothing), an
 exclusive `before` bound, and a window. It returns one `Elsewhere` per
 conversation read, each holding that conversation's projected rows.
 
@@ -40,4 +41,4 @@ not read.
 | --- | --- |
 | `mod.rs` | `gather_elsewhere`, `render_row` |
 | `types.rs` | `ElsewhereQuery`, `Elsewhere` |
-| `test.rs` | the skip, the narrowing, the bound, a thread as its own conversation, and a failed read |
+| `test.rs` | the skip (including General aliases), the narrowing, the bound, a thread as its own conversation, and a failed read |

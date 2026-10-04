@@ -31,8 +31,10 @@ one, and what a private address means.
 returned by the MCP server inside the turn, which is the whole gain over a
 fence. A *policy* refusal is not: `aside::address` runs in `run.rs` after the
 child process has exited, so a `desk_dm` the aside policy declines becomes a
-desk-visible row and the seat is never told it spoke in the open. Failing toward
-the room is the right default and is not in question; the author not knowing is.
+desk-visible row and the seat is never told it spoke in the open. (Superseded: a
+declined aside now fails closed, see `Error::AsideRefused`; failing toward the
+room is the explicit opt-in `commit_utterance_to_room`. The author not knowing
+remains the open point.)
 
 **The address is a field, and then it is unmade into a string.** `run.rs`
 formats the drained `to` list back into `"@a @b"` and re-runs `resolve` over it
@@ -122,7 +124,9 @@ commit_utterance(&CommitRequest) -> Result<CommittedUtterance>
 speaker, the roster, the desk set, and the transcript view `aside::address`
 needs. `CommittedUtterance` carries the content, the resolved `Audience`, the
 `Vec<Mention>` dispatch will read, explicit completion and broadcast flags, and
-`refusal: Option<AsideRefusal>` naming why a requested aside was declined.
+`refusal: Option<AsideRefusal>`, which is `None` from `commit_utterance`: a
+declined aside there is `Error::AsideRefused`. `commit_utterance_to_room` is the
+opt-in fallback that returns the desk row with `refusal` set.
 
 This replaces the block in `run.rs` that resolves mentions, rebuilds the dm list
 as text, re-resolves it, and calls `aside::address`. A `Dm`'s recipients become
@@ -160,7 +164,8 @@ does so. It does not require any other host to.
    by a test that the example's served list equals it. **Met** —
    `serves_the_librarys_tool_surface_and_never_a_second_statement_of_it`.
 3. A `desk_dm` naming a seat the aside policy declines produces a desk-visible
-   row **and** a refusal the example prints and returns to the seat, exercised
+   row **and** a refusal (library level since superseded: `commit_utterance`
+   fails closed, and only `commit_utterance_to_room` yields that row) the example prints and returns to the seat, exercised
    by a test at the library level and one in the example. **Met** — the MCP
    server is handed `--desk` and `--turn` so it can price the call while the
    seat can still act on the answer; without them it serves as before and only

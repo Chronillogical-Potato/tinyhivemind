@@ -257,3 +257,27 @@ fn a_thread_is_its_own_conversation_and_a_failed_read_is_reported() {
     ));
     assert!(matches!(broken, Err(Error::Read { .. })), "{broken:?}");
 }
+
+#[test]
+fn the_turns_own_desk_is_skipped_under_any_general_alias() {
+    let log = log();
+    let here = desk("main");
+    let aliased = desk("General");
+    let channels = [aliased, desk("marketing")];
+    let gathered = run(gather_elsewhere(
+        &log,
+        &ElsewhereQuery {
+            seat: "one",
+            conversations: &channels,
+            current: Some(&here),
+            before: None,
+            window: 30,
+        },
+    ))
+    .expect("reads");
+    let desks: Vec<&str> = gathered
+        .iter()
+        .map(|found| found.conversation.desk_id.as_str())
+        .collect();
+    assert_eq!(desks, ["marketing"], "main and General are one desk");
+}
