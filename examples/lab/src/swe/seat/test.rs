@@ -236,6 +236,27 @@ fn single_text_without_a_tool_is_nudged_then_given_up() {
 }
 
 #[test]
+fn text_only_replies_are_nudged_only_when_consecutive() {
+    let bash = || call("bash", json!({ "cmd": "ls" }));
+    let done = call("complete_episode", json!({ "summary": "ok" }));
+    let rig = rig(
+        vec![
+            text("thinking"),
+            bash(),
+            text("thinking"),
+            bash(),
+            text("thinking"),
+            bash(),
+            text("thinking"),
+            done,
+        ],
+        None,
+    );
+    let out = go(&rig, SINGLE_TOOLS, false, 20);
+    assert!(out.completed, "a text-only reply between tool calls must not end the run");
+}
+
+#[test]
 fn token_cap_aborts_cleanly_mid_activation() {
     let rig = rig(
         vec![
