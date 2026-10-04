@@ -21,7 +21,7 @@ impl Digester for ExtractiveDigester {
 }
 
 /// The account text for one request, within its budget.
-fn fold(request: &DigestRequest) -> String {
+pub(super) fn fold(request: &DigestRequest) -> String {
     let mut lines: Vec<String> = request
         .prior
         .as_deref()
@@ -57,6 +57,3 @@ fn fold(request: &DigestRequest) -> String {
     }
     text
 }
-
-#[cfg(test)]
-pub(super) use fold as fold_for_test;

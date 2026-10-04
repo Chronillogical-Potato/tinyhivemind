@@ -133,7 +133,7 @@ fn extractive_fold_respects_the_budget() {
         budget_chars: 500,
         pinned: vec![Sequence(50)],
     };
-    let text = super::digester::fold_for_test(&request);
+    let text = super::digester::fold(&request);
     assert!(text.len() <= 500);
     assert!(text.contains("* ^50"));
 }
