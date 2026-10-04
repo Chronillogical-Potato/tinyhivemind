@@ -179,7 +179,7 @@ pub fn run() -> Res {
         mentioned_members(&found, Some("eng"), Some("bob"), &roster, &desks)
     );
     let stale = resolve(
-        "hi @bob",
+        "hi @zed",
         Some(vec![tinyhivemind_core::mention::Mention {
             target: tinyhivemind_core::mention::MentionTarget::Agent { id: "zed".into() },
             text: "@zed".into(),
@@ -197,19 +197,33 @@ pub fn run() -> Res {
             .map(|m| (m.text.as_str(), m.quiet))
             .collect::<Vec<_>>()
     );
-    let flood = "@bob ".repeat(MENTION_CAP + 10);
+    let crowd = (1..=MENTION_CAP + 10).fold(World::new(), |w, n| w.agent(&format!("a{n}")));
+    let crowd_roster = crowd.roster();
+    let crowd_desks = crowd.desks();
+    let flood: String = (1..=MENTION_CAP + 10).map(|n| format!("@a{n} ")).collect();
     let flooded = resolve(
         &flood,
         None,
         &MentionAuthor::Person { id: "sam".into() },
+        &crowd_roster,
+        &crowd_desks,
+    );
+    println!(
+        "  {} distinct mentions: {} ping, {} made quiet (MENTION_CAP={MENTION_CAP})",
+        flooded.len(),
+        flooded.iter().filter(|m| !m.quiet).count(),
+        flooded.iter().filter(|m| m.quiet).count()
+    );
+    let repeated = resolve(
+        &"@bob ".repeat(5),
+        None,
+        &MentionAuthor::Other,
         &roster,
         &desks,
     );
     println!(
-        "  {} mentions of bob: {} ping, {} made quiet (MENTION_CAP={MENTION_CAP})",
-        flooded.len(),
-        flooded.iter().filter(|m| !m.quiet).count(),
-        flooded.iter().filter(|m| m.quiet).count()
+        "  @bob five times: {} ping (repeats are quiet)",
+        repeated.iter().filter(|m| !m.quiet).count()
     );
 
     section("mention_dispatch: one bounded child turn");

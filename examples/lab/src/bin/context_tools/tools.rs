@@ -176,27 +176,35 @@ pub fn run(tracer: &Tracer<'_>) -> Res {
         "  addressed_peers of a post naming bob, carol, bob: {:?}",
         addressed_peers(&post, "alice", &roster, &desks)
     );
-    for utterance in [
-        Utterance::Post {
-            message: "m".into(),
-        },
-        Utterance::Broadcast {
-            message: "m".into(),
-        },
-        Utterance::CompleteEpisode {
-            message: "m".into(),
-        },
-        Utterance::Ask {
-            to: vec!["bob".into()],
-            message: "m".into(),
-        },
+    for (label, utterance) in [
+        (
+            "post",
+            Utterance::Post {
+                message: "m".into(),
+            },
+        ),
+        (
+            "broadcast",
+            Utterance::Broadcast {
+                message: "m".into(),
+            },
+        ),
+        (
+            "complete_episode",
+            Utterance::CompleteEpisode {
+                message: "m".into(),
+            },
+        ),
+        (
+            "ask",
+            Utterance::Ask {
+                to: vec!["bob".into()],
+                message: "m".into(),
+            },
+        ),
     ] {
         println!(
-            "  {:?}: closing={} completes_episode={} broadcasting={} asks={:?}",
-            std::mem::discriminant(&utterance)
-                == std::mem::discriminant(&Utterance::Post {
-                    message: String::new()
-                }),
+            "  {label:<17} closing={} completes_episode={} broadcasting={} asks={:?}",
             utterance.closing(),
             utterance.completes_episode(),
             utterance.broadcasting(),
