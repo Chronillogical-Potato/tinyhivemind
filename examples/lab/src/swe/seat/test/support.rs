@@ -1,7 +1,7 @@
 //! Shared fixtures: a scripted model, a recording model, a fake sandbox and
 //! the rig that runs one activation on a persistent session.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 
@@ -73,28 +73,59 @@ impl Clock for Zero {
 }
 
 pub(super) struct Rig {
-    llm: Llm,
-    board: Board,
-    sink: Events,
-    turns: AtomicU64,
+    pub(super) llm: Llm,
+    pub(super) board: Board,
+    pub(super) sink: Events,
+    pub(super) turns: AtomicU64,
+    pub(super) sessions: Sessions,
+    pub(super) memory: Option<Box<dyn SeatMemory>>,
 }
 
-pub(super) fn rig(script: Vec<Value>, cap: Option<u64>) -> Rig {
-    Rig {
-        llm: Llm::new(
-            Box::new(Script(Mutex::new(script))),
-            "m",
-            Meter::new(cap, None),
-        )
-        .without_retry_pause(),
-        board: Board::new(&["lead", "tester"], 6),
-        sink: Events(Mutex::new(Vec::new())),
-        turns: AtomicU64::new(0),
+impl Rig {
+    pub(super) fn over(chat: Box<dyn Chat>, cap: Option<u64>) -> Self {
+        Self {
+            llm: Llm::new(chat, "m", Meter::new(cap, None)).without_retry_pause(),
+            board: Board::new(&["lead", "tester"], 6),
+            sink: Events(Mutex::new(Vec::new())),
+            turns: AtomicU64::new(0),
+            sessions: Sessions::new(SessionMode::Persistent),
+            memory: None,
+        }
     }
 }
 
-pub(super) fn go(rig: &Rig, speaking: &'static [&'static str], implicit: bool, steps: usize) -> Outcome {
-    go_with(rig, speaking, implicit, steps, Settings::OFF)
+pub(super) fn rig(script: Vec<Value>, cap: Option<u64>) -> Rig {
+    Rig::over(Box::new(Script(Mutex::new(script))), cap)
+}
+
+/// What one test activation runs with; `Spec::new` is the old `go` call.
+pub(super) struct Spec {
+    pub(super) speaking: &'static [&'static str],
+    pub(super) implicit: bool,
+    pub(super) steps: usize,
+    pub(super) context: Settings,
+    pub(super) user: String,
+}
+
+impl Spec {
+    pub(super) fn new(speaking: &'static [&'static str], implicit: bool, steps: usize) -> Self {
+        Self {
+            speaking,
+            implicit,
+            steps,
+            context: Settings::OFF,
+            user: "go".into(),
+        }
+    }
+}
+
+pub(super) fn go(
+    rig: &Rig,
+    speaking: &'static [&'static str],
+    implicit: bool,
+    steps: usize,
+) -> Outcome {
+    activate(rig, &Spec::new(speaking, implicit, steps))
 }
 
 pub(super) fn go_with(
@@ -104,6 +135,17 @@ pub(super) fn go_with(
     steps: usize,
     context: Settings,
 ) -> Outcome {
+    activate(
+        rig,
+        &Spec {
+            context,
+            ..Spec::new(speaking, implicit, steps)
+        },
+    )
+}
+
+/// Run one activation of `lead` on its session from the rig's store.
+pub(super) fn activate(rig: &Rig, spec: &Spec) -> Outcome {
     let tracer = Tracer::new("t", &rig.sink, &Zero);
     let env = Env {
         llm: &rig.llm,
@@ -113,20 +155,28 @@ pub(super) fn go_with(
         turns: &rig.turns,
         cmd_timeout: Duration::from_secs(1),
         output_limit: 1000,
+        sessions: &rig.sessions,
+        memory: rig.memory.as_deref(),
     };
-    run(
+    let mut session = rig.sessions.take("lead");
+    let out = run(
         &env,
         &Activation {
             seat: "lead",
             system: "sys".into(),
-            user: "go".into(),
-            tools: tool_list(speaking),
-            speaking,
-            steps,
-            implicit_post: implicit,
-            context,
+            user: spec.user.clone(),
+            shown_rows: 0,
+            focus: "the task".into(),
+            tools: tool_list(spec.speaking),
+            speaking: spec.speaking,
+            steps: spec.steps,
+            implicit_post: spec.implicit,
+            context: spec.context,
         },
-    )
+        &mut session,
+    );
+    rig.sessions.put("lead", session);
+    out
 }
 
 pub(super) fn events(rig: &Rig) -> Vec<TraceEvent> {
@@ -142,8 +192,8 @@ pub(super) fn events(rig: &Rig) -> Vec<TraceEvent> {
 
 /// Records every request body, then answers from a script.
 pub(super) struct Recorder {
-    script: Mutex<Vec<Result<Value, String>>>,
-    bodies: std::sync::Arc<Mutex<Vec<Value>>>,
+    pub(super) script: Mutex<Vec<Result<Value, String>>>,
+    pub(super) bodies: Arc<Mutex<Vec<Value>>>,
 }
 
 impl Chat for Recorder {
@@ -153,22 +203,15 @@ impl Chat for Recorder {
     }
 }
 
-pub(super) fn recorded(script: Vec<Result<Value, String>>) -> (Rig, std::sync::Arc<Mutex<Vec<Value>>>) {
-    let bodies = std::sync::Arc::new(Mutex::new(Vec::new()));
-    let rig = Rig {
-        llm: Llm::new(
-            Box::new(Recorder {
-                script: Mutex::new(script),
-                bodies: bodies.clone(),
-            }),
-            "m",
-            Meter::new(None, None),
-        )
-        .without_retry_pause(),
-        board: Board::new(&["lead", "tester"], 6),
-        sink: Events(Mutex::new(Vec::new())),
-        turns: AtomicU64::new(0),
-    };
+pub(super) fn recorded(script: Vec<Result<Value, String>>) -> (Rig, Arc<Mutex<Vec<Value>>>) {
+    let bodies = Arc::new(Mutex::new(Vec::new()));
+    let rig = Rig::over(
+        Box::new(Recorder {
+            script: Mutex::new(script),
+            bodies: bodies.clone(),
+        }),
+        None,
+    );
     (rig, bodies)
 }
 
