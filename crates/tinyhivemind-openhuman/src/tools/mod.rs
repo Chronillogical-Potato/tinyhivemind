@@ -99,15 +99,18 @@ impl HiveTool {
                     Kind::SendHive => Destination::Hive(text("hive_id")),
                     _ => Destination::Agent(text("agent_id")),
                 };
-                Ok(serde_json::to_value(coordinator.send(SendMessage {
-                    message_id: text("message_id"),
-                    sender: actor.clone(),
-                    destination,
-                    body: text("body"),
-                    thread: args["thread"].as_u64(),
-                    only_for: strings(&args, "only_for"),
-                })
-                .await?)?)
+                Ok(serde_json::to_value(
+                    coordinator
+                        .send(SendMessage {
+                            message_id: text("message_id"),
+                            sender: actor.clone(),
+                            destination,
+                            body: text("body"),
+                            thread: args["thread"].as_u64(),
+                            only_for: strings(&args, "only_for"),
+                        })
+                        .await?,
+                )?)
             }
             Kind::Post | Kind::Ask | Kind::Broadcast | Kind::Complete => {
                 let body = text("body");

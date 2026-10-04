@@ -82,7 +82,7 @@ impl crate::ManagementAuthorizer for Authorize {
 #[tokio::test]
 async fn bound_native_calls_validate_destinations_and_manage_membership() {
     use std::sync::Arc;
-    let coor = registered_coordinator();
+    let coor = registered_coordinator().await;
     let host = OpenHumanHost::new("r".into(), coor)
         .unwrap()
         .with_management(Arc::new(Factory), Arc::new(Authorize))
@@ -202,6 +202,7 @@ async fn explicit_episode_actions_execute_only_during_the_bound_assignment() {
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap();
     let service = Arc::new(Mutex::new(Weak::new()));
     coor.register_agent(AgentRegistration {
@@ -209,6 +210,7 @@ async fn explicit_episode_actions_execute_only_during_the_bound_assignment() {
         runtime_id: "r".into(),
         runner: Arc::new(ActiveTools(service.clone())),
     })
+    .await
     .unwrap();
     let host = OpenHumanHost::new("r".into(), coor).unwrap();
     *service.lock().unwrap() = Arc::downgrade(&host.inner);
@@ -219,6 +221,7 @@ async fn explicit_episode_actions_execute_only_during_the_bound_assignment() {
             description: None,
             members: vec!["a".into()],
         })
+        .await
         .unwrap();
     host.coordinator()
         .send_as_host(SendMessage {
@@ -229,6 +232,7 @@ async fn explicit_episode_actions_execute_only_during_the_bound_assignment() {
             thread: None,
             only_for: vec![],
         })
+        .await
         .unwrap();
     let report = host.coordinator().run_until_idle().await.unwrap();
     assert_eq!(report.completed, 1);
@@ -245,7 +249,7 @@ fn active() -> std::sync::Arc<Activation> {
     activation
 }
 
-fn registered_coordinator() -> tinyhivemind_hives::Coordinator {
+async fn registered_coordinator() -> tinyhivemind_hives::Coordinator {
     use std::sync::Arc;
     use tinyhivemind_hives::{AgentRegistration, Coordinator, CoordinatorOptions, MemoryStorage};
     let coor = Coordinator::new(
@@ -253,6 +257,7 @@ fn registered_coordinator() -> tinyhivemind_hives::Coordinator {
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap();
     for id in ["a", "b"] {
         coor.register_agent(AgentRegistration {
@@ -260,6 +265,7 @@ fn registered_coordinator() -> tinyhivemind_hives::Coordinator {
             runtime_id: "r".into(),
             runner: Arc::new(NoTurn),
         })
+        .await
         .unwrap();
     }
     coor

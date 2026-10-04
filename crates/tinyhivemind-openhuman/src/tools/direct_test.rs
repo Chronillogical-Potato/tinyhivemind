@@ -22,6 +22,7 @@ async fn read_tool_observes_direct_replies_as_its_bound_caller() {
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap();
     for id in ["a", "b", "outsider"] {
         c.register_agent(AgentRegistration {
@@ -29,6 +30,7 @@ async fn read_tool_observes_direct_replies_as_its_bound_caller() {
             runtime_id: "r".into(),
             runner: Arc::new(Reply),
         })
+        .await
         .unwrap();
     }
     let host = OpenHumanHost::new("r".into(), c).unwrap();
@@ -67,8 +69,8 @@ async fn read_tool_observes_direct_replies_as_its_bound_caller() {
         0
     );
 }
-#[test]
-fn read_schema_and_validator_require_exactly_one_destination() {
+#[tokio::test]
+async fn read_schema_and_validator_require_exactly_one_destination() {
     let schema = Kind::Read.schema();
     assert_eq!(schema["oneOf"].as_array().unwrap().len(), 2);
     for args in [
