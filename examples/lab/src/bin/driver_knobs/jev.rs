@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::Value;
-use tinyhivemind_core::embed::{RouteCandidate, RoutingPlan, route_message};
+use tinyhivemind_core::embed::{RouteCandidate, Router, RoutingPlan, route_message};
 use tinyhivemind_core::typesafe::{
     ChoiceAnswer, Error, JevRouter, NoulAnswer, Question, RetryClass, SystemOneAnswer,
     SystemOneRequest, SystemOneResponse, SystemOneTransport, SystemOneTransportFuture, TokenUsage,
@@ -312,7 +312,38 @@ pub fn run() -> Res {
     let bad = JevRouter::new(Scripted::new(Fault::None));
     println!(
         "  a candidate named `none`: {:?}",
-        block_on(tinyhivemind_core::embed::Router::evaluate(&bad, &request))
+        block_on(Router::evaluate(&bad, &request))
+            .err()
+            .map(|e| e.to_string())
+    );
+    let direct = JevRouter::new(Scripted::new(Fault::None));
+    let mut tiny = hive.desk_request(
+        "fix the rust parser",
+        Vec::new(),
+        None,
+        1,
+        routing_policy(1),
+    );
+    tiny.policy.choice_option_limit = 1;
+    println!(
+        "  Router::evaluate with option limit 1: {:?}",
+        block_on(Router::evaluate(&direct, &tiny))
+            .err()
+            .map(|e| e.to_string())
+    );
+    let mut nobody = hive.desk_request(
+        "fix the rust parser",
+        Vec::new(),
+        None,
+        1,
+        routing_policy(1),
+    );
+    for candidate in &mut nobody.candidates {
+        candidate.available = false;
+    }
+    println!(
+        "  Router::evaluate with no eligible candidate: {:?}",
+        block_on(Router::evaluate(&direct, &nobody))
             .err()
             .map(|e| e.to_string())
     );
