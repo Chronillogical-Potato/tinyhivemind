@@ -70,6 +70,8 @@ async fn sqlite_migrates_a_version_one_snapshot_into_the_transcript_table() {
     let mut json = serde_json::to_value(&legacy).unwrap();
     json["messages"] = serde_json::to_value(&legacy.messages).unwrap();
     json["accepted"] = serde_json::to_value(&legacy.accepted).unwrap();
+    // ...and predates writer fencing, so it carries no epoch.
+    json.as_object_mut().unwrap().remove("writer_epoch");
     {
         let connection = Connection::open(&path).unwrap();
         connection
@@ -85,6 +87,7 @@ async fn sqlite_migrates_a_version_one_snapshot_into_the_transcript_table() {
     let store = SqliteStorage::open(&path).unwrap();
     let loaded = store.load().await.unwrap();
     assert_eq!(loaded.revision, 4);
+    assert_eq!(loaded.writer_epoch, 0);
     assert_eq!(loaded.messages, legacy.messages);
     assert_eq!(loaded.accepted, legacy.accepted);
     assert!(loaded.agents.contains_key("a"));
