@@ -36,14 +36,28 @@ does not grow with the conversation. `load` reassembles the transcript with
 `StoredState::append`. SQLite moves to schema 2: a state row plus an
 append-only `hivemind_messages` table, written in one transaction. A
 version-one database is migrated on open. `RetentionPolicy` (default: keep
-all) bounds settled episodes and acknowledged deliveries. It never prunes the
-transcript, or an episode that a running turn still reports to.
+all) bounds settled episodes, acknowledged deliveries, and interruption records
+(interrupted deliveries and `InterruptedTurn`s). It never prunes the
+transcript, an episode that a running turn still reports to, or a pending
+delivery: pending deliveries are live work, so `pending_per_agent` instead
+refuses a send that would overfill one agent's inbox with `Error::InboxFull`.
 
 The coordinator copies live state, mutates the copy, and persists it while
 holding an async writer gate rather than the live lock, so reads never wait on
-storage I/O. The gate makes in-process writers serial. A revision conflict
-therefore means another process wrote the store: the coordinator reloads and
-recomputes its change, up to four times. `Drop` cannot await, so a cancelled
+storage I/O. The gate makes in-process writers serial.
+
+A store has exactly one writer. `StoredState.writer_epoch` names it:
+`Coordinator::new` loads the store and commits `writer_epoch + 1`, and that
+commit is its claim (recovering the previous owner's running turns as
+interruptions happens in the same commit). Every later commit carries the
+coordinator's epoch. A store holding a higher epoch rejects it with
+`Error::Fenced`; the fenced coordinator stops scheduling and every write it
+attempts fails the same way, with no reload-and-retry. Two live coordinators
+over one store were the source of every cross-process race the review found
+(remote reservations, interrupting another process's turn, commits a
+subscriber never sees); fencing removes the case instead of patching each one.
+A host runs one coordinator per store, and a rolling deploy's new process
+fences the old one. `Drop` cannot await, so a cancelled
 drain applies its interruptions to live state at once and the next commit
 persists them. A crash before that commit is still recovered as an interrupted
 running turn. As a consequence, every mutating coordinator API is now `async`.
