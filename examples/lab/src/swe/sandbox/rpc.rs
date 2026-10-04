@@ -16,6 +16,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::sync::mpsc::{self, Sender};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -61,6 +62,7 @@ type Pending = Arc<Mutex<HashMap<u64, Sender<Reply>>>>;
 pub struct StdioExec {
     out: Mutex<Box<dyn Write + Send>>,
     pending: Pending,
+    closed: Arc<AtomicBool>,
     next: Mutex<u64>,
 }
 
@@ -76,6 +78,8 @@ impl StdioExec {
     {
         let pending: Pending = Arc::default();
         let waiting = Arc::clone(&pending);
+        let closed = Arc::new(AtomicBool::new(false));
+        let ended = Arc::clone(&closed);
         std::thread::spawn(move || {
             for line in input.lines() {
                 let Ok(line) = line else { break };
@@ -87,6 +91,7 @@ impl StdioExec {
                     let _ = sender.send(reply);
                 }
             }
+            ended.store(true, Ordering::SeqCst);
             if let Ok(mut map) = waiting.lock() {
                 map.clear();
             }
@@ -94,6 +99,7 @@ impl StdioExec {
         Self {
             out: Mutex::new(Box::new(output)),
             pending,
+            closed,
             next: Mutex::new(0),
         }
     }
@@ -111,6 +117,9 @@ impl Exec for StdioExec {
             .lock()
             .map_err(|_| "rpc pending lock poisoned")?
             .insert(id, tx);
+        if self.closed.load(Ordering::SeqCst) {
+            return Err("rpc peer closed".to_owned());
+        }
         {
             let mut out = self.out.lock().map_err(|_| "rpc writer lock poisoned")?;
             writeln!(out, "{}", encode_request(id, cmd, timeout))
