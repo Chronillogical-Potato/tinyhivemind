@@ -153,7 +153,10 @@ fn the_recall_budget_reaches_seats_through_the_runtime_config() {
         let mut config = offline::config();
         memory.configure(&mut config);
         let (runtime, _backend) = Box::pin(runtime_with(config)).await;
-        let host = host_on(&runtime).await.with_hive_memory(memory.clone()).unwrap();
+        let host = host_on(&runtime)
+            .await
+            .with_hive_memory(memory.clone())
+            .unwrap();
         let agent = host
             .register_spec(&runtime, AgentSpec::new("scout"))
             .await
@@ -163,7 +166,10 @@ fn the_recall_budget_reaches_seats_through_the_runtime_config() {
         drop((agent, host, runtime));
 
         let (unconfigured, _backend) = Box::pin(runtime_with(offline::config())).await;
-        let host = host_on(&unconfigured).await.with_hive_memory(memory).unwrap();
+        let host = host_on(&unconfigured)
+            .await
+            .with_hive_memory(memory)
+            .unwrap();
         let error = host
             .register_spec(&unconfigured, AgentSpec::new("scout"))
             .await

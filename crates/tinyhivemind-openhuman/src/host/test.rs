@@ -328,20 +328,21 @@ struct RegistrationStorage {
     memory: MemoryStorage,
 }
 impl tinyhivemind_hives::Storage for RegistrationStorage {
-    fn load(&self) -> tinyhivemind_hives::Result<tinyhivemind_hives::StoredState> {
+    fn load(&self) -> tinyhivemind_hives::StorageFuture<'_, tinyhivemind_hives::StoredState> {
         tinyhivemind_hives::Storage::load(&self.memory)
     }
-    fn commit(
-        &self,
-        revision: u64,
-        state: &tinyhivemind_hives::StoredState,
-    ) -> tinyhivemind_hives::Result<()> {
+    fn commit<'a>(
+        &'a self,
+        commit: tinyhivemind_hives::Commit<'a>,
+    ) -> tinyhivemind_hives::StorageFuture<'a, ()> {
         if self.reject.load(std::sync::atomic::Ordering::SeqCst) {
-            Err(tinyhivemind_hives::Error::InvalidState(
-                "registration storage unavailable".into(),
-            ))
+            Box::pin(async {
+                Err(tinyhivemind_hives::Error::InvalidState(
+                    "registration storage unavailable".into(),
+                ))
+            })
         } else {
-            tinyhivemind_hives::Storage::commit(&self.memory, revision, state)
+            tinyhivemind_hives::Storage::commit(&self.memory, commit)
         }
     }
 }
