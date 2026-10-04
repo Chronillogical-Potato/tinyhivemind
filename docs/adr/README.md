@@ -55,7 +55,7 @@ link any earlier ADR it amends.
 | [0028](0028-three-crate-workspace.md) | Consolidate the workspace into three crates | Accepted — supersedes the package boundaries in 0025 |
 | [0029](0029-working-memory-is-a-host-adapter.md) | Working memory is a host adapter behind a narrow port | Accepted |
 | [0030](0030-a-host-memory-port-feeds-seat-sessions.md) | A host memory port feeds seat sessions | Accepted — supersedes recall.md's no-port and no-index non-goals for host-owned memory |
-| [0031](0031-the-coordinator-exposes-host-seams-over-async-incremental-storage.md) | The coordinator exposes host seams over async, incremental storage | Accepted |
+| [0031](0031-expose-host-seams-over-async-incremental-storage.md) | Expose host seams over async, incremental storage | Accepted |
 
 ## Reading order
 
