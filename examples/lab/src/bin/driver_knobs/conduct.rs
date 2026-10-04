@@ -164,6 +164,7 @@ impl Host<'_> {
         match step {
             Step::Event(event) => {
                 *self.report.events.entry(kind(&event)).or_default() += 1;
+                if std::env::var("LAB_DEBUG").is_ok() { eprintln!("EVENT {event:?}"); }
                 self.tracer.conducted(&event);
             }
             Step::Note(note) => {
