@@ -149,9 +149,10 @@ fn the_turn_timeout_is_configurable_and_nonzero() {
         tokio::spawn(async {
             let (runtime, _backend, host) = Box::pin(fixture()).await;
             assert_eq!(host.turn_timeout(), TURN_TIMEOUT);
-            let host = host.with_turn_timeout(Duration::ZERO);
-            assert!(matches!(host, Err(Error::InvalidTurnTimeout)));
-            let (_, _, host) = Box::pin(fixture()).await;
+            assert!(matches!(
+                host.clone().with_turn_timeout(Duration::ZERO),
+                Err(Error::InvalidTurnTimeout)
+            ));
             let host = host.with_turn_timeout(Duration::from_millis(20)).unwrap();
             assert_eq!(host.turn_timeout(), Duration::from_millis(20));
             let provider = provider(Duration::from_secs(60)).await;

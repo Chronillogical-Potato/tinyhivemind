@@ -57,6 +57,9 @@ pub enum Error {
     /// or the engine's credential is missing).
     #[error(transparent)]
     Memory(#[from] openhuman_core::memory::MemoryError),
+    /// A turn timeout of zero would fail every turn before it starts.
+    #[error("turn timeout must be nonzero")]
+    InvalidTurnTimeout,
     /// Agent turn exceeded the wall.
     #[error("agent turn timed out")]
     TimedOut,

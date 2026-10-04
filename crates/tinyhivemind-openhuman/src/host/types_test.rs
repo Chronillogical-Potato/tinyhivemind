@@ -66,7 +66,11 @@ fn turn_scope_names_the_episode_its_thread_and_distinct_senders() {
     let request = TurnRequest {
         agent_id: "a".into(),
         session_id: None,
-        messages: vec![row("m1", "b", None), row("m2", "c", Some(7)), row("m3", "b", None)],
+        messages: vec![
+            row("m1", "b", None),
+            row("m2", "c", Some(7)),
+            row("m3", "b", None),
+        ],
         memberships: vec![],
         episode: Some(episode.clone()),
         resumption: None,

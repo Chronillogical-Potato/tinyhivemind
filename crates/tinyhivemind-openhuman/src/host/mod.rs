@@ -9,6 +9,7 @@ use runner::SuppliedRunner;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex, Weak},
+    time::Duration,
 };
 use tinyhivemind_hives::{AgentRegistration, Coordinator};
 pub use types::*;
@@ -20,6 +21,7 @@ pub(crate) struct Inner {
     management: Option<Management>,
     hooks: Arc<dyn TurnHooks>,
     memory: Option<HiveMemory>,
+    turn_timeout: Duration,
 }
 struct Entry {
     agent: Agent,
@@ -59,6 +61,7 @@ impl OpenHumanHost {
                 management: None,
                 hooks: Arc::new(DefaultHooks),
                 memory: None,
+                turn_timeout: TURN_TIMEOUT,
             }),
         })
     }
@@ -84,6 +87,24 @@ impl OpenHumanHost {
         let inner = self.configurable_inner()?;
         inner.hooks = hooks;
         Ok(self)
+    }
+    /// Bound every supplied agent turn by `timeout` instead of
+    /// [`TURN_TIMEOUT`]; configure before sharing or registration.
+    /// # Errors
+    /// Refuse a zero timeout, and changed settings once agents or another
+    /// host clone exist.
+    pub fn with_turn_timeout(mut self, timeout: Duration) -> Result<Self> {
+        if timeout.is_zero() {
+            return Err(Error::InvalidTurnTimeout);
+        }
+        let inner = self.configurable_inner()?;
+        inner.turn_timeout = timeout;
+        Ok(self)
+    }
+    /// The wall applied to each supplied agent turn.
+    #[must_use]
+    pub fn turn_timeout(&self) -> Duration {
+        self.inner.turn_timeout
     }
     /// Share one hive memory among every seat registered from now on.
     ///
@@ -194,6 +215,7 @@ impl OpenHumanHost {
             agent: agent.clone(),
             hooks: self.inner.hooks.clone(),
             activation: activation.clone(),
+            timeout: self.inner.turn_timeout,
         });
         // Keep the exact source for retry even if durable registration fails.
         entries.insert(

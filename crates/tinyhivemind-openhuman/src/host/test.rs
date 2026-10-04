@@ -74,14 +74,23 @@ fn supplied_clones_attach_once_and_drop_services_without_cycle() {
                 "agent"
             );
             assert!(format!("{bound:?}").contains("agent"));
-            assert!(DefaultHooks.progress("agent").is_none());
+            let scope = TurnScope::from_request(&tinyhivemind_hives::TurnRequest {
+                agent_id: "agent".into(),
+                session_id: None,
+                messages: vec![],
+                memberships: vec![],
+                episode: None,
+                resumption: None,
+            });
+            assert!(DefaultHooks.progress(&scope).is_none());
+            assert_eq!(DefaultHooks.prepare(&scope), TurnOptions::default());
             assert_eq!(
-                DefaultHooks.after_turn("agent", None).unwrap(),
+                DefaultHooks.after_turn(&scope, None).unwrap(),
                 tinyhivemind_hives::TurnDisposition::Completed
             );
             let pass = DefaultHooks
                 .wrap_turn(
-                    "agent",
+                    &scope,
                     Box::pin(async {
                         Ok(openhuman_embed::TurnOutcome {
                             reply: "passthrough".into(),
@@ -240,12 +249,12 @@ struct Hooks {
     wrapped: std::sync::atomic::AtomicUsize,
 }
 impl TurnHooks for Hooks {
-    fn progress(&self, _: &str) -> Option<TurnProgressSink> {
+    fn progress(&self, _: &TurnScope) -> Option<TurnProgressSink> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(8);
         tokio::spawn(async move { while rx.recv().await.is_some() {} });
         Some(tx)
     }
-    fn wrap_turn<'a>(&'a self, _: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
+    fn wrap_turn<'a>(&'a self, _: &'a TurnScope, turn: HostedTurn<'a>) -> HostedTurn<'a> {
         self.wrapped
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if self.mode.load(std::sync::atomic::Ordering::SeqCst) == 3 {
@@ -256,7 +265,7 @@ impl TurnHooks for Hooks {
     }
     fn after_turn(
         &self,
-        _: &str,
+        _: &TurnScope,
         usage: Option<&openhuman_core::agent::tinyagents::host::LastTurnUsage>,
     ) -> Result<tinyhivemind_hives::TurnDisposition> {
         use std::sync::atomic::Ordering;
