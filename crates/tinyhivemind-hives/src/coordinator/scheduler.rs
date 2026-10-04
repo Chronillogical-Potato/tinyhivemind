@@ -3,10 +3,10 @@ use super::{
     AgentRunner, Coordinator, Destination, EpisodeContext, RunReport, TurnDisposition, TurnOutcome,
     TurnRequest, conduct, interrupt,
 };
-use crate::{DeliveryStatus, Error, Result, RunningTurn};
+use crate::{DeliveryStatus, Error, Result, RunningTurn, StoredState};
 use futures::{StreamExt, stream::FuturesUnordered};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, atomic::Ordering},
 };
 
@@ -26,17 +26,11 @@ struct Reservations {
 }
 impl Drop for Reservations {
     fn drop(&mut self) {
-        if self.agents.is_empty() {
-            return;
-        }
-        // A storage failure cannot be reported from Drop. Durable running records
-        // remain discoverable by new() even if this best-effort checkpoint fails.
-        let _ = self.coordinator.update(|state| {
-            for agent in &self.agents {
-                interrupt(state, agent, "scheduler cancelled during turn");
-            }
-            Ok(())
-        });
+        // Drop cannot await storage. The interruption is applied to live state
+        // now and persisted by the next commit; durable running records remain
+        // discoverable by new() if the process stops first.
+        self.coordinator
+            .interrupt_unpersisted(std::mem::take(&mut self.agents));
     }
 }
 impl Coordinator {
@@ -47,6 +41,7 @@ impl Coordinator {
     /// recorded in interruptions and the report while other agents continue.
     pub async fn run_until_idle(&self) -> Result<RunReport> {
         let _scheduler = self.inner.scheduler.lock().await;
+        self.flush_unpersisted().await?;
         let mut guard = Reservations {
             coordinator: self.clone(),
             agents: BTreeSet::new(),
@@ -58,7 +53,7 @@ impl Coordinator {
             report.failed += conductor_failures;
             if !self.inner.shutdown.load(Ordering::Acquire) {
                 let capacity = self.inner.options.round_width.saturating_sub(futures.len());
-                for claim in self.claim(capacity)? {
+                for claim in self.claim(capacity).await? {
                     let agent_id = claim.request.agent_id.clone();
                     guard.agents.insert(agent_id.clone());
                     futures.push(async move { (agent_id, claim.runner.run(claim.request).await) });
@@ -75,7 +70,7 @@ impl Coordinator {
             tokio::select! {
                 outcome = futures.next() => {
                     if let Some((agent_id, outcome)) = outcome {
-                        match self.finish(&agent_id, outcome)? {
+                        match self.finish(&agent_id, outcome).await? {
                             TurnDisposition::Completed => report.completed += 1,
                             TurnDisposition::Parked => report.parked += 1,
                             TurnDisposition::Failed(_) => report.failed += 1,
@@ -109,16 +104,17 @@ impl Coordinator {
         Ok(self.advance_report().await?.0)
     }
     async fn advance_report(&self) -> Result<(bool, usize)> {
+        let _gate = self.inner.writer.lock().await;
+        let mut conflicts = 0;
         loop {
-            let original = self.lock()?.durable.clone();
+            let snapshot = self.snapshot()?;
+            let original = &snapshot.base;
             let mut next = original.clone();
             conduct::prepare(&mut next, &self.inner.options).await?;
-            if serde_json::to_vec(&original)? == serde_json::to_vec(&next)? {
+            if next.messages.len() == original.messages.len()
+                && serde_json::to_vec(original)? == serde_json::to_vec(&next)?
+            {
                 return Ok((false, 0));
-            }
-            let mut live = self.lock()?;
-            if live.durable.revision != original.revision {
-                continue;
             }
             let failures = next
                 .episodes
@@ -132,18 +128,35 @@ impl Coordinator {
                             .is_none_or(|old| old.failure.is_none())
                 })
                 .count();
-            self.commit(&mut live, next)?;
-            return Ok((true, failures));
+            let attempt = self.persist(&snapshot, next).await;
+            if self.settle(attempt, &mut conflicts).await? {
+                return Ok((true, failures));
+            }
         }
     }
-    pub(super) fn claim(&self, capacity: usize) -> Result<Vec<Claim>> {
+    pub(super) async fn claim(&self, capacity: usize) -> Result<Vec<Claim>> {
         if capacity == 0 {
             return Ok(Vec::new());
         }
-        let mut live = self.lock()?;
-        let mut next = live.durable.clone();
-        let pruned = conduct::prune_pending(&mut next, &self.inner.options)?;
-        let candidates = candidates(&next);
+        let gate = self.inner.writer.lock().await;
+        // Registration also holds the gate, so this handle set stays current.
+        let runners = self.lock()?.runners.clone();
+        self.transact(&gate, |next| {
+            let claims = self.reserve(next, &runners, capacity)?;
+            Ok((claims.0 || !claims.1.is_empty(), claims.1))
+        })
+        .await
+    }
+    /// Select and durably reserve up to `capacity` claims on `next`.
+    /// Returns whether pending seats were pruned, and the claims.
+    fn reserve(
+        &self,
+        next: &mut StoredState,
+        runners: &BTreeMap<String, Arc<dyn AgentRunner>>,
+        capacity: usize,
+    ) -> Result<(bool, Vec<Claim>)> {
+        let pruned = conduct::prune_pending(next, &self.inner.options)?;
+        let candidates = candidates(next);
         let mut selected = BTreeSet::new();
         let mut claims = Vec::new();
         // Pending positions are removed by seat after selection; saved indices
@@ -159,7 +172,7 @@ impl Coordinator {
             {
                 continue;
             }
-            let Some(runner) = live.runners.get(&agent_id).cloned() else {
+            let Some(runner) = runners.get(&agent_id).cloned() else {
                 continue;
             };
             let memberships = next
@@ -186,7 +199,7 @@ impl Coordinator {
                 Work::Episode(index, turn_index) => {
                     let turn = next.episodes[index].pending[turn_index].clone();
                     let (messages, brief) =
-                        conduct::open(&mut next, index, &turn, &self.inner.options)?;
+                        conduct::open(next, index, &turn, &self.inner.options)?;
                     let record = &next.episodes[index];
                     let context = EpisodeContext {
                         episode_id: record.episode_id.clone(),
@@ -226,18 +239,20 @@ impl Coordinator {
                 .pending
                 .retain(|turn| turn.seat != agent_id);
         }
-        if pruned || !claims.is_empty() {
-            self.commit(&mut live, next)?;
-        }
-        Ok(claims)
+        Ok((pruned, claims))
     }
-    fn finish(&self, agent_id: &str, outcome: Result<TurnOutcome>) -> Result<TurnDisposition> {
+    async fn finish(
+        &self,
+        agent_id: &str,
+        outcome: Result<TurnOutcome>,
+    ) -> Result<TurnDisposition> {
+        let outcome = outcome.map_err(|error| error.to_string());
         self.update(|state| {
-            let outcome = match outcome {
-                Ok(outcome) => outcome,
+            let outcome = match &outcome {
+                Ok(outcome) => outcome.clone(),
                 Err(error) => {
-                    interrupt(state, agent_id, &error.to_string());
-                    return Ok(TurnDisposition::Failed(error.to_string()));
+                    interrupt(state, agent_id, error);
+                    return Ok(TurnDisposition::Failed(error.clone()));
                 }
             };
             if outcome.session_id.trim().is_empty() {
@@ -326,6 +341,7 @@ impl Coordinator {
             }
             Ok(outcome.disposition)
         })
+        .await
     }
 }
 

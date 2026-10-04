@@ -8,7 +8,7 @@ async fn private_child_contract(storage: Arc<dyn Storage>) {
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    )
+    ).await
     .unwrap();
     for id in ["a", "b", "c"] {
         let c2 = c.clone();
@@ -49,16 +49,16 @@ async fn private_child_contract(storage: Arc<dyn Storage>) {
                 }
                 Ok(done(&request))
             })
-        });
+        }).await;
     }
-    hive(&c, "work", &["a", "b", "c"]);
+    hive(&c, "work", &["a", "b", "c"]).await;
     let mut task = message("task", Destination::Hive("work".into()));
     task.only_for = vec!["a".into()];
-    c.send_as_host(task).unwrap();
+    c.send_as_host(task).await.unwrap();
     c.run_until_idle().await.unwrap();
     for coordinator in [
         &c,
-        &Coordinator::new("reopened".into(), storage, CoordinatorOptions::default()).unwrap(),
+        &Coordinator::new("reopened".into(), storage, CoordinatorOptions::default()).await.unwrap(),
     ] {
         let outsider = coordinator.read_hive("c", "work", None, None).unwrap();
         assert!(!outsider.iter().any(|row| row.body.starts_with("private")));
@@ -98,7 +98,7 @@ async fn private_child_visibility_survives_sqlite_reopen() {
 }
 #[tokio::test]
 async fn addressed_private_thread_keeps_turn_context_and_outputs_in_that_thread() {
-    let c = setup();
+    let c = setup().await;
     let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
     for id in ["a", "b", "c"] {
         let c2 = c.clone();
@@ -125,17 +125,17 @@ async fn addressed_private_thread_keeps_turn_context_and_outputs_in_that_thread(
                 )?;
                 Ok(done(&request))
             })
-        });
+        }).await;
     }
-    hive(&c, "work", &["a", "b", "c"]);
+    hive(&c, "work", &["a", "b", "c"]).await;
     let mut initial = message("private root", Destination::Hive("work".into()));
     initial.only_for = vec!["b".into()];
-    let root = c.send(initial).unwrap();
+    let root = c.send(initial).await.unwrap();
     c.run_until_idle().await.unwrap();
     seen.lock().unwrap().clear();
     let mut follow = message("follow", Destination::Hive("work".into()));
     follow.thread = Some(root.sequence);
-    c.send(follow).unwrap();
+    c.send(follow).await.unwrap();
     c.run_until_idle().await.unwrap();
     let seen = seen.lock().unwrap();
     assert_eq!(seen.len(), 2);
@@ -161,9 +161,9 @@ async fn addressed_private_thread_keeps_turn_context_and_outputs_in_that_thread(
     let mut forbidden = message("forbidden", Destination::Hive("work".into()));
     forbidden.sender = "c".into();
     forbidden.thread = Some(root.sequence);
-    assert!(c.send(forbidden).is_err());
+    assert!(c.send(forbidden).await.is_err());
     let mut widening = message("widening", Destination::Hive("work".into()));
     widening.thread = Some(root.sequence);
     widening.only_for = vec!["c".into()];
-    assert!(c.send(widening).is_err());
+    assert!(c.send(widening).await.is_err());
 }

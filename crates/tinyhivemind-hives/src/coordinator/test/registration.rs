@@ -7,15 +7,15 @@ async fn reattached_pending_work_observes_bound_session_while_scheduler_is_live(
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    )
+    ).await
     .unwrap();
-    add(&original, "a", completed_turn);
+    add(&original, "a", completed_turn).await;
     original
-        .send_as_host(message("pending", Destination::Agent("a".into())))
+        .send_as_host(message("pending", Destination::Agent("a".into()))).await
         .unwrap();
     drop(original);
     let restored =
-        Coordinator::new("runtime".into(), storage, CoordinatorOptions::default()).unwrap();
+        Coordinator::new("runtime".into(), storage, CoordinatorOptions::default()).await.unwrap();
     let (seen, mut received) = tokio::sync::mpsc::channel(1);
     let runner: Arc<dyn AgentRunner> = Arc::new(Script(Arc::new(move |request| {
         let seen = seen.clone();
@@ -35,7 +35,7 @@ async fn reattached_pending_work_observes_bound_session_while_scheduler_is_live(
                 runner: runner.clone(),
             },
             "host-conversation",
-        )
+        ).await
         .unwrap();
     assert_eq!(
         received.recv().await.unwrap().as_deref(),
@@ -51,7 +51,7 @@ async fn reattached_pending_work_observes_bound_session_while_scheduler_is_live(
                 runner: runner.clone(),
             },
             "host-conversation",
-        )
+        ).await
         .unwrap();
     assert!(matches!(
         restored.register_agent_in_session(
@@ -61,27 +61,27 @@ async fn reattached_pending_work_observes_bound_session_while_scheduler_is_live(
                 runner
             },
             "replacement"
-        ),
+        ).await,
         Err(Error::SessionConflict(_))
     ));
 }
-#[test]
-fn session_registration_validates_before_publishing_and_storage_failure_is_atomic() {
+#[tokio::test]
+async fn session_registration_validates_before_publishing_and_storage_failure_is_atomic() {
     let storage = Arc::new(MemoryStorage::new());
     let writer = Coordinator::new(
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    )
+    ).await
     .unwrap();
-    add(&writer, "a", completed_turn);
+    add(&writer, "a", completed_turn).await;
     let stale = Coordinator::new(
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    )
+    ).await
     .unwrap();
-    hive(&writer, "revision", &[]);
+    hive(&writer, "revision", &[]).await;
     let runner: Arc<dyn AgentRunner> = Arc::new(Script(Arc::new(completed_turn)));
     let registration = AgentRegistration {
         agent_id: "a".into(),
@@ -89,40 +89,40 @@ fn session_registration_validates_before_publishing_and_storage_failure_is_atomi
         runner: runner.clone(),
     };
     assert!(matches!(
-        stale.register_agent_in_session(registration.clone(), "existing"),
+        stale.register_agent_in_session(registration.clone(), "existing").await,
         Err(Error::RevisionConflict { .. })
     ));
     assert_eq!(stale.lock().unwrap().durable.agents["a"].session_id, None);
     assert!(!stale.lock().unwrap().runners.contains_key("a"));
-    assert_eq!(storage.load().unwrap().agents["a"].session_id, None);
+    assert_eq!(storage.load().await.unwrap().agents["a"].session_id, None);
     let current = Coordinator::new(
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    )
+    ).await
     .unwrap();
     assert!(
         current
-            .register_agent_in_session(registration.clone(), "")
+            .register_agent_in_session(registration.clone(), "").await
             .is_err()
     );
     let mut foreign = registration.clone();
     foreign.runtime_id = "foreign".into();
     assert!(matches!(
-        current.register_agent_in_session(foreign, "existing"),
+        current.register_agent_in_session(foreign, "existing").await,
         Err(Error::RuntimeMismatch)
     ));
     assert!(!current.lock().unwrap().runners.contains_key("a"));
-    current.register_agent(registration.clone()).unwrap();
+    current.register_agent(registration.clone()).await.unwrap();
     current
-        .register_agent_in_session(registration.clone(), "existing")
+        .register_agent_in_session(registration.clone(), "existing").await
         .unwrap();
     let other = AgentRegistration {
         runner: Arc::new(Script(Arc::new(completed_turn))),
         ..registration
     };
     assert!(matches!(
-        current.register_agent_in_session(other.clone(), "existing"),
+        current.register_agent_in_session(other.clone(), "existing").await,
         Err(Error::AgentConflict(_))
     ));
     assert_eq!(
@@ -132,9 +132,9 @@ fn session_registration_validates_before_publishing_and_storage_failure_is_atomi
         Some("existing")
     );
     let restored =
-        Coordinator::new("runtime".into(), storage, CoordinatorOptions::default()).unwrap();
+        Coordinator::new("runtime".into(), storage, CoordinatorOptions::default()).await.unwrap();
     assert!(matches!(
-        restored.register_agent_in_session(other, "switched"),
+        restored.register_agent_in_session(other, "switched").await,
         Err(Error::SessionConflict(_))
     ));
     assert!(!restored.lock().unwrap().runners.contains_key("a"));
