@@ -1,4 +1,5 @@
 import { initPanel } from "./panel.js";
+import { MARK_LANES, markLane, memoryFailed } from "./marks.js";
 "use strict";
 // Hive Lab run viewer. Runs load from the dev server (see server/runs.js), or from dropped files.
 // Input is flat JSONL stamped events; see crates/tinyhivemind-core/src/telemetry/types.rs.
