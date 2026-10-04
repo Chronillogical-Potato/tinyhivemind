@@ -40,12 +40,23 @@ struct Inner {
     notify: Notify,
     shutdown: AtomicBool,
 }
+/// Deferred interruption preserving the reservation it was intended to interrupt.
+#[derive(Clone, Debug)]
+struct DeferredInterruption {
+    reason: String,
+    /// Delivery sequence the interrupted turn was claiming, if present.
+    delivery_sequence: Option<u64>,
+    /// Episode the interrupted turn was working on, if present.
+    episode_id: Option<String>,
+}
 struct LiveState {
     durable: StoredState,
     runners: BTreeMap<String, Arc<dyn AgentRunner>>,
     /// Interruptions applied to `durable` that no commit has persisted yet,
-    /// keyed by agent with their reason.
-    unpersisted: BTreeMap<String, String>,
+    /// keyed by agent with their reservation identity preserved so they are
+    /// only reapplied if the same reservation is still running after a
+    /// conflict reload.
+    unpersisted: BTreeMap<String, DeferredInterruption>,
 }
 impl std::fmt::Debug for Coordinator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
