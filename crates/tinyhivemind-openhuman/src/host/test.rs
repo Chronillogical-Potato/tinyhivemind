@@ -299,7 +299,7 @@ fn continuing_runner_preserves_history_and_finalizes_all_outcomes() {
             .system_prompt("HOST_CONFIGURED_PROMPT")).unwrap();
         host.register_agent(agent).await.unwrap();
         let runner = host.inner.agents.lock().unwrap()["metered"].runner.clone();
-        let mut request = TurnRequest { agent_id:"metered".into(),session_id:None,messages:vec![],memberships:vec![],episode:None };
+        let mut request = TurnRequest { agent_id:"metered".into(),session_id:None,messages:vec![],memberships:vec![],episode:None,resumption:None };
         let first = runner.run(request.clone()).await.unwrap();
         assert_eq!(first.reply.as_deref(),Some("HOST_REPLY"));
         request.session_id = Some(first.session_id.clone());

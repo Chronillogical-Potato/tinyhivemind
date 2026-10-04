@@ -239,6 +239,7 @@ fn retention_keeps_a_settled_episode_a_running_turn_still_reports_to() {
                     thread: None,
                     brief: String::new(),
                 }),
+                resumption: None,
             },
             turn: None,
             actions: Vec::new(),
