@@ -47,6 +47,16 @@ impl Coordinator {
         _gate: &WriterGate<'_>,
         mut operation: impl FnMut(&mut StoredState) -> Result<(bool, T)>,
     ) -> Result<T> {
+        // Check if we've been fenced out before attempting any operation.
+        if self.inner.fenced.load(Ordering::Acquire) {
+            // We've been fenced; fail immediately without attempting further work.
+            let snapshot = self.snapshot()?;
+            return Err(Error::Fenced {
+                coordinator: self.inner.writer_epoch,
+                stored: snapshot.base.writer_epoch,
+            });
+        }
+
         let mut conflicts = 0;
         loop {
             let snapshot = self.snapshot()?;
