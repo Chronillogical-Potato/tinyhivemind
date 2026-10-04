@@ -17,8 +17,9 @@
 //!
 //! Telemetry: one turn per model call (`turn_started`, `turn_finished` with the
 //! provider's real tokens and measured latency), a `tool_call` per tool, a
-//! `mark` per executed command, a `session` mark per activation and a
-//! `memory` mark per memory call.
+//! `mark` per executed command, a `session_resumed` event per resumed
+//! session, and `recalled` / `remembered` events per memory call (with a
+//! `memory` mark carrying the reason when one fails).
 
 mod compact;
 mod recall;
@@ -121,23 +122,12 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>, session: &mut SeatSession) -> Ou
     let mut work = Work::default();
     recall::open(env, act, session);
     session.activations += 1;
-    env.tracer.emit(TraceEvent::Mark {
-        label: "session".into(),
-        detail: format!(
-            "{}: activation {} messages {} delta_rows {} mode {}",
-            act.seat,
-            session.activations,
-            session.messages.len(),
-            act.shown_rows,
-            env.sessions.mode().name()
-        ),
-    });
     if session.activations > 1 && session.last_prompt > act.context.budget {
         let prompt = session.last_prompt;
         compact::apply(env, act, session, &mut out, &mut work, prompt);
     }
     drive(env, act, session, &mut out, &mut work);
-    recall::remember(env, act, &out, &mut work, "activation");
+    recall::remember(env, act, session, &out, &mut work);
     out
 }
 

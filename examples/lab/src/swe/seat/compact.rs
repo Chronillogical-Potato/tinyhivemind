@@ -11,7 +11,7 @@ use serde_json::json;
 use tinyhivemind_core::telemetry::TraceEvent;
 
 use super::super::context::{self, Policy};
-use super::super::memory::Moment;
+use tinyhivemind_core::runtime::RecallMoment;
 use super::super::session::SeatSession;
 use super::{Activation, Env, Outcome, Work, recall};
 
@@ -96,13 +96,9 @@ fn summarize(
     let dropped = context::dropped_text(&messages[2..cut]);
     let removed = context::replace_prefix(messages, cut, done.content.trim());
     if env.memory.is_some() {
-        recall::remember(env, act, out, work, "compaction");
-        let moment = Moment::Compaction {
-            dropped,
-            focus: act.focus.clone(),
-        };
-        if let Some(pack) = recall::ask(env, act.seat, &moment) {
-            context::upsert_memory(&mut session.messages, &pack);
+        recall::remember(env, act, session, out, work);
+        if let Some(block) = recall::ask(env, act, RecallMoment::Compaction { dropped }) {
+            context::upsert_memory(&mut session.messages, &block);
         }
     }
     Some(removed)
