@@ -23,3 +23,4 @@ API stays under module names such as `desk` and `mention`.
 | [`embed`](embed/README.md) | conversation surfaces and semantic routing |
 | [`typesafe`](typesafe/README.md) | exact System One wire types and Jev routing |
 | [`driver`](driver/README.md) | host-neutral completion scheduling and committed-event folds |
+| [`telemetry`](telemetry/README.md) | stamped run events and the sink a host receives them on |
