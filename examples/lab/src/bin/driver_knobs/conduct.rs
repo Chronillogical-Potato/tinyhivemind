@@ -545,6 +545,8 @@ pub fn replay(rig: &TraceRig) -> Res {
             if same {
                 identical += 1;
             } else {
+                let first = resumed.rows.iter().zip(&log).position(|(a, b)| a != b).unwrap_or(resumed.rows.len().min(log.len()));
+                println!("    DEBUG idx {index} kept {kept} first diff at row {first}: resumed {:?} vs whole {:?} (lens {} / {})", resumed.rows.get(first), log.get(first), resumed.rows.len(), log.len());
                 mismatched.push((index, state.mid_wave_is_empty(), resumed.error));
             }
         }
