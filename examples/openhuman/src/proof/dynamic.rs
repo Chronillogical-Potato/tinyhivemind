@@ -63,7 +63,8 @@ pub async fn run() -> anyhow::Result<()> {
         manager.runtime_id().into(),
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
-    ).await?;
+    )
+    .await?;
     let calls = Arc::new(AtomicUsize::new(0));
     let host = OpenHumanHost::new(manager.runtime_id().into(), coordinator.clone())?
         .with_management(
@@ -120,14 +121,16 @@ pub async fn run() -> anyhow::Result<()> {
         coordinator.list_hives()?[0].members == ["specialist"],
         "management tool did not register and join supplied instance"
     );
-    coordinator.send_as_host(SendMessage {
-        message_id: "dynamic-input".into(),
-        sender: String::new(),
-        destination: Destination::Hive("dynamic".into()),
-        body: "Work from dynamically created hive".into(),
-        thread: None,
-        only_for: Vec::new(),
-    }).await?;
+    coordinator
+        .send_as_host(SendMessage {
+            message_id: "dynamic-input".into(),
+            sender: String::new(),
+            destination: Destination::Hive("dynamic".into()),
+            body: "Work from dynamically created hive".into(),
+            thread: None,
+            only_for: Vec::new(),
+        })
+        .await?;
     queue_capabilities(&fixture, "specialist");
     let report = coordinator.run_until_idle().await?;
     anyhow::ensure!(

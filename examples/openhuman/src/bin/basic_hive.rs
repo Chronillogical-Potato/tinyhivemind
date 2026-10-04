@@ -154,16 +154,21 @@ async fn run(mode: Mode) -> Result<()> {
         runtime.runtime_id().into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await?;
+    )
+    .await?;
     let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator.clone())?;
-    host.register_agent_in_session(alice.clone(), &alice_session).await?;
-    host.register_agent_in_session(bob.clone(), &bob_session).await?;
-    coordinator.create_hive(HiveInfo {
-        hive_id: "release".into(),
-        name: "Release".into(),
-        description: Some("Plan and review a release".into()),
-        members: Vec::new(),
-    }).await?;
+    host.register_agent_in_session(alice.clone(), &alice_session)
+        .await?;
+    host.register_agent_in_session(bob.clone(), &bob_session)
+        .await?;
+    coordinator
+        .create_hive(HiveInfo {
+            hive_id: "release".into(),
+            name: "Release".into(),
+            description: Some("Plan and review a release".into()),
+            members: Vec::new(),
+        })
+        .await?;
     for agent in [&alice, &bob] {
         coordinator.join_hive("release", agent.id()).await?;
     }
@@ -174,14 +179,16 @@ async fn run(mode: Mode) -> Result<()> {
         ("alice", "Plan the rollout"),
         ("bob", "Review the rollback"),
     ] {
-        let receipt = coordinator.send_as_host(SendMessage {
-            message_id: format!("task-{agent_id}"),
-            sender: String::new(),
-            destination: Destination::Hive("release".into()),
-            body: task.into(),
-            thread: None,
-            only_for: vec![agent_id.into()],
-        }).await?;
+        let receipt = coordinator
+            .send_as_host(SendMessage {
+                message_id: format!("task-{agent_id}"),
+                sender: String::new(),
+                destination: Destination::Hive("release".into()),
+                body: task.into(),
+                thread: None,
+                only_for: vec![agent_id.into()],
+            })
+            .await?;
         let report = coordinator.run_until_idle().await?;
         ensure!(
             report.completed > 0 && report.failed == 0,
