@@ -14,7 +14,9 @@ use crate::runtime::{
 };
 
 /// Read the newest rows of every conversation in `query.conversations`
-/// except the one the turn is in, as `seat` reads them.
+/// except the one the turn is in, as `seat` reads them. "The one the turn is
+/// in" is decided by [`Conversation::equivalent_to`], so every General alias
+/// (`main`, `general`, a blank id) is the same desk.
 ///
 /// A turn is shown its own channel by whoever runs it. This is the rest of
 /// what the seat would know if it were reading: one page per conversation,
@@ -37,7 +39,7 @@ pub async fn gather_elsewhere(
 ) -> Result<Vec<Elsewhere>> {
     let mut gathered = Vec::new();
     for conversation in query.conversations {
-        if same_conversation(conversation, query.current) {
+        if query.current.is_some_and(|current| conversation.equivalent_to(current)) {
             continue;
         }
         let rows = project_session(
@@ -58,11 +60,6 @@ pub async fn gather_elsewhere(
         });
     }
     Ok(gathered)
-}
-
-/// Whether two conversations are the same desk and the same thread.
-fn same_conversation(one: &Conversation, other: Option<&Conversation>) -> bool {
-    other.is_some_and(|other| one.desk_id == other.desk_id && one.thread_root == other.thread_root)
 }
 
 /// One row as a model reads it: `@author: content`, or nothing for a row
