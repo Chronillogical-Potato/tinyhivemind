@@ -59,6 +59,9 @@ pub enum Error {
         /// Current stored revision.
         actual: u64,
     },
+    /// An appended transcript row does not follow the stored transcript.
+    #[error("transcript row {0} does not extend the stored transcript")]
+    TranscriptOutOfOrder(u64),
     /// Next snapshot does not advance exactly one revision.
     #[error("invalid next storage revision")]
     InvalidRevision,
