@@ -187,6 +187,16 @@ fn cases() -> Vec<Case> {
             r.thresholds = vec![eager.clone(), shy.clone()];
         },
     ));
+    all.push(case(
+        "thresholds",
+        "every seat's threshold +1e9: nobody bids",
+        |_, r| {
+            r.thresholds = crate::room::CAST
+                .iter()
+                .map(|seat| AgentThreshold::new(seat.id, 1_000_000_000))
+                .collect();
+        },
+    ));
     all
 }
 
