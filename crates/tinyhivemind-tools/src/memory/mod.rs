@@ -95,6 +95,12 @@ pub struct MemoryTools {
     memory: Arc<dyn WorkingMemory>,
 }
 
+impl std::fmt::Debug for MemoryTools {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MemoryTools").finish_non_exhaustive()
+    }
+}
+
 impl MemoryTools {
     /// Serve the memory tools over `memory`.
     #[must_use]
