@@ -75,7 +75,7 @@ example could drive and why.
 | `BrevityPolicy.message_chars`, `.window`, `overrun`, `rule_text` | `memory_hive` | briefing |
 | `MentionDispatchContext`, `MentionDispatchPolicy.enabled`, `.max_hops` | `memory_hive`, `gate_knobs` | briefing; dispatch gallery |
 | `initialize_session`, `initialize_session_with_context`, `SessionContext`, `BriefingNote` | `memory_hive` | briefing |
-| `ElsewhereQuery.seat`, `.conversations`, `.current`, `.before`, `.window`, `gather_elsewhere`, `render_row` | `memory_hive` | elsewhere (F9) |
+| `ElsewhereQuery.seat`, `.conversations`, `.current`, `.before`, `.window`, `gather_elsewhere`, `render_row` | `memory_hive` | elsewhere (F9, fixed: General aliases skipped) |
 | `THREAD_INDEX_LIMIT`, `THREAD_OPENING_CHARS`, `read_thread_index`, `ThreadLine.landed` | `memory_hive` | threads |
 | `THREAD_INDEX_SCAN`, `fold_thread_index` (direct) | `memory_hive` | printed; folded through `read_thread_index` |
 
@@ -87,7 +87,7 @@ example could drive and why.
 | `interpret` for `post`, `broadcast`, `dm`, `ask`, `ask_teammates`, `complete_episode`, `close`, `read` | `context_tools` | interpret |
 | `UtteranceRejection` (`UnknownTool`, `EmptyText`, `NoRecipients`, `UnknownRecipient`, `SelfRecipient`, `OneRecipient`, `NotAGroup`) | `context_tools` | interpret; check_recipients |
 | `Utterance` helpers, serde alias `close` | `context_tools` | check_recipients and addressed_peers |
-| `commit_utterance`, `CommitRequest.aside`, `CommittedUtterance.refusal` | `context_tools` | commit_utterance under three policies (F13) |
+| `commit_utterance`, `CommitRequest.aside`, `CommittedUtterance.refusal`, `commit_utterance_to_room`, `Error::AsideRefused` | `context_tools` | commit_utterance under three policies; a declined aside is refused, the room fallback is opt-in (F13, fixed) |
 | `CommitRequest.spent`, `.unsettled`, `AsideInput.spent`, `.unsettled` | `context_tools` | swept through `aside()`; `commit_utterance` is called with `0` and `false` |
 | `addressed_peers`, `check_recipients` | `context_tools` | check_recipients and addressed_peers |
 | `fence::extract_post` | `context_tools` | fence |
