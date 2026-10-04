@@ -90,6 +90,12 @@ impl Coordinator {
             return Err(Error::InvalidOptions);
         }
         let mut durable = storage.load().await?;
+
+        // Claim ownership by incrementing writer_epoch (fencing any previous owner)
+        let previous_epoch = durable.writer_epoch;
+        let writer_epoch = previous_epoch.checked_add(1).ok_or(Error::Exhausted)?;
+        durable.writer_epoch = writer_epoch;
+
         if !durable.running.is_empty() {
             let previous = durable.revision;
             let agents: Vec<_> = durable.running.keys().cloned().collect();
@@ -104,7 +110,19 @@ impl Coordinator {
                     appended: &[],
                 })
                 .await?;
+        } else {
+            // No running turns, but still commit the epoch claim so we own the store.
+            let previous = durable.revision;
+            durable.revision = previous.checked_add(1).ok_or(Error::Exhausted)?;
+            storage
+                .commit(Commit {
+                    expected_revision: previous,
+                    state: &durable,
+                    appended: &[],
+                })
+                .await?;
         }
+
         let (committed, _) = watch::channel(durable.revision);
         Ok(Self {
             inner: Arc::new(Inner {
@@ -121,6 +139,8 @@ impl Coordinator {
                 committed,
                 notify: Notify::new(),
                 shutdown: AtomicBool::new(false),
+                writer_epoch,
+                fenced: AtomicBool::new(false),
             }),
         })
     }
