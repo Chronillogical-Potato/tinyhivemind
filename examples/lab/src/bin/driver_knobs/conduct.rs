@@ -320,6 +320,10 @@ async fn play_inner(
             Conductor::open(&driver, routing, scn.policy, door)?
         }
     };
+    if let (Some((json, _)), true) = (resume, std::env::var("LAB_DEBUG").is_ok()) {
+        let again = conductor.snapshot().map(|s| serde_json::to_string(&s)).transpose()?;
+        eprintln!("ROUNDTRIP equal={} \n IN  {json}\n OUT {:?}", again.as_deref() == Some(json), again);
+    }
     let mut parked_once = false;
     for _ in 0..200 {
         host.drain(&mut conductor, snapshots).await?;
