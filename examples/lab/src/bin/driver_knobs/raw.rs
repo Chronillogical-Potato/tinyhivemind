@@ -189,6 +189,32 @@ pub fn run() -> Res {
             broadcast("writer", 4, "write the rust parser docs"),
         ],
     );
+    // One eligible candidate: the answer is known before the model is asked.
+    let duo = CompletionDriver::new(&hive, 2)?;
+    let alone = KeywordRouter::new("scripted");
+    let solo_routing = BroadcastRouting {
+        primary: Some(&alone),
+        reasoning: None,
+        policy: &narrow,
+        roster_version: 1,
+        thread_context: &[],
+    };
+    let mut pair = duo.start(tinyhivemind_core::hive::CompletionEpisodeState::opened(
+        conversation(),
+        Sequence(1),
+        ["planner", "coder"],
+    )?)?;
+    pair = block_on(duo.apply_committed(&pair, complete("coder", 2), Some(solo_routing)))?.state;
+    let sent = block_on(duo.apply_committed(
+        &pair,
+        broadcast("planner", 3, "anything at all"),
+        Some(solo_routing),
+    ))?;
+    println!(
+        "  a two-seat episode, one eligible candidate: {}; router asked {} time(s)",
+        actions(&sent.actions),
+        alone.calls()
+    );
     for budget in [None, Some(1), Some(2)] {
         let driver = CompletionDriver::new(&hive, 2)?.with_broadcast_budget(budget);
         drive(
