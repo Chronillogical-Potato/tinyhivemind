@@ -4,7 +4,7 @@
 use super::*;
 use crate::{Destination, Message, SendMessage};
 
-fn row(sequence: u64, accepted: bool) -> TranscriptRow {
+pub(super) fn row(sequence: u64, accepted: bool) -> TranscriptRow {
     let message = Message {
         message_id: format!("m{sequence}"),
         sequence,
@@ -27,13 +27,13 @@ fn row(sequence: u64, accepted: bool) -> TranscriptRow {
         message,
     }
 }
-fn state_at(revision: u64) -> StoredState {
+pub(super) fn state_at(revision: u64) -> StoredState {
     StoredState {
         revision,
         ..StoredState::default()
     }
 }
-async fn commit(
+pub(super) async fn commit(
     storage: &dyn Storage,
     expected_revision: u64,
     state: &StoredState,
@@ -47,7 +47,7 @@ async fn commit(
         })
         .await
 }
-async fn contract(storage: &dyn Storage) {
+pub(super) async fn contract(storage: &dyn Storage) {
     let mut state = storage.load().await.unwrap();
     let start = state.revision;
     state.revision += 1;
@@ -201,5 +201,3 @@ fn retention_keeps_recent_settled_episodes_and_deliveries_only() {
         [1, 3, 4]
     );
 }
-#[cfg(feature = "sqlite")]
-mod sqlite;
