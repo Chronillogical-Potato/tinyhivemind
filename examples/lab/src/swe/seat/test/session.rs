@@ -1,0 +1,152 @@
+//! A seat's session persists across activations; only compaction shrinks it.
+
+use serde_json::{Value, json};
+use tinyhivemind_core::telemetry::TraceEvent;
+
+use super::support::*;
+use crate::swe::context::{Policy, Settings};
+use crate::swe::session::{SessionMode, Sessions};
+use crate::swe::tools::HIVE_TOOLS;
+
+fn messages(body: &Value) -> Vec<Value> {
+    body["messages"].as_array().expect("messages").clone()
+}
+
+fn users(body: &Value) -> Vec<String> {
+    messages(body)
+        .iter()
+        .filter(|m| m["role"] == "user")
+        .map(|m| m["content"].as_str().unwrap_or_default().to_owned())
+        .collect()
+}
+
+fn two_activations(rig: &Rig) {
+    activate(rig, &Spec::new(HIVE_TOOLS, true, 5));
+    activate(
+        rig,
+        &Spec {
+            user: "DELTA: @tester: tests pass".into(),
+            ..Spec::new(HIVE_TOOLS, true, 5)
+        },
+    );
+}
+
+fn script() -> Vec<Result<Value, String>> {
+    vec![
+        Ok(call("bash", json!({ "cmd": "ls" }))),
+        Ok(call("post", json!({ "message": "listed" }))),
+        Ok(call("post", json!({ "message": "done" }))),
+    ]
+}
+
+#[test]
+fn a_second_activation_still_holds_the_first_ones_tool_results() {
+    let (rig, bodies) = recorded(script());
+    two_activations(&rig);
+    let bodies = bodies.lock().expect("lock");
+    let last = bodies.last().expect("a request");
+    let all = messages(last);
+    assert_eq!(all.iter().filter(|m| m["role"] == "system").count(), 1);
+    assert!(
+        all.iter()
+            .any(|m| m["role"] == "tool" && m["content"].as_str().unwrap_or("").contains("ran ls")),
+        "the first activation's command output is still in the session"
+    );
+    assert_eq!(users(last), ["go", "DELTA: @tester: tests pass"]);
+}
+
+#[test]
+fn only_the_delta_is_appended_on_resume() {
+    let (rig, _) = recorded(script());
+    activate(&rig, &Spec::new(HIVE_TOOLS, true, 5));
+    let after_first = rig.sessions.len_of("lead");
+    activate(
+        &rig,
+        &Spec {
+            user: "DELTA".into(),
+            ..Spec::new(HIVE_TOOLS, true, 5)
+        },
+    );
+    // One delta message, then the reply and its tool result.
+    assert_eq!(rig.sessions.len_of("lead"), after_first + 3);
+}
+
+#[test]
+fn every_activation_is_marked_with_its_number_and_size() {
+    let (rig, _) = recorded(script());
+    two_activations(&rig);
+    let marks: Vec<String> = events(&rig)
+        .into_iter()
+        .filter_map(|e| match e {
+            TraceEvent::Mark { label, detail } if label == "session" => Some(detail),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(marks.len(), 2);
+    assert!(marks[0].starts_with("lead: activation 1 messages 2"));
+    assert!(marks[1].contains("activation 2") && marks[1].contains("mode persistent"));
+}
+
+#[test]
+fn without_compaction_nothing_is_ever_removed() {
+    let (rig, _) = recorded(vec![
+        Ok(call("bash", json!({ "cmd": "a" }))),
+        Ok(call("post", json!({ "message": "1" }))),
+        Ok(call("bash", json!({ "cmd": "b" }))),
+        Ok(call("post", json!({ "message": "2" }))),
+        Ok(call("bash", json!({ "cmd": "c" }))),
+        Ok(call("post", json!({ "message": "3" }))),
+    ]);
+    let mut sizes = Vec::new();
+    for _ in 0..3 {
+        activate(&rig, &Spec::new(HIVE_TOOLS, true, 5));
+        sizes.push(rig.sessions.len_of("lead"));
+    }
+    assert_eq!(sizes, [6, 11, 16]);
+}
+
+#[test]
+fn compaction_is_what_shrinks_a_long_session() {
+    let mut script = Vec::new();
+    for n in 0..4 {
+        script.push(long_bash());
+        script.push(long_bash());
+        script.push(Ok(call("post", json!({ "message": format!("round {n}") }))));
+    }
+    // The summarizer's reply comes from the same script when it fires.
+    script.insert(5, Ok(text("NOTE: summary of earlier work")));
+    let (rig, _) = recorded(script);
+    let settings = Settings {
+        policy: Policy::Summarize,
+        budget: 50,
+        keep_recent: 1,
+    };
+    let mut sizes = Vec::new();
+    for _ in 0..3 {
+        activate(
+            &rig,
+            &Spec {
+                context: settings,
+                ..Spec::new(HIVE_TOOLS, true, 5)
+            },
+        );
+        sizes.push(rig.sessions.len_of("lead"));
+    }
+    assert!(context_marks(&rig) >= 1);
+    assert!(
+        sizes.windows(2).any(|w| w[1] < w[0] + 8),
+        "a summary removed messages: {sizes:?}"
+    );
+}
+
+#[test]
+fn fresh_mode_starts_every_activation_from_its_opening_again() {
+    let (mut rig, bodies) = recorded(script());
+    rig.sessions = Sessions::new(SessionMode::Fresh);
+    two_activations(&rig);
+    let bodies = bodies.lock().expect("lock");
+    let last = bodies.last().expect("a request");
+    assert_eq!(messages(last).len(), 2, "system and the new opening only");
+    assert_eq!(users(last), ["DELTA: @tester: tests pass"]);
+    assert_eq!(rig.sessions.len_of("lead"), 0);
+}

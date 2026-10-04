@@ -1,7 +1,6 @@
 //! Compaction under each context policy.
 
 use serde_json::json;
-use tinyhivemind_core::telemetry::TraceEvent;
 
 use super::super::*;
 use super::support::*;

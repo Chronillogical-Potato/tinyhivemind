@@ -146,10 +146,15 @@ pub(super) fn go_with(
 
 /// Run one activation of `lead` on its session from the rig's store.
 pub(super) fn activate(rig: &Rig, spec: &Spec) -> Outcome {
+    activate_on(rig, &Echo, spec)
+}
+
+/// [`activate`] with commands running on `exec`.
+pub(super) fn activate_on(rig: &Rig, exec: &dyn Exec, spec: &Spec) -> Outcome {
     let tracer = Tracer::new("t", &rig.sink, &Zero);
     let env = Env {
         llm: &rig.llm,
-        exec: &Echo,
+        exec,
         tracer: &tracer,
         board: &rig.board,
         turns: &rig.turns,
