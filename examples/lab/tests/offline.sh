@@ -38,7 +38,7 @@ check() { # label mode [extra swe_hive flags...]
     --max-turns 30 --token-cap 100000 "$@" 2>"$work/$label.err"
   [ "$(docker exec "$name" cat /tmp/hello.txt)" = "hi" ] || { echo "$label: file missing"; exit 1; }
   python3 - "$work/$label.json" "$work/$label.jsonl" "$mode" "$label" <<'PY'
-import json, re, sys
+import json, sys
 result = json.load(open(sys.argv[1]))
 events = [json.loads(line) for line in open(sys.argv[2])]
 mode, label = sys.argv[3], sys.argv[4]
@@ -51,24 +51,29 @@ if mode == "hive":
     need |= {"round", "converged"}
 assert need <= kinds, (need - kinds)
 marks = [e for e in events if e["event"] == "mark"]
-sessions = [m["detail"] for m in marks if m.get("label") == "session"]
-assert sessions, "every activation is marked"
-memory = [m["detail"] for m in marks if m.get("label") == "memory"]
-lead = [re.search(r"activation (\d+) messages (\d+)", d).groups()
-        for d in sessions if d.startswith("lead:")]
+resumed = [e for e in events if e["event"] == "session_resumed"]
+recalled = [e for e in events if e["event"] == "recalled"]
+remembered = [e for e in events if e["event"] == "remembered"]
+failures = [m["detail"] for m in marks if m.get("label") == "memory" and "error=" in m["detail"]]
 if label.startswith("hive-persistent"):
     assert result["seat_session"] == "persistent", result
-    resumed = [int(n) for a, n in lead if int(a) > 1]
-    assert resumed and min(resumed) > 2, ("a woken lead resumes its session", sessions)
+    lead = [e for e in resumed if e["seat"] == "lead"]
+    assert lead and min(e["messages"] for e in lead) > 2, ("a woken lead resumes its session", resumed)
 if label == "hive-fresh":
     assert result["seat_session"] == "fresh" and result["context_policy"] == "mask", result
-    assert all(int(n) == 2 for _, n in lead), ("fresh sessions restart", sessions)
+    assert not resumed, ("fresh sessions never resume", resumed)
 if label.endswith("-mem"):
     assert result["memory"] == "cortex", result
-    assert any(" recall session_start " in d for d in memory), memory
-    assert any(" remember " in d and "error=" not in d for d in memory), memory
+    assert any(e["moment"] == "session_start" for e in recalled), recalled
+    assert remembered and all(e["entries"] > 0 for e in remembered), remembered
+    assert not failures, failures
+    if mode == "hive":
+        rejoin = [e for e in recalled if e["moment"] == "rejoin"]
+        assert rejoin and all(e["notes"] > 0 for e in rejoin), ("a teammate's turn is indexed in time", rejoin)
 else:
-    assert result["memory"] == "none" and not memory, (result["memory"], memory)
+    assert result["memory"] == "none" and not recalled and not remembered, result["memory"]
+sessions = resumed
+memory = recalled + remembered
 print(f'{label}: ok  turns={result["turns"]} in={result["tokens_in"]} '
       f'out={result["tokens_out"]} wall_ms={result["wall_ms"]} '
       f'sessions={len(sessions)} memory_marks={len(memory)}')
