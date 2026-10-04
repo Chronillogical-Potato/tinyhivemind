@@ -120,6 +120,8 @@ impl Coordinator {
             {
                 return Ok((false, 0));
             }
+            eprintln!("DBG msgs {} -> {} ; eps {:?}", original.messages.len(), next.messages.len(), next.episodes.iter().map(|e| (e.finished, e.failure.clone(), e.waiting, e.wave_open, e.pending.len())).collect::<Vec<_>>());
+            if let Some(m) = next.messages.last() { eprintln!("DBG last {:?}", m); }
             let failures = next
                 .episodes
                 .iter()
