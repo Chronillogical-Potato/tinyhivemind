@@ -69,7 +69,7 @@ async fn commits_append_only_new_transcript_rows() {
     assert!(stored.accepted.contains_key("one"));
 }
 #[tokio::test]
-async fn a_write_racing_another_process_reloads_and_retries() {
+async fn second_coordinator_fences_first_coordinator_from_writing() {
     let storage = Arc::new(MemoryStorage::new());
     let c = Coordinator::new(
         "runtime".into(),
@@ -82,7 +82,9 @@ async fn a_write_racing_another_process_reloads_and_retries() {
         Box::pin(async move { Ok(done(&request)) })
     })
     .await;
-    // Another process sharing the store creates a hive behind our back.
+
+    // A second process claims ownership by starting a new coordinator.
+    // This increments writer_epoch, fencing the first coordinator.
     let other = Coordinator::new(
         "runtime".into(),
         storage.clone(),
@@ -90,15 +92,22 @@ async fn a_write_racing_another_process_reloads_and_retries() {
     )
     .await
     .unwrap();
+
+    // The first coordinator is now fenced. Any attempt to write returns Fenced.
+    assert!(matches!(
+        c.send_as_host(message("fenced", Destination::Agent("a".into())))
+            .await,
+        Err(Error::Fenced { coordinator: 1, stored: 2 })
+    ));
+
+    // The second coordinator can create a hive and operate normally.
     hive(&other, "elsewhere", &["a"]).await;
-    c.send_as_host(message("raced", Destination::Agent("a".into())))
-        .await
-        .unwrap();
-    assert_eq!(c.lock().unwrap().durable.revision, 3);
-    assert_eq!(c.list_hives().unwrap()[0].hive_id, "elsewhere");
+    assert_eq!(other.list_hives().unwrap()[0].hive_id, "elsewhere");
+
     let stored = storage.load().await.unwrap();
-    assert_eq!(stored.messages.len(), 1);
+    // The hive was created, but the fenced message was never sent.
     assert!(stored.hives.contains_key("elsewhere"));
+    assert_eq!(stored.messages.len(), 0);
 }
 #[tokio::test]
 async fn persistent_conflicts_and_storage_failures_publish_nothing() {
