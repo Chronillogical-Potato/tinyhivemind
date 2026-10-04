@@ -66,7 +66,7 @@ impl Coordinator {
 
         let attempt = self.persist(&snapshot, next).await;
         let mut conflicts = 0;
-        self.settle(attempt, &mut conflicts).await?;
+        self.settle(attempt, &mut conflicts)?;
         Ok(value)
     }
     /// Copy live state under the live lock. Hold the writer gate.
