@@ -68,6 +68,8 @@ pub struct Snapshot {
     pub calls: u64,
     /// The largest prompt any single call reported.
     pub max_prompt: u64,
+    /// Times a context policy masked or summarized a conversation.
+    pub context_events: u64,
     /// The same, per seat.
     pub seats: BTreeMap<String, SeatUsage>,
 }
@@ -79,6 +81,7 @@ pub struct Meter {
     output: AtomicU64,
     calls: AtomicU64,
     max_prompt: AtomicU64,
+    context_events: AtomicU64,
     seats: Mutex<BTreeMap<String, SeatUsage>>,
     token_cap: Option<u64>,
     max_calls: Option<u64>,
@@ -147,6 +150,11 @@ impl Meter {
         }
     }
 
+    /// Count one firing of a context policy.
+    pub fn note_context_event(&self) {
+        self.context_events.fetch_add(1, Ordering::SeqCst);
+    }
+
     /// Copy the counters.
     #[must_use]
     pub fn snapshot(&self) -> Snapshot {
@@ -155,6 +163,7 @@ impl Meter {
             output: self.output.load(Ordering::SeqCst),
             calls: self.calls.load(Ordering::SeqCst),
             max_prompt: self.max_prompt.load(Ordering::SeqCst),
+            context_events: self.context_events.load(Ordering::SeqCst),
             seats: self.seats.lock().map(|s| s.clone()).unwrap_or_default(),
         }
     }

@@ -30,6 +30,9 @@ pub struct Params {
     pub round_width: usize,
     /// Model calls one activation may make.
     pub steps: usize,
+    /// Hard per-activation prompt budget (the briefing already bounds the
+    /// opening prompt; this bounds the growth within one activation).
+    pub context: Settings,
 }
 
 /// A queued activation.
@@ -252,6 +255,7 @@ fn run_round(
                             speaking: HIVE_TOOLS,
                             steps: params.steps,
                             implicit_post: true,
+                            context: params.context,
                         },
                     )
                 })

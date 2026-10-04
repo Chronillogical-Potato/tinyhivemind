@@ -77,8 +77,6 @@ pub struct Outcome {
     pub steps: usize,
     /// The largest prompt any call of this activation reported.
     pub max_prompt: u64,
-    /// How many times the context policy fired.
-    pub context_events: u32,
 }
 
 /// Run one activation to its end.
@@ -184,7 +182,7 @@ fn apply_context(
         settings.budget,
         settings.policy.name()
     );
-    out.context_events += 1;
+    env.llm.meter().note_context_event();
     env.tracer.emit(TraceEvent::Mark {
         label: "context".into(),
         detail,
