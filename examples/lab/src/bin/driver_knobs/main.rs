@@ -9,6 +9,7 @@
 
 mod conduct;
 mod fixture;
+mod jev;
 mod raw;
 mod replay;
 mod routing;
@@ -19,6 +20,7 @@ fn main() -> Res {
     let rig = TraceRig::from_args();
     raw::run()?;
     routing::run()?;
+    jev::run()?;
     conduct::run(&rig)?;
     replay::run(&rig)?;
     if let Some(path) = rig.path() {
