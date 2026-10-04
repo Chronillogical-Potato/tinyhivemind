@@ -12,6 +12,7 @@ use tinyhivemind_core::runtime::{
 #[derive(Debug, Default)]
 pub struct MemoryLog {
     rows: Vec<LogMessage>,
+    offset: u64,
 }
 
 /// An agent author.
@@ -33,6 +34,16 @@ pub fn person(id: &str) -> SessionAuthor {
 }
 
 impl MemoryLog {
+    /// An empty log whose first row will be numbered `after + 1`, as a host's
+    /// log is once its oldest rows have been compacted away.
+    #[must_use]
+    pub fn starting_after(after: u64) -> Self {
+        Self {
+            rows: Vec::new(),
+            offset: after,
+        }
+    }
+
     /// Append a desk-visible row to `chat` and return its sequence.
     pub fn say(&mut self, chat: &str, author: SessionAuthor, content: &str) -> Sequence {
         self.append(chat, None, author, content, Audience::Desk)
@@ -58,7 +69,7 @@ impl MemoryLog {
         content: &str,
         audience: Audience,
     ) -> Sequence {
-        let sequence = Sequence(self.rows.len() as u64 + 1);
+        let sequence = Sequence(self.offset + self.rows.len() as u64 + 1);
         self.rows.push(LogMessage {
             sequence,
             chat_id: Some(chat.into()),
@@ -73,7 +84,7 @@ impl MemoryLog {
     /// The newest sequence, or zero for an empty log.
     #[must_use]
     pub fn head(&self) -> Sequence {
-        Sequence(self.rows.len() as u64)
+        Sequence(self.offset + self.rows.len() as u64)
     }
 
     /// Every row, oldest first.
