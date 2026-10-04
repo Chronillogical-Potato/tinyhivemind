@@ -19,7 +19,9 @@
 //! engine has indexed it (`WriteOptions::visible`, which CortexDB serves as
 //! `POST /v1/experience?wait=indexed`). `AgentMemory::post_turn` only waits
 //! for acceptance, which let a teammate's recall a moment later miss the
-//! turn; the wait is bounded by the same timeout as before.
+//! turn. The wait gets most of the 4 s bound; when the index is slower than
+//! that, the turn is kept with an accepted-only write in the rest of the
+//! bound, and [`SeatMemory::finish`] reports how many turns that happened to.
 //!
 //! Seats are threads and tinymemory is async, so `HiveMemory` owns a small
 //! multi-threaded tokio runtime. Each port call spawns its work there (with
@@ -31,8 +33,9 @@ mod notes;
 mod types;
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use tinyhivemind_core::runtime::{
     BriefingNote, Error as CoreError, Recall, RecallFuture, RecallMoment, RecallRequest, Remember,
@@ -78,6 +81,9 @@ struct Inner {
     timeouts: Timeouts,
     state: Mutex<HashMap<String, SeatState>>,
     background: Mutex<Vec<JoinHandle<String>>>,
+    /// Turns stored without waiting for the index, because it was slower
+    /// than the remember bound.
+    lagged: AtomicU32,
 }
 
 /// One run's memory: a namespace root on an engine, one agent per seat.
@@ -179,6 +185,7 @@ impl HiveMemory {
                 timeouts: Timeouts::DEFAULT,
                 state: Mutex::new(HashMap::new()),
                 background: Mutex::new(Vec::new()),
+                lagged: AtomicU32::new(0),
             }),
             budget_chars: budget_tokens.saturating_mul(CHARS_PER_TOKEN),
         })
@@ -369,16 +376,31 @@ impl Inner {
             turn
         };
         let item = notes::turn_item(node, seat, turn, text);
-        let write = self.engine.store_with(item, WriteOptions::visible());
-        match tokio::time::timeout(self.timeouts.remember, write).await {
-            Err(_) => {
-                return Err(remember_error(format!(
-                    "timed out after {:?}",
-                    self.timeouts.remember
-                )));
-            }
-            Ok(Err(error)) => return Err(remember_error(error.to_string())),
+        // Wait for the index for most of the bound; if it is slower than
+        // that, keep the turn anyway with an accepted-only write in what is
+        // left, and count it so the end of the run says how often.
+        let fallback = (self.timeouts.remember / 8).min(Duration::from_millis(500));
+        let indexed = self
+            .engine
+            .store_with(item.clone(), WriteOptions::visible());
+        match tokio::time::timeout(self.timeouts.remember - fallback, indexed).await {
             Ok(Ok(_)) => {}
+            Ok(Err(error)) => return Err(remember_error(error.to_string())),
+            Err(_) => {
+                let accepted = self.engine.store_with(item, WriteOptions::accepted());
+                match tokio::time::timeout(fallback, accepted).await {
+                    Ok(Ok(_)) => {
+                        self.lagged.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Ok(Err(error)) => return Err(remember_error(error.to_string())),
+                    Err(_) => {
+                        return Err(remember_error(format!(
+                            "timed out after {:?}",
+                            self.timeouts.remember
+                        )));
+                    }
+                }
+            }
         }
         if (turn + 1).is_multiple_of(BUILD_EVERY) {
             let job = agent.history_build();
@@ -447,9 +469,12 @@ impl SeatMemory for HiveMemory {
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
         );
         let deadline = Instant::now() + self.inner.timeouts.finish;
-        handles
-            .into_iter()
-            .map(|handle| {
+        let lagged = self.inner.lagged.swap(0, Ordering::Relaxed);
+        let lag = (lagged > 0).then(|| {
+            format!("remember: {lagged} turns stored without waiting for the index (slower than the bound)")
+        });
+        lag.into_iter()
+            .chain(handles.into_iter().map(|handle| {
                 let left = deadline.saturating_duration_since(Instant::now());
                 let waited = self
                     .runtime
@@ -459,7 +484,7 @@ impl SeatMemory for HiveMemory {
                     Ok(Err(error)) => format!("belief_build error={error}"),
                     Err(_) => "belief_build error=still running at the end of the run".into(),
                 }
-            })
+            }))
             .collect()
     }
 }
