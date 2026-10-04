@@ -2,9 +2,12 @@
 //!
 //! Same model, same `bash` tool, same sandbox, same meter and the same caps as
 //! the hive. Its only speaking tool is `complete_episode`, which ends the run.
-//! Nothing is pruned: the conversation grows with every command, which is what
-//! a conventional agent loop pays and what the hive arm is compared against.
+//! What happens when the conversation outgrows the model's context is an
+//! explicit, measured choice (`--single-context none|mask|summarize`, see
+//! [`context`](super::context)), so the baseline does not die of overflow for
+//! reasons unrelated to the hive idea.
 
+use super::context::Settings;
 use super::roles::{single_system, single_turn};
 use super::seat::{Activation, Env, Outcome, run as run_seat};
 use super::tools::{SINGLE_TOOLS, tool_list};
@@ -13,7 +16,7 @@ use super::tools::{SINGLE_TOOLS, tool_list};
 pub const SEAT: &str = "agent";
 
 /// Run the single agent on `task`, allowing up to `steps` model calls.
-pub fn run(env: &Env<'_>, task: &str, steps: usize) -> Outcome {
+pub fn run(env: &Env<'_>, task: &str, steps: usize, context: Settings) -> Outcome {
     run_seat(
         env,
         &Activation {
@@ -24,6 +27,7 @@ pub fn run(env: &Env<'_>, task: &str, steps: usize) -> Outcome {
             speaking: SINGLE_TOOLS,
             steps,
             implicit_post: false,
+            context,
         },
     )
 }
