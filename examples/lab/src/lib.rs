@@ -60,3 +60,6 @@ pub use tick::TickClock;
 mod world;
 
 pub use world::World;
+mod report;
+
+pub use report::{Res, section};
