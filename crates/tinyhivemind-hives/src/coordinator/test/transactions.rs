@@ -170,6 +170,7 @@ async fn retention_bounds_settled_episodes_and_acknowledged_deliveries() {
             retention: RetentionPolicy {
                 settled_episodes: Some(1),
                 delivered: Some(1),
+                interrupted: None,
             },
             ..CoordinatorOptions::default()
         },
