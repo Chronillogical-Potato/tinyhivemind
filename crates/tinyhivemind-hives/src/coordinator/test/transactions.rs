@@ -286,8 +286,16 @@ async fn retention_bounds_interrupted_records() {
         },
     )
     .await;
-    add(&c, "a", |_| {
-        Box::pin(async { Ok(done(&("_").to_owned())) })
+    let request_ref = Arc::new(tokio::sync::Mutex::new(None::<TurnRequest>));
+    add(&c, "a", {
+        let request_ref = request_ref.clone();
+        |request| {
+            let request_ref = request_ref.clone();
+            Box::pin(async move {
+                *request_ref.lock().await = Some(request.clone());
+                Ok(done(&request))
+            })
+        }
     })
     .await;
     // Create multiple interruptions by sending direct messages and cancelling turns.
