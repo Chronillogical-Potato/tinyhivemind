@@ -93,6 +93,7 @@ async fn main() -> Result<()> {
             body: "Choose a safe rollout plan.".into(),
             thread: None,
             only_for: vec!["planner".into()],
+            starters: Vec::new(),
         })
         .await?;
 

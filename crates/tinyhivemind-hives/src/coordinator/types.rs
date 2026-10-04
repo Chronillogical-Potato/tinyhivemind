@@ -156,6 +156,11 @@ pub struct SendMessage {
     pub thread: Option<u64>,
     /// Optional private recipients within the target hive.
     pub only_for: Vec<String>,
+    /// Hive members who start the episode; empty starts every recipient.
+    /// Unlike `only_for` this narrows who acts first, not who can read:
+    /// the message stays visible to all its readers. Hive messages only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub starters: Vec<String>,
 }
 /// Receipt returned without waiting for the destination agent.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

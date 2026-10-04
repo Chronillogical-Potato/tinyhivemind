@@ -129,6 +129,7 @@ pub async fn run() -> anyhow::Result<()> {
             body: "Work from dynamically created hive".into(),
             thread: None,
             only_for: Vec::new(),
+            starters: Vec::new(),
         })
         .await?;
     queue_capabilities(&fixture, "specialist");

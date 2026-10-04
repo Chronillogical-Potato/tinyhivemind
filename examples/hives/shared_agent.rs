@@ -88,6 +88,7 @@ async fn main() -> Result<()> {
                 body: format!("Handle the {hive_id} task."),
                 thread: None,
                 only_for: Vec::new(),
+                starters: Vec::new(),
             })
             .await?;
     }

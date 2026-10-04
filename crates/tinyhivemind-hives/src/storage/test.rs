@@ -23,6 +23,7 @@ pub(super) fn row(sequence: u64, accepted: bool) -> TranscriptRow {
             body: message.body.clone(),
             thread: None,
             only_for: Vec::new(),
+            starters: Vec::new(),
         }),
         message,
     }

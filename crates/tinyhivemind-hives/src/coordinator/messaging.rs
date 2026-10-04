@@ -94,7 +94,11 @@ impl Coordinator {
                         hive,
                         opened_at: sequence,
                         thread: request.thread,
-                        starters: recipients,
+                        starters: if request.starters.is_empty() {
+                            recipients.clone()
+                        } else {
+                            request.starters.clone()
+                        },
                         conductor: None,
                         pending: Vec::new(),
                         wave_open: false,
@@ -221,7 +225,10 @@ fn recipients(state: &StoredState, request: &SendMessage) -> Result<Vec<String>>
     Ok(match &request.destination {
         Destination::Agent(id) => {
             known_agent(state, id)?;
-            if request.thread.is_some() || !request.only_for.is_empty() {
+            if request.thread.is_some()
+                || !request.only_for.is_empty()
+                || !request.starters.is_empty()
+            {
                 return Err(Error::InvalidIdentifier("direct message attribution"));
             }
             vec![id.clone()]
@@ -269,12 +276,30 @@ fn recipients(state: &StoredState, request: &SendMessage) -> Result<Vec<String>>
             {
                 return Err(Error::InvalidThread(request.thread.unwrap_or_default()));
             }
-            selected
+            let selected: Vec<_> = selected
                 .into_iter()
                 .filter(|recipient| scope.is_empty() || scope.contains(recipient))
-                .collect()
+                .collect();
+            starters_among(&request.starters, &selected, id)?;
+            selected
         }
     })
+}
+/// Host-chosen starters must be distinct readers of the message.
+fn starters_among(starters: &[String], readers: &[String], hive_id: &str) -> Result<()> {
+    let mut unique = BTreeSet::new();
+    for starter in starters {
+        if !readers.contains(starter) {
+            return Err(Error::NotMember {
+                agent_id: starter.clone(),
+                hive_id: hive_id.into(),
+            });
+        }
+        if !unique.insert(starter) {
+            return Err(Error::DuplicateMember(starter.clone()));
+        }
+    }
+    Ok(())
 }
 
 /// Root-private threads can only be read by their original participants.

@@ -231,6 +231,7 @@ async fn explicit_episode_actions_execute_only_during_the_bound_assignment() {
             body: "work".into(),
             thread: None,
             only_for: vec![],
+            starters: Vec::new(),
         })
         .await
         .unwrap();

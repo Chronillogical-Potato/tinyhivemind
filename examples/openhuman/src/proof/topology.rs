@@ -99,6 +99,7 @@ pub async fn run(agent_count: usize, hive_count: usize) -> anyhow::Result<()> {
                 body: format!("HOST_HIVE_INPUT_{hive}; retain all earlier conversation."),
                 thread: None,
                 only_for: Vec::new(),
+                starters: Vec::new(),
             })
             .await?;
         let report = coordinator.run_until_idle().await?;

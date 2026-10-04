@@ -29,7 +29,8 @@ async fn creates_empty_hives_but_rejects_delivery_without_members() {
             destination: Destination::Hive("work".into()),
             body: "task".into(),
             thread: None,
-            only_for: vec![]
+            only_for: vec![],
+            starters: Vec::new(),
         })
         .await
         .is_err()
@@ -84,6 +85,7 @@ fn message(id: &str, target: Destination) -> SendMessage {
         body: id.into(),
         thread: None,
         only_for: Vec::new(),
+        starters: Vec::new(),
     }
 }
 fn done(request: &TurnRequest) -> TurnOutcome {
@@ -300,4 +302,5 @@ mod privacy;
 mod registration;
 mod review_regressions;
 mod scheduling;
+mod starters;
 mod transactions;

@@ -187,6 +187,7 @@ async fn run(mode: Mode) -> Result<()> {
                 body: task.into(),
                 thread: None,
                 only_for: vec![agent_id.into()],
+                starters: Vec::new(),
             })
             .await?;
         let report = coordinator.run_until_idle().await?;

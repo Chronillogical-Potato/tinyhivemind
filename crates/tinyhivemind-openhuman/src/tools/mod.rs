@@ -108,6 +108,7 @@ impl HiveTool {
                             body: text("body"),
                             thread: args["thread"].as_u64(),
                             only_for: strings(&args, "only_for"),
+                            starters: Vec::new(),
                         })
                         .await?,
                 )?)
