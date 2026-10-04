@@ -94,15 +94,16 @@ function percentile(sorted, p) {
 function analyze(events) {
   const seatSet = [];
   const note = (x) => { if (x && !seatSet.includes(x)) seatSet.push(x); };
-  const open = new Map(); // seat -> queue of started turns, matched by order
+  const byId = new Map(), open = new Map(); // seat -> queue of started turns, matched by order
   const turns = [], tools = [], rounds = [], conducted = [], outcomes = [], marks = [], others = [];
   let tokIn = 0, tokOut = 0;
   for (const e of events) {
     switch (e.event) {
       case "turn_started": {
         note(e.seat);
-        const t = { seat: e.seat, start: e.at_ms, end: null, open: true, started: e, finished: null };
+        const t = { seat: e.seat, id: e.turn, start: e.at_ms, end: null, open: true, started: e, finished: null };
         turns.push(t);
+        if (typeof e.turn === "number") byId.set(e.turn, t);
         if (!open.has(e.seat)) open.set(e.seat, []);
         open.get(e.seat).push(t);
         break;
@@ -110,9 +111,10 @@ function analyze(events) {
       case "turn_finished": {
         note(e.seat);
         const q = open.get(e.seat);
-        let t = q && q.shift();
+        let t = typeof e.turn === "number" ? byId.get(e.turn) : q && q.shift(); // turn id wins; seat order is the fallback
+        if (t && q && q.includes(t)) q.splice(q.indexOf(t), 1);
         if (!t) { // finish with no start: reconstruct from latency
-          t = { seat: e.seat, start: e.at_ms - (e.latency_ms || 0), started: null };
+          t = { seat: e.seat, id: e.turn, start: e.at_ms - (e.latency_ms || 0), started: null };
           turns.push(t);
         }
         t.end = e.at_ms; t.open = false; t.finished = e;
@@ -215,14 +217,15 @@ function waterfall(run, span, host) {
         `${t.seat} turn from ${t.start - a.t0} to ${t.end - a.t0} milliseconds${t.open ? ", unfinished" : ""}`));
     }
     for (const c of a.tools.filter((c) => c.seat === l.seat)) {
-      const host_t = l.mine.find((t) => c.at_ms >= t.start && c.at_ms <= t.end) || l.mine[0];
+      const host_t = (typeof c.turn === "number" && l.mine.find((t) => t.id === c.turn))
+        || l.mine.find((t) => c.at_ms >= t.start && c.at_ms <= t.end) || l.mine[0];
       const row = host_t ? host_t.row : 0, by = l.y + row * ROW;
       const x0 = x(c.span0 - a.t0), x1 = x(c.at_ms - a.t0), w = Math.max(3, x1 - x0);
       const g = s("g", {});
       g.append(s("rect", { x: x0, y: by - 3, width: w, height: 20, fill: c.refused ? "var(--bad)" : "var(--tick)",
         "fill-opacity": c.refused ? 1 : 0.8, stroke: "var(--panel)", "stroke-width": 1 }));
       if (c.refused) g.append(s("text", { x: x0 + w / 2, y: by - 4, "text-anchor": "middle", fill: "var(--bad)", style: "fill:var(--bad);font-weight:700;font-size:15px" }, "×"));
-      svg.append(hover(g, `${c.tool}${c.refused ? " (refused)" : ""}`, c, `${c.seat} called ${c.tool}${c.refused ? ", refused" : ""}`));
+      svg.append(hover(g, `${c.tool}${c.refused ? " (refused" + (c.reason ? ": " + c.reason : "") + ")" : ""}`, c, `${c.seat} called ${c.tool}${c.refused ? ", refused" + (c.reason ? " because " + c.reason : "") : ""}`));
     }
   }
   host.replaceChildren(svg);
