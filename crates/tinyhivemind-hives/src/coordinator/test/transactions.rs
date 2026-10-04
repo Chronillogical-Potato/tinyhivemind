@@ -147,7 +147,7 @@ async fn second_coordinator_recovers_interrupted_turns_on_restart() {
     assert_eq!(c.interruptions().unwrap().len(), 1);
 
     // A second coordinator starts up and claims ownership.
-    // During startup, it should recover the interrupted running turn.
+    // During startup, it finds the interrupted running turn and commits it.
     let other = Coordinator::new(
         "runtime".into(),
         storage.clone(),
@@ -159,7 +159,8 @@ async fn second_coordinator_recovers_interrupted_turns_on_restart() {
     // The second coordinator sees the recovered interruption.
     assert_eq!(other.interruptions().unwrap().len(), 1);
 
-    // The first coordinator is now fenced and cannot make further progress.
+    // When the first coordinator tries to write again, it will detect the higher epoch
+    // stored by the second coordinator and be fenced.
     assert!(matches!(
         c.send_as_host(message("blocked", Destination::Agent("a".into())))
             .await,
