@@ -233,22 +233,19 @@ async fn retention_bounds_interrupted_records() {
         },
     )
     .await;
-    add(&c, "a", |request| {
-        Box::pin(async move { Ok(done(&request)) })
+    // One runner that never returns: every claimed turn is cancelled by
+    // dropping the drain, which records an interruption.
+    let started = Arc::new(tokio::sync::Notify::new());
+    let signal = started.clone();
+    add(&c, "a", move |_| {
+        let signal = signal.clone();
+        Box::pin(async move {
+            signal.notify_one();
+            std::future::pending().await
+        })
     })
     .await;
-    // Create multiple interruptions by sending direct messages and cancelling turns.
     for i in 1..=3 {
-        let started = Arc::new(tokio::sync::Notify::new());
-        let signal = started.clone();
-        add(&c, "a", move |_| {
-            let signal = signal.clone();
-            Box::pin(async move {
-                signal.notify_one();
-                std::future::pending().await
-            })
-        })
-        .await;
         c.send_as_host(message(&format!("msg-{i}"), Destination::Agent("a".into())))
             .await
             .unwrap();
