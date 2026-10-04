@@ -1,16 +1,26 @@
-//! Where an activation meets its session and memory.
+//! Where an activation meets its session and core's memory ports.
 //!
-//! [`open`] starts or resumes the session; [`ask`] and [`remember`] are the
-//! two memory calls, each reported as a `memory` mark; [`entry`] turns one
-//! executed command into a ledger line.
+//! [`open`] starts or resumes the session (a resume is a typed
+//! `session_resumed` event); [`ask`] is a core `Recall` at one
+//! `RecallMoment`, framed by core's `frame_recalled` and reported as a typed
+//! `recalled` event; [`remember`] is a core `Remember` of the activation's
+//! ledger and last words, reported as a typed `remembered` event. A failed
+//! call also leaves a `memory` mark with the error, since the typed events
+//! carry no reason. [`entry`] turns one executed command into a ledger line.
+
+use std::time::Instant;
 
 use serde_json::json;
+use tinyhivemind_core::runtime::{
+    EntryKind, MemoryEntry, RecallMoment, RecallRequest, RememberRequest, frame_recalled,
+};
 use tinyhivemind_core::telemetry::TraceEvent;
 
-use super::super::memory::{LedgerEntry, Moment, Remembered, Report};
+use super::super::memory::LedgerEntry;
 use super::super::sandbox::truncate;
 use super::super::session::SeatSession;
 use super::{Activation, Env, Outcome, Work};
+use crate::block_on;
 
 /// Longest command kept in a ledger line, in bytes.
 const LEDGER_CMD: usize = 200;
@@ -18,13 +28,11 @@ const LEDGER_CMD: usize = 200;
 const LEDGER_OUTCOME: usize = 160;
 
 /// Start `session` (system prompt, then the opening with a session-start
-/// pack in front) or resume it (the delta, with a rejoin pack after).
+/// block in front) or resume it (the delta, with a rejoin block after).
 pub(super) fn open(env: &Env<'_>, act: &Activation<'_>, session: &mut SeatSession) {
-    let focus = act.focus.clone();
     if session.is_new() {
-        let pack = ask(env, act.seat, &Moment::SessionStart { focus });
-        let user = match pack {
-            Some(pack) => format!("{pack}\n\n{}", act.user),
+        let user = match ask(env, act, RecallMoment::SessionStart) {
+            Some(block) => format!("{block}\n\n{}", act.user),
             None => act.user.clone(),
         };
         session
@@ -33,67 +41,136 @@ pub(super) fn open(env: &Env<'_>, act: &Activation<'_>, session: &mut SeatSessio
         session
             .messages
             .push(json!({ "role": "user", "content": user }));
-    } else {
-        let pack = ask(env, act.seat, &Moment::Rejoin { focus });
-        let user = match pack {
-            Some(pack) => format!("{}\n\n{pack}", act.user),
-            None => act.user.clone(),
-        };
-        session
-            .messages
-            .push(json!({ "role": "user", "content": user }));
+        return;
     }
+    env.tracer.emit(TraceEvent::SessionResumed {
+        seat: act.seat.to_owned(),
+        messages: count(session.messages.len()),
+        delta_rows: count(act.shown_rows),
+    });
+    let user = match ask(env, act, RecallMoment::Rejoin) {
+        Some(block) => format!("{}\n\n{block}", act.user),
+        None => act.user.clone(),
+    };
+    session
+        .messages
+        .push(json!({ "role": "user", "content": user }));
 }
 
-/// Recall a pack for `seat` at `moment`, or `None` without memory or when the
-/// call found nothing or failed.
-pub(super) fn ask(env: &Env<'_>, seat: &str, moment: &Moment) -> Option<String> {
+/// Recall for the activation's seat at `moment` and frame the notes, or
+/// `None` without memory or when nothing came back.
+pub(super) fn ask(env: &Env<'_>, act: &Activation<'_>, moment: RecallMoment) -> Option<String> {
     let memory = env.memory?;
-    let recalled = memory.recall(seat, moment);
-    mark(env, seat, &recalled.report);
-    recalled.pack
+    let budget = memory.budget_chars();
+    let request = RecallRequest {
+        seat: act.seat.to_owned(),
+        conversation: memory.conversation(),
+        focus: Some(act.focus.clone()).filter(|f| !f.trim().is_empty()),
+        moment,
+        budget_chars: budget,
+    };
+    let started = Instant::now();
+    let outcome = block_on(memory.recall(&request));
+    let latency_ms = elapsed_ms(started);
+    let (notes, framed) = match outcome {
+        Ok(notes) => {
+            let framed = frame_recalled(&notes, budget);
+            (notes.len(), framed)
+        }
+        Err(error) => {
+            failed(env, act.seat, "recall", request.moment.label(), &error);
+            (0, None)
+        }
+    };
+    env.tracer.emit(TraceEvent::Recalled {
+        seat: act.seat.to_owned(),
+        moment: request.moment.label().to_owned(),
+        notes: count(notes),
+        chars: framed.as_ref().map_or(0, |b| b.chars().count() as u64),
+        latency_ms,
+    });
+    framed
 }
 
 /// Hand memory the commands not yet stored and the seat's latest words.
 pub(super) fn remember(
     env: &Env<'_>,
     act: &Activation<'_>,
+    session: &SeatSession,
     out: &Outcome,
     work: &mut Work,
-    moment: &'static str,
 ) {
     let Some(memory) = env.memory else { return };
-    let text = out
-        .spoke
-        .as_ref()
-        .map_or_else(|| work.last_text.clone(), |done| done.content.clone());
-    let what = Remembered {
-        text,
-        ledger: out.ledger[work.remembered.min(out.ledger.len())..].to_vec(),
-    };
+    let mut entries: Vec<MemoryEntry> = out.ledger[work.remembered.min(out.ledger.len())..]
+        .iter()
+        .map(LedgerEntry::to_entry)
+        .collect();
     work.remembered = out.ledger.len();
-    if what.is_empty() {
+    let (kind, text) = match &out.spoke {
+        Some(done) => (EntryKind::Outcome, done.content.clone()),
+        None => (EntryKind::Note, work.last_text.clone()),
+    };
+    if !text.trim().is_empty() {
+        entries.push(MemoryEntry { kind, text });
+    }
+    if entries.is_empty() {
         return;
     }
-    let mut report = memory.remember(act.seat, &what);
-    report.moment = moment;
-    mark(env, act.seat, &report);
+    let request = RememberRequest {
+        seat: act.seat.to_owned(),
+        conversation: memory.conversation(),
+        through: session.read_through,
+        entries,
+    };
+    let started = Instant::now();
+    let outcome = block_on(memory.remember(&request));
+    let latency_ms = elapsed_ms(started);
+    let written = match outcome {
+        Ok(()) => request.entries.len(),
+        Err(error) => {
+            failed(env, act.seat, "remember", "activation", &error);
+            0
+        }
+    };
+    env.tracer.emit(TraceEvent::Remembered {
+        seat: act.seat.to_owned(),
+        entries: count(written),
+        latency_ms,
+    });
 }
 
 /// Report every background job a memory finished with.
 pub fn finish(env: &Env<'_>) {
     if let Some(memory) = env.memory {
-        for report in memory.finish() {
-            mark(env, "run", &report);
+        for line in memory.finish() {
+            env.tracer.emit(TraceEvent::Mark {
+                label: "memory".into(),
+                detail: format!("run: {line}"),
+            });
         }
     }
 }
 
-fn mark(env: &Env<'_>, seat: &str, report: &Report) {
+/// The `memory` mark for a failed call: its reason and source chain.
+fn failed(env: &Env<'_>, seat: &str, op: &str, moment: &str, error: &dyn std::error::Error) {
+    let mut reason = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        reason.push_str(&format!(": {cause}"));
+        source = cause.source();
+    }
     env.tracer.emit(TraceEvent::Mark {
         label: "memory".into(),
-        detail: report.detail(seat),
+        detail: format!("{seat}: {op} {moment} error={reason}"),
     });
+}
+
+fn count(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 /// A ledger line for `cmd`: its exit code and one line of `output`, the last
