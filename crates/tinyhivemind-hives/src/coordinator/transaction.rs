@@ -125,7 +125,7 @@ impl Coordinator {
     }
     /// `Ok(true)` once committed. With single-writer fencing, there are no
     /// retries: conflicts indicate we've been fenced or the store is corrupted.
-    pub(super) async fn settle(&self, attempt: Result<()>, _conflicts: &mut usize) -> Result<bool> {
+    pub(super) fn settle(&self, attempt: Result<()>, _conflicts: &mut usize) -> Result<bool> {
         match attempt {
             Ok(()) => Ok(true),
             Err(error) => Err(error),
