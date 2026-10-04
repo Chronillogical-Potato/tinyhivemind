@@ -160,19 +160,15 @@ impl super::LiveState {
         let unpersisted = std::mem::take(&mut self.unpersisted);
         for (agent, deferred) in unpersisted {
             // Check if the currently running reservation matches the interrupted one.
-            let should_reapply = self
-                .durable
-                .running
-                .get(&agent)
-                .is_some_and(|running| {
-                    running.delivery_sequence == deferred.delivery_sequence
-                        && running
-                            .request
-                            .episode
-                            .as_ref()
-                            .map(|ep| ep.episode_id.clone())
-                            == deferred.episode_id
-                });
+            let should_reapply = self.durable.running.get(&agent).is_some_and(|running| {
+                running.delivery_sequence == deferred.delivery_sequence
+                    && running
+                        .request
+                        .episode
+                        .as_ref()
+                        .map(|ep| ep.episode_id.clone())
+                        == deferred.episode_id
+            });
 
             if should_reapply {
                 interrupt(&mut self.durable, &agent, &deferred.reason);
