@@ -39,16 +39,14 @@ struct Inner {
     committed: watch::Sender<u64>,
     notify: Notify,
     shutdown: AtomicBool,
-    /// This coordinator's epoch, claimed at startup. Once a commit fails with
-    /// `Error::Fenced` (a newer coordinator has taken ownership), this flag is
-    /// set and all further writes return the error immediately.
+    /// The writer epoch this coordinator claimed in [`Coordinator::new`].
     writer_epoch: u64,
     /// Highest writer epoch the store has reported above ours; nonzero once a
     /// newer coordinator has fenced this one out.
     fenced_by: AtomicU64,
 }
-/// Deferred interruption preserving the reservation it was intended to interrupt.
-/// Kept for P2 work to persist deferred interruptions until commit.
+/// An interruption recorded while a dropped drain could not await, kept with
+/// the reservation it interrupts until a commit persists it.
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 struct DeferredInterruption {
