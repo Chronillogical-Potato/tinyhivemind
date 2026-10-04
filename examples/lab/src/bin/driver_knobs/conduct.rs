@@ -35,6 +35,12 @@ pub struct Scenario {
     pub wide_task: bool,
     /// The host holds the coder on an approval for one wave.
     pub park: bool,
+    /// The coder starts alongside the planner, so work for it must queue.
+    pub queue_work: bool,
+    /// The router thinks nobody fits a broadcast.
+    pub lost_router: bool,
+    /// The coder asks and tries to complete in the same turn.
+    pub eager_coder: bool,
 }
 
 impl Default for Scenario {
@@ -49,6 +55,9 @@ impl Default for Scenario {
             spam: false,
             wide_task: false,
             park: false,
+            queue_work: false,
+            lost_router: false,
+            eager_coder: false,
         }
     }
 }
@@ -119,6 +128,15 @@ fn script(scn: &Scenario, turn: &Turn, brief: &EpisodeBrief, log: &MemoryLog) ->
         ("coder", Channel::Desk) if brief.conversations.iter().any(|v| v.concluded) => {
             done("parser done, edge cases covered")
         }
+        ("coder", Channel::Desk) if scn.eager_coder && spoke("coder", None) == 0 => vec![
+            ToolCall::Speak(Utterance::Ask {
+                to: vec!["tester".into()],
+                message: "which edge cases must the parser handle?".into(),
+            }),
+            ToolCall::Speak(Utterance::CompleteEpisode {
+                message: "done before the answer".into(),
+            }),
+        ],
         ("coder", Channel::Desk) if spoke("coder", None) == 0 => say(Utterance::Ask {
             to: vec!["tester".into()],
             message: "which edge cases must the parser handle?".into(),
@@ -276,7 +294,11 @@ async fn play_inner(
     let driver = CompletionDriver::new(&hive, scn.driver_width)?
         .with_queue_depth(scn.queue_depth)?
         .with_broadcast_budget(scn.budget);
-    let router = KeywordRouter::new("scripted");
+    let router = if scn.lost_router {
+        KeywordRouter::new("scripted").none_weight(100_000)
+    } else {
+        KeywordRouter::new("scripted")
+    };
     let policy = routing_policy(scn.router_width);
     let routing = BroadcastRouting {
         primary: Some(&router),
@@ -325,7 +347,9 @@ async fn play_inner(
                 chat: "eng".into(),
                 desk_name: "Engineering".into(),
                 members: SEATS.iter().map(|s| (*s).to_owned()).collect(),
-                starters: if scn.wide_task {
+                starters: if scn.queue_work {
+                    vec!["planner".into(), "coder".into()]
+                } else if scn.wide_task {
                     starters(&plan, "planner")
                 } else {
                     vec!["planner".into()]
@@ -524,6 +548,31 @@ pub fn run(rig: &TraceRig) -> Res {
                 ..base
             },
         ));
+    }
+    for (label, scn) in [
+        (
+            "coder is a starter: handoff queues",
+            Scenario {
+                queue_work: true,
+                ..base
+            },
+        ),
+        (
+            "router finds nobody for the broadcast",
+            Scenario {
+                lost_router: true,
+                ..base
+            },
+        ),
+        (
+            "coder completes while its ask is open",
+            Scenario {
+                eager_coder: true,
+                ..base
+            },
+        ),
+    ] {
+        table.push((label.into(), scn));
     }
     table.push((
         "coder parked for one wave (approval)".into(),
