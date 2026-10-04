@@ -23,7 +23,7 @@
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tinyhivemind_core::runtime::{
-    MEMORY_LIMIT, MEMORY_NOTE_CHARS, MemoryNote, MemoryScope, WorkingMemory, memory,
+    Error, MEMORY_LIMIT, MEMORY_NOTE_CHARS, MemoryNote, MemoryScope, WorkingMemory, memory,
 };
 use tinytools::ToolSpec;
 
@@ -143,7 +143,9 @@ impl MemoryTools {
                 let scope = match arguments.get("scope").and_then(Value::as_str) {
                     None | Some("hive") => MemoryScope::Hive,
                     Some("seat") => MemoryScope::Seat,
-                    Some(other) => return Err(format!("unknown scope `{other}`: use hive or seat")),
+                    Some(other) => {
+                        return Err(format!("unknown scope `{other}`: use hive or seat"));
+                    }
                 };
                 let note = MemoryNote {
                     author: seat.to_owned(),
@@ -152,8 +154,9 @@ impl MemoryTools {
                 };
                 match memory::record(self.memory.as_ref(), &note).await {
                     Ok(entry) => Ok(format!("remembered as {}", entry.id)),
-                    Err(error @ (memory::Error::MemoryNoteEmpty
-                    | memory::Error::MemoryNoteTooLong { .. })) => Err(error.to_string()),
+                    Err(error @ (Error::MemoryNoteEmpty | Error::MemoryNoteTooLong { .. })) => {
+                        Err(error.to_string())
+                    }
                     Err(_) => Err("memory is unavailable; carry on without it".to_owned()),
                 }
             }

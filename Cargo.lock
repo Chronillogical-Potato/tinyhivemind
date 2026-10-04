@@ -3325,6 +3325,7 @@ dependencies = [
  "serde_json",
  "tinyhivemind-core",
  "tinytools",
+ "tokio",
 ]
 
 [[package]]

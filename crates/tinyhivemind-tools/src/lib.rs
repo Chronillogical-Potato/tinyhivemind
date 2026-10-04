@@ -35,8 +35,10 @@
 //! assert_eq!(tools.drain("lead").len(), 1);
 //! ```
 
+pub mod memory;
 pub mod render;
 pub mod tools;
 
+pub use memory::{MEMORY_TOOLS, MemoryTools, memory_tool_definitions};
 pub use render::{raw_arguments, served_specs, tool_definitions};
 pub use tools::{Dispatch, EpisodeTools, Refusal, SeatEvent};
