@@ -2,6 +2,7 @@
 
 | File | Purpose |
 | --- | --- |
+| `basic_hive.rs` | Offline or live two-agent OpenHuman quickstart: host sessions, hive membership, private tasks, leaving, and session continuity. |
 | `deepswe_hive.rs` | Hermetic four-agent external software-engineering adapter with host-side OpenHuman and Docker-confined tools. |
 | `deepswe_hive/` | Task validation, MCP tools, Docker confinement, and contract tests for the DeepSWE adapter. |
 | `pe1006_hive.rs` | Web-assisted five-agent experiment driven by `tinyhivemind_core::driver`, with a durable shared workspace, explicit agent memory, and one OpenHuman runtime per run. |
