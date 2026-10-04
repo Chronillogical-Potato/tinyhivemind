@@ -184,7 +184,7 @@ fn retention_keeps_recent_settled_episodes_and_deliveries_only() {
         settled_episodes: Some(1),
         delivered: Some(1),
         interrupted: None,
-    }
+       pending_per_agent: None,    }
     .apply(&mut state);
     assert_eq!(
         state
@@ -251,7 +251,7 @@ fn retention_keeps_a_settled_episode_a_running_turn_still_reports_to() {
         settled_episodes: Some(0),
         delivered: None,
         interrupted: None,
-    }
+       pending_per_agent: None,    }
     .apply(&mut state);
     assert_eq!(state.episodes.len(), 1);
     assert_eq!(state.episodes[0].episode_id, "running");

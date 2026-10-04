@@ -137,7 +137,7 @@ async fn retention_bounds_settled_episodes_and_acknowledged_deliveries() {
                 settled_episodes: Some(1),
                 delivered: Some(1),
                 interrupted: None,
-            },
+               pending_per_agent: None,            },
             ..CoordinatorOptions::default()
         },
     )
@@ -226,7 +226,7 @@ async fn retention_bounds_interrupted_records() {
                 settled_episodes: Some(1),
                 delivered: Some(1),
                 interrupted: Some(1),
-            },
+               pending_per_agent: None,            },
             ..CoordinatorOptions::default()
         },
     )
