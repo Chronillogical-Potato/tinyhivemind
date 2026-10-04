@@ -1,26 +1,58 @@
 # Run viewer
 
-A single-page, dependency-free viewer for the telemetry a hive-lab run emits
-(`TraceEvent` in `crates/tinyhivemind-core/src/telemetry/types.rs`, stamped with
-`run`, `seq`, `at_ms`). It works offline, follows the system light/dark setting,
-and stays usable at 360px (charts scroll horizontally inside their card).
+A Vite app for the telemetry a hive-lab run emits (`TraceEvent` in
+`crates/tinyhivemind-core/src/telemetry/types.rs`, stamped with `run`, `seq`,
+`at_ms`). The dev server reads traces straight from disk, so there is nothing
+to upload: runs appear in a table, a click loads one, **Compare** loads every
+arm of a task side by side, and a run that is still being written follows live.
 
-| File | Purpose |
+```sh
+cd examples/lab/viewer
+npm install
+HIVE_RUNS=/path/to/harbor/jobs npm run dev      # http://<host>:8099
+```
+
+`npm run dev` binds `0.0.0.0:8099` (`--strictPort`). `HIVE_RUNS` is a
+colon-separated list of directories to scan for `*.jsonl` files (depth 6); the
+default is `examples/lab/runs/` plus the bundled `public/fixtures/`. There is no
+authentication, so anyone who can reach the port can read every trace under the
+roots.
+
+| Path | Purpose |
 | --- | --- |
-| `viewer.html` | Page shell, styles, and theme tokens |
-| `viewer.js` | Parsing, analysis, SVG rendering (no libraries) |
-| `fixtures/sample.jsonl` | Two demo runs: `hive-4seat` (concurrent) and `baseline-serial` |
+| `index.html` | Page shell, styles, theme tokens |
+| `src/main.js` | Parsing, analysis, SVG rendering (no chart libraries) |
+| `src/panel.js` | The runs table: load, compare, live follow, URL state |
+| `server/scan.js` | Finds and describes traces; resolves ids safely |
+| `server/plugin.js` | Vite plugin serving `/api/runs`, `/api/runs/<id>`, `/api/events` |
+| `server/scan.test.js` | `npm test`: scanner and path-escape tests |
+| `tools/probe.mjs`, `tools/live-check.mjs` | Headless-Chromium checks over the DevTools protocol |
+| `public/fixtures/sample.jsonl` | Two demo runs: `hive-4seat` and `baseline-serial` |
 
-## Use
+## How runs are found
 
-- Open `viewer.html` and drop one or more `.jsonl` files, or use *Choose files*.
-- Several runs may share one file (grouped by the `run` field) or come from
-  several files. Axes are shared across loaded runs so they compare fairly.
-- `?file=a.jsonl&file=b.jsonl` fetches files relative to the page. Fetching
-  needs an http server (for example the docker static server), not `file://`.
-  *Load sample* uses the same path.
-- Quick local try: `python3 -m http.server -d examples/lab/viewer` then open
-  `http://localhost:8000/viewer.html?file=fixtures/sample.jsonl`.
+A Harbor trial (`<job>/<task>__<hash>/agent/trace.jsonl`) is described from its
+`agent/result.json` (mode, tokens, wall time, turns) and the trial's
+`result.json` (verifier reward). Jobs named `<tag>-<mode>` (for example
+`r1-single` and `r1-hive`) share the tag `r1`, so one task's arms land on one
+row. Any other `.jsonl` is listed under its folder, by file name.
+
+## API
+
+- `GET /api/runs` returns `{roots, runs: [{id, path, group, tag, task, mode,
+  reward, tokens, wall_ms, turns, size, mtime}]}`, newest first.
+- `GET /api/runs/<id>` returns the raw trace. Ids are `<root index>:<relative
+  path>`; anything that resolves outside a root, or is not `.jsonl`, is a 404.
+- `GET /api/events` is a server-sent-event stream; a `runs` event fires when a
+  trace appears or changes size (polled every second). The page re-reads the
+  list and re-fetches any loaded trace that grew.
+
+## URL state
+
+`?run=<id>&run=<id>` reopens the same selection. With none, the page opens the
+newest task that has two arms in Compare. `?file=<url>` still fetches any
+static file. Drag and drop of local files still works, and is all a static
+`npm run build` supports (there is no `/api` there, so the panel hides).
 
 ## Views
 

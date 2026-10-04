@@ -30,6 +30,7 @@
   --s4: #e6c34a; --s5: #8fd0ff; --s6: #b69cff; --s7: #b4b8c2;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--ink);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 1200px; margin: 0 auto; padding: 16px; }
@@ -87,14 +88,15 @@ details summary { cursor: pointer; padding: 4px 0; }
   <h1>Hive Lab Run Viewer</h1>
   <p class="muted">Inspect telemetry from one or more runs: per-seat waterfall, room timeline, token cost, and a side-by-side summary. Everything stays in your browser.</p>
 
-  <section class="card drop" id="drop" aria-label="Load runs">
-    <p><strong>Drop one or more <code>.jsonl</code> run files here</strong></p>
+  <section class="card" id="runs-panel" aria-label="Runs on disk"></section>
+
+  <section class="card drop" id="drop" aria-label="Load runs from files">
+    <p><strong>Or drop one or more <code>.jsonl</code> run files here</strong></p>
     <div class="bar centered">
       <label class="btn">Choose files<input type="file" id="picker" accept=".jsonl,.json,.ndjson,.txt,application/json" multiple></label>
-      <button type="button" id="sample">Load sample</button>
-      <button type="button" id="clear">Clear</button>
+            <button type="button" id="clear">Clear</button>
     </div>
-    <p id="status" class="muted" role="status" aria-live="polite">No runs loaded. URL form: <code>?file=a.jsonl&amp;file=b.jsonl</code></p>
+    <p id="status" class="muted" role="status" aria-live="polite">No runs loaded.</p>
   </section>
 
   <div id="out" hidden>
@@ -111,6 +113,6 @@ details summary { cursor: pointer; padding: 4px 0; }
   </div>
 </main>
 <div id="tip" role="tooltip"></div>
-<script src="viewer.js"></script>
+<script type="module" src="/src/main.js"></script>
 </body>
 </html>
