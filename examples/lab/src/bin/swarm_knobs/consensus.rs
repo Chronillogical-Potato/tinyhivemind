@@ -193,8 +193,8 @@ pub fn evaluated_quorum(rig: &TraceRig) -> Res {
     table("ada violation 0.2, relaxed (<=0.3)", &risky, &relaxed);
     table("ada violation 0.2, strict (<=0.05)", &risky, &strict);
     table(
-        "stale source (ada at ^2, not ^7)",
-        &[eval("ada", 2, 900_000, 1_000_000, 0)],
+        "stale source (ada cites ben's ^3)",
+        &[eval("ada", 3, 950_000, 1_000_000, 0)],
         &relaxed,
     );
     table(
