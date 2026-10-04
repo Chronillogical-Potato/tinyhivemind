@@ -1,7 +1,7 @@
 //! Incremental commits outside the live lock, conflict reload, and retention.
 #![allow(clippy::unwrap_used)]
 use super::*;
-use crate::{Commit, RetentionPolicy, Storage, StorageFuture, StoredState};
+use crate::{Commit, DeliveryStatus, RetentionPolicy, Storage, StorageFuture, StoredState};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Memory storage that records each commit's appended rows and can be told
