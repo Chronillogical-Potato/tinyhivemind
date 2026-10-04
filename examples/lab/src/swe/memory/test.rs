@@ -187,6 +187,8 @@ fn two_run_ids_share_nothing() {
 struct Recording {
     engine: ReferenceEngine,
     waits: Arc<Mutex<Vec<WaitFor>>>,
+    /// How long an indexed (`Visible`) write takes before it returns.
+    index_delay: Duration,
 }
 
 #[async_trait]
@@ -215,6 +217,9 @@ impl MemoryEngine for Recording {
         options: WriteOptions,
     ) -> tinymemory_api::Result<StoreReceipt> {
         self.waits.lock().expect("lock").push(options.wait);
+        if options.wait == WaitFor::Visible {
+            tokio::time::sleep(self.index_delay).await;
+        }
         self.engine.store_with(item, options).await
     }
     async fn forget(&self, target: ForgetTarget) -> tinymemory_api::Result<ForgetReport> {
@@ -246,12 +251,39 @@ fn remember_waits_until_indexed_so_the_next_recall_sees_it() {
     let engine = Recording {
         engine: ReferenceEngine::new(),
         waits: waits.clone(),
+        index_delay: Duration::ZERO,
     };
     let memory = memory_on(Arc::new(engine), "t-indexed");
     store(&memory, "implementer", failed_pytest()).expect("stored");
     assert_eq!(*waits.lock().expect("lock"), [WaitFor::Visible]);
     let next = text(&recall(&memory, "tester", RecallMoment::Rejoin).expect("recall"));
     assert!(next.contains("ModuleNotFoundError"), "{next}");
+}
+
+#[test]
+fn an_index_slower_than_the_bound_still_keeps_the_turn() {
+    let waits = Arc::new(Mutex::new(Vec::new()));
+    let engine = Recording {
+        engine: ReferenceEngine::new(),
+        waits: waits.clone(),
+        index_delay: Duration::from_secs(2),
+    };
+    let memory = memory_on(Arc::new(engine), "t-lag").with_timeouts(quick());
+    let started = Instant::now();
+    store(&memory, "implementer", failed_pytest()).expect("kept");
+    assert!(
+        started.elapsed() < Duration::from_millis(600),
+        "within the bound"
+    );
+    assert_eq!(
+        *waits.lock().expect("lock"),
+        [WaitFor::Visible, WaitFor::Accepted]
+    );
+    let next = text(&recall(&memory, "tester", RecallMoment::Rejoin).expect("recall"));
+    assert!(next.contains("ModuleNotFoundError"));
+    let report = memory.finish();
+    assert_eq!(report.len(), 1);
+    assert!(report[0].starts_with("remember: 1 turns stored without waiting"));
 }
 
 #[test]
