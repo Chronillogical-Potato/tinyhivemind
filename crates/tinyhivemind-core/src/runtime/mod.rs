@@ -6,8 +6,10 @@
 //! A channel that outgrows every window can be folded by [`mod@crate::runtime::digest`] into
 //! one bounded account behind a live tail through the [`crate::runtime::Digester`] port.
 //! The [`crate::runtime::speech`] module interprets a seat's call and turns an accepted
-//! utterance into a committed row. Core responder, referral, and approval
-//! decisions remain available through the re-exported core modules.
+//! utterance into a committed row. The [`mod@crate::runtime::recall`] module
+//! defines the host memory ports that feed a seat's persistent session.
+//! Core responder, referral, and approval decisions remain available through
+//! the re-exported core modules.
 //! The host remains responsible for storage, transports, model clients, and
 //! choosing an async executor.
 //!
@@ -37,6 +39,7 @@ pub mod digest;
 pub mod elsewhere;
 pub mod error;
 pub mod pins;
+pub mod recall;
 pub mod session;
 pub mod sharing;
 pub mod speech;
@@ -69,6 +72,11 @@ pub use error::{Error, Result};
 pub use pins::{
     PIN_EXCERPT_CHARS, PIN_LIMIT, PIN_SCAN, Pin, PinAction, PinDirective, fold_pins, pin_note,
     read_directives, read_pinboard,
+};
+pub use recall::{
+    DeskDelta, DeskWatermark, EntryKind, MemoryEntry, RECALL_HEADING, Recall, RecallFuture,
+    RecallMoment, RecallRequest, RecalledSession, Remember, RememberFuture, RememberRequest,
+    desk_delta, frame_recalled, initialize_session_with_recall,
 };
 pub use session::{
     Conversation, Elision, LogMessage, PAGE_SIZE, SCAN_LIMIT, SESSION_WINDOW, Sequence,

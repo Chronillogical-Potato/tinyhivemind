@@ -10,6 +10,7 @@ pure dependency tree. The root README of the repository describes the library.
 | `viewer/` | offline viewer for the JSONL traces |
 | `harbor/` | Harbor agent wrapper for Terminal-Bench |
 | `tests/` | mock model server and the offline end-to-end script |
+| `docker/cortex/` | a local CortexDB server for `swe_hive --memory cortex` |
 
 Contract checks: `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, run from this directory.
 
@@ -151,6 +152,20 @@ example could drive and why.
 | `ApprovalPolicy.enabled`, `.default`, `.rules`, `.approver`, `.allow_grants`, `.max_grant_ttl` | `gate_knobs` | approve |
 | `ApprovalRule`, `TargetPattern`, `ApproverRule`, `DeskApprover`, `GrantScope`, `StandingGrant`, `RememberedRefusal`, `ScopeKey`, `Millis`, `ConsentEpoch` (F36) | `gate_knobs` | approve |
 | Every `DenyReason`, `AllowBasis` | `gate_knobs` | approve |
+
+### SWE hive: sessions and memory
+
+`swe_hive` flags added for issue #104 (seats forgot what they ran), and what
+exercises them. Unit tests run under `cargo test`; `offline.sh` is
+`tests/offline.sh` against the mock model.
+
+| Flag | Default | Where |
+| --- | --- | --- |
+| `--seat-session persistent` | yes | `seat/test/session.rs` (second activation keeps the first's tool results, delta-only resume, nothing removed without compaction), `hive/test.rs` (a woken lead resumes its own session; its own broadcast is not echoed), `board/test.rs` (delta watermark, own posts skipped, pins only when changed), `offline.sh` `hive-persistent` |
+| `--seat-session fresh` | | `seat/test/session.rs`, `hive/test.rs` (`fresh_sessions_reproduce_the_briefing_per_activation`), `offline.sh` `hive-fresh` |
+| `--hive-context mask|summarize` | `summarize` (mask, then summarize if still over budget); `mask` under `fresh` | `config/test.rs`, `context/test.rs` (`scaled_estimate`), `seat/test/session.rs` (compaction is what shrinks a session) |
+| `--memory none|cortex`, `--memory-url`, `--memory-budget`, `--run-id` | `none`, `$CORTEX_DB_URL`, 1200, generated | `config/test.rs`; `memory/test.rs` on the reference engine (a later recall surfaces an earlier failed attempt, rejoin shows a teammate's memory once, two run ids share nothing, namespace root pinned, timeout and unreachable server degrade to no memory); `seat/test/memory.rs` (recall at start, rejoin, compaction; ledger stored at the end; a failing memory is reported and ignored); `live_cortex_memory_round_trip` and `offline.sh` `*-mem` with `CORTEX_DB_URL` set |
+| core memory port (`Recall`, `Remember`, `frame_recalled`, `desk_delta`) and typed `session_resumed` / `recalled` / `remembered` events | | `HiveMemory` is the reference host (`memory/test.rs`: typed errors, conversation scoping, indexed writes, the slow-index fallback); `board/test.rs` (delta through `desk_delta`); `seat/test/session.rs`, `seat/test/memory.rs`, `offline.sh`, and their own timeline lanes in the viewer (`viewer/src/marks.js`) |
 
 ### Gaps: what no example drives
 

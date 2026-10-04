@@ -58,7 +58,7 @@ fn summary(mode: Mode) -> (Summary, usize) {
     let sink = Sink(Mutex::new(0));
     let tracer = Tracer::new("r", &sink, &Zero);
     let llm = Llm::new(Box::new(Finisher), "m", Meter::new(None, None));
-    let s = run(&config(mode), &llm, &Nop, &tracer);
+    let s = run(&config(mode), &llm, &Nop, &tracer, None);
     let events = *sink.0.lock().expect("lock");
     (s, events)
 }
@@ -92,16 +92,22 @@ fn hive_completes_when_the_lead_completes() {
         "context_policy",
         "context_budget",
         "context_events",
+        "seat_session",
+        "memory",
     ] {
         assert!(doc.get(key).is_some(), "result.json lacks {key}");
     }
     assert_eq!(doc["seats"]["lead"]["calls"], 1);
     assert_eq!(
+        (doc["seat_session"].as_str(), doc["memory"].as_str()),
+        (Some("persistent"), Some("none"))
+    );
+    assert_eq!(
         (
             doc["max_prompt_tokens"].as_u64(),
             doc["context_policy"].as_str()
         ),
-        (Some(30), Some("mask"))
+        (Some(30), Some("mask+summarize"))
     );
 }
 
@@ -126,7 +132,7 @@ fn an_overflow_is_recorded_as_the_abort_reason() {
     let sink = Sink(Mutex::new(0));
     let tracer = Tracer::new("r", &sink, &Zero);
     let llm = Llm::new(Box::new(Overflow), "m", Meter::new(None, None));
-    let s = run(&config(Mode::Single), &llm, &Nop, &tracer);
+    let s = run(&config(Mode::Single), &llm, &Nop, &tracer, None);
     assert_eq!(s.to_json()["aborted"], "context_overflow");
     assert!(!s.completed);
 }

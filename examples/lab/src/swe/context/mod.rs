@@ -11,6 +11,14 @@
 //! - [`Policy::Summarize`] makes one extra metered call that condenses the
 //!   oldest half of the conversation into a note ([`summary_cut`],
 //!   [`replace_prefix`]).
+//! - [`Policy::MaskThenSummarize`] masks first and summarizes only when the
+//!   masked conversation would still be over budget ([`scaled_estimate`]).
+//!   It is the hive default under persistent sessions, where a session
+//!   lives for the whole run.
+//!
+//! When memory is on, what compaction drops ([`dropped_text`]) steers a
+//! recall whose pack is kept as one message right after the opening
+//! ([`upsert_memory`]).
 //!
 //! Every function here is pure over the JSON message list. Neither ever removes
 //! the system message, the first user message, or a tool message whose
@@ -27,6 +35,8 @@ pub enum Policy {
     Mask,
     /// Summarize the oldest half with one extra model call.
     Summarize,
+    /// Mask; summarize as well when the masked prompt is still over budget.
+    MaskThenSummarize,
 }
 
 impl Policy {
@@ -37,6 +47,7 @@ impl Policy {
             Self::None => "none",
             Self::Mask => "mask",
             Self::Summarize => "summarize",
+            Self::MaskThenSummarize => "mask+summarize",
         }
     }
 
@@ -47,6 +58,7 @@ impl Policy {
             "none" => Some(Self::None),
             "mask" => Some(Self::Mask),
             "summarize" => Some(Self::Summarize),
+            "mask+summarize" => Some(Self::MaskThenSummarize),
             _ => None,
         }
     }
@@ -198,6 +210,75 @@ pub fn replace_prefix(messages: &mut Vec<Value>, cut: usize, note: &str) -> usiz
         })],
     );
     removed
+}
+
+/// Header of the message that carries recalled memory inside a session:
+/// core's, which `frame_recalled` opens every block with.
+pub use tinyhivemind_core::runtime::RECALL_HEADING as MEMORY_HEADER;
+
+/// Longest one dropped message is when handed to memory, in characters.
+const DROPPED_CHARS: usize = 400;
+
+/// Total characters of `messages`' text bodies, tool-call arguments included.
+#[must_use]
+pub fn text_chars(messages: &[Value]) -> usize {
+    messages
+        .iter()
+        .map(|message| {
+            let body = message["content"].as_str().map_or(0, str::len);
+            let calls = message["tool_calls"].as_array().map_or(0, |calls| {
+                calls
+                    .iter()
+                    .map(|call| call["function"]["arguments"].as_str().map_or(0, str::len))
+                    .sum()
+            });
+            body + calls
+        })
+        .sum()
+}
+
+/// The prompt a call would report after the conversation shrank from
+/// `before` to `after` characters, given it reported `prompt` before.
+#[must_use]
+pub fn scaled_estimate(prompt: u64, before: usize, after: usize) -> u64 {
+    if before == 0 {
+        return prompt;
+    }
+    let scaled = u128::from(prompt) * after as u128 / before as u128;
+    u64::try_from(scaled).unwrap_or(u64::MAX)
+}
+
+/// Put `pack` right after the opening user message, under [`MEMORY_HEADER`]
+/// (added unless the pack already starts with it), replacing the pack an
+/// earlier compaction left there.
+pub fn upsert_memory(messages: &mut Vec<Value>, pack: &str) {
+    let framed = if pack.starts_with(MEMORY_HEADER) {
+        pack.to_owned()
+    } else {
+        format!("{MEMORY_HEADER}\n{pack}")
+    };
+    let message = json!({ "role": "user", "content": framed });
+    let held = messages
+        .get(2)
+        .and_then(|m| m["content"].as_str())
+        .is_some_and(|body| body.starts_with(MEMORY_HEADER));
+    if held {
+        messages[2] = message;
+    } else if messages.len() >= 2 {
+        messages.insert(2, message);
+    }
+}
+
+/// One clipped line per message, for steering a compaction recall.
+#[must_use]
+pub fn dropped_text(messages: &[Value]) -> Vec<String> {
+    messages
+        .iter()
+        .map(|message| {
+            let line = render_for_summary(std::slice::from_ref(message));
+            one_line(line.trim_end(), DROPPED_CHARS)
+        })
+        .collect()
 }
 
 /// System prompt of the summarizing call.

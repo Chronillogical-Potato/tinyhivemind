@@ -1,3 +1,3 @@
 # hive
 
-`mod.rs` is the scheduler: a mention-driven wake queue, rounds of at most `round_width` concurrent seats, keyword routing of broadcasts, digest checkpoints, and the converged / exhausted / idle outcomes. `test.rs` covers the queue, routing and whole scripted episodes.
+`mod.rs` is the scheduler: a mention-driven wake queue, rounds of at most `round_width` concurrent seats, keyword routing of broadcasts, digest checkpoints, and the converged / exhausted / idle outcomes. Each woken seat takes its session from the run's `Sessions`, opens it with `Board::briefing_view` the first time and resumes it with `Board::delta` (rows since its watermark, not its own) after that, and puts it back; the queue dedupes by seat, so no round holds a seat twice. `test.rs` covers the queue, routing, whole scripted episodes, and a lead that resumes its own session (persistent) or restarts from the briefing (fresh).

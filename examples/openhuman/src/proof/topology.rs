@@ -180,7 +180,6 @@ pub async fn run(agent_count: usize, hive_count: usize) -> anyhow::Result<()> {
             }
         }
         for marker in [
-            format!("MEMORY_MARKER_{id}"),
             format!("SKILL_MARKER_{id}"),
             format!("MCP_MARKER_{id}"),
         ] {
@@ -193,7 +192,7 @@ pub async fn run(agent_count: usize, hive_count: usize) -> anyhow::Result<()> {
             if peer == agent_index {
                 continue;
             }
-            for marker in ["PROMPT", "MEMORY", "SKILL", "MCP"] {
+            for marker in ["PROMPT", "SKILL", "MCP"] {
                 anyhow::ensure!(
                     !system.contains(&format!("{marker}_MARKER_agent{peer}")),
                     "agent {id} sees agent{peer}'s {marker}"

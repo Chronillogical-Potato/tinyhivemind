@@ -4,6 +4,8 @@
 //! in how the work is divided, not in what the model is told about the
 //! sandbox. Prompts are deliberately short: they are paid for on every call.
 
+use super::session::SessionMode;
+
 /// A seat's job on the desk.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Role {
@@ -76,13 +78,21 @@ reaches nobody. End each turn by calling exactly one of post, broadcast, ask or 
 complete_episode; your next turn starts from the desk, not from this conversation, so put \
 everything a teammate needs in that message. Be brief.";
 
-/// The system prompt for a hive seat.
+const HIVE_RULES_PERSISTENT: &str = "You share a desk with teammates. What you write outside a \
+tool call reaches nobody. End each turn by calling exactly one of post, broadcast, ask or \
+complete_episode. When you are woken again you continue your own conversation: everything \
+you ran and saw is still above, and only what is new on the desk is added, so do not re-run \
+commands whose results you already have. Teammates cannot see your conversation, so put \
+everything they need in your message. Be brief.";
+
+/// The system prompt for a hive seat whose session runs in `mode`.
 #[must_use]
-pub fn hive_system(role: Role, task: &str) -> String {
-    format!(
-        "{ENVIRONMENT}{HIVE_RULES}\n\n{}\n\nTask:\n{task}",
-        role.duty()
-    )
+pub fn hive_system(role: Role, task: &str, mode: SessionMode) -> String {
+    let rules = match mode {
+        SessionMode::Fresh => HIVE_RULES,
+        SessionMode::Persistent => HIVE_RULES_PERSISTENT,
+    };
+    format!("{ENVIRONMENT}{rules}\n\n{}\n\nTask:\n{task}", role.duty())
 }
 
 /// The system prompt for the single-agent baseline.
@@ -99,6 +109,13 @@ pub fn single_system(task: &str) -> String {
 #[must_use]
 pub fn hive_turn(seat: &str, briefing: &str, reason: &str) -> String {
     format!("{briefing}\n(You are @{seat}. {reason})")
+}
+
+/// The message that resumes a persistent hive session: the desk delta and
+/// why the seat was woken.
+#[must_use]
+pub fn hive_rejoin(seat: &str, delta: &str, reason: &str) -> String {
+    format!("{delta}\n(You are @{seat}, continuing your session. {reason})")
 }
 
 /// The opening user message of the single agent.

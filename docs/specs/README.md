@@ -68,6 +68,10 @@ remain here as design records; their API sketches are not current usage guides.
   pickers, bounded transcript search with optional regular expressions,
   pinning as a fold, and the stated per-message budget. Standalone
   find/select/search entry points were retired.
+- [`hive-memory.md`](hive-memory.md) — a seat's persistent session, the desk
+  delta by watermark, and the host memory ports recalled at session start, on
+  rejoin, and after compaction. See
+  [ADR 0029](../adr/0029-a-host-memory-port-feeds-seat-sessions.md).
 - [`jev-integration.md`](jev-integration.md) — typed routing distributions,
   admission-gated probabilistic quorum, approval narrowing, and paired Jev
   versus strict-JSON evaluation.

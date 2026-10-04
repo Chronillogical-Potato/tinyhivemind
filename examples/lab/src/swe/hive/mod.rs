@@ -5,9 +5,13 @@
 //! routed to it; the lead wakes again only once the queue has drained and a
 //! teammate has reported, so it is not re-read on every report. A round runs at
 //! most `round_width` seats at once on scoped threads, which is core's bound
-//! on concurrent turns (charter rule 3). Each activation starts from
-//! [`Board::briefing`](super::board::Board::briefing) (pins, digest, live
-//! tail) rather than from a private history that grows with every command.
+//! on concurrent turns (charter rule 3). A seat's first activation opens its
+//! session with [`Board::briefing_view`](super::board::Board::briefing_view)
+//! (pins, digest, live tail). With persistent sessions a later activation
+//! resumes that session with only
+//! [`Board::delta`](super::board::Board::delta), the rows teammates committed
+//! since the seat's watermark, so the seat keeps every command it ran; with
+//! `--seat-session fresh` every activation starts from the briefing again.
 //!
 //! The run ends when the lead calls `complete_episode` (`converged`), when a
 //! cap aborts it (`exhausted`), or when the desk stays idle after the lead
@@ -20,8 +24,9 @@ use tinyhivemind_core::telemetry::{RoundSeat, TraceEvent};
 
 use super::context::Settings;
 use super::meter::Abort;
-use super::roles::{Role, hive_system, hive_turn};
+use super::roles::{Role, hive_rejoin, hive_system, hive_turn};
 use super::seat::{Activation, Env, Outcome, run as run_seat};
+use super::session::SeatSession;
 use super::tools::{HIVE_TOOLS, tool_list};
 
 /// Knobs of the hive arm.
@@ -31,8 +36,8 @@ pub struct Params {
     pub round_width: usize,
     /// Model calls one activation may make.
     pub steps: usize,
-    /// Hard per-activation prompt budget (the briefing already bounds the
-    /// opening prompt; this bounds the growth within one activation).
+    /// The prompt budget and the compaction that enforces it on each seat's
+    /// session.
     pub context: Settings,
 }
 
@@ -244,21 +249,12 @@ fn run_round(
             .map(|wake| {
                 let tools = Arc::clone(&tools);
                 scope.spawn(move || {
-                    let role = Role::from_id(&wake.seat).unwrap_or(Role::Implementer);
-                    let briefing = env.board.briefing(&wake.seat);
-                    run_seat(
-                        env,
-                        &Activation {
-                            seat: &wake.seat,
-                            system: hive_system(role, task),
-                            user: hive_turn(&wake.seat, &briefing, &wake.note),
-                            tools: tools.to_vec(),
-                            speaking: HIVE_TOOLS,
-                            steps: params.steps,
-                            implicit_post: true,
-                            context: params.context,
-                        },
-                    )
+                    // The queue dedupes by seat, so this round is the only
+                    // one holding this seat's session.
+                    let mut session = env.sessions.take(&wake.seat);
+                    let out = activate(env, task, params, &tools, wake, &mut session);
+                    env.sessions.put(&wake.seat, session);
+                    out
                 })
             })
             .collect();
@@ -267,6 +263,54 @@ fn run_round(
             .map(|handle| handle.join().unwrap_or_default())
             .collect()
     })
+}
+
+/// Longest memory focus taken from a wake, in characters.
+const FOCUS_CHARS: usize = 600;
+
+/// One seat's activation: open or resume its session from the desk, then run.
+fn activate(
+    env: &Env<'_>,
+    task: &str,
+    params: &Params,
+    tools: &[serde_json::Value],
+    wake: &Wake,
+    session: &mut SeatSession,
+) -> Outcome {
+    let role = Role::from_id(&wake.seat).unwrap_or(Role::Implementer);
+    let (view, user) = if session.is_new() {
+        let view = env.board.briefing_view(&wake.seat);
+        let user = hive_turn(&wake.seat, &view.text, &wake.note);
+        (view, user)
+    } else {
+        let view = env
+            .board
+            .delta(&wake.seat, session.read_through, session.pins_seen);
+        let user = hive_rejoin(&wake.seat, &view.text, &wake.note);
+        (view, user)
+    };
+    session.read_through = Some(view.through);
+    session.pins_seen = view.pins;
+    let focus: String = format!("{}\n{}", wake.note, view.text)
+        .chars()
+        .take(FOCUS_CHARS)
+        .collect();
+    run_seat(
+        env,
+        &Activation {
+            seat: &wake.seat,
+            system: hive_system(role, task, env.sessions.mode()),
+            user,
+            shown_rows: view.rows,
+            focus,
+            tools: tools.to_vec(),
+            speaking: HIVE_TOOLS,
+            steps: params.steps,
+            implicit_post: true,
+            context: params.context,
+        },
+        session,
+    )
 }
 
 #[cfg(test)]

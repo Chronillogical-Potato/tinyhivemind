@@ -8,13 +8,15 @@ because core is pure. The `swe_hive` binary (`src/bin/swe_hive.rs`) drives it.
 | Directory | Role |
 | --- | --- |
 | `meter/` | shared token meter and the `--token-cap` / `--max-turns` caps |
-| `context/` | pure masking / summarizing of a seat's conversation (`--single-context`, `--context-budget`) |
+| `context/` | pure masking / summarizing of a seat's conversation (`--single-context`, `--hive-context`, `--context-budget`) |
 | `llm/` | chat-completions client over `curl`, tool-call parsing, retry once |
 | `sandbox/` | `Exec` over `docker exec` or stdio JSON-lines RPC; command policy; truncation |
 | `tools/` | tool schemas: `bash` plus core `tool_specs` rendered verbatim |
-| `board/` | shared transcript through core commit, pins, digest and projection |
+| `board/` | shared transcript through core commit, pins, digest and projection; `briefing_view` and `delta` with watermarks |
 | `roles/` | prompts for lead, implementer, tester, reviewer and the single agent |
-| `seat/` | one activation: model loop, tool dispatch, telemetry |
+| `session/` | seat conversations kept between activations (`--seat-session persistent|fresh`) |
+| `memory/` | hive memory over tinymemory / CortexDB (`--memory none|cortex`) |
+| `seat/` | one activation on a seat session: model loop, tool dispatch, compaction, memory, telemetry |
 | `hive/` | rounds of at most `--round-width` concurrent seats |
 | `single/` | the baseline arm |
 | `config/` | command-line parsing |

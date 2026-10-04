@@ -164,10 +164,10 @@ async fn run() -> anyhow::Result<()> {
     }
 
     let config = inherited_config().await?;
-    if config.subsystems.memory.driver != "tinycortex" {
+    if config.memory.engine != "cortexdb" {
         anyhow::bail!(
-            "machine OpenHuman memory driver is {:?}, expected tinycortex",
-            config.subsystems.memory.driver
+            "machine OpenHuman memory engine is {:?}, expected cortexdb",
+            config.memory.engine
         );
     }
     let runtime = Arc::new(
@@ -268,7 +268,7 @@ async fn run() -> anyhow::Result<()> {
     println!("runtime_agents: {}", runtime.agent_ids().join(","));
     println!("initial_route: {}", selected.join(","));
     println!("model: {MODEL}");
-    println!("memory_driver: tinycortex");
+    println!("memory_engine: cortexdb");
     println!("workspace: {}", workspace.display());
     println!("run_dir: {}", run_dir.display());
 

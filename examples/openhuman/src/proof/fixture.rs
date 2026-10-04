@@ -162,7 +162,6 @@ pub fn configured_agent(
     let server = root.join(id).join("mcp.py");
     std::fs::write(&server, MCP_SCRIPT)?;
     std::fs::create_dir_all(&workspace)?;
-    std::fs::write(workspace.join("MEMORY.md"), format!("MEMORY_MARKER_{id}\n"))?;
     // Inline prompts are host-authored: OpenHuman intentionally does not
     // add a skill/MCP catalogue around a custom body. This host describes its
     // installed resources and later verifies their actual native execution.
