@@ -47,6 +47,14 @@ pub fn exchange_rounds() -> Res {
             },
         ),
         (
+            "on, contact_cap=5, round_cap=2",
+            ExchangePolicy {
+                enabled: true,
+                contact_cap: 5,
+                round_cap: 2,
+            },
+        ),
+        (
             "on, contact_cap=0",
             ExchangePolicy {
                 enabled: true,
@@ -110,9 +118,16 @@ pub fn exchange_rounds() -> Res {
 pub fn evaluated_quorum(rig: &TraceRig) -> Res {
     section("quorum by evaluation: probabilities instead of head counts");
     let tracer = rig.tracer("swarm:evaluated");
-    let rows = journal();
+    // Three seats back #x and one backs #y; nobody has objected.
+    let rows = vec![
+        journal().remove(0),
+        desk(2, "ada", "!propose #x plan x ^1"),
+        desk(3, "ben", "!support #x agree ^2"),
+        desk(4, "cy", "!propose #y plan y ^1"),
+        desk(5, "di", "!support #x also ^2"),
+    ];
     let traces = read(&rows);
-    let at = Sequence(7);
+    let at = Sequence(5);
     let quorum = QuorumPolicy::DEFAULT;
     let p = |parts: u32| Probability::new(parts).unwrap_or(Probability::ZERO);
     let eval =
@@ -138,18 +153,18 @@ pub fn evaluated_quorum(rig: &TraceRig) -> Res {
     let strict = AdmissionPolicy {
         maximum_violation_probability: p(50_000),
     };
-    let full = [
-        eval("ada", 7, 900_000, 1_000_000, 10_000),
-        eval("ben", 3, 900_000, 1_000_000, 10_000),
-    ];
-    let weak = [
-        eval("ada", 7, 900_000, 400_000, 10_000),
-        eval("ben", 3, 900_000, 400_000, 10_000),
-    ];
-    let risky = [
-        eval("ada", 7, 900_000, 1_000_000, 200_000),
-        eval("ben", 3, 900_000, 1_000_000, 10_000),
-    ];
+    let all = |x: u32, evidence: u32, violation: u32| {
+        vec![
+            eval("ada", 2, x, evidence, violation),
+            eval("ben", 3, x, evidence, violation),
+            eval("di", 5, x, evidence, violation),
+        ]
+    };
+    let full = all(950_000, 1_000_000, 10_000);
+    let weak = all(950_000, 600_000, 10_000);
+    let mut risky = all(950_000, 1_000_000, 10_000);
+    risky[0] = eval("ada", 2, 950_000, 1_000_000, 200_000);
+    let two = full[1..].to_vec();
     let none: [DecisionEvaluation; 0] = [];
     let table = |label: &str, evals: &[DecisionEvaluation], admission: &AdmissionPolicy| {
         match standings_with_evaluations(&traces, evals, at, &quorum, admission) {
@@ -172,8 +187,9 @@ pub fn evaluated_quorum(rig: &TraceRig) -> Res {
         }
     };
     table("head count (no evaluations asked)", &none, &relaxed);
-    table("both confident, relaxed admission", &full, &relaxed);
-    table("evidence_quality 0.4", &weak, &relaxed);
+    table("three confident (0.95), relaxed", &full, &relaxed);
+    table("two of three evaluated", &two, &relaxed);
+    table("evidence_quality 0.6", &weak, &relaxed);
     table("ada violation 0.2, relaxed (<=0.3)", &risky, &relaxed);
     table("ada violation 0.2, strict (<=0.05)", &risky, &strict);
     table(
@@ -188,7 +204,7 @@ pub fn evaluated_quorum(rig: &TraceRig) -> Res {
                 topic: Some(TopicId::from("x")),
                 probability: p(900_000),
             }],
-            ..eval("ada", 7, 0, 1_000_000, 0)
+            ..eval("ada", 2, 0, 1_000_000, 0)
         }],
         &relaxed,
     );
