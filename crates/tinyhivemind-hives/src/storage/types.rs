@@ -95,6 +95,11 @@ pub struct RetentionPolicy {
     /// Most recent acknowledged ([`DeliveryStatus::Delivered`]) deliveries to
     /// keep; `None` keeps all. Pending and interrupted deliveries are kept.
     pub delivered: Option<usize>,
+    /// Most recent terminal interruption records to keep; `None` keeps all.
+    /// This bounds both [`DeliveryStatus::Interrupted`] deliveries and
+    /// [`InterruptedTurn`] records so long-running hosts do not grow the
+    /// state row unboundedly.
+    pub interrupted: Option<usize>,
 }
 impl RetentionPolicy {
     /// Drop the oldest settled records beyond each bound.
