@@ -67,6 +67,7 @@ impl StoredState {
     pub(crate) fn without_transcript(&self) -> Self {
         Self {
             revision: self.revision,
+            writer_epoch: self.writer_epoch,
             next_sequence: self.next_sequence,
             hives: self.hives.clone(),
             agents: self.agents.clone(),
