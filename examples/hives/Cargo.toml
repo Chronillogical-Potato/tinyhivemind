@@ -1,0 +1,21 @@
+[package]
+name = "tinyhivemind-hives-examples"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+
+# Keep runnable host examples outside the library workspace.
+[workspace]
+
+[dependencies]
+tinyhivemind-hives = { path = "../../crates/tinyhivemind-hives" }
+tokio = { version = "1", features = ["macros", "rt", "sync"] }
+
+[[bin]]
+name = "one_hive"
+path = "one_hive.rs"
+
+[[bin]]
+name = "shared_agent"
+path = "shared_agent.rs"
