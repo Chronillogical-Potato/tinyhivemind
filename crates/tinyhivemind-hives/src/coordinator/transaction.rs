@@ -164,7 +164,7 @@ impl super::LiveState {
                 .durable
                 .running
                 .get(&agent)
-                .map(|running| {
+                .is_some_and(|running| {
                     running.delivery_sequence == deferred.delivery_sequence
                         && running
                             .request
@@ -172,8 +172,7 @@ impl super::LiveState {
                             .as_ref()
                             .map(|ep| ep.episode_id.clone())
                             == deferred.episode_id
-                })
-                .unwrap_or(false);
+                });
 
             if should_reapply {
                 interrupt(&mut self.durable, &agent, &deferred.reason);
