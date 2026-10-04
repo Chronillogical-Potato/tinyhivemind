@@ -97,7 +97,13 @@ pub fn route_broadcast(author: &str, message: &str) -> &'static str {
     Role::ALL
         .into_iter()
         .filter(|role| role.id() != author && *role != Role::Lead)
-        .max_by_key(|role| (score(*role), *role == Role::Implementer))
+        .max_by_key(|role| {
+            (
+                score(*role),
+                *role == Role::Implementer,
+                *role == Role::Tester,
+            )
+        })
         .map_or(Role::Implementer.id(), Role::id)
 }
 
