@@ -209,6 +209,11 @@ impl Host<'_> {
     }
 }
 
+/// The host's own record that the coder was already held once.
+fn asked_approval(log: &MemoryLog) -> bool {
+    log.rows().iter().any(|row| row.content == "coder is waiting on an approval")
+}
+
 fn rows_since(log: &MemoryLog, seat: &str, since: Option<Sequence>) -> Vec<String> {
     log.rows()
         .iter()
@@ -320,9 +325,23 @@ async fn play_inner(
             Conductor::open(&driver, routing, scn.policy, door)?
         }
     };
-    let mut parked_once = false;
+    let result = turn_loop(scn, host, &mut conductor, snapshots).await;
+    host.report.waves = conductor.waves();
+    host.report.turns = conductor.turns_run();
+    host.report.conversations = conductor.conversations();
+    host.report.discharged = conductor.discharged();
+    host.report.finished = conductor.finished();
+    result
+}
+
+async fn turn_loop(
+    scn: &Scenario,
+    host: &mut Host<'_>,
+    conductor: &mut Conductor<'_, Runtime>,
+    snapshots: bool,
+) -> Res {
     for _ in 0..200 {
-        host.drain(&mut conductor, snapshots).await?;
+        host.drain(conductor, snapshots).await?;
         if conductor.finished() {
             break;
         }
@@ -388,8 +407,8 @@ async fn play_inner(
                     .sum(),
                 latency_ms: 0,
             });
-            if scn.park && turn.seat == "coder" && !parked_once {
-                parked_once = true;
+            if scn.park && turn.seat == "coder" && !asked_approval(&host.log) {
+                host.log.say("eng", SessionAuthor::System { kind: "approval".into(), label: "approval".into() }, "coder is waiting on an approval");
                 conductor.record_parked(turn, calls);
             } else {
                 conductor.record(turn, calls);
@@ -507,66 +526,5 @@ pub fn run(rig: &TraceRig) -> Res {
         );
     }
     println!("  ConductPolicy::default = {:?}", ConductPolicy::default());
-    Ok(())
-}
-
-/// Replay a run from every snapshot and compare it with the uninterrupted one.
-pub fn replay(rig: &TraceRig) -> Res {
-    section("snapshot and resume: replay from every commit boundary");
-    for (label, scn) in [
-        ("baseline", Scenario::default()),
-        (
-            "chatty tester, width 1",
-            Scenario {
-                driver_width: 1,
-                chatty_tester: true,
-                ..Scenario::default()
-            },
-        ),
-        (
-            "coder parked",
-            Scenario {
-                park: true,
-                ..Scenario::default()
-            },
-        ),
-    ] {
-        let tracer = rig.tracer(&format!("replay:{label}"));
-        let whole = play(&scn, &tracer, true, None);
-        let log = whole.rows.clone();
-        let mut identical = 0;
-        let mut mismatched = Vec::new();
-        for (index, (json, kept)) in whole.snapshots.iter().enumerate() {
-            let state: ConductorState = serde_json::from_str(json)?;
-            let rows = &whole.log[..*kept];
-            let quiet = rig.tracer("replay:silent");
-            let resumed = play(&scn, &quiet, false, Some((json, rows)));
-            let same = resumed.rows == log && resumed.error.is_none();
-            if same {
-                identical += 1;
-            } else {
-                let first = resumed.rows.iter().zip(&log).position(|(a, b)| a != b).unwrap_or(resumed.rows.len().min(log.len()));
-                for (a, b) in resumed.rows.iter().zip(&log) { eprintln!("ROWS {} | {} | {:?} {:?} || {:?} {:?}", a.0, b.0, a.2, a.3.chars().take(25).collect::<String>(), b.2, b.3.chars().take(25).collect::<String>()); }
-                println!("    DEBUG idx {index} kept {kept} first diff at row {first}: resumed {:?} vs whole {:?} (lens {} / {})", resumed.rows.get(first), log.get(first), resumed.rows.len(), log.len());
-                if std::env::var("LAB_DEBUG2").is_ok() {
-                    let again = play(&scn, &rig.tracer("x"), true, Some((json, rows)));
-                    for (a, b) in whole.snapshots.iter().skip(index + 1).zip(&again.snapshots) {
-                        let (va, vb): (serde_json::Value, serde_json::Value) = (serde_json::from_str(&a.0)?, serde_json::from_str(&b.0)?);
-                        if va != vb { eprintln!("SNAP DIFF at kept {}:\n WHOLE {}\n RESUM {}", a.1, a.0, b.0); break; }
-                    }
-                }
-                mismatched.push((index, state.mid_wave_is_empty(), resumed.error));
-            }
-        }
-        println!(
-            "  {label:<26} {} snapshots, {identical} replay identically{}",
-            whole.snapshots.len(),
-            if mismatched.is_empty() {
-                String::new()
-            } else {
-                format!("; mismatches (index, idle, error): {mismatched:?}")
-            }
-        );
-    }
     Ok(())
 }
