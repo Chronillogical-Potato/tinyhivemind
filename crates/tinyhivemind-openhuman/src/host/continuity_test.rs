@@ -10,8 +10,8 @@ fn input(id: &str) -> SendMessage {
         body: id.into(),
         thread: None,
         only_for: vec![],
-    },
-    starters: Vec::new(),
+        starters: Vec::new(),
+    }
 }
 #[test]
 fn first_turn_finalization_failure_keeps_the_session_and_prior_provider_history() {
