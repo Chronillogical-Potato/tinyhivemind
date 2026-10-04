@@ -12,6 +12,7 @@ use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
 
 use super::board::Board;
 use super::config::{Config, Mode};
+use super::context::Policy;
 use super::hive::{self, Params};
 use super::llm::Llm;
 use super::meter::Abort;
@@ -43,6 +44,14 @@ pub struct Summary {
     pub rounds: u32,
     /// Seat activations (one for single).
     pub activations: u32,
+    /// Largest prompt any single model call reported, all seats.
+    pub max_prompt_tokens: u64,
+    /// Context policy in force: the `--single-context` value for single, `mask` for hive.
+    pub context_policy: &'static str,
+    /// The prompt budget the policy acts above.
+    pub context_budget: u64,
+    /// Times the policy masked or summarized.
+    pub context_events: u64,
     /// Usage per seat.
     pub seats: Value,
 }
@@ -62,6 +71,10 @@ impl Summary {
             "aborted": self.aborted,
             "rounds": self.rounds,
             "activations": self.activations,
+            "max_prompt_tokens": self.max_prompt_tokens,
+            "context_policy": self.context_policy,
+            "context_budget": self.context_budget,
+            "context_events": self.context_events,
             "seats": self.seats,
         })
     }
@@ -104,6 +117,7 @@ pub fn run(config: &Config, llm: &Llm, exec: &dyn Exec, tracer: &Tracer<'_>) -> 
                 &Params {
                     round_width: config.round_width,
                     steps: config.steps_per_turn,
+                    context: config.hive_settings(),
                 },
             );
             (
@@ -115,10 +129,16 @@ pub fn run(config: &Config, llm: &Llm, exec: &dyn Exec, tracer: &Tracer<'_>) -> 
         }
         Mode::Single => {
             let steps = usize::try_from(config.max_turns).unwrap_or(usize::MAX);
-            let outcome = single::run(&env, &config.task, steps);
+            let outcome = single::run(&env, &config.task, steps, config.single_settings());
             (outcome.completed, outcome.abort, 0, 1)
         }
     };
+    if let Some(Abort::ContextOverflow(why)) = &abort {
+        tracer.emit(TraceEvent::Mark {
+            label: "context_overflow".into(),
+            detail: why.clone(),
+        });
+    }
     let snapshot = llm.meter().snapshot();
     let wall_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     tracer.emit(TraceEvent::Mark {
@@ -146,6 +166,13 @@ pub fn run(config: &Config, llm: &Llm, exec: &dyn Exec, tracer: &Tracer<'_>) -> 
         aborted: abort.map(|why| why.to_string()),
         rounds,
         activations,
+        max_prompt_tokens: snapshot.max_prompt,
+        context_policy: match config.mode {
+            Mode::Hive => Policy::Mask.name(),
+            Mode::Single => config.single_context.name(),
+        },
+        context_budget: config.context_budget,
+        context_events: snapshot.context_events,
         seats: Value::Object(per_seat),
     }
 }

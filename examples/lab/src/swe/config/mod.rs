@@ -7,6 +7,8 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use super::context::{Policy, Settings};
+
 /// Which arm to run.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Mode {
@@ -67,6 +69,35 @@ pub struct Config {
     pub output_limit: usize,
     /// Seconds per model request.
     pub request_timeout: u64,
+    /// Context policy of the single seat.
+    pub single_context: Policy,
+    /// Prompt tokens above which the context policy acts (both arms).
+    pub context_budget: u64,
+    /// Tool results kept verbatim by `mask`.
+    pub context_keep: usize,
+}
+
+impl Config {
+    /// The context settings for the single seat.
+    #[must_use]
+    pub fn single_settings(&self) -> Settings {
+        Settings {
+            policy: self.single_context,
+            budget: self.context_budget,
+            keep_recent: self.context_keep,
+        }
+    }
+
+    /// The hard prompt budget every hive activation runs under: masking, with
+    /// the same budget and keep as the single arm.
+    #[must_use]
+    pub fn hive_settings(&self) -> Settings {
+        Settings {
+            policy: Policy::Mask,
+            budget: self.context_budget,
+            keep_recent: self.context_keep,
+        }
+    }
 }
 
 /// A bad command line.
@@ -85,7 +116,8 @@ impl std::error::Error for UsageError {}
 pub const USAGE: &str = "usage: swe_hive --mode hive|single (--task TEXT | --task-file F) \
 (--container NAME | --stdio-rpc)\n  [--model M] [--api-base URL] [--trace F] [--result F]\n  \
 [--max-turns N] [--round-width N] [--token-cap N] [--steps-per-turn N]\n  \
-[--cmd-timeout SECS] [--output-limit BYTES] [--request-timeout SECS]\n\
+[--cmd-timeout SECS] [--output-limit BYTES] [--request-timeout SECS]\n  \
+[--single-context none|mask|summarize] [--context-budget TOKENS] [--context-keep N]\n\
 The API key is read from OPENROUTER_API_KEY.";
 
 impl Config {
@@ -114,6 +146,9 @@ impl Config {
             cmd_timeout: 180,
             output_limit: 6000,
             request_timeout: 240,
+            single_context: Policy::Mask,
+            context_budget: 60_000,
+            context_keep: 8,
         };
         let mut args = args.into_iter();
         while let Some(flag) = args.next() {
@@ -144,6 +179,15 @@ impl Config {
                 "--cmd-timeout" => config.cmd_timeout = number(&flag, &value)?,
                 "--output-limit" => config.output_limit = number(&flag, &value)?,
                 "--request-timeout" => config.request_timeout = number(&flag, &value)?,
+                "--single-context" => {
+                    config.single_context = Policy::parse(&value).ok_or_else(|| {
+                        UsageError(format!(
+                            "--single-context must be none, mask or summarize, not {value}"
+                        ))
+                    })?;
+                }
+                "--context-budget" => config.context_budget = number(&flag, &value)?,
+                "--context-keep" => config.context_keep = number(&flag, &value)?,
                 other => return Err(UsageError(format!("unknown flag {other}"))),
             }
         }

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use tinyhivemind_core::hive::{BidReason, Phase, TopicId, Visibility};
 use tinyhivemind_core::telemetry::{RoundSeat, TraceEvent};
 
+use super::context::Settings;
 use super::meter::Abort;
 use super::roles::{Role, hive_system, hive_turn};
 use super::seat::{Activation, Env, Outcome, run as run_seat};
