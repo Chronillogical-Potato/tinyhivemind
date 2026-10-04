@@ -238,7 +238,7 @@ fn single_text_without_a_tool_is_nudged_then_given_up() {
 #[test]
 fn text_only_replies_are_nudged_only_when_consecutive() {
     let bash = || call("bash", json!({ "cmd": "ls" }));
-    let done = call("complete_episode", json!({ "summary": "ok" }));
+    let done = call("complete_episode", json!({ "message": "ok" }));
     let rig = rig(
         vec![
             text("thinking"),
@@ -253,7 +253,10 @@ fn text_only_replies_are_nudged_only_when_consecutive() {
         None,
     );
     let out = go(&rig, SINGLE_TOOLS, false, 20);
-    assert!(out.completed, "a text-only reply between tool calls must not end the run");
+    assert!(
+        out.completed,
+        "a text-only reply between tool calls must not end the run"
+    );
 }
 
 #[test]

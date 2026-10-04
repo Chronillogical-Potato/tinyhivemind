@@ -134,6 +134,9 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
             }));
             continue;
         }
+        // Only consecutive text-only replies mean the model has stopped; a
+        // long task is bound to think aloud now and then between tool calls.
+        nudges = 0;
         for call in &completion.tool_calls {
             let content = handle(env, act, turn, call, &mut out);
             messages.push(tool_result(&call.id, &content));
