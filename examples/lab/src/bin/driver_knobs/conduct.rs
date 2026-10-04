@@ -396,6 +396,7 @@ async fn play_inner(
             }
         }
     }
+    if std::env::var("LAB_DEBUG").is_ok() { if let Some(state) = conductor.snapshot() { eprintln!("FINAL {}", serde_json::to_string(&state)?); } }
     host.report.waves = conductor.waves();
     host.report.turns = conductor.turns_run();
     host.report.conversations = conductor.conversations();
