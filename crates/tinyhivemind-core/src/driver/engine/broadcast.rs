@@ -5,7 +5,8 @@
 //! participant holds at most one (ADR 0021) -- handed a queued [`Handoff`] it
 //! receives the moment it completes. A recipient whose queue is full is
 //! skipped; if nobody could take the work at all, it stays with its author,
-//! who is owed another turn to decide what to do with it. Nothing is dropped.
+//! who is owed another turn to decide what to do with it. Nothing is dropped:
+//! a refused seat is not run, and the author's assignment stays open.
 
 use std::collections::BTreeSet;
 
@@ -90,9 +91,19 @@ impl<A: BoundAgent> CompletionDriver<'_, A> {
             next.seen.ran_for.remove(author);
             return Ok(Vec::new());
         }
-        self.place(next, event, message, &recipients)?;
+        let refused = self.place(next, event, message, &recipients)?;
+        let placed: Vec<String> = recipients
+            .into_iter()
+            .filter(|id| !refused.contains(id))
+            .collect();
+        if placed.is_empty() {
+            // Every recipient was refused for capacity. `place` already owes
+            // the author another turn; its assignment stays open so the work
+            // is not closed on a handoff nobody received.
+            return Ok(Vec::new());
+        }
         let mut actions = vec![HostAction::RunAgents {
-            agent_ids: recipients,
+            agent_ids: placed,
             plan,
         }];
         // Handing work off is a finding. Unless the author is still waiting
@@ -121,17 +132,18 @@ impl<A: BoundAgent> CompletionDriver<'_, A> {
         Ok(actions)
     }
 
+    /// Place the work; returns the recipients refused for a full queue.
     fn place(
         &self,
         next: &mut DriverState,
         event: &CommittedUtterance,
         message: &str,
         recipients: &[String],
-    ) -> Result<()> {
+    ) -> Result<Vec<String>> {
         let author = event.author_id.as_str();
         let mut idle: Vec<&str> = Vec::new();
         let mut queued = 0_usize;
-        let mut refused = 0_usize;
+        let mut refused: Vec<String> = Vec::new();
         for id in recipients {
             if !is_pending(&next.episode, id) {
                 idle.push(id);
@@ -141,7 +153,7 @@ impl<A: BoundAgent> CompletionDriver<'_, A> {
             // filled up while the model was thinking. Skip it and let the
             // outcome below decide who owns the work.
             if next.ledger.queue_len(id) >= self.queue_depth {
-                refused += 1;
+                refused.push(id.clone());
                 continue;
             }
             next.ledger.push(
@@ -157,14 +169,19 @@ impl<A: BoundAgent> CompletionDriver<'_, A> {
         if !idle.is_empty() {
             next.episode = apply_assignment(&next.episode, &idle, event.sequence)?;
         }
-        extend_pending_order(&mut next.pending_order, recipients);
+        let accepted: Vec<String> = recipients
+            .iter()
+            .filter(|id| !refused.contains(id))
+            .cloned()
+            .collect();
+        extend_pending_order(&mut next.pending_order, &accepted);
         // Nobody could take it and somebody was refused for capacity: the work
         // stays with the author, who must be asked again rather than left to
         // believe it was handed off.
-        if idle.is_empty() && queued == 0 && refused > 0 {
+        if idle.is_empty() && queued == 0 && !refused.is_empty() {
             next.seen.ran_for.remove(author);
         }
-        Ok(())
+        Ok(refused)
     }
 
     pub(super) fn broadcast_fallback_for<'state>(
