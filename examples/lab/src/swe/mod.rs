@@ -17,6 +17,8 @@
 //! | [`tools`] | tool schemas from core's speech specs plus `bash` |
 //! | [`board`] | shared transcript: core commit, pins, digest, briefing |
 //! | [`roles`] | prompts |
+//! | [`session`] | seat conversations kept between activations |
+//! | [`memory`] | hive memory over a tinymemory engine (CortexDB) |
 //! | [`seat`] | one activation: model loop, tools, telemetry |
 //! | [`hive`] / [`single`] | the two arms |
 //! | [`config`] / [`run`] | CLI and the run driver |
@@ -26,10 +28,12 @@ pub mod config;
 pub mod context;
 pub mod hive;
 pub mod llm;
+pub mod memory;
 pub mod meter;
 pub mod roles;
 pub mod run;
 pub mod sandbox;
 pub mod seat;
+pub mod session;
 pub mod single;
 pub mod tools;
