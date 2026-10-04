@@ -144,7 +144,8 @@ tinytools-agent = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinytools/
 # workspace root, and its crates.io consumers must resolve to these same types.
 [patch."https://github.com/tinyhumansai/tinymemory"]
 tinymemory-api = { path = "vendor/openhuman/vendor/tinymemory/crates/tinymemory-api" }
-tinymemory-safety = { path = "vendor/openhuman/vendor/tinymemory/crates/tinymemory-safety" }
+tinymemory-tools = { path = "vendor/openhuman/vendor/tinymemory/crates/tinymemory-tools" }
+tinymemory-integrations = { path = "vendor/openhuman/vendor/tinymemory/crates/tinymemory-integrations" }
 
 [patch."https://github.com/tinyhumansai/tinyinference"]
 tinyinference-core = { path = "vendor/openhuman/vendor/tinyagents/vendor/tinyinference/crates/tinyinference-core" }
