@@ -39,7 +39,6 @@ pub(crate) fn world() -> World {
         .desk("ops", "Operations", "Keep it running", &["dave", "erin"])
 }
 
-
 fn main() -> Res {
     let rig = TraceRig::from_args();
     digest::digest(&rig)?;

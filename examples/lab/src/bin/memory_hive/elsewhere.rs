@@ -56,10 +56,12 @@ pub fn elsewhere_and_threads() -> Res {
             );
         }
     }
+    // Nothing in the query says which desks the seat sits on: dave is on ops,
+    // and `gather_elsewhere` reads eng for him all the same.
     let unrestricted = block_on(gather_elsewhere(
         &log,
         &ElsewhereQuery {
-            seat: "alice",
+            seat: "dave",
             conversations: &conversations[..1],
             current: None,
             before: None,
@@ -67,9 +69,40 @@ pub fn elsewhere_and_threads() -> Res {
         },
     ))?;
     println!(
-        "  alice may read eng from outside it; nothing checks desk membership: {} row(s) (members: {:?})",
-        unrestricted[0].rows.len(),
-        world.desk_records()[1].members
+        "  dave (desks: {:?}) is handed {} row(s) of eng; membership is the caller's check",
+        world.desk_records()[1].members,
+        unrestricted[0].rows.len()
+    );
+    // Conversation::equivalent_to treats `main` and `General` as one desk;
+    // gather_elsewhere compares raw ids, so it does not skip the current one.
+    let main_desk = Conversation {
+        desk_id: "main".into(),
+        desk_name: "General".into(),
+        thread_root: None,
+    };
+    let alias = Conversation {
+        desk_id: "general".into(),
+        desk_name: "General".into(),
+        thread_root: None,
+    };
+    println!(
+        "  equivalent_to says main==general: {}",
+        main_desk.equivalent_to(&alias)
+    );
+    let both = [alias];
+    let leaked = block_on(gather_elsewhere(
+        &log,
+        &ElsewhereQuery {
+            seat: "alice",
+            conversations: &both,
+            current: Some(&main_desk),
+            before: None,
+            window: 5,
+        },
+    ))?;
+    println!(
+        "  gather_elsewhere with current=main and listed=general returns {} conversation(s) (0 expected if aliases matched)",
+        leaked.len()
     );
 
     section("threads: the index a viewer gets of a desk");
@@ -133,4 +166,3 @@ pub fn elsewhere_and_threads() -> Res {
     );
     Ok(())
 }
-

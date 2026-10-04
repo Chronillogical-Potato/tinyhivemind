@@ -130,4 +130,3 @@ fn board_line(board: &[Pin]) -> String {
         parts.join(" ")
     }
 }
-

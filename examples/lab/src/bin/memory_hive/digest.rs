@@ -287,4 +287,3 @@ fn plan_label(plan: &DigestPlan) -> String {
         }
     }
 }
-
