@@ -1,44 +1,97 @@
-//! Hive memory over the in-memory reference engine, a server that never
+//! Hive memory through core's `Recall` and `Remember` ports, over the
+//! in-memory reference engine, a recording wrapper, a server that never
 //! answers, and (when `CORTEX_DB_URL` is set) a live CortexDB.
 
 use std::net::TcpListener;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
+use tinyhivemind_core::runtime::{
+    BriefingNote, EntryKind, Error as CoreError, MemoryEntry, Recall, RecallMoment,
+    RecallRequest, Remember, RememberRequest,
+};
 use tinymemory_api::conformance::ReferenceEngine;
-use tinymemory_api::{ForgetTarget, MemoryEngine};
+use tinymemory_api::{
+    BeliefsRequest, ConsolidateReceipt, ConsolidateRequest, EngineDescriptor, EngineHealth,
+    ExplorePage, ExploreRequest, FetchPage, FetchRequest, ForgetReport, ForgetTarget, GetRequest,
+    Hit, ListPage, ListRequest, MemoryEngine, RecallAnswer, StoreItem, StoreReceipt, WaitFor,
+    WriteOptions, async_trait,
+};
 
 use super::*;
+use crate::block_on;
 
 const SEATS: [&str; 3] = ["lead", "implementer", "tester"];
-
-fn failed_pytest() -> Remembered {
-    Remembered {
-        text: "pytest still fails; the import path is wrong".into(),
-        ledger: vec![LedgerEntry {
-            cmd: "pytest tests/test_parser.py -x".into(),
-            exit: Some(1),
-            outcome: "ModuleNotFoundError: No module named 'parser_core'".into(),
-        }],
-    }
-}
 
 fn memory_on(engine: Arc<dyn MemoryEngine>, run: &str) -> HiveMemory {
     HiveMemory::new(engine, run, &SEATS, 1200).expect("memory")
 }
 
-fn start(focus: &str) -> Moment {
-    Moment::SessionStart {
-        focus: focus.into(),
+fn failed_pytest() -> Vec<MemoryEntry> {
+    let ledger = LedgerEntry {
+        cmd: "pytest tests/test_parser.py -x".into(),
+        exit: Some(1),
+        outcome: "ModuleNotFoundError: No module named 'parser_core'".into(),
+    };
+    vec![
+        ledger.to_entry(),
+        MemoryEntry {
+            kind: EntryKind::Outcome,
+            text: "pytest still fails; the import path is wrong".into(),
+        },
+    ]
+}
+
+fn store(memory: &HiveMemory, seat: &str, entries: Vec<MemoryEntry>) -> Result<(), CoreError> {
+    block_on(memory.remember(&RememberRequest {
+        seat: seat.into(),
+        conversation: memory.conversation(),
+        through: None,
+        entries,
+    }))
+}
+
+fn recall(
+    memory: &HiveMemory,
+    seat: &str,
+    moment: RecallMoment,
+) -> Result<Vec<BriefingNote>, CoreError> {
+    block_on(memory.recall(&RecallRequest {
+        seat: seat.into(),
+        conversation: memory.conversation(),
+        focus: Some("pytest parser import".into()),
+        moment,
+        budget_chars: memory.budget_chars(),
+    }))
+}
+
+fn text(notes: &[BriefingNote]) -> String {
+    notes
+        .iter()
+        .map(|note| format!("{}\n{}", note.heading, note.lines.join("\n")))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn chain(error: &CoreError) -> String {
+    let mut out = error.to_string();
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        out.push_str(&format!(": {cause}"));
+        source = cause.source();
     }
+    out
 }
 
 #[test]
 fn the_namespace_root_is_pinned_to_the_run_id() {
     let memory = memory_on(Arc::new(ReferenceEngine::new()), "trial 7/a");
     assert_eq!(memory.root().to_string(), "team:trial-7-a");
+    assert_eq!(memory.conversation(), "team:trial-7-a");
+    assert_eq!(memory.budget_chars(), 1200 * CHARS_PER_TOKEN);
     assert_eq!(
         memory
+            .inner
             .layout
             .conversations("implementer")
             .expect("node")
@@ -50,56 +103,74 @@ fn the_namespace_root_is_pinned_to_the_run_id() {
 }
 
 #[test]
-fn a_seats_later_recall_surfaces_its_earlier_failed_attempt() {
-    let memory = memory_on(Arc::new(ReferenceEngine::new()), "t-fail");
-    let stored = memory.remember("implementer", &failed_pytest());
-    assert_eq!(stored.error, None);
-    assert_eq!(stored.items, 1);
-    let recalled = memory.recall("implementer", &start("run pytest on the parser"));
-    assert_eq!(recalled.report.error, None);
-    let pack = recalled.pack.expect("a pack");
-    assert!(pack.starts_with(MEMORY_HEADER));
-    assert!(pack.contains("FAILED attempt, exit 1"), "{pack}");
-    assert!(pack.contains("ModuleNotFoundError"));
+fn another_runs_conversation_is_refused_by_both_ports() {
+    let memory = memory_on(Arc::new(ReferenceEngine::new()), "mine");
+    let theirs = block_on(memory.recall(&RecallRequest {
+        seat: "lead".into(),
+        conversation: "team:theirs".into(),
+        focus: None,
+        moment: RecallMoment::SessionStart,
+        budget_chars: 400,
+    }));
+    assert!(matches!(theirs, Err(CoreError::Recall { .. })));
+    let write = block_on(memory.remember(&RememberRequest {
+        seat: "lead".into(),
+        conversation: "team:theirs".into(),
+        through: None,
+        entries: failed_pytest(),
+    }));
+    assert!(matches!(write, Err(CoreError::Remember { .. })));
 }
 
 #[test]
-fn a_rejoin_shows_a_teammates_new_memory_once() {
-    let memory = memory_on(Arc::new(ReferenceEngine::new()), "t-rejoin");
-    memory.remember("implementer", &failed_pytest());
-    let rejoin = Moment::Rejoin {
-        focus: "pytest parser".into(),
+fn failed_commands_become_failed_attempts() {
+    let ok = LedgerEntry {
+        cmd: "ls".into(),
+        exit: Some(0),
+        outcome: "a b".into(),
     };
-    let first = memory.recall("tester", &rejoin);
-    let pack = first.pack.expect("the teammate's attempt");
-    assert!(pack.contains("@implementer") && pack.contains("pytest"));
-    let again = memory.recall("tester", &rejoin);
-    assert!(
-        again
-            .pack
-            .is_none_or(|p| !p.contains("ModuleNotFoundError")),
-        "already shown"
-    );
-    let own = memory.recall("implementer", &rejoin);
-    assert!(
-        own.pack.is_none_or(|p| !p.contains("ModuleNotFoundError")),
-        "a rejoin never repeats the seat's own history"
-    );
+    let refused = LedgerEntry {
+        cmd: "rm -rf /".into(),
+        exit: None,
+        outcome: "refused".into(),
+    };
+    assert_eq!(ok.to_entry().kind, EntryKind::Observation);
+    assert_eq!(failed_pytest()[0].kind, EntryKind::FailedAttempt);
+    assert_eq!(refused.to_entry().kind, EntryKind::FailedAttempt);
+    assert!(refused.to_entry().text.contains("did not run"));
+}
+
+#[test]
+fn a_seats_later_recall_surfaces_its_earlier_failed_attempt() {
+    let memory = memory_on(Arc::new(ReferenceEngine::new()), "t-fail");
+    store(&memory, "implementer", failed_pytest()).expect("stored");
+    let notes = recall(&memory, "implementer", RecallMoment::SessionStart).expect("recall");
+    let all = text(&notes);
+    assert!(all.contains("[FAILED attempt] `pytest tests/test_parser.py -x` (failed, exit 1)"));
+    assert!(all.contains("ModuleNotFoundError"));
+}
+
+#[test]
+fn a_rejoin_shows_a_teammates_new_memory_once_and_never_the_seats_own() {
+    let memory = memory_on(Arc::new(ReferenceEngine::new()), "t-rejoin");
+    store(&memory, "implementer", failed_pytest()).expect("stored");
+    let first = text(&recall(&memory, "tester", RecallMoment::Rejoin).expect("recall"));
+    assert!(first.contains("@implementer") && first.contains("pytest"));
+    let again = text(&recall(&memory, "tester", RecallMoment::Rejoin).expect("recall"));
+    assert!(!again.contains("ModuleNotFoundError"), "already shown");
+    let own = text(&recall(&memory, "implementer", RecallMoment::Rejoin).expect("recall"));
+    assert!(!own.contains("ModuleNotFoundError"));
 }
 
 #[test]
 fn a_compaction_recall_carries_the_seats_thread() {
     let memory = memory_on(Arc::new(ReferenceEngine::new()), "t-compact");
-    memory.remember("implementer", &failed_pytest());
-    let recalled = memory.recall(
-        "implementer",
-        &Moment::Compaction {
-            dropped: vec!["assistant: ran pytest".into()],
-            focus: "fix the import".into(),
-        },
-    );
-    assert_eq!(recalled.report.moment, "compaction");
-    assert!(recalled.pack.expect("pack").contains("pytest"));
+    store(&memory, "implementer", failed_pytest()).expect("stored");
+    let moment = RecallMoment::Compaction {
+        dropped: vec!["assistant: ran pytest".into()],
+    };
+    let notes = recall(&memory, "implementer", moment).expect("recall");
+    assert!(text(&notes).contains("pytest"));
 }
 
 #[test]
@@ -107,19 +178,93 @@ fn two_run_ids_share_nothing() {
     let engine: Arc<dyn MemoryEngine> = Arc::new(ReferenceEngine::new());
     let one = memory_on(engine.clone(), "run-one");
     let two = memory_on(engine, "run-two");
-    one.remember("implementer", &failed_pytest());
-    let other = two.recall("implementer", &start("pytest"));
-    assert_eq!(other.pack, None);
-    assert_eq!(other.report.error, None);
+    store(&one, "implementer", failed_pytest()).expect("stored");
+    let other = recall(&two, "implementer", RecallMoment::SessionStart).expect("recall");
+    assert!(other.is_empty(), "{other:?}");
+}
+
+/// The reference engine, recording how long each store asked to wait.
+struct Recording {
+    engine: ReferenceEngine,
+    waits: Arc<Mutex<Vec<WaitFor>>>,
+}
+
+#[async_trait]
+impl MemoryEngine for Recording {
+    fn descriptor(&self) -> &EngineDescriptor {
+        self.engine.descriptor()
+    }
+    async fn health(&self) -> EngineHealth {
+        self.engine.health().await
+    }
+    async fn recall(&self, req: tinymemory_api::RecallRequest) -> tinymemory_api::Result<RecallAnswer> {
+        self.engine.recall(req).await
+    }
+    async fn fetch(&self, req: FetchRequest) -> tinymemory_api::Result<FetchPage> {
+        self.engine.fetch(req).await
+    }
+    async fn store(&self, item: StoreItem) -> tinymemory_api::Result<StoreReceipt> {
+        self.store_with(item, WriteOptions::visible()).await
+    }
+    async fn store_with(
+        &self,
+        item: StoreItem,
+        options: WriteOptions,
+    ) -> tinymemory_api::Result<StoreReceipt> {
+        self.waits.lock().expect("lock").push(options.wait);
+        self.engine.store_with(item, options).await
+    }
+    async fn forget(&self, target: ForgetTarget) -> tinymemory_api::Result<ForgetReport> {
+        self.engine.forget(target).await
+    }
+    async fn list(&self, req: ListRequest) -> tinymemory_api::Result<ListPage> {
+        self.engine.list(req).await
+    }
+    async fn explore(&self, req: ExploreRequest) -> tinymemory_api::Result<ExplorePage> {
+        self.engine.explore(req).await
+    }
+    async fn get(&self, req: GetRequest) -> tinymemory_api::Result<Vec<Hit>> {
+        self.engine.get(req).await
+    }
+    async fn consolidate(
+        &self,
+        req: ConsolidateRequest,
+    ) -> tinymemory_api::Result<ConsolidateReceipt> {
+        self.engine.consolidate(req).await
+    }
+    async fn beliefs(&self, req: BeliefsRequest) -> tinymemory_api::Result<Vec<Hit>> {
+        self.engine.beliefs(req).await
+    }
 }
 
 #[test]
-fn packs_are_clipped_to_the_budget() {
-    let long = format!("# Memory\n\n## Learnings\n{}", "- fact\n".repeat(400));
-    let framed = frame(&long, 50).expect("pack");
-    assert!(framed.chars().count() <= 200);
-    assert!(framed.starts_with(MEMORY_HEADER) && !framed.contains("# Memory\n"));
-    assert_eq!(frame("# Memory", 50), None);
+fn remember_waits_until_indexed_so_the_next_recall_sees_it() {
+    let waits = Arc::new(Mutex::new(Vec::new()));
+    let engine = Recording {
+        engine: ReferenceEngine::new(),
+        waits: waits.clone(),
+    };
+    let memory = memory_on(Arc::new(engine), "t-indexed");
+    store(&memory, "implementer", failed_pytest()).expect("stored");
+    assert_eq!(*waits.lock().expect("lock"), [WaitFor::Visible]);
+    let next = text(&recall(&memory, "tester", RecallMoment::Rejoin).expect("recall"));
+    assert!(next.contains("ModuleNotFoundError"), "{next}");
+}
+
+#[test]
+fn every_fifth_turn_of_a_seat_starts_a_belief_build() {
+    let memory = memory_on(Arc::new(ReferenceEngine::new()), "t-build");
+    for n in 0..5 {
+        let entries = vec![MemoryEntry {
+            kind: EntryKind::Note,
+            text: format!("note {n}"),
+        }];
+        store(&memory, "lead", entries).expect("stored");
+    }
+    let jobs = memory.finish();
+    assert_eq!(jobs.len(), 1, "{jobs:?}");
+    assert!(jobs[0].starts_with("belief_build"));
+    assert!(memory.finish().is_empty(), "drained");
 }
 
 /// A CortexDB address whose server accepts connections and never answers.
@@ -138,29 +283,32 @@ fn quick() -> Timeouts {
 }
 
 #[test]
-fn a_timeout_degrades_to_no_memory_with_the_reason() {
+fn a_timeout_is_a_typed_port_error_with_the_reason() {
     let (_held, url) = silent_server();
     let memory = HiveMemory::cortex(&url, "k", "t-slow", &SEATS, 1200)
         .expect("memory")
         .with_timeouts(quick());
-    let recalled = memory.recall("lead", &start("anything"));
-    assert_eq!(recalled.pack, None);
-    assert!(recalled.report.error.expect("error").contains("timed out"));
-    let stored = memory.remember("lead", &failed_pytest());
-    assert!(stored.error.expect("error").contains("timed out"));
+    let recalled = recall(&memory, "lead", RecallMoment::SessionStart);
+    let error = recalled.expect_err("times out");
+    assert!(matches!(error, CoreError::Recall { .. }));
+    assert!(chain(&error).contains("timed out"), "{}", chain(&error));
+    let stored = store(&memory, "lead", failed_pytest()).expect_err("times out");
+    assert!(matches!(stored, CoreError::Remember { .. }));
+    assert!(chain(&stored).contains("timed out"));
     assert!(memory.finish().is_empty());
 }
 
 #[test]
-fn an_unreachable_server_degrades_to_no_memory() {
+fn an_unreachable_server_is_a_remember_error() {
     let (listener, url) = silent_server();
     drop(listener);
     let memory = HiveMemory::cortex(&url, "k", "t-down", &SEATS, 1200)
         .expect("memory")
         .with_timeouts(quick());
-    let stored = memory.remember("lead", &failed_pytest());
-    assert!(stored.error.is_some(), "{stored:?}");
-    assert_eq!(memory.recall("lead", &start("x")).pack, None);
+    assert!(matches!(
+        store(&memory, "lead", failed_pytest()),
+        Err(CoreError::Remember { .. })
+    ));
     assert!(HiveMemory::cortex("not a url", "k", "t", &SEATS, 1).is_err());
 }
 
@@ -172,7 +320,9 @@ fn a_bad_seat_or_run_id_is_refused_up_front() {
 }
 
 /// Store and recall against a real CortexDB when `CORTEX_DB_URL` is set
-/// (key from `CORTEX_DB_KEY`); a no-op otherwise. Cleans up after itself.
+/// (key from `CORTEX_DB_KEY`); a no-op otherwise. Measures what waiting for
+/// the index costs over an accepted-only write, checks a teammate's very next
+/// recall sees the turn, and cleans up after itself.
 #[test]
 fn live_cortex_memory_round_trip() {
     let Ok(url) = std::env::var("CORTEX_DB_URL") else {
@@ -182,39 +332,45 @@ fn live_cortex_memory_round_trip() {
     let run = generated_run_id("live");
     let memory = HiveMemory::cortex(&url, &key, &run, &SEATS, 1200).expect("memory");
     eprintln!("live: {}", memory.describe());
-    let stored = memory.remember("implementer", &failed_pytest());
-    eprintln!("live: {}", stored.detail("implementer"));
-    assert_eq!(stored.error, None);
-    let mut found = None;
-    for _ in 0..10 {
-        let recalled = memory.recall(
-            "tester",
-            &Moment::Rejoin {
-                focus: "pytest parser import".into(),
-            },
-        );
-        eprintln!("live: {}", recalled.report.detail("tester"));
-        if let Some(pack) = recalled.pack.filter(|p| p.contains("pytest")) {
-            found = Some(pack);
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(500));
-    }
-    let compaction = memory.recall(
-        "implementer",
-        &Moment::Compaction {
-            dropped: vec!["ran pytest".into()],
-            focus: "the import path".into(),
-        },
+    let accepted_ms = {
+        let node = memory.inner.layout.conversations("reviewer").expect("node");
+        let item = notes::turn_item(node, "reviewer", 0, "- [note] baseline write".into());
+        let engine = memory.inner.engine.clone();
+        let started = Instant::now();
+        memory
+            .runtime
+            .block_on(async { engine.store_with(item, WriteOptions::accepted()).await })
+            .expect("accepted write");
+        started.elapsed().as_millis()
+    };
+    let started = Instant::now();
+    store(&memory, "implementer", failed_pytest()).expect("indexed write");
+    let indexed_ms = started.elapsed().as_millis();
+    eprintln!("live: remember accepted_ms={accepted_ms} indexed_ms={indexed_ms}");
+    let started = Instant::now();
+    let next = text(&recall(&memory, "tester", RecallMoment::Rejoin).expect("recall"));
+    eprintln!(
+        "live: immediate rejoin recall latency_ms={} notes:\n{next}",
+        started.elapsed().as_millis()
     );
-    eprintln!("live: {}", compaction.report.detail("implementer"));
-    let filter = memory.layout.holistic_filter();
-    let engine = memory.engine.clone();
+    let compaction = RecallMoment::Compaction {
+        dropped: vec!["ran pytest".into()],
+    };
+    let started = Instant::now();
+    let carried = recall(&memory, "implementer", compaction).expect("recall");
+    eprintln!(
+        "live: compaction recall latency_ms={} notes={}",
+        started.elapsed().as_millis(),
+        carried.len()
+    );
+    let filter = memory.inner.layout.holistic_filter();
+    let engine = memory.inner.engine.clone();
     let forgotten = memory
         .runtime
         .block_on(async { engine.forget(ForgetTarget::Filter(filter)).await });
     eprintln!("live: cleanup {forgotten:?}");
-    let pack = found.expect("the teammate's attempt is recalled");
-    eprintln!("live pack:\n{pack}");
-    assert!(pack.contains("pytest"));
+    assert!(
+        next.contains("ModuleNotFoundError"),
+        "the very next recall sees the indexed turn"
+    );
 }
