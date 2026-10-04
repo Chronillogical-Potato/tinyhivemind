@@ -5,8 +5,7 @@ use tinyhivemind_core::aside::Audience;
 use tinyhivemind_core::hive::quorum::{ConsensusState, consensus, standings};
 use tinyhivemind_core::hive::trace::{TraceKind, read};
 use tinyhivemind_core::hive::{
-    AgentThreshold, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Visibility, project_for,
-    step,
+    AgentThreshold, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, project_for, step,
 };
 use tinyhivemind_core::runtime::{Conversation, Sequence, SessionAuthor, SessionMessage};
 use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
@@ -21,11 +20,26 @@ pub struct Seat {
 
 /// The cast: two seats for `x`, two for `y`, one undecided-leaning `z`.
 pub const CAST: [Seat; 5] = [
-    Seat { id: "ada", favourite: "x" },
-    Seat { id: "ben", favourite: "x" },
-    Seat { id: "cy", favourite: "y" },
-    Seat { id: "di", favourite: "y" },
-    Seat { id: "eli", favourite: "z" },
+    Seat {
+        id: "ada",
+        favourite: "x",
+    },
+    Seat {
+        id: "ben",
+        favourite: "x",
+    },
+    Seat {
+        id: "cy",
+        favourite: "y",
+    },
+    Seat {
+        id: "di",
+        favourite: "y",
+    },
+    Seat {
+        id: "eli",
+        favourite: "z",
+    },
 ];
 
 /// How the room is run, apart from the episode policy under test.
@@ -86,7 +100,13 @@ fn says(
     policy: &EpisodePolicy,
     sloppy: bool,
 ) -> String {
-    let cite = |at: u64| if sloppy { String::new() } else { format!(" ^{at}") };
+    let cite = |at: u64| {
+        if sloppy {
+            String::new()
+        } else {
+            format!(" ^{at}")
+        }
+    };
     let traces = read(visible);
     let at = visible.last().map_or(Sequence(0), |row| row.sequence);
     let table = standings(&traces, at, &policy.quorum).unwrap_or_default();
@@ -105,17 +125,25 @@ fn says(
     let proposal = |topic: &str| {
         traces
             .iter()
-            .find(|t| t.kind == TraceKind::Propose && t.topic.as_ref().is_some_and(|x| x.as_str() == topic))
+            .find(|t| {
+                t.kind == TraceKind::Propose
+                    && t.topic.as_ref().is_some_and(|x| x.as_str() == topic)
+            })
             .map(|t| t.sequence.0)
     };
     if turn.reason == tinyhivemind_core::hive::BidReason::Dissent {
         let other = traces.iter().find(|t| {
             t.kind == TraceKind::Propose
                 && t.agent_id() != Some(seat.id)
-                && t.topic.as_ref().is_some_and(|x| x.as_str() != seat.favourite)
+                && t.topic
+                    .as_ref()
+                    .is_some_and(|x| x.as_str() != seat.favourite)
         });
         if let Some(other) = other {
-            return format!("!object >{} ^{} that plan is weaker", other.sequence.0, other.sequence.0);
+            return format!(
+                "!object >{} ^{} that plan is weaker",
+                other.sequence.0, other.sequence.0
+            );
         }
     }
     let leader = table
@@ -141,8 +169,19 @@ pub fn run(room: &Room, policy: &EpisodePolicy, tracer: &Tracer<'_>) -> Result<O
     };
     let mut state = EpisodeState::opened(conversation, Sequence(1));
     state.thresholds = room.thresholds.clone();
-    let mut journal = vec![msg(1, SessionAuthor::Operator, "Pick a plan.", Audience::Desk)];
-    let mut outcome = Outcome { rounds: 0, turns: 0, widest: 0, end: String::new(), order: Vec::new() };
+    let mut journal = vec![msg(
+        1,
+        SessionAuthor::Operator,
+        "Pick a plan.",
+        Audience::Desk,
+    )];
+    let mut outcome = Outcome {
+        rounds: 0,
+        turns: 0,
+        widest: 0,
+        end: String::new(),
+        order: Vec::new(),
+    };
     for _ in 0..80 {
         let decided = step(&state, &journal, &roster, &desks, policy).map_err(|e| e.to_string())?;
         tracer.step(&decided);
@@ -176,18 +215,17 @@ pub fn run(room: &Room, policy: &EpisodePolicy, tracer: &Tracer<'_>) -> Result<O
             journal.push(msg(next, seat_author(seat.id), &line, Audience::Desk));
             for _ in 0..room.chatter {
                 let next = journal.len() as u64 + 1;
-                let to = Audience::Aside { members: vec!["ben".into()] };
+                let to = Audience::Aside {
+                    members: vec!["ben".into()],
+                };
                 journal.push(msg(next, seat_author("ada"), "side remark", to));
             }
         }
         state = *next_state;
     }
-    tracer.emit(TraceEvent::Checkpoint { label: "step cap reached".into() });
+    tracer.emit(TraceEvent::Checkpoint {
+        label: "step cap reached".into(),
+    });
     outcome.end = "step cap".into();
     Ok(outcome)
-}
-
-/// Whether the visibility of a turn was blind, for tables.
-pub fn blind(turn: &HiveTurn) -> bool {
-    turn.visibility == Visibility::Blind
 }
