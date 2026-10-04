@@ -183,6 +183,7 @@ fn retention_keeps_recent_settled_episodes_and_deliveries_only() {
     RetentionPolicy {
         settled_episodes: Some(1),
         delivered: Some(1),
+        interrupted: None,
     }
     .apply(&mut state);
     assert_eq!(
