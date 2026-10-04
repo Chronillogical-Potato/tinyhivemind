@@ -125,49 +125,34 @@ impl HiveTool {
                 };
                 submit(coordinator, actor, &text("episode_id"), action).await
             }
-            Kind::CreateHive => {
-                host.manage(
-                    actor,
-                    ManagementRequest::CreateHive(HiveInfo {
-                        hive_id: text("hive_id"),
-                        name: text("name"),
-                        description: args["description"].as_str().map(str::to_owned),
-                        members: strings(&args, "members"),
-                    }),
-                )
-                .await
-            }
-            Kind::CreateAgent => {
-                host.manage(
-                    actor,
-                    ManagementRequest::CreateAgent {
-                        template: text("template"),
-                        config: args["config"].clone(),
-                    },
-                )
-                .await
-            }
-            Kind::JoinHive => {
-                host.manage(
-                    actor,
-                    ManagementRequest::JoinHive {
-                        hive_id: text("hive_id"),
-                        agent_id: text("agent_id"),
-                    },
-                )
-                .await
-            }
-            Kind::LeaveHive => {
-                host.manage(
-                    actor,
-                    ManagementRequest::LeaveHive {
-                        hive_id: text("hive_id"),
-                        agent_id: text("agent_id"),
-                    },
-                )
-                .await
+            Kind::CreateHive | Kind::CreateAgent | Kind::JoinHive | Kind::LeaveHive => {
+                host.manage(actor, management(self.kind, &args)).await
             }
         }
+    }
+}
+/// The management request a management tool's validated arguments describe.
+fn management(kind: Kind, args: &Value) -> ManagementRequest {
+    let text = |name: &str| args[name].as_str().unwrap_or_default().to_owned();
+    match kind {
+        Kind::CreateHive => ManagementRequest::CreateHive(HiveInfo {
+            hive_id: text("hive_id"),
+            name: text("name"),
+            description: args["description"].as_str().map(str::to_owned),
+            members: strings(args, "members"),
+        }),
+        Kind::CreateAgent => ManagementRequest::CreateAgent {
+            template: text("template"),
+            config: args["config"].clone(),
+        },
+        Kind::JoinHive => ManagementRequest::JoinHive {
+            hive_id: text("hive_id"),
+            agent_id: text("agent_id"),
+        },
+        _ => ManagementRequest::LeaveHive {
+            hive_id: text("hive_id"),
+            agent_id: text("agent_id"),
+        },
     }
 }
 #[cfg(test)]

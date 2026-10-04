@@ -201,6 +201,34 @@ pub struct RunReport {
     /// Turns awaiting explicit release.
     pub parked: usize,
 }
+/// Host-facing status of one conducted hive episode.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EpisodeStatus {
+    /// Durable episode identity.
+    pub episode_id: String,
+    /// Hive the episode runs in.
+    pub hive_id: String,
+    /// Sequence of the message that opened it.
+    pub opened_at: u64,
+    /// Addressed outer conversation, absent on the open hive.
+    pub thread: Option<u64>,
+    /// Members the opening message started.
+    pub starters: Vec<String>,
+    /// Where the episode stands.
+    pub phase: EpisodePhase,
+}
+/// Lifecycle of an episode as a host observes it.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum EpisodePhase {
+    /// Running or queued behind its hive's earlier episode.
+    Open,
+    /// Every remaining seat is parked; waiting for `release`.
+    AwaitingRelease,
+    /// Finished normally.
+    Settled,
+    /// Stopped by a wall, a conductor error, or an interrupted turn.
+    Failed(String),
+}
 /// Uncertain turn effects which must not be replayed automatically.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct InterruptedTurn {

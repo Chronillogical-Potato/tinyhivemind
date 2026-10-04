@@ -295,6 +295,7 @@ async fn membership_removed_before_claim_prevents_later_delivery() {
 mod failures;
 mod finalization;
 mod lifecycle;
+mod observation;
 mod privacy;
 mod registration;
 mod review_regressions;
