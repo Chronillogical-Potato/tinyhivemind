@@ -47,7 +47,9 @@ struct Inner {
     fenced: AtomicBool,
 }
 /// Deferred interruption preserving the reservation it was intended to interrupt.
+/// Kept for P2 work to persist deferred interruptions until commit.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 struct DeferredInterruption {
     reason: String,
     /// Delivery sequence the interrupted turn was claiming, if present.
