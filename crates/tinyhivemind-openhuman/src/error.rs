@@ -28,6 +28,35 @@ pub enum Error {
     /// Shared adapter state was poisoned.
     #[error("adapter lock poisoned")]
     Poisoned,
+    /// A hive memory root `OpenHuman` would not accept, or one that isolates
+    /// nothing.
+    #[error("invalid memory root {root:?}: {reason}")]
+    InvalidMemoryRoot {
+        /// The refused root.
+        root: String,
+        /// Why it was refused.
+        reason: String,
+    },
+    /// A seat id that cannot be a memory agent id verbatim.
+    #[error("invalid memory agent id {agent_id:?}: {reason}")]
+    InvalidMemoryAgentId {
+        /// The refused id.
+        agent_id: String,
+        /// Why it was refused.
+        reason: String,
+    },
+    /// Hive memory is on and a registered seat was built without its binding.
+    #[error("seat {seat} is not bound to the hive memory: {reason}")]
+    UnboundSeat {
+        /// The seat's agent id.
+        seat: String,
+        /// What differs from the hive's binding.
+        reason: String,
+    },
+    /// `OpenHuman` has no memory engine bound for the config (memory is off,
+    /// or the engine's credential is missing).
+    #[error(transparent)]
+    Memory(#[from] openhuman_core::memory::MemoryError),
     /// Agent turn exceeded the wall.
     #[error("agent turn timed out")]
     TimedOut,

@@ -152,7 +152,9 @@ pub async fn run() -> anyhow::Result<()> {
         } else {
             "specialist"
         };
-        for marker in ["PROMPT", "MEMORY", "SKILL", "MCP"] {
+        // OpenHuman no longer renders a workspace `MEMORY.md` into the
+        // prompt; memory arrives as a recalled pack from the memory engine.
+        for marker in ["PROMPT", "SKILL", "MCP"] {
             anyhow::ensure!(
                 system.contains(&format!("{marker}_MARKER_{own}")),
                 "factory supplied agent lost its {marker}"

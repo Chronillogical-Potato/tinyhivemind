@@ -13,9 +13,14 @@ Agent kwargs (``--ak key=value``): ``mode`` (``hive`` | ``single``, default
 ``token_cap``, ``steps_per_turn``, ``cmd_timeout``, ``single_context``
 (``none`` | ``mask`` | ``summarize``, default ``mask``: what the single seat does when its
 prompt passes ``context_budget`` tokens, default 60000) and ``context_keep`` (tool
-results ``mask`` keeps verbatim, default 8). The API key is read from
-``OPENROUTER_API_KEY`` in the host environment (or ``--ae``) and handed to the
-binary through its environment, never through its arguments.
+results ``mask`` keeps verbatim, default 8), ``hive_context`` (``mask`` |
+``summarize``; unset picks by session mode), ``seat_session`` (``persistent`` |
+``fresh``, default ``persistent``), ``memory`` (``none`` | ``cortex``, default
+``none``), ``memory_url`` (else ``CORTEX_DB_URL``), ``memory_budget`` (default
+1200) and ``run_id`` (default: a fresh id per trial, so trials never share
+memory). The API key is read from ``OPENROUTER_API_KEY`` in the host
+environment (or ``--ae``) and handed to the binary through its environment,
+never through its arguments; so are ``CORTEX_DB_URL`` and ``CORTEX_DB_KEY``.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -92,15 +98,34 @@ class HiveAgent(BaseAgent):
         single_context: str = "mask",
         context_budget: int | str = 60000,
         context_keep: int | str = 8,
+        hive_context: str | None = None,
+        seat_session: str = "persistent",
+        memory: str = "none",
+        memory_url: str | None = None,
+        memory_budget: int | str = 1200,
+        run_id: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         if mode not in ("hive", "single"):
             raise ValueError(f"mode must be 'hive' or 'single', not {mode!r}")
-        if single_context not in ("none", "mask", "summarize"):
+        if single_context not in ("none", "mask", "summarize", "mask+summarize"):
             raise ValueError(
-                f"single_context must be 'none', 'mask' or 'summarize', not {single_context!r}"
+                "single_context must be 'none', 'mask', 'summarize' or 'mask+summarize', "
+                f"not {single_context!r}"
             )
+        if hive_context not in (None, "", "mask", "summarize"):
+            raise ValueError(f"hive_context must be 'mask' or 'summarize', not {hive_context!r}")
+        if seat_session not in ("persistent", "fresh"):
+            raise ValueError(f"seat_session must be 'persistent' or 'fresh', not {seat_session!r}")
+        if memory not in ("none", "cortex"):
+            raise ValueError(f"memory must be 'none' or 'cortex', not {memory!r}")
+        self.hive_context = hive_context or None
+        self.seat_session = seat_session
+        self.memory = memory
+        self.memory_url = memory_url or None
+        self.memory_budget = int(memory_budget)
+        self.run_id = run_id or f"tb-{uuid.uuid4().hex[:12]}"
         self.mode = mode
         self.single_context = single_context
         self.context_budget = int(context_budget)
@@ -115,6 +140,12 @@ class HiveAgent(BaseAgent):
 
     async def setup(self, environment: BaseEnvironment) -> None:
         find_binary(self.bin_path)  # fail the trial early, not mid-run
+        if self.memory == "cortex":
+            env = {**os.environ, **self._extra_env}
+            if not env.get("CORTEX_DB_KEY"):
+                raise RuntimeError("memory=cortex needs CORTEX_DB_KEY in the host environment")
+            if not (self.memory_url or env.get("CORTEX_DB_URL")):
+                raise RuntimeError("memory=cortex needs memory_url or CORTEX_DB_URL")
 
     def _argv(self, binary: Path, task_file: Path) -> list[str]:
         argv = [
@@ -131,6 +162,13 @@ class HiveAgent(BaseAgent):
             "--context-budget", str(self.context_budget),
             "--context-keep", str(self.context_keep),
         ]
+        argv += ["--seat-session", self.seat_session, "--run-id", self.run_id]
+        if self.hive_context is not None:
+            argv += ["--hive-context", self.hive_context]
+        if self.memory != "none":
+            argv += ["--memory", self.memory, "--memory-budget", str(self.memory_budget)]
+            if self.memory_url is not None:
+                argv += ["--memory-url", self.memory_url]
         if self.token_cap is not None:
             argv += ["--token-cap", str(self.token_cap)]
         return argv

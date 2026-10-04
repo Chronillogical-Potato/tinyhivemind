@@ -52,6 +52,9 @@ link any earlier ADR it amends.
 | [0025](0025-the-driver-names-no-harness.md) | The driver names no harness; one crate links it | Proposed |
 | [0026](0026-a-question-to-a-group-is-its-own-tool.md) | A question to a group is its own tool, and the group is one conversation | Proposed — amends 0023 |
 | [0027](0027-retire-unused-adapters-and-optional-mechanisms.md) | Retire unused adapters and optional mechanisms | Accepted — supersedes the MCP adapter and optional hive mechanisms |
+| [0028](0028-three-crate-workspace.md) | Consolidate the workspace into three crates | Accepted — supersedes the package boundaries in 0025 |
+| [0029](0029-working-memory-is-a-host-adapter.md) | Working memory is a host adapter behind a narrow port | Accepted |
+| [0030](0030-a-host-memory-port-feeds-seat-sessions.md) | A host memory port feeds seat sessions | Accepted — supersedes recall.md's no-port and no-index non-goals for host-owned memory |
 
 ## Reading order
 
@@ -65,6 +68,3 @@ adapters and optional hive mechanisms; read it before applying older records.
 argument about what a private row is and what it costs, and should be read as a
 sequence. The measurements that pushed 0011 and 0012 are in
 [`../experiments/`](../experiments/README.md).
-
-- [ADR 0028: Consolidate the workspace into three crates](0028-three-crate-workspace.md)
-- [ADR 0029: Working memory is a host adapter behind a narrow port](0029-working-memory-is-a-host-adapter.md)

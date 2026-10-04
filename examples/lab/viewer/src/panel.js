@@ -2,7 +2,7 @@
 // you pick, compares arms of one task, and follows runs that are still being
 // written. Falls back to nothing on a static build, where there is no /api.
 
-const MODE_ORDER = ["single", "hive"];
+const MODE_ORDER = ["single", "single-mem", "hive", "hive-briefing", "hive-session", "hive-session-mem"];
 
 function el(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
@@ -17,7 +17,7 @@ function el(tag, attrs = {}, ...kids) {
 
 const kTok = (t) => (t == null ? "" : t >= 1000 ? `${(t / 1000).toFixed(1)}k tok` : `${t} tok`);
 const secs = (ms) => (ms == null ? "" : `${(ms / 1000).toFixed(1)}s`);
-const label = (r) => (r.mode ? `${r.task} · ${r.mode}` : r.task);
+const label = (r) => (r.arm ?? r.mode ? `${r.task} · ${r.arm ?? r.mode}` : r.task);
 
 function verdict(r) {
   if (r.reward == null) return { text: "–", cls: "muted" };
@@ -31,7 +31,7 @@ export function rows(catalog) {
     const key = `${r.tag}\u0000${r.task}`;
     if (!byKey.has(key)) byKey.set(key, { tag: r.tag, task: r.task, cells: new Map(), mtime: 0 });
     const row = byKey.get(key);
-    row.cells.set(r.mode ?? "run", r);
+    row.cells.set(r.arm ?? r.mode ?? "run", r);
     row.mtime = Math.max(row.mtime, r.mtime);
   }
   return [...byKey.values()].sort((a, b) => b.mtime - a.mtime || a.task.localeCompare(b.task));

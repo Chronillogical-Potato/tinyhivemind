@@ -14,3 +14,21 @@ publish = false
 tinyhivemind-core = { path = "../../crates/tinyhivemind-core" }
 # JSONL encoding of telemetry events.
 serde_json = "1"
+# Hive memory (`swe::memory`, `--memory cortex`): the engine contract
+# (`MemoryEngine`, `Namespace`, `Turn`) the memory module is written against.
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", tag = "v1.23.1" }
+# `AgentMemory`, `MemoryLayout` and `holistic_recall`: the session-start,
+# post-turn and compaction lifecycle each seat's memory runs through.
+tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", tag = "v1.23.1" }
+# `CortexEngine`, the CortexDB client behind `--memory cortex`; only the
+# `cortex` feature, none of the document or source readers.
+tinymemory-integrations = { git = "https://github.com/tinyhumansai/tinymemory", tag = "v1.23.1", default-features = false, features = ["cortex"] }
+# The memory calls are async and the seats are threads: one multi-threaded
+# runtime owned by `HiveMemory` drives them, bounds each with a timeout, and
+# runs belief builds off the seats' path. `net` is what the CortexDB client's
+# HTTP stack needs from the runtime's I/O driver.
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time", "net"] }
+
+[dev-dependencies]
+# `ReferenceEngine`: an in-memory engine the offline memory tests run against.
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", tag = "v1.23.1", features = ["conformance"] }

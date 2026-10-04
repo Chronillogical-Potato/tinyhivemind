@@ -19,6 +19,17 @@ API. A concurrently running scheduler sees the supplied session from its first
 claim. A claimed runner waits for attachment activation; cancellation during
 that wait follows the coordinator's interruption path and starts no model call.
 
+`with_hive_memory` binds every seat registered afterwards to one hive memory
+(see [`../memory`](../memory/README.md)). `register_spec` applies the binding to a
+seat's `AgentSpec` before building it; `register_agent` refuses an agent built
+without it. `memory_test.rs` covers bound seats, unbound and foreign-bound
+refusals, the recall budget, and memory switched off.
+
+Seat sessions persist in OpenHuman: the coordinator stores the session id the
+first turn returns, and every later turn continues it through `turn.session(id)`.
+The adapter never clears a session; compaction is the only thing that drops
+turns from the live context, and the memory lifecycle recalls what it dropped.
+
 `continuity_test.rs` captures actual provider requests after a first-turn hook
 failure, proving that the next delivery retains the committed input and assistant
 reply. Finalizer errors return a failed outcome carrying the completed session;

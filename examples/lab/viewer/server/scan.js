@@ -53,7 +53,11 @@ export function describe(rootIndex, root, file) {
   const reward = trial?.verifier_result?.rewards?.reward ?? null;
   const group = harbor ? parts[0] : parts.length > 1 ? parts.slice(0, -1).join("/") : path.basename(root);
   const task = harbor ? parts[1].split("__")[0] : path.basename(file, ".jsonl");
-  const tag = mode && group.endsWith(`-${mode}`) ? group.slice(0, -mode.length - 1) : group;
+  // `<tag>-<arm>`, where the arm starts with the mode: `r1-hive`, or
+  // `r1-hive-session-mem` from `harbor/arm.sh`.
+  const cut = mode ? group.lastIndexOf(`-${mode}`) : -1;
+  const tag = cut > 0 ? group.slice(0, cut) : group;
+  const arm = cut > 0 ? group.slice(cut + 1) : mode;
   return {
     id: `${rootIndex}:${rel}`,
     path: rel,
@@ -61,6 +65,7 @@ export function describe(rootIndex, root, file) {
     tag,
     task,
     mode,
+    arm,
     reward: typeof reward === "number" ? reward : null,
     tokens: own ? (own.tokens_in ?? 0) + (own.tokens_out ?? 0) : null,
     wall_ms: own?.wall_ms ?? null,

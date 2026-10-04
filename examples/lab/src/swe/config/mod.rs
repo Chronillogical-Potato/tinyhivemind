@@ -8,6 +8,27 @@ use std::fmt;
 use std::path::PathBuf;
 
 use super::context::{Policy, Settings};
+use super::session::SessionMode;
+
+/// Which memory a run uses.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MemoryKind {
+    /// No memory.
+    None,
+    /// A CortexDB server through tinymemory.
+    Cortex,
+}
+
+impl MemoryKind {
+    /// The CLI and `result.json` name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Cortex => "cortex",
+        }
+    }
+}
 
 /// Which arm to run.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -75,6 +96,18 @@ pub struct Config {
     pub context_budget: u64,
     /// Tool results kept verbatim by `mask`.
     pub context_keep: usize,
+    /// Compaction of the hive seats' sessions; `None` picks by session mode.
+    pub hive_context: Option<Policy>,
+    /// Whether hive seats keep their conversation between activations.
+    pub seat_session: SessionMode,
+    /// Which memory the run uses.
+    pub memory: MemoryKind,
+    /// The memory server; else `CORTEX_DB_URL`.
+    pub memory_url: Option<String>,
+    /// Most tokens one recalled pack may take.
+    pub memory_budget: usize,
+    /// The run id: the memory namespace root and the trace's run id.
+    pub run_id: Option<String>,
 }
 
 impl Config {
@@ -88,12 +121,18 @@ impl Config {
         }
     }
 
-    /// The hard prompt budget every hive activation runs under: masking, with
-    /// the same budget and keep as the single arm.
+    /// The compaction every hive session runs under, with the same budget
+    /// and keep as the single arm: `--hive-context` when given, else
+    /// mask-then-summarize for persistent sessions (they live for the whole
+    /// run) and plain masking for fresh ones (the old behaviour).
     #[must_use]
     pub fn hive_settings(&self) -> Settings {
+        let policy = self.hive_context.unwrap_or(match self.seat_session {
+            SessionMode::Persistent => Policy::MaskThenSummarize,
+            SessionMode::Fresh => Policy::Mask,
+        });
         Settings {
-            policy: Policy::Mask,
+            policy,
             budget: self.context_budget,
             keep_recent: self.context_keep,
         }
@@ -117,8 +156,11 @@ pub const USAGE: &str = "usage: swe_hive --mode hive|single (--task TEXT | --tas
 (--container NAME | --stdio-rpc)\n  [--model M] [--api-base URL] [--trace F] [--result F]\n  \
 [--max-turns N] [--round-width N] [--token-cap N] [--steps-per-turn N]\n  \
 [--cmd-timeout SECS] [--output-limit BYTES] [--request-timeout SECS]\n  \
-[--single-context none|mask|summarize] [--context-budget TOKENS] [--context-keep N]\n\
-The API key is read from OPENROUTER_API_KEY.";
+[--single-context none|mask|summarize|mask+summarize] [--context-budget TOKENS] \
+[--context-keep N]\n  [--hive-context mask|summarize] [--seat-session fresh|persistent]\n  \
+[--memory none|cortex] [--memory-url URL] [--memory-budget TOKENS] [--run-id ID]\n\
+The API key is read from OPENROUTER_API_KEY; the memory key from CORTEX_DB_KEY, and the \
+memory URL from CORTEX_DB_URL when --memory-url is not given.";
 
 impl Config {
     /// Parse arguments (without the program name).
@@ -149,6 +191,12 @@ impl Config {
             single_context: Policy::Mask,
             context_budget: 60_000,
             context_keep: 8,
+            hive_context: None,
+            seat_session: SessionMode::Persistent,
+            memory: MemoryKind::None,
+            memory_url: None,
+            memory_budget: 1200,
+            run_id: None,
         };
         let mut args = args.into_iter();
         while let Some(flag) = args.next() {
@@ -182,10 +230,43 @@ impl Config {
                 "--single-context" => {
                     config.single_context = Policy::parse(&value).ok_or_else(|| {
                         UsageError(format!(
-                            "--single-context must be none, mask or summarize, not {value}"
+                            "--single-context must be none, mask, summarize or \
+                             mask+summarize, not {value}"
                         ))
                     })?;
                 }
+                "--hive-context" => {
+                    config.hive_context = Some(match value.as_str() {
+                        "mask" => Policy::Mask,
+                        "summarize" => Policy::MaskThenSummarize,
+                        other => {
+                            return Err(UsageError(format!(
+                                "--hive-context must be mask or summarize, not {other}"
+                            )));
+                        }
+                    });
+                }
+                "--seat-session" => {
+                    config.seat_session = SessionMode::parse(&value).ok_or_else(|| {
+                        UsageError(format!(
+                            "--seat-session must be fresh or persistent, not {value}"
+                        ))
+                    })?;
+                }
+                "--memory" => {
+                    config.memory = match value.as_str() {
+                        "none" => MemoryKind::None,
+                        "cortex" => MemoryKind::Cortex,
+                        other => {
+                            return Err(UsageError(format!(
+                                "--memory must be none or cortex, not {other}"
+                            )));
+                        }
+                    };
+                }
+                "--memory-url" => config.memory_url = Some(value),
+                "--memory-budget" => config.memory_budget = number(&flag, &value)?,
+                "--run-id" => config.run_id = Some(value),
                 "--context-budget" => config.context_budget = number(&flag, &value)?,
                 "--context-keep" => config.context_keep = number(&flag, &value)?,
                 other => return Err(UsageError(format!("unknown flag {other}"))),
@@ -204,9 +285,15 @@ impl Config {
                 ));
             }
         };
-        if config.round_width == 0 || config.max_turns == 0 || config.steps_per_turn == 0 {
+        if config.round_width == 0
+            || config.max_turns == 0
+            || config.steps_per_turn == 0
+            || config.memory_budget == 0
+        {
             return Err(UsageError(
-                "--round-width, --max-turns and --steps-per-turn must be at least 1".into(),
+                "--round-width, --max-turns, --steps-per-turn and --memory-budget must be at \
+                 least 1"
+                    .into(),
             ));
         }
         Ok(config)
