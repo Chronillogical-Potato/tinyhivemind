@@ -169,12 +169,7 @@ impl<A: BoundAgent> CompletionDriver<'_, A> {
         if !idle.is_empty() {
             next.episode = apply_assignment(&next.episode, &idle, event.sequence)?;
         }
-        let accepted: Vec<String> = recipients
-            .iter()
-            .filter(|id| !refused.contains(id))
-            .cloned()
-            .collect();
-        extend_pending_order(&mut next.pending_order, &accepted);
+        extend_pending_order(&mut next.pending_order, recipients);
         // Nobody could take it and somebody was refused for capacity: the work
         // stays with the author, who must be asked again rather than left to
         // believe it was handed off.
