@@ -80,7 +80,7 @@ framed block beside the initialization.
 
 After each activation the host calls `Remember::remember` with a
 `RememberRequest`: the seat, the run's conversation namespace, the last desk
-row the activation had seen (`through`), and `MemoryEntry` values of four
+row the activation had seen (`through`), and `RememberEntry` values of four
 kinds:
 
 - `Observation` — a command run and what came back, exit code included;
@@ -144,7 +144,7 @@ messages, delta_rows }`. The host measures latency.
 - The framed block never exceeds its budget.
 - A recall failure never fails a session.
 - Wire forms of `RecallRequest`, `RecallMoment`, `RememberRequest`,
-  `MemoryEntry`, `EntryKind`, `DeskWatermark`, `DeskDelta`, and the three trace
+  `RememberEntry`, `EntryKind`, `DeskWatermark`, `DeskDelta`, and the three trace
   events are pinned by unit tests.
 
 ## Acceptance criteria

@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use serde_json::json;
 use tinyhivemind_core::runtime::{
-    EntryKind, MemoryEntry, RecallMoment, RecallRequest, RememberRequest, frame_recalled,
+    EntryKind, RememberEntry, RecallMoment, RecallRequest, RememberRequest, frame_recalled,
 };
 use tinyhivemind_core::telemetry::TraceEvent;
 
@@ -101,7 +101,7 @@ pub(super) fn remember(
     work: &mut Work,
 ) {
     let Some(memory) = env.memory else { return };
-    let mut entries: Vec<MemoryEntry> = out.ledger[work.remembered.min(out.ledger.len())..]
+    let mut entries: Vec<RememberEntry> = out.ledger[work.remembered.min(out.ledger.len())..]
         .iter()
         .map(LedgerEntry::to_entry)
         .collect();
@@ -111,7 +111,7 @@ pub(super) fn remember(
         None => (EntryKind::Note, work.last_text.clone()),
     };
     if !text.trim().is_empty() {
-        entries.push(MemoryEntry { kind, text });
+        entries.push(RememberEntry { kind, text });
     }
     if entries.is_empty() {
         return;

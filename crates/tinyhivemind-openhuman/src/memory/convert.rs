@@ -1,9 +1,9 @@
 //! Translations between core's memory records and `TinyMemory`'s.
 //!
 //! A recalled [`ContextPack`] becomes one [`BriefingNote`] per section that
-//! found something; a [`MemoryEntry`] becomes one shared learning at the
+//! found something; a [`RememberEntry`] becomes one shared learning at the
 //! layout root, labelled with its kind so a failed attempt reads as one.
-use tinyhivemind_core::runtime::{BriefingNote, EntryKind, MemoryEntry, Sequence};
+use tinyhivemind_core::runtime::{BriefingNote, EntryKind, RememberEntry, Sequence};
 use tinymemory_api::{LearningKind, MemoryMeta, Namespace, StoreItem};
 use tinymemory_tools::ContextPack;
 
@@ -54,7 +54,7 @@ pub(super) struct EntryContext<'a> {
 }
 
 /// One entry as a shared learning, or `None` for a blank entry.
-pub(super) fn entry_item(context: &EntryContext<'_>, entry: &MemoryEntry) -> Option<StoreItem> {
+pub(super) fn entry_item(context: &EntryContext<'_>, entry: &RememberEntry) -> Option<StoreItem> {
     let text = entry.text.trim();
     if text.is_empty() {
         return None;

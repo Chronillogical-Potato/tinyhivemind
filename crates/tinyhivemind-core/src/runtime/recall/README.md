@@ -17,7 +17,7 @@ port exists at all is
 | `Remember`, `RememberFuture` | Write port. One call per activation's `RememberRequest`. |
 | `RecallMoment` | `SessionStart`, `Rejoin` (other seats' new memory only), `Compaction { dropped }`. `label()` is the wire tag. |
 | `RecallRequest` | Seat, per-run conversation namespace, optional focus, moment, character budget. |
-| `MemoryEntry`, `EntryKind` | One remembered fact: `Observation`, `FailedAttempt`, `Outcome`, or `Note`. |
+| `RememberEntry`, `EntryKind` | One remembered fact: `Observation`, `FailedAttempt`, `Outcome`, or `Note`. |
 | `RememberRequest` | Seat, namespace, last desk row seen (`through`), entries. |
 | `frame_recalled` | Pure. Renders notes under `RECALL_HEADING` as data, clipped to the budget on a character boundary; `None` when empty or the budget cannot hold the header. |
 | `DeskWatermark`, `DeskDelta`, `desk_delta` | Pure. The projected rows after a seat's inclusive watermark, and the advanced watermark. The seat's own and elided rows advance it too. |
@@ -40,5 +40,5 @@ port implementation constructs around its own error.
 | File | What it does |
 | --- | --- |
 | `mod.rs` | Module overview, the two ports, `frame_recalled`, `desk_delta`, and `initialize_session_with_recall`. |
-| `types.rs` | Wire records: `RecallMoment`, `RecallRequest`, `EntryKind`, `MemoryEntry`, `RememberRequest`, `DeskWatermark`, `DeskDelta`, and the call-only `RecalledSession`. |
+| `types.rs` | Wire records: `RecallMoment`, `RecallRequest`, `EntryKind`, `RememberEntry`, `RememberRequest`, `DeskWatermark`, `DeskDelta`, and the call-only `RecalledSession`. |
 | `test.rs` | Framing and clipping, the desk delta, the degrade-on-failure path, both error variants, and pinned wire forms. |

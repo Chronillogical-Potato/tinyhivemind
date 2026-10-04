@@ -8,7 +8,7 @@ use openhuman_core::memory::{lifecycle::agent_memory_on, scope::MemoryIdentity};
 use openhuman_embed::RuntimeConfig;
 use std::{num::NonZeroU32, sync::Arc};
 use tinyhivemind_core::runtime::{
-    self, BriefingNote, EntryKind, MemoryEntry, Recall, RecallMoment, RecallRequest, Remember,
+    self, BriefingNote, EntryKind, Recall, RecallMoment, RecallRequest, Remember, RememberEntry,
     RememberRequest, Sequence, frame_recalled,
 };
 use tinymemory_api::conformance::ReferenceEngine;
@@ -41,7 +41,7 @@ fn entries(seat: &str, entries: &[(EntryKind, &str)]) -> RememberRequest {
         through: Some(Sequence(7)),
         entries: entries
             .iter()
-            .map(|(kind, text)| MemoryEntry {
+            .map(|(kind, text)| RememberEntry {
                 kind: *kind,
                 text: (*text).into(),
             })
@@ -149,7 +149,7 @@ fn entries_become_learnings_of_the_matching_kind() {
         (EntryKind::Note, LearningKind::Other),
     ];
     for (entry_kind, learning) in cases {
-        let entry = MemoryEntry {
+        let entry = RememberEntry {
             kind: entry_kind,
             text: " text ".into(),
         };
@@ -163,7 +163,7 @@ fn entries_become_learnings_of_the_matching_kind() {
             "{entry_kind:?} became {item:?}"
         );
     }
-    let blank = MemoryEntry {
+    let blank = RememberEntry {
         kind: EntryKind::Note,
         text: "\n ".into(),
     };

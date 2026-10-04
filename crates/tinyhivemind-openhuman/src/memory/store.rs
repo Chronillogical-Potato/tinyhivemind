@@ -34,7 +34,7 @@ const CHARS_PER_TOKEN: usize = 4;
 /// | `Rejoin` | [`AgentMemory::start_session`] without the seat's own history | learnings, brain, the team's turns; anything the seat itself wrote is dropped |
 /// | `Compaction` | [`AgentMemory::recall_for_compaction`] with the dropped text as turns | a summary of the thread, then the standard sections |
 ///
-/// Remember stores each [`MemoryEntry`](tinyhivemind_core::runtime::MemoryEntry)
+/// Remember stores each [`RememberEntry`](tinyhivemind_core::runtime::RememberEntry)
 /// as a learning at the hive's root, where every seat's learnings section
 /// reads it, labelled with its kind (`Failed attempt: …`) and tagged
 /// `hive-entry:<kind>`.

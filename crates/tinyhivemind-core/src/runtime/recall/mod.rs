@@ -4,7 +4,7 @@
 //! from it. What the session lacks, a host-owned memory store supplies through
 //! two narrow ports: [`Recall`] reads notes at the three moments a session is
 //! missing something ([`RecallMoment`]), and [`Remember`] writes what one
-//! activation learned ([`MemoryEntry`]). The store, its index, and its
+//! activation learned ([`RememberEntry`]). The store, its index, and its
 //! namespacing are the host's; this module defines the ports and three pure
 //! helpers around them:
 //!
@@ -43,8 +43,8 @@ mod test;
 mod types;
 
 pub use types::{
-    DeskDelta, DeskWatermark, EntryKind, MemoryEntry, RecallMoment, RecallRequest, RecalledSession,
-    RememberRequest,
+    DeskDelta, DeskWatermark, EntryKind, RecallMoment, RecallRequest, RecalledSession,
+    RememberEntry, RememberRequest,
 };
 
 use crate::runtime::{

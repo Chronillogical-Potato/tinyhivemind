@@ -60,7 +60,7 @@ pub struct RecallRequest {
     pub budget_chars: usize,
 }
 
-/// What kind of thing a [`MemoryEntry`] records.
+/// What kind of thing a [`RememberEntry`] records.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntryKind {
@@ -77,7 +77,7 @@ pub enum EntryKind {
 /// One fact a seat leaves in host memory after an activation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub struct MemoryEntry {
+pub struct RememberEntry {
     /// What the entry records.
     pub kind: EntryKind,
     /// The entry text, written for a later reader with no other context.
@@ -96,7 +96,7 @@ pub struct RememberRequest {
     /// The last desk row the activation had seen, when there was one.
     pub through: Option<Sequence>,
     /// What to remember, in the order the activation produced it.
-    pub entries: Vec<MemoryEntry>,
+    pub entries: Vec<RememberEntry>,
 }
 
 /// How far into the desk one seat's persistent session has read.

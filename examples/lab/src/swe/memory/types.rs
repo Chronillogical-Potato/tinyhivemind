@@ -2,13 +2,13 @@
 //!
 //! The ports themselves are core's: [`Recall`] and [`Remember`] in
 //! `tinyhivemind_core::runtime::recall`. A seat records each command it runs
-//! as a [`LedgerEntry`] and turns the ledger into core [`MemoryEntry`] values
+//! as a [`LedgerEntry`] and turns the ledger into core [`RememberEntry`] values
 //! when it remembers: a command that exited 0 is an
 //! [`EntryKind::Observation`], anything else an [`EntryKind::FailedAttempt`].
 
 use std::time::Duration;
 
-use tinyhivemind_core::runtime::{EntryKind, MemoryEntry, Recall, Remember};
+use tinyhivemind_core::runtime::{EntryKind, RememberEntry, Recall, Remember};
 
 /// One command a seat ran, as memory keeps it.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -30,13 +30,13 @@ impl LedgerEntry {
 
     /// The core entry: an observation, or a failed attempt with its exit.
     #[must_use]
-    pub fn to_entry(&self) -> MemoryEntry {
+    pub fn to_entry(&self) -> RememberEntry {
         let (kind, status) = match self.exit {
             Some(0) => (EntryKind::Observation, "exit 0".to_owned()),
             Some(code) => (EntryKind::FailedAttempt, format!("failed, exit {code}")),
             None => (EntryKind::FailedAttempt, "failed, did not run".to_owned()),
         };
-        MemoryEntry {
+        RememberEntry {
             kind,
             text: format!("`{}` ({status}) -> {}", self.cmd, self.outcome),
         }

@@ -375,11 +375,11 @@ fn remembered() -> RememberRequest {
         conversation: "run-7/desk".into(),
         through: Some(Sequence(12)),
         entries: vec![
-            MemoryEntry {
+            RememberEntry {
                 kind: EntryKind::FailedAttempt,
                 text: "`pip install` without --user: exit 1, permission denied".into(),
             },
-            MemoryEntry {
+            RememberEntry {
                 kind: EntryKind::Outcome,
                 text: "tests pass after installing libssl-dev".into(),
             },

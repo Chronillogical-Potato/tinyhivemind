@@ -79,8 +79,8 @@ pub use pins::{
     read_directives, read_pinboard,
 };
 pub use recall::{
-    DeskDelta, DeskWatermark, EntryKind, MemoryEntry, RECALL_HEADING, Recall, RecallFuture,
-    RecallMoment, RecallRequest, RecalledSession, Remember, RememberFuture, RememberRequest,
+    DeskDelta, DeskWatermark, EntryKind, RECALL_HEADING, Recall, RecallFuture, RecallMoment,
+    RecallRequest, RecalledSession, Remember, RememberEntry, RememberFuture, RememberRequest,
     desk_delta, frame_recalled, initialize_session_with_recall,
 };
 pub use session::{

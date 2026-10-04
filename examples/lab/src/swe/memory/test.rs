@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tinyhivemind_core::runtime::{
-    BriefingNote, EntryKind, Error as CoreError, MemoryEntry, Recall, RecallMoment, RecallRequest,
+    BriefingNote, EntryKind, Error as CoreError, RememberEntry, Recall, RecallMoment, RecallRequest,
     Remember, RememberRequest,
 };
 use tinymemory_api::conformance::ReferenceEngine;
@@ -27,7 +27,7 @@ fn memory_on(engine: Arc<dyn MemoryEngine>, run: &str) -> HiveMemory {
     HiveMemory::new(engine, run, &SEATS, 1200).expect("memory")
 }
 
-fn failed_pytest() -> Vec<MemoryEntry> {
+fn failed_pytest() -> Vec<RememberEntry> {
     let ledger = LedgerEntry {
         cmd: "pytest tests/test_parser.py -x".into(),
         exit: Some(1),
@@ -35,14 +35,14 @@ fn failed_pytest() -> Vec<MemoryEntry> {
     };
     vec![
         ledger.to_entry(),
-        MemoryEntry {
+        RememberEntry {
             kind: EntryKind::Outcome,
             text: "pytest still fails; the import path is wrong".into(),
         },
     ]
 }
 
-fn store(memory: &HiveMemory, seat: &str, entries: Vec<MemoryEntry>) -> Result<(), CoreError> {
+fn store(memory: &HiveMemory, seat: &str, entries: Vec<RememberEntry>) -> Result<(), CoreError> {
     block_on(memory.remember(&RememberRequest {
         seat: seat.into(),
         conversation: memory.conversation(),
@@ -290,7 +290,7 @@ fn an_index_slower_than_the_bound_still_keeps_the_turn() {
 fn every_fifth_turn_of_a_seat_starts_a_belief_build() {
     let memory = memory_on(Arc::new(ReferenceEngine::new()), "t-build");
     for n in 0..5 {
-        let entries = vec![MemoryEntry {
+        let entries = vec![RememberEntry {
             kind: EntryKind::Note,
             text: format!("note {n}"),
         }];
