@@ -119,7 +119,7 @@ fn call_label(before: &[Value], id: &str) -> String {
         let Some(calls) = message["tool_calls"].as_array() else {
             continue;
         };
-        for call in calls.iter().filter(|c| c["id"] == id) {
+        if let Some(call) = calls.iter().find(|c| c["id"] == id) {
             let function = &call["function"];
             let raw = function["arguments"].as_str().unwrap_or_default();
             let cmd = serde_json::from_str::<Value>(raw)

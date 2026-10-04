@@ -40,7 +40,7 @@ fn keeps_the_recent_results_and_stubs_the_older() {
     assert_eq!(mask_observations(&mut m, 8), 4);
     let bodies = tool_bodies(&m);
     for old in &bodies[..4] {
-        assert_eq!(old.len() < 100, true, "{old}");
+        assert!(old.len() < 100, "{old}");
         assert!(
             old.starts_with("[output elided: 500 bytes, cmd=echo "),
             "{old}"
