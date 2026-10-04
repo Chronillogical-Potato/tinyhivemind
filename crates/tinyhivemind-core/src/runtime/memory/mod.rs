@@ -124,10 +124,7 @@ pub async fn recall(
 ///
 /// Returns a validation error from [`validate_note`], or [`Error::Memory`]
 /// when the host's engine fails.
-pub async fn record(
-    memory: &(dyn WorkingMemory + '_),
-    note: &MemoryNote,
-) -> Result<MemoryEntry> {
+pub async fn record(memory: &(dyn WorkingMemory + '_), note: &MemoryNote) -> Result<MemoryEntry> {
     validate_note(note)?;
     memory
         .record(note)
