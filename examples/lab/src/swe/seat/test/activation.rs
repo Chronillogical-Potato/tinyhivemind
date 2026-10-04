@@ -157,4 +157,3 @@ fn running_out_of_steps_posts_a_stop_note_in_hive_mode() {
     assert!(out.spoke.is_some());
     assert!(rig.board.read("lead", 5).contains("stopped after 2 steps"));
 }
-

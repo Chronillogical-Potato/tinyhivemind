@@ -30,8 +30,8 @@ use std::time::{Duration, Instant};
 use tinymemory_api::{ItemId, MemoryEngine, Namespace, Role, Turn};
 use tinymemory_integrations::cortex::{CortexCredential, CortexEngine};
 use tinymemory_tools::{
-    AgentMemory, Compaction, ContextPack, HolisticRecall, MemoryLayout,
-    PostTurn, RecallPolicy, ScopeSection, SessionStart, holistic_recall,
+    AgentMemory, Compaction, ContextPack, HolisticRecall, MemoryLayout, PostTurn, RecallPolicy,
+    ScopeSection, SessionStart, holistic_recall,
 };
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
@@ -262,7 +262,11 @@ impl HiveMemory {
         HolisticRecall {
             budget_tokens: self.policy.budget_tokens,
             title: PACK_TITLE.to_owned(),
-            exclude_ids: self.lock().get(seat).map(|s| s.seen.clone()).unwrap_or_default(),
+            exclude_ids: self
+                .lock()
+                .get(seat)
+                .map(|s| s.seen.clone())
+                .unwrap_or_default(),
             ..HolisticRecall::new(query, sections)
         }
     }

@@ -155,7 +155,10 @@ fn policy_names_round_trip() {
 
 #[test]
 fn the_layered_policy_parses_from_both_names() {
-    assert_eq!(Policy::parse("mask+summarize"), Some(Policy::MaskThenSummarize));
+    assert_eq!(
+        Policy::parse("mask+summarize"),
+        Some(Policy::MaskThenSummarize)
+    );
     assert_eq!(Policy::MaskThenSummarize.name(), "mask+summarize");
 }
 

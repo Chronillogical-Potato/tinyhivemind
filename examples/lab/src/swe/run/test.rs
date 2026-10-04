@@ -98,7 +98,10 @@ fn hive_completes_when_the_lead_completes() {
         assert!(doc.get(key).is_some(), "result.json lacks {key}");
     }
     assert_eq!(doc["seats"]["lead"]["calls"], 1);
-    assert_eq!((doc["seat_session"].as_str(), doc["memory"].as_str()), (Some("persistent"), Some("none")));
+    assert_eq!(
+        (doc["seat_session"].as_str(), doc["memory"].as_str()),
+        (Some("persistent"), Some("none"))
+    );
     assert_eq!(
         (
             doc["max_prompt_tokens"].as_u64(),

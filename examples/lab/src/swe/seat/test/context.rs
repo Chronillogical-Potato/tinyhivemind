@@ -7,7 +7,6 @@ use super::support::*;
 use crate::swe::context::Policy;
 use crate::swe::tools::SINGLE_TOOLS;
 
-
 #[test]
 fn mask_stubs_old_results_once_the_prompt_passes_the_budget() {
     let (rig, bodies) = recorded(vec![
@@ -107,4 +106,3 @@ fn a_context_overflow_error_aborts_without_a_retry() {
     assert_eq!(bodies.lock().expect("lock").len(), 1);
     assert_eq!(out.abort.expect("abort").to_string(), "context_overflow");
 }
-

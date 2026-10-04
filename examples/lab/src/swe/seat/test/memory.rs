@@ -104,9 +104,18 @@ fn a_new_session_opens_with_the_pack_and_a_resumed_one_appends_it() {
     let users = user_texts(bodies.last().expect("request"));
     assert!(users[0].starts_with(MEMORY_HEADER) && users[0].ends_with("go"));
     assert!(users[1].starts_with("DELTA") && users[1].contains("PACK-rejoin"));
-    let names: Vec<&str> = recalls.lock().expect("lock").iter().map(Moment::name).collect();
+    let names: Vec<&str> = recalls
+        .lock()
+        .expect("lock")
+        .iter()
+        .map(Moment::name)
+        .collect();
     assert_eq!(names, ["session_start", "rejoin"]);
-    assert!(memory_marks(&rig).iter().any(|m| m.contains("recall rejoin")));
+    assert!(
+        memory_marks(&rig)
+            .iter()
+            .any(|m| m.contains("recall rejoin"))
+    );
 }
 
 struct Failing;
@@ -159,10 +168,16 @@ fn a_summary_carries_a_compaction_recall_and_flushes_the_ledger_first() {
         panic!("second recall is a compaction: {recalls:?}");
     };
     assert!(!dropped.is_empty());
-    assert!(stored.lock().expect("lock").len() >= 2, "flushed, then the end");
+    assert!(
+        stored.lock().expect("lock").len() >= 2,
+        "flushed, then the end"
+    );
     let bodies = bodies.lock().expect("lock");
     let users = user_texts(bodies.last().expect("request"));
-    assert!(users[1].contains("PACK-compaction"), "pack after the opening: {users:?}");
+    assert!(
+        users[1].contains("PACK-compaction"),
+        "pack after the opening: {users:?}"
+    );
 }
 
 #[test]

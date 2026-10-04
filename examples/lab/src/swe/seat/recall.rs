@@ -27,15 +27,21 @@ pub(super) fn open(env: &Env<'_>, act: &Activation<'_>, session: &mut SeatSessio
             Some(pack) => format!("{pack}\n\n{}", act.user),
             None => act.user.clone(),
         };
-        session.messages.push(json!({ "role": "system", "content": act.system }));
-        session.messages.push(json!({ "role": "user", "content": user }));
+        session
+            .messages
+            .push(json!({ "role": "system", "content": act.system }));
+        session
+            .messages
+            .push(json!({ "role": "user", "content": user }));
     } else {
         let pack = ask(env, act.seat, &Moment::Rejoin { focus });
         let user = match pack {
             Some(pack) => format!("{}\n\n{pack}", act.user),
             None => act.user.clone(),
         };
-        session.messages.push(json!({ "role": "user", "content": user }));
+        session
+            .messages
+            .push(json!({ "role": "user", "content": user }));
     }
 }
 

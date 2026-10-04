@@ -1,7 +1,7 @@
 //! Queue discipline, routing and a whole scripted hive episode.
 
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};

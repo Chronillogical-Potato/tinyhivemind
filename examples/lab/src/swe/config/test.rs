@@ -109,7 +109,12 @@ fn hive_context_overrides_the_session_default() {
 fn memory_flags_parse_with_defaults() {
     let c = parse("--mode hive --task x --stdio-rpc").expect("parses");
     assert_eq!(
-        (c.memory, c.memory_url.as_deref(), c.memory_budget, c.run_id.as_deref()),
+        (
+            c.memory,
+            c.memory_url.as_deref(),
+            c.memory_budget,
+            c.run_id.as_deref()
+        ),
         (MemoryKind::None, None, 1200, None)
     );
     let c = parse(
@@ -119,7 +124,10 @@ fn memory_flags_parse_with_defaults() {
     .expect("parses");
     assert_eq!(c.memory, MemoryKind::Cortex);
     assert_eq!(c.memory_url.as_deref(), Some("http://m:1"));
-    assert_eq!((c.memory_budget, c.run_id.as_deref()), (300, Some("trial-7")));
+    assert_eq!(
+        (c.memory_budget, c.run_id.as_deref()),
+        (300, Some("trial-7"))
+    );
     assert_eq!(c.memory.name(), "cortex");
     assert!(parse("--mode hive --task x --stdio-rpc --memory redis").is_err());
     assert!(parse("--mode hive --task x --stdio-rpc --memory-budget 0").is_err());

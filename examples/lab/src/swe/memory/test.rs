@@ -38,7 +38,11 @@ fn the_namespace_root_is_pinned_to_the_run_id() {
     let memory = memory_on(Arc::new(ReferenceEngine::new()), "trial 7/a");
     assert_eq!(memory.root().to_string(), "team:trial-7-a");
     assert_eq!(
-        memory.layout.conversations("implementer").expect("node").to_string(),
+        memory
+            .layout
+            .conversations("implementer")
+            .expect("node")
+            .to_string(),
         "team:trial-7-a/agent:implementer"
     );
     assert!(run_root("///").is_err());
@@ -71,7 +75,9 @@ fn a_rejoin_shows_a_teammates_new_memory_once() {
     assert!(pack.contains("@implementer") && pack.contains("pytest"));
     let again = memory.recall("tester", &rejoin);
     assert!(
-        again.pack.is_none_or(|p| !p.contains("ModuleNotFoundError")),
+        again
+            .pack
+            .is_none_or(|p| !p.contains("ModuleNotFoundError")),
         "already shown"
     );
     let own = memory.recall("implementer", &rejoin);
@@ -181,9 +187,12 @@ fn live_cortex_memory_round_trip() {
     assert_eq!(stored.error, None);
     let mut found = None;
     for _ in 0..10 {
-        let recalled = memory.recall("tester", &Moment::Rejoin {
-            focus: "pytest parser import".into(),
-        });
+        let recalled = memory.recall(
+            "tester",
+            &Moment::Rejoin {
+                focus: "pytest parser import".into(),
+            },
+        );
         eprintln!("live: {}", recalled.report.detail("tester"));
         if let Some(pack) = recalled.pack.filter(|p| p.contains("pytest")) {
             found = Some(pack);
@@ -191,10 +200,13 @@ fn live_cortex_memory_round_trip() {
         }
         std::thread::sleep(Duration::from_millis(500));
     }
-    let compaction = memory.recall("implementer", &Moment::Compaction {
-        dropped: vec!["ran pytest".into()],
-        focus: "the import path".into(),
-    });
+    let compaction = memory.recall(
+        "implementer",
+        &Moment::Compaction {
+            dropped: vec!["ran pytest".into()],
+            focus: "the import path".into(),
+        },
+    );
     eprintln!("live: {}", compaction.report.detail("implementer"));
     let filter = memory.layout.holistic_filter();
     let engine = memory.engine.clone();

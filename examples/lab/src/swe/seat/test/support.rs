@@ -1,20 +1,20 @@
 //! Shared fixtures: a scripted model, a recording model, a fake sandbox and
 //! the rig that runs one activation on a persistent session.
 
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use tinyhivemind_core::telemetry::{Clock, Stamped, TraceEvent, TraceSink, Tracer};
 
 use super::super::*;
-use crate::swe::memory::SeatMemory;
-use crate::swe::session::{SessionMode, Sessions};
 use crate::swe::context::{Policy, Settings};
 use crate::swe::llm::Chat;
+use crate::swe::memory::SeatMemory;
 use crate::swe::meter::Meter;
 use crate::swe::sandbox::{Exec, ExecOutput};
+use crate::swe::session::{SessionMode, Sessions};
 use crate::swe::tools::tool_list;
 
 pub(super) struct Script(Mutex<Vec<Value>>);
@@ -193,7 +193,6 @@ pub(super) fn events(rig: &Rig) -> Vec<TraceEvent> {
         .map(|s| s.event.clone())
         .collect()
 }
-
 
 /// Records every request body, then answers from a script.
 pub(super) struct Recorder {

@@ -22,11 +22,11 @@ use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
 use tinyhivemind_lab::swe::config::{Config, MemoryKind, Mode, Target};
 use tinyhivemind_lab::swe::llm::{CurlChat, Llm};
 use tinyhivemind_lab::swe::memory::{HiveMemory, SeatMemory, generated_run_id};
-use tinyhivemind_lab::swe::roles::Role;
-use tinyhivemind_lab::swe::single;
 use tinyhivemind_lab::swe::meter::Meter;
+use tinyhivemind_lab::swe::roles::Role;
 use tinyhivemind_lab::swe::run::run;
 use tinyhivemind_lab::swe::sandbox::{DockerExec, Exec, StdioExec};
+use tinyhivemind_lab::swe::single;
 use tinyhivemind_lab::{JsonlSink, WallClock};
 
 fn main() -> ExitCode {

@@ -69,7 +69,9 @@ impl Sessions {
     /// Messages currently kept for `seat`.
     #[must_use]
     pub fn len_of(&self, seat: &str) -> usize {
-        self.lock().get(seat).map_or(0, |session| session.messages.len())
+        self.lock()
+            .get(seat)
+            .map_or(0, |session| session.messages.len())
     }
 }
 

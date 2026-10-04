@@ -228,11 +228,7 @@ pub fn text_chars(messages: &[Value]) -> usize {
             let calls = message["tool_calls"].as_array().map_or(0, |calls| {
                 calls
                     .iter()
-                    .map(|call| {
-                        call["function"]["arguments"]
-                            .as_str()
-                            .map_or(0, str::len)
-                    })
+                    .map(|call| call["function"]["arguments"].as_str().map_or(0, str::len))
                     .sum()
             });
             body + calls
