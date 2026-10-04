@@ -47,16 +47,7 @@ impl Coordinator {
         _gate: &WriterGate<'_>,
         mut operation: impl FnMut(&mut StoredState) -> Result<(bool, T)>,
     ) -> Result<T> {
-        // Check if we've been fenced out before attempting any operation.
-        if self.inner.fenced.load(Ordering::Acquire) {
-            // We've been fenced; fail immediately without attempting further work.
-            let snapshot = self.snapshot()?;
-            return Err(Error::Fenced {
-                coordinator: self.inner.writer_epoch,
-                stored: snapshot.base.writer_epoch,
-            });
-        }
-
+        self.ensure_owner()?;
         let snapshot = self.snapshot()?;
         let mut next = snapshot.base.clone();
         let (changed, value) = operation(&mut next)?;
@@ -67,21 +58,22 @@ impl Coordinator {
         self.persist(&snapshot, next).await?;
         Ok(value)
     }
-    /// Copy live state under the live lock. Hold the writer gate.
-    /// Detects if this coordinator has been fenced by another process that
-    /// incremented the epoch.
-    pub(super) fn snapshot(&self) -> Result<Snapshot> {
-        let live = self.lock()?;
-
-        // Check if we've been fenced (another coordinator has claimed higher epoch).
-        if live.durable.writer_epoch > self.inner.writer_epoch {
-            self.inner.fenced.store(true, Ordering::Release);
+    /// Fail with [`Error::Fenced`] once a newer coordinator has claimed the
+    /// store. The flag is latched by [`Self::persist`] from the store's answer,
+    /// since live state only ever holds this coordinator's own commits.
+    pub(super) fn ensure_owner(&self) -> Result<()> {
+        let stored = self.inner.fenced_by.load(Ordering::Acquire);
+        if stored > self.inner.writer_epoch {
             return Err(Error::Fenced {
                 coordinator: self.inner.writer_epoch,
-                stored: live.durable.writer_epoch,
+                stored,
             });
         }
-
+        Ok(())
+    }
+    /// Copy live state under the live lock. Hold the writer gate.
+    pub(super) fn snapshot(&self) -> Result<Snapshot> {
+        let live = self.lock()?;
         Ok(Snapshot {
             base: live.durable.clone(),
             flushed: live.unpersisted.keys().cloned().collect(),
@@ -89,28 +81,25 @@ impl Coordinator {
     }
     /// Commit `next` over `snapshot` and publish it. Hold the writer gate.
     pub(super) async fn persist(&self, snapshot: &Snapshot, mut next: StoredState) -> Result<()> {
-        // Ensure we're not already fenced out.
-        if self.inner.fenced.load(Ordering::Acquire) {
-            return Err(Error::Fenced {
-                coordinator: self.inner.writer_epoch,
-                stored: snapshot.base.writer_epoch,
-            });
-        }
-
+        self.ensure_owner()?;
         let base = &snapshot.base;
         next.revision = base.revision.checked_add(1).ok_or(Error::Exhausted)?;
         next.writer_epoch = self.inner.writer_epoch;
 
         self.inner.options.retention.apply(&mut next);
         let appended = next.rows_since(base.messages.len());
-        self.inner
+        let committed = self
+            .inner
             .storage
             .commit(Commit {
                 expected_revision: base.revision,
                 state: &next,
                 appended: &appended,
             })
-            .await?;
+            .await;
+        if let Err(error) = committed {
+            return Err(self.fenced_or(error).await);
+        }
 
         let revision = next.revision;
         let mut live = self.lock()?;
@@ -120,6 +109,27 @@ impl Coordinator {
         drop(live);
         self.inner.committed.send_replace(revision);
         Ok(())
+    }
+    /// Classify a failed commit. Only the owner writes, so a revision conflict
+    /// means another coordinator claimed the store: read its epoch, latch the
+    /// fence, and report [`Error::Fenced`]. Anything else is returned as is.
+    async fn fenced_or(&self, error: Error) -> Error {
+        if !matches!(error, Error::RevisionConflict { .. }) {
+            return error;
+        }
+        let Ok(stored) = self.inner.storage.load().await else {
+            return error;
+        };
+        if stored.writer_epoch <= self.inner.writer_epoch {
+            return error;
+        }
+        self.inner
+            .fenced_by
+            .fetch_max(stored.writer_epoch, Ordering::AcqRel);
+        Error::Fenced {
+            coordinator: self.inner.writer_epoch,
+            stored: stored.writer_epoch,
+        }
     }
     /// Persist interruptions recorded while a dropped drain could not await.
     pub(super) async fn flush_unpersisted(&self) -> Result<()> {

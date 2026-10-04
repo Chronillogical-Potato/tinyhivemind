@@ -91,29 +91,7 @@ impl Coordinator {
         {
             return Err(Error::InvalidOptions);
         }
-        let mut durable = storage.load().await?;
-
-        // Claim ownership by incrementing writer_epoch (fencing any previous owner)
-        let previous_epoch = durable.writer_epoch;
-        let writer_epoch = previous_epoch.checked_add(1).ok_or(Error::Exhausted)?;
-        durable.writer_epoch = writer_epoch;
-
-        if !durable.running.is_empty() {
-            let previous = durable.revision;
-            let agents: Vec<_> = durable.running.keys().cloned().collect();
-            for agent in agents {
-                interrupt(&mut durable, &agent, "process restarted during turn");
-            }
-            durable.revision = previous.checked_add(1).ok_or(Error::Exhausted)?;
-            storage
-                .commit(Commit {
-                    expected_revision: previous,
-                    state: &durable,
-                    appended: &[],
-                })
-                .await?;
-        }
-
+        let (durable, writer_epoch) = claim(storage.as_ref()).await?;
         let (committed, _) = watch::channel(durable.revision);
         Ok(Self {
             inner: Arc::new(Inner {
@@ -457,4 +435,38 @@ fn bind_session_state(state: &mut StoredState, agent_id: &str, session_id: &str)
         agent.session_id = Some(session_id.into());
     }
     Ok(())
+}
+/// Attempts [`claim`] makes before giving up on a store that keeps changing.
+const CLAIM_ATTEMPTS: usize = 4;
+/// Take ownership of `storage`: load it, advance `writer_epoch`, recover the
+/// previous owner's running turns as interruptions, and commit that as one
+/// revision. A conflict means another process wrote between the load and the
+/// commit, so the claim is retried on a fresh load; the newest claimant wins.
+async fn claim(storage: &dyn Storage) -> Result<(StoredState, u64)> {
+    let mut attempts = 0;
+    loop {
+        let mut durable = storage.load().await?;
+        let previous = durable.revision;
+        let writer_epoch = durable.writer_epoch.checked_add(1).ok_or(Error::Exhausted)?;
+        durable.writer_epoch = writer_epoch;
+        let agents: Vec<_> = durable.running.keys().cloned().collect();
+        for agent in agents {
+            interrupt(&mut durable, &agent, "process restarted during turn");
+        }
+        durable.revision = previous.checked_add(1).ok_or(Error::Exhausted)?;
+        let committed = storage
+            .commit(Commit {
+                expected_revision: previous,
+                state: &durable,
+                appended: &[],
+            })
+            .await;
+        match committed {
+            Ok(()) => return Ok((durable, writer_epoch)),
+            Err(Error::RevisionConflict { .. }) if attempts + 1 < CLAIM_ATTEMPTS => {
+                attempts += 1;
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
