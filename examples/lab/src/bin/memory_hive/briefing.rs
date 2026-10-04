@@ -3,8 +3,8 @@
 use tinyhivemind_core::aside::{AsidePolicy, Audience, Viewer};
 use tinyhivemind_core::dispatch::MentionDispatchPolicy;
 use tinyhivemind_core::runtime::{
-    BrevityPolicy, BriefingNote, MentionDispatchContext, SessionQuery, THREAD_INDEX_LIMIT,
-    THREAD_INDEX_SCAN, THREAD_OPENING_CHARS, TeamBriefing, initialize_session,
+    BrevityPolicy, BriefedTeammate, BriefingNote, MentionDispatchContext, SessionQuery,
+    THREAD_INDEX_LIMIT, THREAD_INDEX_SCAN, THREAD_OPENING_CHARS, TeamBriefing, initialize_session,
     initialize_session_with_context,
 };
 use tinyhivemind_lab::{MemoryLog, Res, agent, block_on, person, section};
