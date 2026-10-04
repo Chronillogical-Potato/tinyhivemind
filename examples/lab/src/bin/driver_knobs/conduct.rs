@@ -339,6 +339,7 @@ async fn play_inner(
         }
         let turns = conductor.turns()?;
         host.report.widest = host.report.widest.max(turns.len());
+        if std::env::var("LAB_DEBUG3").is_ok() { eprintln!("WAVE {} turns {:?} head {}", conductor.waves(), turns.iter().map(|t| (&t.seat, t.thread().map(|s| s.0), t.since.map(|s| s.0))).collect::<Vec<_>>(), host.log.head()); }
         for turn in &turns {
             host.turn_ids += 1;
             let n = host.turn_ids;
