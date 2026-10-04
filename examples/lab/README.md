@@ -87,7 +87,8 @@ example could drive and why.
 | `interpret` for `post`, `broadcast`, `dm`, `ask`, `ask_teammates`, `complete_episode`, `close`, `read` | `context_tools` | interpret |
 | `UtteranceRejection` (`UnknownTool`, `EmptyText`, `NoRecipients`, `UnknownRecipient`, `SelfRecipient`, `OneRecipient`, `NotAGroup`) | `context_tools` | interpret; check_recipients |
 | `Utterance` helpers, serde alias `close` | `context_tools` | check_recipients and addressed_peers |
-| `commit_utterance`, `CommitRequest.aside`, `.spent`, `.unsettled`, `CommittedUtterance.refusal` | `context_tools` | commit_utterance under three policies (F13) |
+| `commit_utterance`, `CommitRequest.aside`, `CommittedUtterance.refusal` | `context_tools` | commit_utterance under three policies (F13) |
+| `CommitRequest.spent`, `.unsettled`, `AsideInput.spent`, `.unsettled` | `context_tools` | swept through `aside()`; `commit_utterance` is called with `0` and `false` |
 | `addressed_peers`, `check_recipients` | `context_tools` | check_recipients and addressed_peers |
 | `fence::extract_post` | `context_tools` | fence |
 | `AsidePolicy.enabled`, `.max_members`, `.max_messages`, `.must_surface`, `.require_thread` | `context_tools`, `memory_hive` | aside(); briefing |
@@ -163,7 +164,7 @@ example could drive and why.
 | `BroadcastRouting.reasoning` and non-empty `thread_context` inside the driver | Every driver run passes `reasoning: None` and no context; the reasoning path is driven through `route_message` and `hive.route_desk`. |
 | `MessageRoute::CurrentConversation`, `DirectAgent`, `DeskReferral` | Vocabulary the host acts on; nothing in core constructs them. |
 | `SelectionDisposition::Selected`, `InvalidOutput`, `ResponderRung::AutoSelection` | Never produced by core; the host assembles them (F35). |
-| `EpisodeBrief.elsewhere` filled by the conductor | The conductor never fills it; the lab sets it by hand. |
+| `EpisodeBrief.elsewhere` filled by the conductor | By design the episode fills nothing in; the lab sets it by hand. |
 | Serde wire forms of most payload types | Core pins them in its own unit tests; the lab round-trips only `DriverState`, `ConductorState`, `SharingState` and `Utterance`. |
 | A real model behind `Digester`, `Router`, `SystemOneTransport` or a seat | Out of scope: the lab is offline. The scripted stand-ins have the same signatures. |
 | `tinyhivemind-tools` | Not a dependency of the lab; `context_tools` uses core's `runtime::speech` instead. |
