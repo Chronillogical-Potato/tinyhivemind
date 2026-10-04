@@ -83,6 +83,8 @@ async fn session_registration_validates_before_publishing_and_storage_failure_is
     .await
     .unwrap();
     add(&writer, "a", completed_turn).await;
+    hive(&writer, "revision", &[]).await;
+    // One writer per store: the next coordinator takes the store over.
     let stale = Coordinator::new(
         "runtime".into(),
         storage.clone(),
@@ -90,7 +92,6 @@ async fn session_registration_validates_before_publishing_and_storage_failure_is
     )
     .await
     .unwrap();
-    hive(&writer, "revision", &[]).await;
     let runner: Arc<dyn AgentRunner> = Arc::new(Script(Arc::new(completed_turn)));
     let registration = AgentRegistration {
         agent_id: "a".into(),
