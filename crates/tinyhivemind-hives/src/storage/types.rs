@@ -15,6 +15,11 @@ use tinyhivemind_core::driver::{ConductorState, Turn};
 pub struct StoredState {
     /// CAS revision; each commit advances exactly one.
     pub revision: u64,
+    /// Writer epoch: claimed by exactly one live Coordinator at a time. A
+    /// Coordinator increments this on startup (Coordinator::new) to fence out
+    /// any previous owner. Commits from lower epochs are rejected with
+    /// Error::Fenced.
+    pub writer_epoch: u64,
     /// Next global message sequence.
     pub next_sequence: u64,
     /// Dynamic definitions and current memberships.
