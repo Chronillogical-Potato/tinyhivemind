@@ -8,6 +8,7 @@ fn main() {
     let clock = WallClock::default();
     let tracer = Tracer::new("hello", &sink, &clock);
     tracer.emit(TraceEvent::TurnStarted {
+        turn: 0,
         seat: "alice".into(),
     });
     tracer.emit(TraceEvent::TurnFinished {

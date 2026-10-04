@@ -112,7 +112,8 @@ impl SessionLog for MemoryLog {
             .rev()
             .filter(|row| before.is_none_or(|bound| row.sequence < bound))
             .collect();
-        let messages: Vec<LogMessage> = older.iter().take(limit).map(|row| (*row).clone()).collect();
+        let messages: Vec<LogMessage> =
+            older.iter().take(limit).map(|row| (*row).clone()).collect();
         let next_before = if older.len() > messages.len() {
             messages.last().map(|row| row.sequence)
         } else {
