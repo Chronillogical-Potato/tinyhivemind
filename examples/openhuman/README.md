@@ -54,9 +54,10 @@ assignment using its own configuration.
 ## Host configuration and catalogues
 
 This host supplies a separate `workspace_dir` for each agent through
-`AgentSpec::config`. `MEMORY.md` and native skill bundles live under that private
-workspace, so OpenHuman's existing memory and skill readers see only that agent's
-resources. Skills are installed at `<workspace_dir>/skills/<name>/SKILL.md`.
+`AgentSpec::config`. Native skill bundles live under that private workspace, so
+OpenHuman's skill readers see only that agent's resources. (OpenHuman no longer
+renders a workspace `MEMORY.md` into the prompt; agent memory is a recalled pack
+from the configured memory engine, bound per agent with `AgentSpec::memory`.) Skills are installed at `<workspace_dir>/skills/<name>/SKILL.md`.
 `AgentSpec::skills_dir` currently installs under the agent's home directory;
 this example uses the explicit workspace discovery root instead.
 

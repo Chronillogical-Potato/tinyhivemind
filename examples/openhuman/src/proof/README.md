@@ -3,7 +3,7 @@
 `types.rs` holds the host fixture and factory handles.
 
 `fixture.rs` constructs one host-owned runtime, per-agent skill bundles,
-private MCP servers, private workspace memory, and host-authored prompts.
+private MCP servers, private workspaces, and host-authored prompts.
 Skills use the supported explicit workspace discovery root; the example does
 not use `AgentSpec::skills_dir`'s separate agent-home installation path.
 Native `use_skill`, MCP catalogue and MCP invocation receipts prove that those
