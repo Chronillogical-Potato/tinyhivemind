@@ -9,12 +9,14 @@
 
 mod fixture;
 mod raw;
+mod routing;
 
 use tinyhivemind_lab::{Res, TraceRig};
 
 fn main() -> Res {
     let rig = TraceRig::from_args();
     raw::run()?;
+    routing::run()?;
     if let Some(path) = rig.path() {
         println!("\ntrace written to {path}");
     }
