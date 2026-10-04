@@ -49,15 +49,11 @@ impl Coordinator {
         let mut futures = FuturesUnordered::new();
         let mut report = RunReport::default();
         loop {
-            eprintln!("DBG advance");
             let (changed, conductor_failures) = self.advance_report().await?;
-            eprintln!("DBG advanced {changed} futures={}", futures.len());
             report.failed += conductor_failures;
             if !self.inner.shutdown.load(Ordering::Acquire) {
                 let capacity = self.inner.options.round_width.saturating_sub(futures.len());
-                let claims = self.claim(capacity).await?;
-                eprintln!("DBG claims {:?}", claims.iter().map(|c| c.request.agent_id.clone()).collect::<Vec<_>>());
-                for claim in claims {
+                for claim in self.claim(capacity).await? {
                     let agent_id = claim.request.agent_id.clone();
                     guard.agents.insert(agent_id.clone());
                     futures.push(async move { (agent_id, claim.runner.run(claim.request).await) });
@@ -120,8 +116,6 @@ impl Coordinator {
             {
                 return Ok((false, 0));
             }
-            eprintln!("DBG msgs {} -> {} ; eps {:?}", original.messages.len(), next.messages.len(), next.episodes.iter().map(|e| (e.finished, e.failure.clone(), e.waiting, e.wave_open, e.pending.len())).collect::<Vec<_>>());
-            if let Some(m) = next.messages.last() { eprintln!("DBG last {:?}", m); }
             let failures = next
                 .episodes
                 .iter()

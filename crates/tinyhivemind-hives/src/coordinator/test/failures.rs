@@ -300,3 +300,23 @@ async fn joining_after_episode_creation_cannot_inject_an_unbound_child_participa
     c.join_hive("work", "b").await.unwrap();
     c.run_until_idle().await.unwrap();
 }
+#[tokio::test]
+async fn a_stalled_episode_settles_as_failed_instead_of_repreparing_forever() {
+    let c = setup().await;
+    // A seat that never acts: the conductor reports the episode stalled.
+    add(&c, "a", |request| {
+        Box::pin(async move { Ok(done(&request)) })
+    })
+    .await;
+    hive(&c, "work", &["a"]).await;
+    c.send_as_host(message("task", Destination::Hive("work".into())))
+        .await
+        .unwrap();
+    let report = c.run_until_idle().await.unwrap();
+    assert_eq!(report.failed, 1);
+    let state = c.lock().unwrap();
+    let episode = &state.durable.episodes[0];
+    assert!(episode.finished, "a stalled episode must stay settled");
+    assert!(episode.failure.as_ref().unwrap().contains("stalled"));
+    assert_eq!(episode.pending.len(), 0);
+}
