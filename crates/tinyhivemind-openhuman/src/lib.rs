@@ -6,9 +6,9 @@
 //! With [`OpenHumanHost::with_hive_memory`], every seat registered afterwards
 //! shares one [`HiveMemory`]: its own memory agent id under the hive's root.
 //! ```no_run
-//! # fn example(agent: openhuman_embed::Agent, coordinator: tinyhivemind_hives::Coordinator) -> tinyhivemind_openhuman::Result<()> {
+//! # async fn example(agent: openhuman_embed::Agent, coordinator: tinyhivemind_hives::Coordinator) -> tinyhivemind_openhuman::Result<()> {
 //! let host = tinyhivemind_openhuman::OpenHumanHost::new(agent.runtime_id().into(), coordinator)?;
-//! host.register_agent(agent)?;
+//! host.register_agent(agent).await?;
 //! # Ok(()) }
 //! ```
 mod error;
