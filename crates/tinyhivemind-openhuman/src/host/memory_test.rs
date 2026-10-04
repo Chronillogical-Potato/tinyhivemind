@@ -35,16 +35,20 @@ fn host_on(runtime: &Runtime) -> OpenHumanHost {
     OpenHumanHost::new(runtime.runtime_id().into(), coordinator).unwrap()
 }
 
-fn on_runtime(test: impl AsyncFnOnce() + Send + 'static) {
+fn on_runtime<F, Fut>(test: F)
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = ()> + Send + 'static,
+{
     let _guard = RUNTIME_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    executor().block_on(async { tokio::spawn(async { test().await }).await.unwrap() });
+    executor().block_on(async { tokio::spawn(test()).await.unwrap() });
 }
 
 #[test]
 fn every_seat_registered_with_hive_memory_is_bound_under_the_hive_root() {
-    on_runtime(async || {
+    on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
         assert_eq!(host.hive_memory().map(HiveMemory::root), Some("team:hive-1"));
@@ -59,7 +63,7 @@ fn every_seat_registered_with_hive_memory_is_bound_under_the_hive_root() {
 
 #[test]
 fn seats_carry_no_binding_when_hive_memory_is_off() {
-    on_runtime(async || {
+    on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         assert!(host.hive_memory().is_none());
         let agent = host.register_spec(&runtime, AgentSpec::new("scout")).unwrap();
@@ -72,7 +76,7 @@ fn seats_carry_no_binding_when_hive_memory_is_off() {
 
 #[test]
 fn a_seat_bound_by_the_host_itself_registers() {
-    on_runtime(async || {
+    on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let memory = hive("hive-1");
         let host = host.with_hive_memory(memory.clone()).unwrap();
@@ -84,7 +88,7 @@ fn a_seat_bound_by_the_host_itself_registers() {
 
 #[test]
 fn rejects_a_seat_built_without_the_hive_binding() {
-    on_runtime(async || {
+    on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
         let unbound = runtime.agent(AgentSpec::new("scout")).unwrap();
@@ -113,16 +117,16 @@ fn rejects_a_seat_built_without_the_hive_binding() {
 
 #[test]
 fn an_unusable_seat_id_fails_before_the_runtime_sees_it() {
-    on_runtime(async || {
+    on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
         assert!(matches!(
             host.register_spec(&runtime, AgentSpec::new("Bad Seat")),
             Err(Error::InvalidMemoryAgentId { .. })
         ));
-        let (other, _backend, plain) = Box::pin(fixture()).await;
+        let plain = host_on(&runtime);
         assert!(matches!(
-            plain.register_spec(&other, AgentSpec::new("Bad Seat")),
+            plain.register_spec(&runtime, AgentSpec::new("Bad Seat")),
             Err(Error::Agent(_))
         ));
     });
@@ -130,7 +134,7 @@ fn an_unusable_seat_id_fails_before_the_runtime_sees_it() {
 
 #[test]
 fn the_recall_budget_reaches_seats_through_the_runtime_config() {
-    on_runtime(async || {
+    on_runtime(|| async {
         let memory = hive("hive-1").recall_budget_tokens(NonZeroU32::new(640).unwrap());
         let mut config = offline::config();
         memory.configure(&mut config);
@@ -138,6 +142,8 @@ fn the_recall_budget_reaches_seats_through_the_runtime_config() {
         let host = host_on(&runtime).with_hive_memory(memory.clone()).unwrap();
         let agent = host.register_spec(&runtime, AgentSpec::new("scout")).unwrap();
         assert_eq!(agent.config().memory.recall.budget_tokens, 640);
+        // One runtime per process: release this one before the next.
+        drop((agent, host, runtime));
 
         let (unconfigured, _backend) = Box::pin(runtime_with(offline::config())).await;
         let host = host_on(&unconfigured).with_hive_memory(memory).unwrap();
@@ -153,7 +159,7 @@ fn the_recall_budget_reaches_seats_through_the_runtime_config() {
 
 #[test]
 fn hive_memory_cannot_change_after_registration() {
-    on_runtime(async || {
+    on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         host.register_spec(&runtime, AgentSpec::new("scout")).unwrap();
         assert!(matches!(
