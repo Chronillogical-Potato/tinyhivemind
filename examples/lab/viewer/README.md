@@ -24,11 +24,12 @@ and stays usable at 360px (charts scroll horizontally inside their card).
 
 ## Views
 
-1. **Waterfall**: a lane per seat. A `turn_started` is matched to the next
-   `turn_finished` of the same seat, in order. Overlapping turns of one seat
+1. **Waterfall**: a lane per seat. A `turn_started` is matched to its
+   `turn_finished` by the `turn` id (seat order when the id is absent). Overlapping turns of one seat
    stack. A finish with no start is reconstructed from `latency_ms`; a start
-   with no finish runs to the end of the run (dashed). Tool calls are ticks
-   spanning `[at_ms - latency_ms, at_ms]`; refused calls are red with a cross.
+   with no finish runs to the end of the run (dashed). Tool calls sit in their
+   turn's row (by `turn`), spanning `[at_ms - latency_ms, at_ms]`; refused calls
+   are red with a cross and the `reason` in the tooltip.
 2. **Timeline**: rounds (phase and visibility; dashed = blind), one row per
    conductor kind, outcome markers (C converged, D deadlocked, E exhausted,
    I idle), marks (triangle) and checkpoints (square).
@@ -41,8 +42,7 @@ and stays usable at 360px (charts scroll horizontally inside their card).
 Hover or focus any mark for its raw event; Escape dismisses. Each run also has
 an event table. Unreadable lines are counted and skipped.
 
-## Assumptions about the data
+## Timing
 
-- `at_ms` of `turn_finished` and `tool_call` is when it was recorded, that is
-  the end of the span. Core does not state this; the viewer assumes it.
-- `at_ms` is on one host clock per run; time zero is the earliest event.
+`at_ms` is the start for `turn_started` and the end for `turn_finished` and
+`tool_call`, as documented in core. Time zero is the earliest event of a run.
