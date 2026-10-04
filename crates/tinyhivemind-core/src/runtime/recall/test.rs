@@ -162,7 +162,7 @@ fn an_empty_delta_keeps_the_watermark() {
         },
         &[row(9, "a")],
     );
-    assert!(delta.rows.is_empty());
+    assert_eq!(delta.rows, Vec::<SessionMessage>::new());
     assert_eq!(delta.watermark.through, Some(Sequence(9)));
     assert_eq!(
         desk_delta(DeskWatermark::default(), &[]).watermark,
@@ -261,7 +261,7 @@ fn briefing() -> TeamBriefing {
         desk_name: "Engineering".into(),
         teammates: Vec::new(),
         brevity: BrevityPolicy::DEFAULT,
-        asides: Default::default(),
+        asides: crate::aside::AsidePolicy::DEFAULT,
     }
 }
 
@@ -321,7 +321,7 @@ async fn a_failed_recall_degrades_to_no_memory() {
     )
     .await
     .unwrap();
-    assert!(session.recalled.is_empty());
+    assert_eq!(session.recalled, Vec::<BriefingNote>::new());
     assert_eq!(session.framed, None);
     assert_eq!(session.initialization.history.len(), 1);
     let failure = session.failure.unwrap();
@@ -345,7 +345,7 @@ async fn a_failed_log_read_still_fails_the_session_without_recalling() {
     .await
     .unwrap_err();
     assert!(matches!(error, Error::Read { .. }), "{error:?}");
-    assert!(store.asked.lock().unwrap().is_empty());
+    assert_eq!(*store.asked.lock().unwrap(), Vec::<RecallRequest>::new());
 }
 
 // --- Remember ---------------------------------------------------------------
