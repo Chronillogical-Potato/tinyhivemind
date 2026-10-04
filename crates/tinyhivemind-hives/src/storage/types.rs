@@ -18,7 +18,9 @@ pub struct StoredState {
     /// Writer epoch: claimed by exactly one live Coordinator at a time. A
     /// Coordinator increments this on startup (`Coordinator::new`) to fence out
     /// any previous owner. Commits from lower epochs are rejected with
-    /// `Error::Fenced`.
+    /// `Error::Fenced`. Absent from snapshots written before fencing existed,
+    /// which decode as epoch zero.
+    #[serde(default)]
     pub writer_epoch: u64,
     /// Next global message sequence.
     pub next_sequence: u64,
