@@ -100,6 +100,9 @@ async fn second_coordinator_fences_first_coordinator_on_next_snapshot() {
     // Second coordinator writes, storing epoch 2 and fencing the first.
     hive(&other, "elsewhere", &["a"]).await;
 
+    // Run the second coordinator to actually persist the hive and claim the epoch.
+    other.run_until_idle().await.unwrap();
+
     // Now when first coordinator tries to write again, it will detect the higher
     // stored epoch when creating a snapshot, and be fenced.
     assert!(matches!(
