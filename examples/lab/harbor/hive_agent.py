@@ -10,7 +10,10 @@ task's ``environment.exec``; the result goes back on its stdin:
 
 Agent kwargs (``--ak key=value``): ``mode`` (``hive`` | ``single``, default
 ``hive``), ``bin_path``, ``api_base``, ``max_turns``, ``round_width``,
-``token_cap``, ``steps_per_turn``, ``cmd_timeout``. The API key is read from
+``token_cap``, ``steps_per_turn``, ``cmd_timeout``, ``single_context``
+(``none`` | ``mask`` | ``summarize``, default ``mask``: what the single seat does when its
+prompt passes ``context_budget`` tokens, default 60000) and ``context_keep`` (tool
+results ``mask`` keeps verbatim, default 8). The API key is read from
 ``OPENROUTER_API_KEY`` in the host environment (or ``--ae``) and handed to the
 binary through its environment, never through its arguments.
 """
@@ -86,12 +89,22 @@ class HiveAgent(BaseAgent):
         token_cap: int | str | None = None,
         steps_per_turn: int | str = 12,
         cmd_timeout: int | str = 180,
+        single_context: str = "mask",
+        context_budget: int | str = 60000,
+        context_keep: int | str = 8,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         if mode not in ("hive", "single"):
             raise ValueError(f"mode must be 'hive' or 'single', not {mode!r}")
+        if single_context not in ("none", "mask", "summarize"):
+            raise ValueError(
+                f"single_context must be 'none', 'mask' or 'summarize', not {single_context!r}"
+            )
         self.mode = mode
+        self.single_context = single_context
+        self.context_budget = int(context_budget)
+        self.context_keep = int(context_keep)
         self.bin_path = bin_path
         self.api_base = api_base
         self.max_turns = int(max_turns)
@@ -114,6 +127,9 @@ class HiveAgent(BaseAgent):
             "--round-width", str(self.round_width),
             "--steps-per-turn", str(self.steps_per_turn),
             "--cmd-timeout", str(self.cmd_timeout),
+            "--single-context", self.single_context,
+            "--context-budget", str(self.context_budget),
+            "--context-keep", str(self.context_keep),
         ]
         if self.token_cap is not None:
             argv += ["--token-cap", str(self.token_cap)]
