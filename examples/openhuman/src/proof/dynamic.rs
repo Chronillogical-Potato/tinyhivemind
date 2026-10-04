@@ -110,7 +110,7 @@ pub async fn run() -> anyhow::Result<()> {
             .await?;
     }
     anyhow::ensure!(
-        calls.load(Ordering::SeqCst).await == 3,
+        calls.load(Ordering::SeqCst) == 3,
         "denied tool reached host factory"
     );
     anyhow::ensure!(
