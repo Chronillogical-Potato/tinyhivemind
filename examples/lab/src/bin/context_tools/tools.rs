@@ -6,7 +6,8 @@ use tinyhivemind_core::mention::{Mention, MentionTarget};
 use tinyhivemind_core::runtime::speech::fence::extract_post;
 use tinyhivemind_core::runtime::speech::{
     CallArguments, CommitRequest, ParameterKind, READ_DEFAULT, READ_MAX, ToolCall, Utterance,
-    addressed_peers, check_recipients, commit_utterance, commit_utterance_to_room, interpret, read_limit, tool_specs,
+    addressed_peers, check_recipients, commit_utterance, commit_utterance_to_room, interpret,
+    read_limit, tool_specs,
 };
 use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
 use tinyhivemind_lab::{Res, World, section};
