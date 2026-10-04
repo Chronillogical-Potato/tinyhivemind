@@ -160,13 +160,13 @@ async fn an_engine_failure_is_a_typed_memory_error() {
 
 #[test]
 fn renders_entries_in_the_engines_order() {
-    let note = hive_memory_note(&[entry("a", "first"), entry("b", "second")], 100).unwrap();
+    let note = memory_note(&[entry("a", "first"), entry("b", "second")], 100).unwrap();
     assert_eq!(note.lines, ["[a] first", "[b] second"]);
 }
 
 #[test]
 fn collapses_whitespace_so_an_entry_is_one_line() {
-    let note = hive_memory_note(&[entry("a", "one\n  two\tthree")], 100).unwrap();
+    let note = memory_note(&[entry("a", "one\n  two\tthree")], 100).unwrap();
     assert_eq!(note.lines, ["[a] one two three"]);
 }
 
@@ -177,21 +177,21 @@ fn stops_before_the_entry_that_passes_the_budget() {
         entry("b", &"y".repeat(200)),
         entry("c", "tail"),
     ];
-    let note = hive_memory_note(&entries, 50).unwrap();
+    let note = memory_note(&entries, 50).unwrap();
     assert_eq!(note.lines, ["[a] short"]);
 }
 
 #[test]
 fn renders_nothing_when_there_is_nothing_or_no_room() {
-    assert!(hive_memory_note(&[], 100).is_none());
-    assert!(hive_memory_note(&[entry("a", "does not fit")], 3).is_none());
+    assert!(memory_note(&[], 100).is_none());
+    assert!(memory_note(&[entry("a", "does not fit")], 3).is_none());
 }
 
 #[test]
 fn never_renders_more_than_the_entry_limit() {
     let entries: Vec<_> = (0..40).map(|n| entry("a", &n.to_string())).collect();
     assert_eq!(
-        hive_memory_note(&entries, 10_000).unwrap().lines.len(),
+        memory_note(&entries, 10_000).unwrap().lines.len(),
         MEMORY_LIMIT
     );
 }

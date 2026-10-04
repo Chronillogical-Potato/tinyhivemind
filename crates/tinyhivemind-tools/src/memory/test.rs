@@ -79,7 +79,11 @@ fn serves_three_tools_each_with_an_object_schema() {
 async fn a_note_is_attributed_to_the_calling_seat_and_recalled() {
     let t = tools(false);
     let said = t
-        .call("solver", "hive_memory_note", &json!({"text": "use --no-cache"}))
+        .call(
+            "solver",
+            "hive_memory_note",
+            &json!({"text": "use --no-cache"}),
+        )
         .await
         .unwrap();
     assert_eq!(said, "remembered as m0");
@@ -131,7 +135,11 @@ async fn refuses_missing_and_malformed_arguments() {
     assert!(t.call("a", "hive_memory_note", &json!({})).await.is_err());
     assert!(t.call("a", "hive_memory_forget", &json!({})).await.is_err());
     let bad = t
-        .call("a", "hive_memory_note", &json!({"text": "x", "scope": "galaxy"}))
+        .call(
+            "a",
+            "hive_memory_note",
+            &json!({"text": "x", "scope": "galaxy"}),
+        )
         .await
         .unwrap_err();
     assert!(bad.contains("galaxy"));

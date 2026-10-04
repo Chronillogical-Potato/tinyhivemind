@@ -69,7 +69,7 @@ pub use elsewhere::{Elsewhere, ElsewhereQuery, gather_elsewhere, render_row};
 pub use error::{Error, Result};
 pub use memory::{
     MEMORY_LIMIT, MEMORY_NOTE_CHARS, MemoryEntry, MemoryFuture, MemoryNote, MemoryQuery,
-    MemoryScope, WorkingMemory, hive_memory_note, validate_note,
+    MemoryScope, WorkingMemory, memory_note, validate_note,
 };
 pub use pins::{
     PIN_EXCERPT_CHARS, PIN_LIMIT, PIN_SCAN, Pin, PinAction, PinDirective, fold_pins, pin_note,

@@ -19,7 +19,7 @@ seam between the two, so the hive stays unopinionated about storage.
 | `MemoryScope` | `Hive` (shared) or `Seat` (private); the engine decides how to honor it |
 | `recall(..)` / `record(..)` | bounded, validated calls over a port |
 | `validate_note(note)` | rejects a blank or over-long note |
-| `hive_memory_note(entries, budget)` | entries as one `BriefingNote`, cut to a character budget |
+| `memory_note(entries, budget)` | entries as one `BriefingNote`, cut to a character budget |
 | `MEMORY_LIMIT` / `MEMORY_NOTE_CHARS` | 12 / 1000 |
 
 ## Constraints worth knowing

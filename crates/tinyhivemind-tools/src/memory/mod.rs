@@ -28,7 +28,11 @@ use tinyhivemind_core::runtime::{
 use tinytools::ToolSpec;
 
 /// The tool names this module serves, in the order a seat meets them.
-pub const MEMORY_TOOLS: [&str; 3] = ["hive_memory_recall", "hive_memory_note", "hive_memory_forget"];
+pub const MEMORY_TOOLS: [&str; 3] = [
+    "hive_memory_recall",
+    "hive_memory_note",
+    "hive_memory_forget",
+];
 
 /// The memory tools as native `tinytools::ToolSpec` values.
 #[must_use]
@@ -78,8 +82,9 @@ pub fn memory_tool_definitions() -> Vec<ToolSpec> {
         },
         ToolSpec {
             name: "hive_memory_forget".to_owned(),
-            description: "Drop an entry that is wrong or stale, by the id hive_memory_recall showed."
-                .to_owned(),
+            description:
+                "Drop an entry that is wrong or stale, by the id hive_memory_recall showed."
+                    .to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": { "id": { "type": "string" } },

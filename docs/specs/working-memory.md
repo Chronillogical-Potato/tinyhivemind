@@ -33,7 +33,7 @@ shared one.
 - `WorkingMemory::{recall, record, forget}` in
   `tinyhivemind_core::runtime::memory`; notes <= 1000 characters; recalls <= 12
   entries; engine order trusted.
-- `hive_memory_note(entries, budget)` folds entries into one `BriefingNote` for the
+- `memory_note(entries, budget)` folds entries into one `BriefingNote` for the
   turn's briefing, so a seat need not spend a call to read it.
 - `tinyhivemind_tools::MemoryTools` serves `hive_memory_recall`, `hive_memory_note` and
   `hive_memory_forget`; the seat id comes from the host.
