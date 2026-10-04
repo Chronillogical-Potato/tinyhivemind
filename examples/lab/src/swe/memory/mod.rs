@@ -1,47 +1,57 @@
-//! Hive memory: what seats did, stored and recalled through tinymemory.
+//! Hive memory: the lab's reference host for core's memory ports.
 //!
-//! [`HiveMemory`] implements the seat-facing [`SeatMemory`] port over any
-//! tinymemory engine: CortexDB in a run (`--memory cortex`), the in-memory
-//! reference engine in tests. Every run writes below its own namespace root,
-//! `team:<run-id>` ([`run_root`]), and each seat is one tinymemory agent at
+//! [`HiveMemory`] implements core's
+//! [`Recall`](tinyhivemind_core::runtime::Recall) and
+//! [`Remember`](tinyhivemind_core::runtime::Remember) over any tinymemory
+//! engine: CortexDB in a run (`--memory cortex`), the in-memory reference
+//! engine in tests. Every run writes below its own namespace root,
+//! `team:<run-id>` ([`run_root`]), which is also the `conversation` every
+//! request must name; each seat is one tinymemory agent at
 //! `team:<run-id>/agent:<seat>` whose single thread is named after the seat.
 //!
-//! | Moment | Call | What comes back |
+//! | `RecallMoment` | tinymemory call | Notes |
 //! | --- | --- | --- |
-//! | session start | `AgentMemory::start_session` (the seat's own thread first) | everything relevant to the focus |
-//! | rejoin | `holistic_recall` over learnings and one section per teammate | only items this seat has not been shown |
-//! | compaction | `AgentMemory::recall_for_compaction` | a summary of the seat's thread plus related memory |
-//! | end of activation | `AgentMemory::post_turn` | (stores the seat's words and command ledger) |
+//! | `SessionStart` | `AgentMemory::start_session` (the seat's own thread first) | everything relevant to the focus |
+//! | `Rejoin` | `holistic_recall` over learnings and one section per teammate | only items this seat has not been shown |
+//! | `Compaction { dropped }` | `AgentMemory::recall_for_compaction` | a summary of the seat's thread plus related memory |
+//!
+//! `Remember` stores the activation's entries as one turn, waiting until the
+//! engine has indexed it (`WriteOptions::visible`, which CortexDB serves as
+//! `POST /v1/experience?wait=indexed`). `AgentMemory::post_turn` only waits
+//! for acceptance, which let a teammate's recall a moment later miss the
+//! turn; the wait is bounded by the same timeout as before.
 //!
 //! Seats are threads and tinymemory is async, so `HiveMemory` owns a small
-//! multi-threaded tokio runtime: each call blocks its seat's thread on the
-//! runtime under a timeout, and belief builds the policy asks for are spawned
-//! onto it and collected (bounded) by [`SeatMemory::finish`]. Any error or
-//! timeout becomes an empty pack and a [`Report::error`], never a failed
-//! seat. Packs are framed under the context module's `MEMORY_HEADER` and
-//! clipped to the budget, four characters per token.
+//! multi-threaded tokio runtime. Each port call spawns its work there (with
+//! its timeout) and returns a future that only awaits the task, so any
+//! executor can drive it. Belief builds the policy asks for run there too and
+//! are collected, bounded, by [`SeatMemory::finish`].
 
+mod notes;
 mod types;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use tinymemory_api::{ItemId, MemoryEngine, Namespace, Role, Turn};
+use tinymemory_api::{ItemId, MemoryEngine, Namespace, Role, Turn, WriteOptions};
 use tinymemory_integrations::cortex::{CortexCredential, CortexEngine};
 use tinymemory_tools::{
-    AgentMemory, Compaction, ContextPack, HolisticRecall, MemoryLayout, PostTurn, RecallPolicy,
+    AgentMemory, Compaction, ContextPack, HolisticRecall, MemoryLayout, RecallPolicy,
     ScopeSection, SessionStart, holistic_recall,
+};
+use tinyhivemind_core::runtime::{
+    BriefingNote, Error as CoreError, Recall, RecallFuture, RecallMoment, RecallRequest, Remember,
+    RememberFuture, RememberRequest,
 };
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
-use super::context::MEMORY_HEADER;
+pub use notes::{entries_text, pack_notes};
+pub use types::{LedgerEntry, SeatMemory, Timeouts, kind_label};
 
-pub use types::{LedgerEntry, Moment, Recalled, Remembered, Report, SeatMemory};
-
-/// Characters per token when clipping a pack.
-const CHARS_PER_TOKEN: usize = 4;
+/// Characters per token: `--memory-budget` is in tokens, requests in chars.
+pub const CHARS_PER_TOKEN: usize = 4;
 /// Longest a run id segment may be once sanitized.
 const RUN_ID_CHARS: usize = 64;
 /// Teammate turns one rejoin section may show.
@@ -50,29 +60,6 @@ const REJOIN_PER_TEAMMATE: usize = 3;
 const BUILD_EVERY: u32 = 5;
 /// Heading of the shared learnings section of a rejoin pack.
 const LEARNINGS_HEADING: &str = "Learnings";
-/// Title tinymemory gives every pack; dropped in favour of our header.
-const PACK_TITLE: &str = "Memory";
-
-/// How long each kind of call may take before it is abandoned.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Timeouts {
-    /// A recall at any moment.
-    pub recall: Duration,
-    /// Storing one activation.
-    pub remember: Duration,
-    /// Waiting for every outstanding belief build at the end of the run.
-    pub finish: Duration,
-}
-
-impl Timeouts {
-    /// Recall and remember 4 s each (a compaction recall measured ~1.4 s
-    /// against CortexDB), 20 s for background work at the end.
-    pub const DEFAULT: Self = Self {
-        recall: Duration::from_secs(4),
-        remember: Duration::from_secs(4),
-        finish: Duration::from_secs(20),
-    };
-}
 
 /// Per-seat bookkeeping.
 #[derive(Debug, Default)]
@@ -83,24 +70,29 @@ struct SeatState {
     seen: Vec<ItemId>,
 }
 
-/// One run's memory: a namespace root on an engine, one agent per seat.
-pub struct HiveMemory {
-    runtime: Runtime,
+/// What the spawned tasks share.
+struct Inner {
     engine: Arc<dyn MemoryEngine>,
     layout: MemoryLayout,
     seats: Vec<String>,
-    policy: RecallPolicy,
     timeouts: Timeouts,
     state: Mutex<HashMap<String, SeatState>>,
-    background: Mutex<Vec<JoinHandle<Report>>>,
+    background: Mutex<Vec<JoinHandle<String>>>,
+}
+
+/// One run's memory: a namespace root on an engine, one agent per seat.
+pub struct HiveMemory {
+    runtime: Runtime,
+    inner: Arc<Inner>,
+    budget_chars: usize,
 }
 
 impl std::fmt::Debug for HiveMemory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HiveMemory")
-            .field("engine", &self.engine.descriptor().id)
-            .field("root", &self.layout.root().to_string())
-            .field("seats", &self.seats)
+            .field("engine", &self.inner.engine.descriptor().id)
+            .field("root", &self.inner.layout.root().to_string())
+            .field("seats", &self.inner.seats)
             .finish_non_exhaustive()
     }
 }
@@ -142,14 +134,26 @@ pub fn generated_run_id(mode: &str) -> String {
     format!("{mode}-{secs}-{}", std::process::id())
 }
 
+fn recall_error(message: impl Into<String>) -> CoreError {
+    CoreError::Recall {
+        source: message.into().into(),
+    }
+}
+
+fn remember_error(message: impl Into<String>) -> CoreError {
+    CoreError::Remember {
+        source: message.into().into(),
+    }
+}
+
 impl HiveMemory {
-    /// Memory for `seats` of run `run_id` on `engine`, recalling at most
-    /// `budget_tokens` per pack.
+    /// Memory for `seats` of run `run_id` on `engine`, framing recalls within
+    /// `budget_tokens`.
     ///
     /// # Errors
     ///
-    /// Returns a message for an unusable run id or seat id, or when the
-    /// runtime cannot start.
+    /// Returns a message for an unusable run id or a blank seat id, or when
+    /// the runtime cannot start.
     pub fn new(
         engine: Arc<dyn MemoryEngine>,
         run_id: &str,
@@ -168,17 +172,15 @@ impl HiveMemory {
             .map_err(|error| format!("cannot start the memory runtime: {error}"))?;
         Ok(Self {
             runtime,
-            engine,
-            layout,
-            seats: seats.iter().map(|seat| (*seat).to_owned()).collect(),
-            policy: RecallPolicy {
-                budget_tokens,
-                build_beliefs_every: Some(BUILD_EVERY),
-                ..RecallPolicy::default()
-            },
-            timeouts: Timeouts::DEFAULT,
-            state: Mutex::new(HashMap::new()),
-            background: Mutex::new(Vec::new()),
+            inner: Arc::new(Inner {
+                engine,
+                layout,
+                seats: seats.iter().map(|seat| (*seat).to_owned()).collect(),
+                timeouts: Timeouts::DEFAULT,
+                state: Mutex::new(HashMap::new()),
+                background: Mutex::new(Vec::new()),
+            }),
+            budget_chars: budget_tokens.saturating_mul(CHARS_PER_TOKEN),
         })
     }
 
@@ -200,51 +202,80 @@ impl HiveMemory {
     }
 
     /// The same memory under other timeouts.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the shared state is only cloned into tasks by the
+    /// port calls, so before the first call this memory holds the only
+    /// reference (and the call falls back to keeping the old timeouts if not).
     #[must_use]
     pub fn with_timeouts(mut self, timeouts: Timeouts) -> Self {
-        self.timeouts = timeouts;
+        if let Some(inner) = Arc::get_mut(&mut self.inner) {
+            inner.timeouts = timeouts;
+        }
         self
     }
 
     /// The run's namespace root.
     #[must_use]
     pub fn root(&self) -> &Namespace {
-        self.layout.root()
+        self.inner.layout.root()
     }
 
     /// One line for the trace: engine, root and health.
     #[must_use]
     pub fn describe(&self) -> String {
+        let inner = &self.inner;
         let health = self.runtime.block_on(async {
-            tokio::time::timeout(self.timeouts.recall, self.engine.health()).await
+            tokio::time::timeout(inner.timeouts.recall, inner.engine.health()).await
         });
         format!(
             "{} root {} health {}",
-            self.engine.descriptor().id,
-            self.layout.root(),
+            inner.engine.descriptor().id,
+            inner.layout.root(),
             health.map_or_else(|_| "timed out".to_owned(), |h| format!("{h:?}"))
         )
     }
+}
 
+impl Inner {
     fn lock(&self) -> MutexGuard<'_, HashMap<String, SeatState>> {
         self.state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn agent(&self, seat: &str) -> Result<AgentMemory, String> {
+    fn agent(&self, seat: &str, budget_chars: usize) -> Result<AgentMemory, String> {
+        let policy = RecallPolicy {
+            budget_tokens: (budget_chars / CHARS_PER_TOKEN).max(1),
+            build_beliefs_every: Some(BUILD_EVERY),
+            ..RecallPolicy::default()
+        };
         AgentMemory::new(self.engine.clone(), self.layout.clone(), seat)
-            .map(|memory| memory.with_policy(self.policy.clone()))
+            .map(|memory| memory.with_policy(policy))
             .map_err(|error| error.to_string())
+    }
+
+    /// Refuse a request for another run's namespace.
+    fn check(&self, conversation: &str) -> Result<(), String> {
+        let root = self.layout.root().to_string();
+        if conversation == root {
+            Ok(())
+        } else {
+            Err(format!(
+                "conversation {conversation:?} is not this run's memory {root:?}"
+            ))
+        }
     }
 
     /// The rejoin read: learnings, then each teammate's turns, never an item
     /// this seat was already shown.
-    fn rejoin_request(&self, seat: &str, focus: &str) -> HolisticRecall {
+    fn rejoin_request(&self, request: &RecallRequest) -> HolisticRecall {
+        let seat = request.seat.as_str();
         let mut sections = vec![ScopeSection::fetch(
             LEARNINGS_HEADING,
             self.layout.learnings_filter(),
-            self.policy.learnings_limit,
+            RecallPolicy::default().learnings_limit,
         )];
         sections.extend(
             self.seats
@@ -258,35 +289,31 @@ impl HiveMemory {
                     )
                 }),
         );
-        let query = (!focus.trim().is_empty()).then(|| focus.to_owned());
+        let query = request.focus.clone().filter(|f| !f.trim().is_empty());
         HolisticRecall {
-            budget_tokens: self.policy.budget_tokens,
-            title: PACK_TITLE.to_owned(),
-            exclude_ids: self
-                .lock()
-                .get(seat)
-                .map(|s| s.seen.clone())
-                .unwrap_or_default(),
+            budget_tokens: (request.budget_chars / CHARS_PER_TOKEN).max(1),
+            exclude_ids: self.lock().get(seat).map(|s| s.seen.clone()).unwrap_or_default(),
             ..HolisticRecall::new(query, sections)
         }
     }
 
-    async fn read(&self, seat: &str, moment: &Moment) -> Result<ContextPack, String> {
-        let agent = self.agent(seat)?;
-        let pack = match moment {
-            Moment::SessionStart { focus } => {
+    async fn read(&self, request: &RecallRequest) -> Result<ContextPack, String> {
+        self.check(&request.conversation)?;
+        let seat = request.seat.as_str();
+        let agent = self.agent(seat, request.budget_chars)?;
+        let pack = match &request.moment {
+            RecallMoment::SessionStart => {
                 agent
                     .start_session(SessionStart {
                         thread_id: Some(seat.to_owned()),
-                        focus: Some(focus.clone()),
+                        focus: request.focus.clone(),
                     })
                     .await
             }
-            Moment::Rejoin { focus } => {
-                let request = self.rejoin_request(seat, focus);
-                holistic_recall(self.engine.as_ref(), &request).await
+            RecallMoment::Rejoin => {
+                holistic_recall(self.engine.as_ref(), &self.rejoin_request(request)).await
             }
-            Moment::Compaction { dropped, focus } => {
+            RecallMoment::Compaction { dropped } => {
                 agent
                     .recall_for_compaction(Compaction {
                         thread_id: seat.to_owned(),
@@ -294,7 +321,7 @@ impl HiveMemory {
                             .iter()
                             .map(|text| Turn::new(Role::Assistant, text.clone()))
                             .collect(),
-                        focus: Some(focus.clone()),
+                        focus: request.focus.clone(),
                     })
                     .await
             }
@@ -302,80 +329,40 @@ impl HiveMemory {
         pack.map_err(|error| error.to_string())
     }
 
-    fn spawn_jobs(&self, agent: &AgentMemory, jobs: Vec<tinymemory_tools::BackgroundJob>) {
-        let mut handles = self
-            .background
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        for job in jobs {
-            let agent = agent.clone();
-            handles.push(self.runtime.spawn(async move {
-                let started = Instant::now();
-                let outcome = agent.run_background(job).await;
-                Report {
-                    op: "background",
-                    moment: "belief_build",
-                    latency_ms: elapsed_ms(started),
-                    error: outcome.err().map(|error| error.to_string()),
-                    ..Report::default()
-                }
-            }));
-        }
-    }
-}
-
-impl SeatMemory for HiveMemory {
-    fn recall(&self, seat: &str, moment: &Moment) -> Recalled {
-        let started = Instant::now();
-        let outcome = self.runtime.block_on(async {
-            tokio::time::timeout(self.timeouts.recall, self.read(seat, moment)).await
-        });
-        let mut report = Report {
-            op: "recall",
-            moment: moment.name(),
-            ..Report::default()
-        };
-        let pack = match outcome {
+    async fn recall_notes(&self, request: RecallRequest) -> Result<Vec<BriefingNote>, CoreError> {
+        let read = tokio::time::timeout(self.timeouts.recall, self.read(&request)).await;
+        let pack = match read {
             Err(_) => {
-                report.error = Some(format!("timed out after {:?}", self.timeouts.recall));
-                None
+                return Err(recall_error(format!(
+                    "timed out after {:?}",
+                    self.timeouts.recall
+                )));
             }
-            Ok(Err(error)) => {
-                report.error = Some(error);
-                None
-            }
-            Ok(Ok(pack)) => {
-                report.items = pack.refs.len();
-                self.lock()
-                    .entry(seat.to_owned())
-                    .or_default()
-                    .seen
-                    .extend(pack.refs.iter().cloned());
-                frame(&pack.markdown, self.policy.budget_tokens)
-            }
+            Ok(Err(error)) => return Err(recall_error(error)),
+            Ok(Ok(pack)) => pack,
         };
-        report.chars = pack.as_ref().map_or(0, String::len);
-        report.latency_ms = elapsed_ms(started);
-        Recalled { pack, report }
+        let (notes, seen) = pack_notes(&pack);
+        self.lock()
+            .entry(request.seat.clone())
+            .or_default()
+            .seen
+            .extend(seen);
+        Ok(notes)
     }
 
-    fn remember(&self, seat: &str, what: &Remembered) -> Report {
-        let started = Instant::now();
-        let text = what.render();
-        let mut report = Report {
-            op: "remember",
-            moment: "activation",
-            chars: text.len(),
-            items: what.ledger.len(),
-            ..Report::default()
-        };
-        let agent = match self.agent(seat) {
-            Ok(agent) => agent,
-            Err(error) => {
-                report.error = Some(error);
-                return report;
-            }
-        };
+    async fn store(&self, request: RememberRequest, budget_chars: usize) -> Result<(), CoreError> {
+        self.check(&request.conversation)
+            .map_err(remember_error)?;
+        let text = entries_text(&request);
+        if text.trim().is_empty() {
+            return Ok(());
+        }
+        let seat = request.seat.as_str();
+        let agent = self.agent(seat, budget_chars).map_err(remember_error)?;
+        let node = self
+            .layout
+            .conversations(seat)
+            .map_err(|error| remember_error(error.to_string()))?;
         let turn = {
             let mut state = self.lock();
             let entry = state.entry(seat.to_owned()).or_default();
@@ -383,32 +370,85 @@ impl SeatMemory for HiveMemory {
             entry.turn += 1;
             turn
         };
-        let outcome = self.runtime.block_on(async {
-            tokio::time::timeout(
-                self.timeouts.remember,
-                agent.post_turn(PostTurn::new(seat, turn, text)),
-            )
-            .await
-        });
-        match outcome {
+        let item = notes::turn_item(node, seat, turn, text);
+        let write = self.engine.store_with(item, WriteOptions::visible());
+        match tokio::time::timeout(self.timeouts.remember, write).await {
             Err(_) => {
-                report.error = Some(format!("timed out after {:?}", self.timeouts.remember));
+                return Err(remember_error(format!(
+                    "timed out after {:?}",
+                    self.timeouts.remember
+                )));
             }
-            Ok(Err(error)) => report.error = Some(error.to_string()),
-            Ok(Ok(done)) => self.spawn_jobs(&agent, done.jobs),
+            Ok(Err(error)) => return Err(remember_error(error.to_string())),
+            Ok(Ok(_)) => {}
         }
-        report.latency_ms = elapsed_ms(started);
-        report
+        if (turn + 1).is_multiple_of(BUILD_EVERY) {
+            let job = agent.history_build();
+            let handle = tokio::spawn(async move {
+                let started = Instant::now();
+                let outcome = agent.run_background(job).await;
+                let ms = started.elapsed().as_millis();
+                match outcome {
+                    Ok(_) => format!("belief_build latency_ms={ms}"),
+                    Err(error) => format!("belief_build latency_ms={ms} error={error}"),
+                }
+            });
+            self.background
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(handle);
+        }
+        Ok(())
+    }
+}
+
+impl Recall for HiveMemory {
+    fn recall<'a>(&'a self, request: &'a RecallRequest) -> RecallFuture<'a> {
+        let inner = Arc::clone(&self.inner);
+        let request = request.clone();
+        let task = self
+            .runtime
+            .spawn(async move { inner.recall_notes(request).await });
+        Box::pin(async move {
+            task.await
+                .map_err(|error| recall_error(format!("recall task failed: {error}")))?
+        })
+    }
+}
+
+impl Remember for HiveMemory {
+    fn remember<'a>(&'a self, request: &'a RememberRequest) -> RememberFuture<'a> {
+        let inner = Arc::clone(&self.inner);
+        let request = request.clone();
+        let budget = self.budget_chars;
+        let task = self
+            .runtime
+            .spawn(async move { inner.store(request, budget).await });
+        Box::pin(async move {
+            task.await
+                .map_err(|error| remember_error(format!("remember task failed: {error}")))?
+        })
+    }
+}
+
+impl SeatMemory for HiveMemory {
+    fn conversation(&self) -> String {
+        self.inner.layout.root().to_string()
     }
 
-    fn finish(&self) -> Vec<Report> {
-        let handles: Vec<JoinHandle<Report>> = std::mem::take(
+    fn budget_chars(&self) -> usize {
+        self.budget_chars
+    }
+
+    fn finish(&self) -> Vec<String> {
+        let handles: Vec<JoinHandle<String>> = std::mem::take(
             &mut *self
+                .inner
                 .background
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
         );
-        let deadline = Instant::now() + self.timeouts.finish;
+        let deadline = Instant::now() + self.inner.timeouts.finish;
         handles
             .into_iter()
             .map(|handle| {
@@ -417,47 +457,13 @@ impl SeatMemory for HiveMemory {
                     .runtime
                     .block_on(async { tokio::time::timeout(left, handle).await });
                 match waited {
-                    Ok(Ok(report)) => report,
-                    Ok(Err(error)) => failed_job(error.to_string()),
-                    Err(_) => failed_job("still running at the end of the run".into()),
+                    Ok(Ok(line)) => line,
+                    Ok(Err(error)) => format!("belief_build error={error}"),
+                    Err(_) => "belief_build error=still running at the end of the run".into(),
                 }
             })
             .collect()
     }
-}
-
-fn failed_job(error: String) -> Report {
-    Report {
-        op: "background",
-        moment: "belief_build",
-        error: Some(error),
-        ..Report::default()
-    }
-}
-
-/// A pack's markdown under [`MEMORY_HEADER`] (tinymemory's own title line
-/// dropped), clipped to `budget_tokens`; `None` when it says nothing.
-#[must_use]
-pub fn frame(markdown: &str, budget_tokens: usize) -> Option<String> {
-    let body = markdown
-        .strip_prefix(&format!("# {PACK_TITLE}"))
-        .unwrap_or(markdown)
-        .trim();
-    if body.is_empty() {
-        return None;
-    }
-    let framed = format!("{MEMORY_HEADER}\n{body}");
-    let limit = budget_tokens.saturating_mul(CHARS_PER_TOKEN);
-    if framed.chars().count() <= limit {
-        return Some(framed);
-    }
-    let mut clipped: String = framed.chars().take(limit.saturating_sub(4)).collect();
-    clipped.push_str("\n...");
-    Some(clipped)
-}
-
-fn elapsed_ms(started: Instant) -> u64 {
-    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]
