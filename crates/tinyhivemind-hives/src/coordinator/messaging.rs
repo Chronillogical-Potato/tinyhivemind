@@ -28,6 +28,7 @@ impl Coordinator {
         if request.message_id.starts_with("hivemind:") {
             return Err(Error::InvalidIdentifier("reserved message id"));
         }
+        let retention = self.inner.options.retention;
         self.update(|state| {
             if let Some(old) = state.accepted.get(&request.message_id) {
                 if old != &request {
@@ -67,6 +68,9 @@ impl Coordinator {
             };
             match &request.destination {
                 Destination::Agent(_) => {
+                    for agent_id in &recipients {
+                        retention.admit_pending(state, agent_id)?;
+                    }
                     for agent_id in recipients {
                         state.deliveries.push(Delivery {
                             sequence,

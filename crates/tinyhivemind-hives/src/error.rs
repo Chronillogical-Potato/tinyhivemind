@@ -68,6 +68,15 @@ pub enum Error {
         /// The epoch currently owning the store.
         stored: u64,
     },
+    /// The recipient already holds the most pending direct messages
+    /// [`crate::RetentionPolicy::pending_per_agent`] allows.
+    #[error("inbox of {agent_id} is full ({limit} pending)")]
+    InboxFull {
+        /// The recipient whose inbox is full.
+        agent_id: String,
+        /// The configured bound.
+        limit: usize,
+    },
     /// An appended transcript row does not follow the stored transcript.
     #[error("transcript row {0} does not extend the stored transcript")]
     TranscriptOutOfOrder(u64),

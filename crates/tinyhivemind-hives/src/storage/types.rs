@@ -106,8 +106,34 @@ pub struct RetentionPolicy {
     /// [`InterruptedTurn`] records so long-running hosts do not grow the
     /// state row unboundedly.
     pub interrupted: Option<usize>,
+    /// Most undelivered ([`DeliveryStatus::Pending`]) direct messages one
+    /// agent may hold; `None` is unbounded. Pending deliveries are live work,
+    /// so they are never pruned: a send that would exceed the bound is
+    /// refused with [`crate::Error::InboxFull`] instead, which keeps an
+    /// offline or unattached agent from growing the state row without limit
+    /// and tells the sender why.
+    pub pending_per_agent: Option<usize>,
 }
 impl RetentionPolicy {
+    /// Refuse a delivery that would push `agent_id`'s pending inbox past
+    /// [`Self::pending_per_agent`].
+    pub(crate) fn admit_pending(&self, state: &StoredState, agent_id: &str) -> crate::Result<()> {
+        let Some(limit) = self.pending_per_agent else {
+            return Ok(());
+        };
+        let pending = state
+            .deliveries
+            .iter()
+            .filter(|d| d.agent_id == agent_id && d.status == DeliveryStatus::Pending)
+            .count();
+        if pending >= limit {
+            return Err(crate::Error::InboxFull {
+                agent_id: agent_id.to_owned(),
+                limit,
+            });
+        }
+        Ok(())
+    }
     /// Drop the oldest settled records beyond each bound.
     pub(crate) fn apply(&self, state: &mut StoredState) {
         if let Some(keep) = self.settled_episodes {
