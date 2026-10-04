@@ -1,5 +1,5 @@
 import { initPanel } from "./panel.js";
-import { MARK_LANES, markLane, memoryFailed } from "./marks.js";
+import { MARK_EVENTS, MARK_LANES, markLane, markTitle, memoryFailed } from "./marks.js";
 "use strict";
 // Hive Lab run viewer. Runs load from the dev server (see server/runs.js), or from dropped files.
 // Input is flat JSONL stamped events; see crates/tinyhivemind-core/src/telemetry/types.rs.
@@ -130,8 +130,8 @@ function analyze(events) {
       case "round": (e.seats || []).forEach((x) => note(x.agent_id)); rounds.push(e); break;
       case "conducted": conducted.push(e); note(e.conducted && e.conducted.seat); break;
       case "converged": case "deadlocked": case "exhausted": case "idle": outcomes.push(e); break;
-      case "checkpoint": case "mark": marks.push(e); break;
-      default: others.push(e);
+      default:
+        if (MARK_EVENTS.has(e.event)) { note(e.seat); marks.push(e); } else others.push(e);
     }
   }
   let t0 = Infinity, t1 = -Infinity;
@@ -291,8 +291,7 @@ function timeline(run, span, host) {
     const [shape, fill] = lane === "session" ? ["circle", "var(--s2)"]
       : lane === "memory" ? ["diamond", memoryFailed(e) ? "var(--bad)" : "var(--s6)"]
       : [isMark ? "triangle" : "square", isMark ? "var(--s1)" : "var(--accent)"];
-    svg.append(hover(marker(shape, cx, cy, lane === "marks" ? 7 : 6, fill),
-      `${e.event}: ${e.label}`, detail(e), `${e.event} ${e.label}${e.detail ? ": " + e.detail : ""}`));
+    svg.append(hover(marker(shape, cx, cy, lane === "marks" ? 7 : 6, fill), markTitle(e), detail(e), markTitle(e)));
   }
   host.replaceChildren(svg);
   const lg = h("div", { class: "legend" });
@@ -300,8 +299,8 @@ function timeline(run, span, host) {
   item(h("i", { class: "sw", style: "background:var(--blind);border:1px dashed var(--accent)" }), "blind round");
   item(h("i", { class: "sw", style: "background:var(--full);border:1px solid var(--accent)" }), "full-visibility round");
   kinds.forEach((k, i) => item(h("i", { class: "sw", style: `background:var(${KIND_COLOR[i % 8]});transform:rotate(45deg) scale(.8)` }), k));
-  item(h("i", { class: "sw", style: "background:var(--s2);border-radius:50%" }), "session (one per activation)");
-  item(h("i", { class: "sw", style: "background:var(--s6);transform:rotate(45deg) scale(.8)" }), "memory recall / store");
+  item(h("i", { class: "sw", style: "background:var(--s2);border-radius:50%" }), "session resumed");
+  item(h("i", { class: "sw", style: "background:var(--s6);transform:rotate(45deg) scale(.8)" }), "memory recalled / remembered");
   item(h("i", { class: "sw", style: "background:var(--bad);transform:rotate(45deg) scale(.8)" }), "memory error");
   item(document.createTextNode(""), "C converged, D deadlocked, E exhausted, I idle; triangle mark, square checkpoint");
   host.append(lg);
