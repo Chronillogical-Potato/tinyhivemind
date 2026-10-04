@@ -7,6 +7,7 @@
 //! Run with `cargo run --bin memory_hive [-- --trace out.jsonl]`.
 
 mod briefing;
+mod contract;
 mod digest;
 mod elsewhere;
 mod pins;
@@ -58,6 +59,8 @@ fn main() -> Res {
     mark("briefing done");
     elsewhere::elsewhere_and_threads()?;
     mark("elsewhere and threads done");
+    contract::run()?;
+    mark("contract done");
     if let Some(path) = rig.path() {
         println!("\ntrace written to {path}");
     }
