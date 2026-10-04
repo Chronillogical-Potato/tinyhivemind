@@ -141,6 +141,8 @@ fn script(scn: &Scenario, turn: &Turn, brief: &EpisodeBrief, log: &MemoryLog) ->
             to: vec!["tester".into()],
             message: "which edge cases must the parser handle?".into(),
         }),
+        // Nothing owed and nothing awaited: a later assignment, from a handoff.
+        ("coder", Channel::Desk) if brief.awaiting.is_empty() => done("second job done"),
         ("coder", Channel::Desk) => Vec::new(),
         ("tester", Channel::Thread { root, .. })
             if scn.chatty_tester && spoke("tester", Some(*root)) < 8 =>
