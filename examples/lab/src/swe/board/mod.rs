@@ -25,7 +25,8 @@ use tinyhivemind_core::runtime::digest::{
 use tinyhivemind_core::runtime::pins::{PIN_LIMIT, Pin, read_pinboard};
 use tinyhivemind_core::runtime::speech::{CommitRequest, Utterance, commit_utterance_to_room};
 use tinyhivemind_core::runtime::{
-    Conversation, Sequence, SessionAuthor, SessionQuery, project_session, render_row,
+    Conversation, DeskWatermark, Sequence, SessionAuthor, SessionQuery, desk_delta,
+    project_session, render_row,
 };
 
 use crate::{MemoryLog, World, agent, block_on};
@@ -312,9 +313,13 @@ impl Board {
             window: pending.clamp(1, DELTA_WINDOW),
         };
         let projected = block_on(project_session(&inner.log, &query)).unwrap_or_default();
-        let rows: Vec<String> = projected
+        // Core picks the unseen rows and advances the watermark past all of
+        // them, the seat's own included; the board only leaves its own out
+        // of what it renders, since they are already in its session.
+        let unseen = desk_delta(DeskWatermark { through: after }, &projected);
+        let rows: Vec<String> = unseen
+            .rows
             .iter()
-            .filter(|row| row.sequence > floor)
             .filter(|row| !matches!(&row.author, SessionAuthor::Agent { id, .. } if id == seat))
             .filter_map(render_row)
             .collect();
@@ -339,7 +344,7 @@ impl Board {
         }
         View {
             text,
-            through: inner.log.head(),
+            through: unseen.watermark.through.unwrap_or(floor),
             pins: hash,
             rows: rows.len(),
         }
