@@ -23,9 +23,11 @@ roots.
 | `index.html` | Page shell, styles, theme tokens |
 | `src/main.js` | Parsing, analysis, SVG rendering (no chart libraries) |
 | `src/panel.js` | The runs table: load, compare, live follow, URL state |
+| `src/marks.js` | Which timeline lane a mark goes to (`session`, `memory`, other) |
+| `src/marks.test.js` | `npm test`: lane and memory-error classification |
 | `server/scan.js` | Finds and describes traces; resolves ids safely |
 | `server/plugin.js` | Vite plugin serving `/api/runs`, `/api/runs/<id>`, `/api/events` |
-| `server/scan.test.js` | `npm test`: scanner and path-escape tests |
+| `server/scan.test.js` | `npm test`: scanner, arm and path-escape tests |
 | `tools/probe.mjs`, `tools/live-check.mjs` | Headless-Chromium checks over the DevTools protocol |
 | `public/fixtures/sample.jsonl` | Two demo runs: `hive-4seat` and `baseline-serial` |
 
@@ -35,11 +37,12 @@ A Harbor trial (`<job>/<task>__<hash>/agent/trace.jsonl`) is described from its
 `agent/result.json` (mode, tokens, wall time, turns) and the trial's
 `result.json` (verifier reward). Jobs named `<tag>-<mode>` (for example
 `r1-single` and `r1-hive`) share the tag `r1`, so one task's arms land on one
-row. Any other `.jsonl` is listed under its folder, by file name.
+row. The arm is everything after the tag, so `harbor/arm.sh` jobs such as
+`r2-hive-briefing` and `r2-hive-session-mem` get their own columns. Any other `.jsonl` is listed under its folder, by file name.
 
 ## API
 
-- `GET /api/runs` returns `{roots, runs: [{id, path, group, tag, task, mode,
+- `GET /api/runs` returns `{roots, runs: [{id, path, group, tag, task, mode, arm,
   reward, tokens, wall_ms, turns, size, mtime}]}`, newest first.
 - `GET /api/runs/<id>` returns the raw trace. Ids are `<root index>:<relative
   path>`; anything that resolves outside a root, or is not `.jsonl`, is a 404.
@@ -64,7 +67,10 @@ static file. Drag and drop of local files still works, and is all a static
    are red with a cross and the `reason` in the tooltip.
 2. **Timeline**: rounds (phase and visibility; dashed = blind), one row per
    conductor kind, outcome markers (C converged, D deadlocked, E exhausted,
-   I idle), marks (triangle) and checkpoints (square).
+   I idle), then three mark lanes: `session` (green circle, one per seat
+   activation), `memory` (purple diamond per recall or store; red when the
+   call failed or timed out) and every other mark (triangle) or checkpoint
+   (square).
 3. **Tokens**: cumulative input/output/total over time, plus per-seat share.
 4. **Summary**: turns, tokens in/out, wall ms, p50/p95 turn latency (from
    `latency_ms`, nearest rank), max concurrent turns, tool calls, refusals,
