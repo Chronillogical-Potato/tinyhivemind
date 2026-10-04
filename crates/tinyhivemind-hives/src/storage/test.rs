@@ -201,3 +201,54 @@ fn retention_keeps_recent_settled_episodes_and_deliveries_only() {
         [1, 3, 4]
     );
 }
+#[test]
+fn retention_keeps_a_settled_episode_a_running_turn_still_reports_to() {
+    let mut state = StoredState::default();
+    for id in ["running", "idle"] {
+        state.episodes.push(EpisodeRecord {
+            episode_id: id.into(),
+            hive: crate::HiveInfo {
+                hive_id: id.into(),
+                name: id.into(),
+                description: None,
+                members: Vec::new(),
+            },
+            opened_at: 0,
+            thread: None,
+            starters: Vec::new(),
+            conductor: None,
+            pending: Vec::new(),
+            wave_open: false,
+            waiting: false,
+            finished: true,
+            failure: None,
+        });
+    }
+    state.running.insert(
+        "a".into(),
+        RunningTurn {
+            request: crate::TurnRequest {
+                agent_id: "a".into(),
+                session_id: None,
+                messages: Vec::new(),
+                memberships: Vec::new(),
+                episode: Some(crate::EpisodeContext {
+                    episode_id: "running".into(),
+                    hive_id: "running".into(),
+                    thread: None,
+                    brief: String::new(),
+                }),
+            },
+            turn: None,
+            actions: Vec::new(),
+            delivery_sequence: None,
+        },
+    );
+    RetentionPolicy {
+        settled_episodes: Some(0),
+        delivered: None,
+    }
+    .apply(&mut state);
+    assert_eq!(state.episodes.len(), 1);
+    assert_eq!(state.episodes[0].episode_id, "running");
+}
