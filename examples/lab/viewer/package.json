@@ -1,0 +1,16 @@
+{
+  "name": "hive-lab-viewer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Vite app that browses hive-lab run traces served straight from disk.",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 8099 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 8099 --strictPort",
+    "test": "node --test server/"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}
