@@ -10,7 +10,7 @@ use tinyhivemind_core::hive::{
 };
 use tinyhivemind_core::runtime::{Conversation, Sequence, SessionAuthor, SessionMessage};
 use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
-use tinyhivemind_lab::World;
+use tinyhivemind_lab::{World, row};
 
 /// A seat and the plan it argues for.
 #[derive(Clone, Copy)]
@@ -75,16 +75,6 @@ pub fn world() -> World {
     CAST.iter()
         .fold(World::new(), |world, seat| world.agent(seat.id))
         .desk("war", "War Room", "Pick a plan", &ids)
-}
-
-fn msg(sequence: u64, author: SessionAuthor, content: &str, audience: Audience) -> SessionMessage {
-    SessionMessage {
-        sequence: Sequence(sequence),
-        author,
-        content: content.into(),
-        audience,
-        elided: None,
-    }
 }
 
 fn seat_author(id: &str) -> SessionAuthor {
@@ -185,7 +175,7 @@ pub fn episode(
     };
     let mut state = EpisodeState::opened(conversation, Sequence(1));
     state.thresholds = room.thresholds.clone();
-    let mut journal = vec![msg(
+    let mut journal = vec![row(
         1,
         SessionAuthor::Operator,
         "Pick a plan.",
@@ -228,13 +218,13 @@ pub fn episode(
                 outcome.order.push(seat.id);
             }
             let next = journal.len() as u64 + 1;
-            journal.push(msg(next, seat_author(seat.id), &line, Audience::Desk));
+            journal.push(row(next, seat_author(seat.id), &line, Audience::Desk));
             for _ in 0..room.chatter {
                 let next = journal.len() as u64 + 1;
                 let to = Audience::Aside {
                     members: vec!["ben".into()],
                 };
-                journal.push(msg(next, seat_author("ada"), "side remark", to));
+                journal.push(row(next, seat_author("ada"), "side remark", to));
             }
         }
         state = *next_state;

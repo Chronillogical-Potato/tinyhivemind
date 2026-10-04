@@ -127,3 +127,21 @@ impl SessionLog for MemoryLog {
         })
     }
 }
+
+/// A projected row, as a `SessionMessage` for the folds that take a transcript
+/// rather than a log.
+#[must_use]
+pub fn row(
+    sequence: u64,
+    author: SessionAuthor,
+    content: &str,
+    audience: Audience,
+) -> tinyhivemind_core::runtime::SessionMessage {
+    tinyhivemind_core::runtime::SessionMessage {
+        sequence: Sequence(sequence),
+        author,
+        content: content.into(),
+        audience,
+        elided: None,
+    }
+}

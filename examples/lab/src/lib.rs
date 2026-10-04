@@ -55,7 +55,7 @@ mod tick;
 
 pub use cli::TraceRig;
 pub use exec::block_on;
-pub use log::{MemoryLog, agent, person};
+pub use log::{MemoryLog, agent, person, row};
 pub use tick::TickClock;
 mod world;
 
