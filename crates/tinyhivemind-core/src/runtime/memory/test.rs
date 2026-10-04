@@ -91,7 +91,7 @@ async fn a_seat_private_note_stays_with_its_author() {
     record(&shelf, &note("solver", MemoryScope::Seat, "my hunch"))
         .await
         .unwrap();
-    assert!(recall(&shelf, "reviewer", "", 5).await.unwrap().is_empty());
+    assert_eq!(recall(&shelf, "reviewer", "", 5).await.unwrap().len(), 0);
     assert_eq!(recall(&shelf, "solver", "", 5).await.unwrap().len(), 1);
 }
 
@@ -118,7 +118,7 @@ async fn forget_removes_an_entry() {
         .await
         .unwrap();
     shelf.forget("a", &made.id).await.unwrap();
-    assert!(recall(&shelf, "a", "", 5).await.unwrap().is_empty());
+    assert_eq!(recall(&shelf, "a", "", 5).await.unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -128,7 +128,7 @@ async fn rejects_an_empty_note_before_the_engine_sees_it() {
         .await
         .unwrap_err();
     assert!(matches!(err, Error::MemoryNoteEmpty));
-    assert!(shelf.entries.lock().unwrap().is_empty());
+    assert_eq!(shelf.entries.lock().unwrap().len(), 0);
 }
 
 #[tokio::test]
