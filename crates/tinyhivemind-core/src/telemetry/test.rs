@@ -163,3 +163,107 @@ fn pins_the_memory_event_wire_forms() {
         assert_eq!(serde_json::from_str::<TraceEvent>(wire).unwrap(), event);
     }
 }
+
+fn standing(topic: &str) -> crate::hive::TopicStanding {
+    crate::hive::TopicStanding {
+        topic: TopicId(topic.into()),
+        supporters: vec!["alice".into()],
+        silenced: Vec::new(),
+        refuted_by: Vec::new(),
+        support: 1,
+        probability_support: 1,
+    }
+}
+
+fn turn(agent: &str, reason: crate::hive::BidReason) -> crate::hive::HiveTurn {
+    crate::hive::HiveTurn {
+        agent_id: agent.into(),
+        phase: Phase::Commit,
+        visibility: Visibility::Full,
+        reason,
+        watermark: crate::hive::Sequence(0),
+        round_start: crate::hive::Sequence(4),
+    }
+}
+
+#[test]
+fn derives_a_round_from_its_first_turn_and_lists_every_seat() {
+    use crate::hive::{BidReason, Conversation, EpisodeState, Sequence};
+    let (sink, clock) = (MemorySink::default(), ManualClock::default());
+    let tracer = tracer(&sink, &clock);
+    let next_state = Box::new(EpisodeState::opened(
+        Conversation {
+            desk_id: "d".into(),
+            desk_name: "Desk".into(),
+            thread_root: None,
+        },
+        Sequence(0),
+    ));
+    tracer.step(&HiveStep::Speak {
+        turns: vec![
+            turn("alice", BidReason::Addressed),
+            turn("bob", BidReason::Quiet),
+        ],
+        next_state: next_state.clone(),
+    });
+    tracer.step(&HiveStep::Speak {
+        turns: Vec::new(),
+        next_state,
+    });
+    let events: Vec<_> = sink.events().into_iter().map(|e| e.event).collect();
+    assert_eq!(
+        events[0],
+        TraceEvent::Round {
+            phase: Phase::Commit,
+            visibility: Visibility::Full,
+            seats: vec![
+                RoundSeat {
+                    agent_id: "alice".into(),
+                    reason: BidReason::Addressed,
+                },
+                RoundSeat {
+                    agent_id: "bob".into(),
+                    reason: BidReason::Quiet,
+                },
+            ],
+        }
+    );
+    assert_eq!(
+        events[1],
+        TraceEvent::Round {
+            phase: Phase::Deliberate,
+            visibility: Visibility::Blind,
+            seats: Vec::new(),
+        }
+    );
+}
+
+#[test]
+fn derives_convergence_and_counts_exhausted_advocates() {
+    let (sink, clock) = (MemorySink::default(), ManualClock::default());
+    let tracer = tracer(&sink, &clock);
+    tracer.step(&HiveStep::Converged {
+        topic: TopicId("ship".into()),
+        standing: Box::new(standing("ship")),
+    });
+    tracer.step(&HiveStep::Exhausted {
+        spent: 3,
+        standings: vec![standing("a"), standing("b")],
+        visibility: Visibility::Full,
+    });
+    let events: Vec<_> = sink.events().into_iter().map(|e| e.event).collect();
+    assert_eq!(
+        events[0],
+        TraceEvent::Converged {
+            topic: TopicId("ship".into())
+        }
+    );
+    assert_eq!(
+        events[1],
+        TraceEvent::Exhausted {
+            spent: 3,
+            visibility: Visibility::Full,
+            advocated: 2
+        }
+    );
+}
