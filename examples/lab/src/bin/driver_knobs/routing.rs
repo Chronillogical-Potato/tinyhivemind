@@ -50,32 +50,15 @@ pub fn run() -> Res {
     let hive = hive();
     let base = routing_policy(3);
     let sure = KeywordRouter::new("small");
-    let unsure = KeywordRouter {
-        confidence: Some(300_000),
-        ..KeywordRouter::new("small-unsure")
-    };
+    let unsure = KeywordRouter::new("small-unsure").confidence(300_000);
     let strong = KeywordRouter::new("large");
-    let stale = KeywordRouter {
-        roster_skew: 1,
-        ..KeywordRouter::new("small-stale")
-    };
-    let down = KeywordRouter {
-        fail: true,
-        ..KeywordRouter::new("small-down")
-    };
-    let vague = KeywordRouter {
-        needs_clarification: 800_000,
-        ..KeywordRouter::new("small-vague")
-    };
-    let nothing = KeywordRouter {
-        none_weight: 5_000,
-        ..KeywordRouter::new("small-none")
-    };
-    let risky = KeywordRouter {
-        high_impact: 900_000,
-        confidence: Some(700_000),
-        ..KeywordRouter::new("small-risky")
-    };
+    let stale = KeywordRouter::new("small-stale").roster_skew(1);
+    let down = KeywordRouter::new("small-down").failing();
+    let vague = KeywordRouter::new("small-vague").clarification(800_000);
+    let nothing = KeywordRouter::new("small-none").none_weight(5_000);
+    let risky = KeywordRouter::new("small-risky")
+        .high_impact(900_000)
+        .confidence(700_000);
     let rows = [
         Row {
             label: "confident, one seat fits",

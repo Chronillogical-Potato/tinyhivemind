@@ -14,23 +14,23 @@ use tinyhivemind_core::embed::{
 };
 use tinyhivemind_core::runtime::responder::{PROBABILITY_SCALE, Probability};
 
-/// How the scripted router behaves.
+/// How the scripted router behaves; the knobs are builder methods.
 #[derive(Debug)]
 pub struct KeywordRouter {
     /// Model identity stamped on every evaluation.
     pub model: &'static str,
     /// Weight of the `none` answer against each candidate's `100 + 400 * hits`.
-    pub none_weight: u32,
+    none_weight: u32,
     /// Report this confidence instead of the primary's probability.
-    pub confidence: Option<u32>,
+    confidence: Option<u32>,
     /// Report this need for clarification, in parts per million.
-    pub needs_clarification: u32,
+    needs_clarification: u32,
     /// Report this high-impact probability, in parts per million.
-    pub high_impact: u32,
+    high_impact: u32,
     /// Added to the request's roster version, so the answer is stale.
-    pub roster_skew: u64,
+    roster_skew: u64,
     /// Fail every call.
-    pub fail: bool,
+    fail: bool,
     calls: AtomicUsize,
 }
 
@@ -48,6 +48,48 @@ impl KeywordRouter {
             fail: false,
             calls: AtomicUsize::new(0),
         }
+    }
+
+    /// Report this confidence instead of the primary's probability.
+    #[must_use]
+    pub fn confidence(mut self, parts: u32) -> Self {
+        self.confidence = Some(parts);
+        self
+    }
+
+    /// Report this need for clarification.
+    #[must_use]
+    pub fn clarification(mut self, parts: u32) -> Self {
+        self.needs_clarification = parts;
+        self
+    }
+
+    /// Report this high-impact probability.
+    #[must_use]
+    pub fn high_impact(mut self, parts: u32) -> Self {
+        self.high_impact = parts;
+        self
+    }
+
+    /// Weigh the `none` answer this heavily.
+    #[must_use]
+    pub fn none_weight(mut self, weight: u32) -> Self {
+        self.none_weight = weight;
+        self
+    }
+
+    /// Answer for a roster version this far ahead of the request's.
+    #[must_use]
+    pub fn roster_skew(mut self, skew: u64) -> Self {
+        self.roster_skew = skew;
+        self
+    }
+
+    /// Fail every call.
+    #[must_use]
+    pub fn failing(mut self) -> Self {
+        self.fail = true;
+        self
     }
 
     /// How many times the router has been asked.
