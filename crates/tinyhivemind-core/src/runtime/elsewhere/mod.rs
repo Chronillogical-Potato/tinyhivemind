@@ -10,7 +10,7 @@ pub use types::{Elsewhere, ElsewhereQuery};
 
 use crate::runtime::aside::Viewer;
 use crate::runtime::{
-    Conversation, Result, SessionAuthor, SessionLog, SessionMessage, SessionQuery, project_session,
+    Result, SessionAuthor, SessionLog, SessionMessage, SessionQuery, project_session,
 };
 
 /// Read the newest rows of every conversation in `query.conversations`
@@ -39,7 +39,10 @@ pub async fn gather_elsewhere(
 ) -> Result<Vec<Elsewhere>> {
     let mut gathered = Vec::new();
     for conversation in query.conversations {
-        if query.current.is_some_and(|current| conversation.equivalent_to(current)) {
+        if query
+            .current
+            .is_some_and(|current| conversation.equivalent_to(current))
+        {
             continue;
         }
         let rows = project_session(
