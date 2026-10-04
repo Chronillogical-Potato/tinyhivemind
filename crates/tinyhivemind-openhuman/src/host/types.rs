@@ -22,6 +22,56 @@ pub trait ManagementAuthorizer: Send + Sync {
     /// Return a denial when the actor cannot perform this request.
     fn authorize(&self, actor: &str, request: &ManagementRequest) -> Result<()>;
 }
+/// Host policy over what an agent may send, mirroring [`ManagementAuthorizer`].
+///
+/// Consulted by `hivemind_send_agent`, `hivemind_send_hive`, `hivemind_ask` and
+/// `hivemind_broadcast` before they execute. A refusal is returned to the model
+/// as the tool's error text; the turn continues.
+pub trait SendAuthorizer: Send + Sync {
+    /// Admit or refuse one outbound request from `actor`.
+    /// # Errors
+    /// Return a refusal, conventionally [`crate::Error::SendDenied`], whose
+    /// message the model reads.
+    fn authorize(&self, actor: &str, request: &SendRequest) -> Result<()>;
+}
+/// Outbound operation offered to the host [`SendAuthorizer`].
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum SendRequest {
+    /// Direct message to a registered agent.
+    Agent {
+        /// Recipient agent identity.
+        agent_id: String,
+        /// Message text.
+        body: String,
+    },
+    /// Message to a hive the actor belongs to.
+    Hive {
+        /// Hive identity.
+        hive_id: String,
+        /// Message text.
+        body: String,
+        /// Existing conversation root, when replying in a thread.
+        thread: Option<u64>,
+        /// Private readers; empty means every member.
+        only_for: Vec<String>,
+    },
+    /// Question to peers in the actor's active episode.
+    Ask {
+        /// Episode the question is asked in.
+        episode_id: String,
+        /// Asked peers.
+        agents: Vec<String>,
+        /// Question text.
+        body: String,
+    },
+    /// Work routed across the actor's active episode.
+    Broadcast {
+        /// Episode the work is broadcast in.
+        episode_id: String,
+        /// Work text.
+        body: String,
+    },
+}
 /// Management operation offered to the host authorizer.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum ManagementRequest {

@@ -22,6 +22,7 @@ pub(crate) struct Inner {
     hooks: Arc<dyn TurnHooks>,
     memory: Option<HiveMemory>,
     turn_timeout: Duration,
+    pub send_policy: Option<Arc<dyn SendAuthorizer>>,
 }
 struct Entry {
     /// `None` while a replacement is being built, or after one failed.
@@ -63,6 +64,7 @@ impl OpenHumanHost {
                 hooks: Arc::new(DefaultHooks),
                 memory: None,
                 turn_timeout: TURN_TIMEOUT,
+                send_policy: None,
             }),
         })
     }
@@ -87,6 +89,16 @@ impl OpenHumanHost {
     pub fn with_hooks(mut self, hooks: Arc<dyn TurnHooks>) -> Result<Self> {
         let inner = self.configurable_inner()?;
         inner.hooks = hooks;
+        Ok(self)
+    }
+    /// Gate the outbound tools — `hivemind_send_agent`, `hivemind_send_hive`,
+    /// `hivemind_ask`, `hivemind_broadcast` — behind `policy`; configure
+    /// before sharing or registration. Without one every send is admitted.
+    /// # Errors
+    /// Refuse changed settings once agents or another host clone exist.
+    pub fn with_send_policy(mut self, policy: Arc<dyn SendAuthorizer>) -> Result<Self> {
+        let inner = self.configurable_inner()?;
+        inner.send_policy = Some(policy);
         Ok(self)
     }
     /// Bound every supplied agent turn by `timeout` instead of

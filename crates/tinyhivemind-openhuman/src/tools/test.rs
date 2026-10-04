@@ -244,13 +244,13 @@ async fn explicit_episode_actions_execute_only_during_the_bound_assignment() {
     );
 }
 
-fn active() -> std::sync::Arc<Activation> {
+pub(super) fn active() -> std::sync::Arc<Activation> {
     let activation = std::sync::Arc::new(Activation::default());
     activation.activate();
     activation
 }
 
-async fn registered_coordinator() -> tinyhivemind_hives::Coordinator {
+pub(super) async fn registered_coordinator() -> tinyhivemind_hives::Coordinator {
     use std::sync::Arc;
     use tinyhivemind_hives::{AgentRegistration, Coordinator, CoordinatorOptions, MemoryStorage};
     let coor = Coordinator::new(

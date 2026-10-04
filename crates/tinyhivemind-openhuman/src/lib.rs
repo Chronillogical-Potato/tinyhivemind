@@ -21,7 +21,8 @@ mod tools;
 pub use error::{Error, Result};
 pub use host::{
     AgentFactory, AgentFuture, HostedTurn, ManagementAuthorizer, ManagementRequest, OpenHumanHost,
-    RegisteredAgent, TURN_TIMEOUT, TurnHooks, TurnOptions, TurnProgressSink, TurnScope,
+    RegisteredAgent, SendAuthorizer, SendRequest, TURN_TIMEOUT, TurnHooks, TurnOptions,
+    TurnProgressSink, TurnScope,
 };
 pub use journal::MemoryLog;
 pub use memory::{HiveMemory, HiveMemoryStore};

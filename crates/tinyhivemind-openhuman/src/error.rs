@@ -25,6 +25,9 @@ pub enum Error {
     /// Host explicitly denied management.
     #[error("management denied: {0}")]
     Unauthorized(String),
+    /// The host send policy refused an outbound tool call.
+    #[error("send denied: {0}")]
+    SendDenied(String),
     /// Shared adapter state was poisoned.
     #[error("adapter lock poisoned")]
     Poisoned,

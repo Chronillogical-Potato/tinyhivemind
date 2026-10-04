@@ -1,7 +1,7 @@
 //! Stable native tools with bound attribution and weak service references.
 mod types;
 use crate::host::{Activation, Inner};
-use crate::{Error, ManagementRequest, OpenHumanHost, Result};
+use crate::{Error, ManagementRequest, OpenHumanHost, Result, SendRequest};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Weak;
@@ -72,6 +72,10 @@ impl HiveTool {
         let coordinator = host.coordinator();
         let text = |name: &str| args[name].as_str().unwrap_or_default().to_owned();
         let actor = &self.actor;
+        if let (Some(policy), Some(request)) = (&host.inner.send_policy, outbound(self.kind, &args))
+        {
+            policy.authorize(actor, &request)?;
+        }
         match self.kind {
             Kind::ListHives => Ok(serde_json::to_value(
                 coordinator
@@ -132,6 +136,33 @@ impl HiveTool {
         }
     }
 }
+/// The send a gated tool's validated arguments describe; `None` for tools the
+/// send policy does not gate.
+fn outbound(kind: Kind, args: &Value) -> Option<SendRequest> {
+    let text = |name: &str| args[name].as_str().unwrap_or_default().to_owned();
+    Some(match kind {
+        Kind::SendAgent => SendRequest::Agent {
+            agent_id: text("agent_id"),
+            body: text("body"),
+        },
+        Kind::SendHive => SendRequest::Hive {
+            hive_id: text("hive_id"),
+            body: text("body"),
+            thread: args["thread"].as_u64(),
+            only_for: strings(args, "only_for"),
+        },
+        Kind::Ask => SendRequest::Ask {
+            episode_id: text("episode_id"),
+            agents: strings(args, "agents"),
+            body: text("body"),
+        },
+        Kind::Broadcast => SendRequest::Broadcast {
+            episode_id: text("episode_id"),
+            body: text("body"),
+        },
+        _ => return None,
+    })
+}
 /// The management request a management tool's validated arguments describe.
 fn management(kind: Kind, args: &Value) -> ManagementRequest {
     let text = |name: &str| args[name].as_str().unwrap_or_default().to_owned();
@@ -158,6 +189,8 @@ fn management(kind: Kind, args: &Value) -> ManagementRequest {
 }
 #[cfg(test)]
 mod direct_test;
+#[cfg(test)]
+mod policy_test;
 #[cfg(test)]
 mod test;
 
