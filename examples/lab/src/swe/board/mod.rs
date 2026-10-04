@@ -39,6 +39,8 @@ pub struct Committed {
     pub sequence: Sequence,
     /// Seats the row names, from mentions and an `ask`'s addressee.
     pub addressed: Vec<String>,
+    /// The row's text.
+    pub content: String,
     /// Whether the author reported its assignment done.
     pub completes: bool,
     /// Whether the row asks the host to route it to a teammate.
@@ -143,6 +145,7 @@ impl Board {
         Ok(Committed {
             sequence,
             addressed,
+            content: committed.content,
             completes: committed.completes_episode,
             broadcasting: committed.broadcasting,
         })

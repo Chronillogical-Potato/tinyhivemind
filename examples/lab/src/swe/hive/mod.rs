@@ -156,7 +156,7 @@ pub fn run(env: &Env<'_>, task: &str, params: &Params) -> Report {
                 }
             }
             if done.broadcasting && done.addressed.is_empty() {
-                let target = route_broadcast(&wake.seat, &latest_message(env, &wake.seat));
+                let target = route_broadcast(&wake.seat, &done.content);
                 enqueue(&mut queue, Wake {
                     seat: target.into(),
                     reason: BidReason::Salience,
@@ -194,14 +194,6 @@ fn lead_wake(note: &str) -> Wake {
         reason: BidReason::Quiet,
         note: note.into(),
     }
-}
-
-/// The text of `seat`'s newest row, which is what a broadcast routes on.
-fn latest_message(env: &Env<'_>, seat: &str) -> String {
-    env.board
-        .read(seat, 1)
-        .split_once(": ")
-        .map_or_else(String::new, |(_, body)| body.to_owned())
 }
 
 fn run_round(
