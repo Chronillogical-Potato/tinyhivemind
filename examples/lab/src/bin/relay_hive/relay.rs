@@ -23,7 +23,7 @@ const BUG: &str = "checkout times out for EU users";
 /// What a desk makes of a message it is handed: its findings, and whether it
 /// needs another desk. Rules, not a model.
 fn findings(desk: &str, handed: &str) -> (String, bool) {
-    let answered = handed.contains("Renewed");
+    let answered = handed.to_lowercase().contains("renewed");
     match desk {
         "support" if answered => (format!("Customer update: {handed}"), false),
         "support" => (format!("Triaged: {handed}."), true),
