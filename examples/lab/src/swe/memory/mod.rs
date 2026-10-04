@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use tinymemory_api::{ItemId, MemoryEngine, Namespace, Role, Turn};
 use tinymemory_integrations::cortex::{CortexCredential, CortexEngine};
 use tinymemory_tools::{
-    AgentMemory, Compaction, ContextPack, HolisticRecall, LEARNINGS_HEADING, MemoryLayout,
+    AgentMemory, Compaction, ContextPack, HolisticRecall, MemoryLayout,
     PostTurn, RecallPolicy, ScopeSection, SessionStart, holistic_recall,
 };
 use tokio::runtime::Runtime;
@@ -48,6 +48,8 @@ const RUN_ID_CHARS: usize = 64;
 const REJOIN_PER_TEAMMATE: usize = 3;
 /// Ask for a belief build of a seat's turns after every this many.
 const BUILD_EVERY: u32 = 5;
+/// Heading of the shared learnings section of a rejoin pack.
+const LEARNINGS_HEADING: &str = "Learnings";
 /// Title tinymemory gives every pack; dropped in favour of our header.
 const PACK_TITLE: &str = "Memory";
 
