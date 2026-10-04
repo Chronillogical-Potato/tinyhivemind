@@ -13,5 +13,6 @@ about a live session; see its own `README.md` for the how and why.
 | [`memory`](memory) | What does a hive ask of whatever remembers for it, with the engine left to the host? |
 | [`pins`](pins) | Which messages does every turn see whether or not it asked? |
 | [`threads`](threads) | What live threads exist in one desk, ranked by recency, for a viewer that has been away? |
+| [`recall`](recall) | What does a host memory store hand a seat's persistent session — at start, on rejoin, after compaction — and what does each activation write back? |
 | [`speech`](speech) | What may a seat say, what makes a call valid, and what does exactly one accepted utterance become? |
 | [`error`](error) | The one `Error`/`Result<T>` every fallible function in this crate returns. |

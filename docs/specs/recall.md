@@ -3,7 +3,10 @@
 > **Current API note.** [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md) retired the runtime waiting wrapper and some standalone query entry points described below. The retained pure folds and transcript views are documented in the current crate READMEs.
 
 
-**Status:** Implemented — P14
+**Status:** Implemented — P14; the "no new port" and "no index" non-goals are
+superseded for host-owned seat memory by
+[ADR 0030](../adr/0030-a-host-memory-port-feeds-seat-sessions.md) and
+[`hive-memory.md`](hive-memory.md)
 **Owner:** tinyhivemind maintainers
 
 ## Problem
@@ -68,7 +71,9 @@ and what was deliberately not borrowed.
   transcript it describes.
 - **An index.** No inverted index, no embedding, no background job. A search is
   a bounded backward walk over the same `SessionLog` port everything else uses,
-  and it is honest about being bounded.
+  and it is honest about being bounded. This still binds the transcript; a
+  host-owned memory of what seats concluded sits behind its own port, per
+  [ADR 0030](../adr/0030-a-host-memory-port-feeds-seat-sessions.md).
 - **Ranking quality as a research result.** The ordering is a fixed-point
   integer fold chosen to be predictable and testable, not a retrieval model.
 - **A claim that querying beats holding for deliberation.** The RLM results
@@ -255,7 +260,9 @@ them.
 - No function here opens storage, a socket, or an index. Search and the
   pinboard read through the existing `SessionLog` port and nothing else.
 - No new port, and no host type. The `regex` feature adds a pure dependency and
-  is off by default.
+  is off by default. (Seat memory is the exception, behind the `Recall` and
+  `Remember` ports of [`hive-memory.md`](hive-memory.md); both rules on
+  injected context above apply to it.)
 - Every bound is a named constant: `SELECT_LIMIT`, `SEARCH_LIMIT`,
   `SEARCH_SCAN`, `EXCERPT_CHARS`, `PIN_LIMIT`, `PIN_SCAN`,
   `PIN_EXCERPT_CHARS`, `PIN_MARKER_CAP`.

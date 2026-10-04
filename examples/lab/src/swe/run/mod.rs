@@ -12,13 +12,14 @@ use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
 
 use super::board::Board;
 use super::config::{Config, Mode};
-use super::context::Policy;
 use super::hive::{self, Params};
 use super::llm::Llm;
+use super::memory::SeatMemory;
 use super::meter::Abort;
 use super::roles::Role;
 use super::sandbox::Exec;
-use super::seat::Env;
+use super::seat::{Env, finish_memory};
+use super::session::{SessionMode, Sessions};
 use super::single;
 
 /// The outcome of a run, as written to `result.json`.
@@ -46,8 +47,14 @@ pub struct Summary {
     pub activations: u32,
     /// Largest prompt any single model call reported, all seats.
     pub max_prompt_tokens: u64,
-    /// Context policy in force: the `--single-context` value for single, `mask` for hive.
+    /// Context policy in force: the `--single-context` value for single, the
+    /// hive sessions' compaction for hive.
     pub context_policy: &'static str,
+    /// `persistent` or `fresh` (the hive's `--seat-session`; single is one
+    /// session either way).
+    pub seat_session: &'static str,
+    /// `none` or `cortex`.
+    pub memory: &'static str,
     /// The prompt budget the policy acts above.
     pub context_budget: u64,
     /// Times the policy masked or summarized.
@@ -75,13 +82,21 @@ impl Summary {
             "context_policy": self.context_policy,
             "context_budget": self.context_budget,
             "context_events": self.context_events,
+            "seat_session": self.seat_session,
+            "memory": self.memory,
             "seats": self.seats,
         })
     }
 }
 
-/// Run `config.task` on the chosen arm.
-pub fn run(config: &Config, llm: &Llm, exec: &dyn Exec, tracer: &Tracer<'_>) -> Summary {
+/// Run `config.task` on the chosen arm, with `memory` when the run has one.
+pub fn run(
+    config: &Config,
+    llm: &Llm,
+    exec: &dyn Exec,
+    tracer: &Tracer<'_>,
+    memory: Option<&dyn SeatMemory>,
+) -> Summary {
     let started = Instant::now();
     let seats: Vec<&str> = match config.mode {
         Mode::Hive => Role::ALL.iter().map(|role| role.id()).collect(),
@@ -89,6 +104,11 @@ pub fn run(config: &Config, llm: &Llm, exec: &dyn Exec, tracer: &Tracer<'_>) -> 
     };
     let board = Board::new(&seats, 8);
     let turns = AtomicU64::new(0);
+    let session_mode = match config.mode {
+        Mode::Hive => config.seat_session,
+        Mode::Single => SessionMode::Persistent,
+    };
+    let sessions = Sessions::new(session_mode);
     let env = Env {
         llm,
         exec,
@@ -97,15 +117,19 @@ pub fn run(config: &Config, llm: &Llm, exec: &dyn Exec, tracer: &Tracer<'_>) -> 
         turns: &turns,
         cmd_timeout: Duration::from_secs(config.cmd_timeout),
         output_limit: config.output_limit,
+        sessions: &sessions,
+        memory,
     };
     tracer.emit(TraceEvent::Mark {
         label: "run start".into(),
         detail: format!(
-            "{} {} max_turns {} round_width {}",
+            "{} {} max_turns {} round_width {} seat_session {} memory {}",
             config.mode.name(),
             llm.model(),
             config.max_turns,
-            config.round_width
+            config.round_width,
+            session_mode.name(),
+            if memory.is_some() { "on" } else { "off" }
         ),
     });
     let (completed, abort, rounds, activations): (bool, Option<Abort>, u32, u32) = match config.mode
@@ -139,6 +163,7 @@ pub fn run(config: &Config, llm: &Llm, exec: &dyn Exec, tracer: &Tracer<'_>) -> 
             detail: why.clone(),
         });
     }
+    finish_memory(&env);
     let snapshot = llm.meter().snapshot();
     let wall_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     tracer.emit(TraceEvent::Mark {
@@ -168,8 +193,14 @@ pub fn run(config: &Config, llm: &Llm, exec: &dyn Exec, tracer: &Tracer<'_>) -> 
         activations,
         max_prompt_tokens: snapshot.max_prompt,
         context_policy: match config.mode {
-            Mode::Hive => Policy::Mask.name(),
+            Mode::Hive => config.hive_settings().policy.name(),
             Mode::Single => config.single_context.name(),
+        },
+        seat_session: session_mode.name(),
+        memory: if memory.is_some() {
+            config.memory.name()
+        } else {
+            "none"
         },
         context_budget: config.context_budget,
         context_events: snapshot.context_events,

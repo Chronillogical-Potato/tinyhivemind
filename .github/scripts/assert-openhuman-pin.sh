@@ -32,3 +32,7 @@ check openhuman "$(pin openhuman openhuman)" vendor/openhuman "$openhuman_sub"
 tinytools_sub=$(git -C vendor/openhuman/vendor/tinyagents ls-tree HEAD vendor/tinytools | awk '{print $3}')
 check tinytools "$(pin tinytools tinytools)" vendor/openhuman/vendor/tinyagents/vendor/tinytools "$tinytools_sub"
 check tinytools-agent "$(pin tinytools-agent tinytools)" vendor/openhuman/vendor/tinyagents/vendor/tinytools "$tinytools_sub"
+# The memory crates come from the tinymemory submodule inside OpenHuman.
+tinymemory_sub=$(git -C vendor/openhuman ls-tree HEAD vendor/tinymemory | awk '{print $3}')
+check tinymemory-api "$(pin tinymemory-api tinymemory)" vendor/openhuman/vendor/tinymemory "$tinymemory_sub"
+check tinymemory-tools "$(pin tinymemory-tools tinymemory)" vendor/openhuman/vendor/tinymemory "$tinymemory_sub"

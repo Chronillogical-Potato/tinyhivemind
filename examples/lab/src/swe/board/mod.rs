@@ -13,6 +13,7 @@
 
 mod digester;
 
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Mutex, MutexGuard};
 
 use tinyhivemind_core::aside::{AsidePolicy, Viewer};
@@ -21,10 +22,11 @@ use tinyhivemind_core::mention::MentionTarget;
 use tinyhivemind_core::runtime::digest::{
     ChannelDigest, ChannelHead, DigestOutcome, DigestPolicy, apply_digest, refold,
 };
-use tinyhivemind_core::runtime::pins::{PIN_LIMIT, read_pinboard};
+use tinyhivemind_core::runtime::pins::{PIN_LIMIT, Pin, read_pinboard};
 use tinyhivemind_core::runtime::speech::{CommitRequest, Utterance, commit_utterance_to_room};
 use tinyhivemind_core::runtime::{
-    Conversation, Sequence, SessionQuery, project_session, render_row,
+    Conversation, DeskWatermark, Sequence, SessionAuthor, SessionQuery, desk_delta,
+    project_session, render_row,
 };
 
 use crate::{MemoryLog, World, agent, block_on};
@@ -33,6 +35,22 @@ use digester::ExtractiveDigester;
 
 /// The one desk every seat sits on.
 pub const DESK: &str = "swe";
+
+/// Most rows one [`Board::delta`] renders; older ones are left to `read`.
+const DELTA_WINDOW: usize = 40;
+
+/// A rendered view of the desk and the point in the log it was read at.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct View {
+    /// What the seat is shown.
+    pub text: String,
+    /// The log head when it was read: the session's next watermark.
+    pub through: Sequence,
+    /// A fingerprint of the pins it was read with.
+    pub pins: u64,
+    /// Desk rows rendered.
+    pub rows: usize,
+}
 
 /// What committing one utterance produced.
 #[derive(Clone, Debug)]
@@ -62,6 +80,32 @@ pub struct Board {
     conversation: Conversation,
     policy: DigestPolicy,
     window: usize,
+}
+
+fn render_pins(pins: &[Pin], heading: &str) -> String {
+    let mut text = String::new();
+    if pins.is_empty() {
+        return text;
+    }
+    text.push_str(heading);
+    for pin in pins {
+        let label = pin
+            .label
+            .as_deref()
+            .map(|l| format!(" #{l}"))
+            .unwrap_or_default();
+        let excerpt = pin.excerpt.as_deref().unwrap_or_default();
+        text.push_str(&format!("[{}]{label} {excerpt}\n", pin.sequence));
+    }
+    text
+}
+
+fn pin_hash(pins: &[Pin]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    for pin in pins {
+        (pin.sequence.0, &pin.label, &pin.excerpt).hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 impl Board {
@@ -204,16 +248,16 @@ impl Board {
     /// What `seat` is shown at the top of an activation: pins, digest, tail.
     #[must_use]
     pub fn briefing(&self, seat: &str) -> String {
+        self.briefing_view(seat).text
+    }
+
+    /// The briefing with the watermark it was read at, so a persistent
+    /// session can later ask only for what came after it.
+    #[must_use]
+    pub fn briefing_view(&self, seat: &str) -> View {
         let inner = self.lock();
         let viewer = Viewer::Agent { id: seat.into() };
-        let pins = block_on(read_pinboard(
-            &inner.log,
-            &self.conversation,
-            &viewer,
-            PIN_LIMIT,
-            None,
-        ))
-        .unwrap_or_default();
+        let pins = self.pins(&inner, &viewer);
         let query = SessionQuery {
             conversation: self.conversation.clone(),
             viewer,
@@ -222,19 +266,7 @@ impl Board {
         };
         let projected = block_on(project_session(&inner.log, &query)).unwrap_or_default();
         let history = apply_digest(inner.digest.as_ref(), &projected);
-        let mut text = String::new();
-        if !pins.is_empty() {
-            text.push_str("## Pinned\n");
-            for pin in &pins {
-                let label = pin
-                    .label
-                    .as_deref()
-                    .map(|l| format!(" #{l}"))
-                    .unwrap_or_default();
-                let excerpt = pin.excerpt.as_deref().unwrap_or_default();
-                text.push_str(&format!("[{}]{label} {excerpt}\n", pin.sequence));
-            }
-        }
+        let mut text = render_pins(&pins, "## Pinned\n");
         if let Some(digest) = &history.digest {
             text.push_str("## Earlier on the desk (digest)\n");
             text.push_str(digest);
@@ -245,11 +277,88 @@ impl Board {
         if rows.is_empty() {
             text.push_str("(nothing yet)\n");
         }
-        for row in rows {
-            text.push_str(&row);
+        for row in &rows {
+            text.push_str(row);
             text.push('\n');
         }
-        text
+        View {
+            text,
+            through: inner.log.head(),
+            pins: pin_hash(&pins),
+            rows: rows.len(),
+        }
+    }
+
+    /// What reached the desk for `seat` after `after`: the rows other seats
+    /// committed since (the seat's own posts are already in its session, so
+    /// they are skipped but still move the watermark), and the pins again
+    /// only when they differ from `pins_seen`.
+    #[must_use]
+    pub fn delta(&self, seat: &str, after: Option<Sequence>, pins_seen: u64) -> View {
+        let inner = self.lock();
+        let viewer = Viewer::Agent { id: seat.into() };
+        let pins = self.pins(&inner, &viewer);
+        let hash = pin_hash(&pins);
+        let floor = after.unwrap_or(Sequence(0));
+        let pending = inner
+            .log
+            .rows()
+            .iter()
+            .filter(|row| row.sequence > floor)
+            .count();
+        let query = SessionQuery {
+            conversation: self.conversation.clone(),
+            viewer,
+            before: None,
+            window: pending.clamp(1, DELTA_WINDOW),
+        };
+        let projected = block_on(project_session(&inner.log, &query)).unwrap_or_default();
+        // Core picks the unseen rows and advances the watermark past all of
+        // them, the seat's own included; the board only leaves its own out
+        // of what it renders, since they are already in its session.
+        let unseen = desk_delta(DeskWatermark { through: after }, &projected);
+        let rows: Vec<String> = unseen
+            .rows
+            .iter()
+            .filter(|row| !matches!(&row.author, SessionAuthor::Agent { id, .. } if id == seat))
+            .filter_map(render_row)
+            .collect();
+        let mut text = if hash == pins_seen {
+            String::new()
+        } else {
+            render_pins(&pins, "## Pinned (changed)\n")
+        };
+        text.push_str("## New on the desk since your last turn\n");
+        if pending > DELTA_WINDOW {
+            text.push_str(&format!(
+                "({} older rows not shown; use read)\n",
+                pending - DELTA_WINDOW
+            ));
+        }
+        if rows.is_empty() {
+            text.push_str("(nothing new)\n");
+        }
+        for row in &rows {
+            text.push_str(row);
+            text.push('\n');
+        }
+        View {
+            text,
+            through: unseen.watermark.through.unwrap_or(floor),
+            pins: hash,
+            rows: rows.len(),
+        }
+    }
+
+    fn pins(&self, inner: &Inner, viewer: &Viewer) -> Vec<Pin> {
+        block_on(read_pinboard(
+            &inner.log,
+            &self.conversation,
+            viewer,
+            PIN_LIMIT,
+            None,
+        ))
+        .unwrap_or_default()
     }
 
     /// The most recent `limit` desk rows, rendered, for the `read` tool.

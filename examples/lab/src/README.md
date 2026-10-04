@@ -17,5 +17,7 @@ a sink) written once so every example can share it.
 | `bin/` | the runnable examples, see [`bin/README.md`](bin/README.md) |
 | `swe/` | the SWE hive and its single-agent baseline, see [`swe/README.md`](swe/README.md) |
 
-Nothing here is part of core. Core stays pure; this crate may use `serde_json`
-and the standard library only.
+Nothing here is part of core. Core stays pure. The knob examples use
+`serde_json` and the standard library only; `swe/memory` additionally links
+tinymemory (the CortexDB client) and a tokio runtime, which is why the lab is
+its own workspace.

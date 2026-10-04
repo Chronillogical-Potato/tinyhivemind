@@ -7,9 +7,24 @@
 //! `complete_episode` to speak with, so the two modes share every line that
 //! touches the model, the sandbox and the meter.
 //!
+//! An activation runs on the seat's [`SeatSession`]. A new session opens with
+//! the system prompt and the activation's opening message; a resumed one gets
+//! only that message (the desk delta) appended, so the seat still sees every
+//! command it ran before. Only compaction ([`compact`]) removes messages.
+//! With memory on ([`recall`]), a pack is recalled when the session starts,
+//! when it resumes and after compaction, and what the seat did is stored at
+//! the end of every activation.
+//!
 //! Telemetry: one turn per model call (`turn_started`, `turn_finished` with the
-//! provider's real tokens and measured latency), a `tool_call` per tool, and a
-//! `mark` per executed command.
+//! provider's real tokens and measured latency), a `tool_call` per tool, a
+//! `mark` per executed command, a `session_resumed` event per resumed
+//! session, and `recalled` / `remembered` events per memory call (with a
+//! `memory` mark carrying the reason when one fails).
+
+mod compact;
+mod recall;
+
+pub use recall::finish as finish_memory;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -19,10 +34,12 @@ use tinyhivemind_core::runtime::speech::{CallArguments, ToolCall, Utterance, int
 use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
 
 use super::board::{Board, Committed};
-use super::context::{self, Policy, Settings};
+use super::context::Settings;
 use super::llm::{Llm, ToolUse, tool_result};
+use super::memory::{LedgerEntry, SeatMemory};
 use super::meter::Abort;
 use super::sandbox::{Exec, refuse, truncate};
+use super::session::{SeatSession, Sessions};
 use super::tools::parse_arguments;
 
 /// Everything an activation borrows from the run.
@@ -41,16 +58,25 @@ pub struct Env<'a> {
     pub cmd_timeout: Duration,
     /// Bytes of command output returned to the model.
     pub output_limit: usize,
+    /// Every seat's session, kept between activations when persistent.
+    pub sessions: &'a Sessions,
+    /// Hive memory, when the run has it.
+    pub memory: Option<&'a dyn SeatMemory>,
 }
 
 /// What to run for one seat.
 pub struct Activation<'a> {
     /// The seat id.
     pub seat: &'a str,
-    /// System prompt.
+    /// System prompt, used when the session is new.
     pub system: String,
-    /// Opening user message.
+    /// This activation's opening user message: the briefing for a new
+    /// session, the desk delta for a resumed one.
     pub user: String,
+    /// Desk rows that message shows (for the `session` mark).
+    pub shown_rows: usize,
+    /// What the seat is about to do, for steering memory recall.
+    pub focus: String,
     /// Tool schemas offered.
     pub tools: Vec<Value>,
     /// Names of the speaking tools offered (the rest are refused).
@@ -77,17 +103,43 @@ pub struct Outcome {
     pub steps: usize,
     /// The largest prompt any call of this activation reported.
     pub max_prompt: u64,
+    /// Every command this activation ran, for memory.
+    pub ledger: Vec<LedgerEntry>,
 }
 
-/// Run one activation to its end.
-pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
-    let mut messages = vec![
-        json!({ "role": "system", "content": act.system }),
-        json!({ "role": "user", "content": act.user }),
-    ];
+/// Activation-local state the model loop and compaction share.
+#[derive(Default)]
+struct Work {
+    /// Commands already handed to memory (a prefix of the ledger).
+    remembered: usize,
+    /// The model's latest non-empty text.
+    last_text: String,
+}
+
+/// Run one activation to its end on `session`.
+pub fn run(env: &Env<'_>, act: &Activation<'_>, session: &mut SeatSession) -> Outcome {
     let mut out = Outcome::default();
+    let mut work = Work::default();
+    recall::open(env, act, session);
+    session.activations += 1;
+    if session.activations > 1 && session.last_prompt > act.context.budget {
+        let prompt = session.last_prompt;
+        compact::apply(env, act, session, &mut out, &mut work, prompt);
+    }
+    drive(env, act, session, &mut out, &mut work);
+    recall::remember(env, act, session, &out, &mut work);
+    out
+}
+
+/// The model loop.
+fn drive(
+    env: &Env<'_>,
+    act: &Activation<'_>,
+    session: &mut SeatSession,
+    out: &mut Outcome,
+    work: &mut Work,
+) {
     let mut nudges = 0;
-    let mut last_text = String::new();
     while out.steps < act.steps {
         let turn = env.turns.fetch_add(1, Ordering::SeqCst);
         env.tracer.emit(TraceEvent::TurnStarted {
@@ -95,13 +147,13 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
             seat: act.seat.to_owned(),
         });
         let started = Instant::now();
-        let reply = env.llm.complete(act.seat, &messages, &act.tools);
+        let reply = env.llm.complete(act.seat, &session.messages, &act.tools);
         let completion = match reply {
             Ok(completion) => completion,
             Err(abort) => {
                 finish_turn(env, act.seat, turn, 0, 0, started);
                 out.abort = Some(abort);
-                return out;
+                return;
             }
         };
         out.steps += 1;
@@ -114,21 +166,23 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
             completion.output_tokens,
             started,
         );
-        messages.push(completion.message.clone());
+        session.messages.push(completion.message.clone());
+        session.last_prompt = prompt;
         out.max_prompt = out.max_prompt.max(prompt);
         if !completion.content.trim().is_empty() {
-            last_text.clone_from(&completion.content);
+            work.last_text.clone_from(&completion.content);
         }
         if completion.tool_calls.is_empty() {
             if act.implicit_post {
-                commit_implicit(env, act, &mut out, &last_text);
-                return out;
+                let text = work.last_text.clone();
+                commit_implicit(env, act, out, &text);
+                return;
             }
             nudges += 1;
             if nudges > 2 {
-                return out;
+                return;
             }
-            messages.push(json!({
+            session.messages.push(json!({
                 "role": "user",
                 "content": "Use a tool: bash to work, or complete_episode when the task is done."
             }));
@@ -138,69 +192,20 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
         // long task is bound to think aloud now and then between tool calls.
         nudges = 0;
         for call in &completion.tool_calls {
-            let content = handle(env, act, turn, call, &mut out);
-            messages.push(tool_result(&call.id, &content));
+            let content = handle(env, act, turn, call, out);
+            session.messages.push(tool_result(&call.id, &content));
         }
         if out.spoke.is_some() {
-            return out;
+            return;
         }
         if prompt > act.context.budget {
-            apply_context(env, act, &mut messages, prompt);
+            compact::apply(env, act, session, out, work, prompt);
         }
     }
     if act.implicit_post && out.spoke.is_none() {
-        let note = format!("(stopped after {} steps) {last_text}", act.steps);
-        commit_implicit(env, act, &mut out, &note);
+        let note = format!("(stopped after {} steps) {}", act.steps, work.last_text);
+        commit_implicit(env, act, out, &note);
     }
-    out
-}
-
-/// Shrink `messages` under the activation's policy after a call whose prompt
-/// of `prompt` tokens went over budget; every firing is a `mark` in the trace.
-fn apply_context(env: &Env<'_>, act: &Activation<'_>, messages: &mut Vec<Value>, prompt: u64) {
-    let settings = act.context;
-    let mut detail = match settings.policy {
-        Policy::None => return,
-        Policy::Mask => {
-            let n = context::mask_observations(messages, settings.keep_recent);
-            if n == 0 {
-                return;
-            }
-            format!("masked {n} tool results")
-        }
-        Policy::Summarize => match summarize(env, act, messages) {
-            Some(removed) => format!("summarized {removed} messages"),
-            None => return,
-        },
-    };
-    detail = format!(
-        "{}: {detail} (prompt {prompt} > budget {}, policy {})",
-        act.seat,
-        settings.budget,
-        settings.policy.name()
-    );
-    env.llm.meter().note_context_event();
-    env.tracer.emit(TraceEvent::Mark {
-        label: "context".into(),
-        detail,
-    });
-}
-
-/// One extra metered call that condenses the oldest half of `messages`.
-/// Returns how many messages it replaced, or `None` if there was nothing to
-/// summarize or the call failed (the conversation is then left as it was).
-fn summarize(env: &Env<'_>, act: &Activation<'_>, messages: &mut Vec<Value>) -> Option<usize> {
-    let cut = context::summary_cut(messages)?;
-    let log = context::render_for_summary(&messages[2..cut]);
-    let ask = [
-        json!({ "role": "system", "content": context::SUMMARIZER_SYSTEM }),
-        json!({ "role": "user", "content": log }),
-    ];
-    let done = env.llm.complete(act.seat, &ask, &[]).ok()?;
-    if done.content.trim().is_empty() {
-        return None;
-    }
-    Some(context::replace_prefix(messages, cut, done.content.trim()))
 }
 
 fn finish_turn(env: &Env<'_>, seat: &str, turn: u64, input: u64, output: u64, started: Instant) {
@@ -243,7 +248,7 @@ fn handle(
     let started = Instant::now();
     let (content, refusal) = match &call.args {
         Err(why) => (format!("error: {why}"), Some(why.clone())),
-        Ok(args) if call.name == "bash" => bash(env, act.seat, args),
+        Ok(args) if call.name == "bash" => bash(env, act.seat, args, &mut out.ledger),
         Ok(args) => speak(env, act, call, args, out),
     };
     env.tracer.emit(TraceEvent::ToolCall {
@@ -257,9 +262,15 @@ fn handle(
     content
 }
 
-fn bash(env: &Env<'_>, seat: &str, args: &Value) -> (String, Option<String>) {
+fn bash(
+    env: &Env<'_>,
+    seat: &str,
+    args: &Value,
+    ledger: &mut Vec<LedgerEntry>,
+) -> (String, Option<String>) {
     let cmd = args.get("cmd").and_then(Value::as_str).unwrap_or_default();
     if let Some(why) = refuse(cmd) {
+        ledger.push(recall::entry(cmd, None, &format!("refused: {why}")));
         return (format!("refused: {why}"), Some(why.to_owned()));
     }
     env.tracer.emit(TraceEvent::Mark {
@@ -267,15 +278,21 @@ fn bash(env: &Env<'_>, seat: &str, args: &Value) -> (String, Option<String>) {
         detail: format!("{seat}: {}", truncate(cmd, 240)),
     });
     match env.exec.exec(cmd, env.cmd_timeout) {
-        Ok(done) => (
-            format!(
-                "exit={}\n{}",
-                done.exit,
-                truncate(&done.stdout, env.output_limit)
-            ),
-            None,
-        ),
-        Err(why) => (format!("error: {why}"), Some(why)),
+        Ok(done) => {
+            ledger.push(recall::entry(cmd, Some(done.exit), &done.stdout));
+            (
+                format!(
+                    "exit={}\n{}",
+                    done.exit,
+                    truncate(&done.stdout, env.output_limit)
+                ),
+                None,
+            )
+        }
+        Err(why) => {
+            ledger.push(recall::entry(cmd, None, &why));
+            (format!("error: {why}"), Some(why))
+        }
     }
 }
 

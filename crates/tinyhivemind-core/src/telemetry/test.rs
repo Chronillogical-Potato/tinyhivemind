@@ -127,3 +127,39 @@ fn tool_call_omits_an_absent_refusal_reason() {
     let back: TraceEvent = serde_json::from_value(plain).unwrap();
     assert_eq!(back, call(None));
 }
+
+#[test]
+fn pins_the_memory_event_wire_forms() {
+    let cases = [
+        (
+            TraceEvent::Recalled {
+                seat: "builder".into(),
+                moment: "compaction".into(),
+                notes: 3,
+                chars: 420,
+                latency_ms: 18,
+            },
+            r#"{"event":"recalled","seat":"builder","moment":"compaction","notes":3,"chars":420,"latency_ms":18}"#,
+        ),
+        (
+            TraceEvent::Remembered {
+                seat: "builder".into(),
+                entries: 2,
+                latency_ms: 7,
+            },
+            r#"{"event":"remembered","seat":"builder","entries":2,"latency_ms":7}"#,
+        ),
+        (
+            TraceEvent::SessionResumed {
+                seat: "builder".into(),
+                messages: 40,
+                delta_rows: 5,
+            },
+            r#"{"event":"session_resumed","seat":"builder","messages":40,"delta_rows":5}"#,
+        ),
+    ];
+    for (event, wire) in cases {
+        assert_eq!(serde_json::to_string(&event).unwrap(), wire);
+        assert_eq!(serde_json::from_str::<TraceEvent>(wire).unwrap(), event);
+    }
+}

@@ -57,3 +57,13 @@ test("resolves ids inside a root and refuses escapes", () => {
   assert.equal(resolveId([root], "0:a.txt"), null);
   assert.equal(resolveId([root], "nonsense"), null);
 });
+
+test("keeps arm.sh arms of one mode apart under one tag", () => {
+  const root = tmp();
+  trial(root, "r2-hive-briefing", "fix-git__a", "hive", 0);
+  trial(root, "r2-hive-session-mem", "fix-git__b", "hive", 1);
+  trial(root, "r2-single-mem", "fix-git__c", "single", 1);
+  const runs = scan([root]);
+  assert.deepEqual([...new Set(runs.map((r) => r.tag))], ["r2"]);
+  assert.deepEqual(runs.map((r) => r.arm).sort(), ["hive-briefing", "hive-session-mem", "single-mem"]);
+});
