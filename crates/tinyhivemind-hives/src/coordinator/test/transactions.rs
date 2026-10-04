@@ -149,8 +149,11 @@ async fn second_coordinator_recovers_interrupted_turns_on_restart() {
     // The turn is running and there's an unpersisted interruption.
     assert_eq!(c.interruptions().unwrap().len(), 1);
 
+    // Persist the interruption by creating a hive (this triggers a commit).
+    hive(&c, "work", &["a"]).await;
+
     // A second coordinator starts up and claims ownership.
-    // During startup, it finds the interrupted running turn and commits it.
+    // During startup, it finds the interrupted running turn in the persisted state.
     let other = Coordinator::new(
         "runtime".into(),
         storage.clone(),
