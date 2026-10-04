@@ -81,7 +81,8 @@ pub use sharing::{
 };
 pub use speech::{
     CallArguments, CommitRequest, CommittedUtterance, ToolCall, ToolParameter, ToolSpec, Utterance,
-    UtteranceRejection, addressed_peers, check_recipients, commit_utterance, commit_utterance_to_room, interpret, tool_specs,
+    UtteranceRejection, addressed_peers, check_recipients, commit_utterance,
+    commit_utterance_to_room, interpret, tool_specs,
 };
 pub use threads::{
     THREAD_INDEX_LIMIT, THREAD_INDEX_SCAN, THREAD_OPENING_CHARS, ThreadLine, fold_thread_index,

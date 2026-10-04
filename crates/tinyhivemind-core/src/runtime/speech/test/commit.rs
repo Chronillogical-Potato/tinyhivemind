@@ -96,14 +96,23 @@ fn a_dm_whose_text_names_a_peer_outside_the_audience_does_not_hand_them_the_cont
 }
 
 #[test]
-fn a_refused_aside_is_a_desk_row_carrying_the_reason() {
+fn a_refused_aside_is_not_posted_to_the_desk() {
     // Six rows is the budget; a seventh cannot be part of the same aside.
-    let committed = commit_with("solver", &dm(&["checker"], "one more"), ASIDES, 6, false);
+    let refused = try_commit_with("solver", &dm(&["checker"], "one more"), ASIDES, 6, false, false);
     assert_eq!(
-        committed.audience,
-        Audience::Desk,
-        "a refusal fails toward the room, never toward silence",
+        refused,
+        Err(Error::AsideRefused {
+            reason: NoAsideReason::BudgetSpent
+        }),
+        "a refusal fails toward silence, never toward the room",
     );
+}
+
+#[test]
+fn a_refused_aside_is_a_desk_row_only_when_the_host_opts_into_the_room() {
+    let committed = try_commit_with("solver", &dm(&["checker"], "one more"), ASIDES, 6, false, true)
+        .expect("opted-in fallback commits");
+    assert_eq!(committed.audience, Audience::Desk);
     assert_eq!(committed.refusal, Some(NoAsideReason::BudgetSpent));
     assert_eq!(committed.content, "one more");
 }
@@ -114,16 +123,34 @@ fn an_aside_the_policy_disables_is_refused_with_that_reason() {
         enabled: false,
         ..ASIDES
     };
-    let committed = commit_with("solver", &dm(&["checker"], "quietly"), off, 0, false);
-    assert_eq!(committed.audience, Audience::Desk);
-    assert_eq!(committed.refusal, Some(NoAsideReason::Disabled));
+    let refused = try_commit_with("solver", &dm(&["checker"], "quietly"), off, 0, false, false);
+    assert_eq!(
+        refused,
+        Err(Error::AsideRefused {
+            reason: NoAsideReason::Disabled
+        }),
+        "a dm with asides off must not become a public desk row",
+    );
+    let marker = try_commit_with("solver", &post("!aside @checker quietly"), off, 0, false, false);
+    assert!(marker.is_err(), "nor does the marker spelling");
 }
 
 #[test]
 fn a_dm_naming_more_peers_than_the_policy_allows_is_refused() {
-    let committed = commit("solver", &dm(&["checker", "theory"], "both of you"));
-    assert_eq!(committed.audience, Audience::Desk);
-    assert_eq!(committed.refusal, Some(NoAsideReason::AudienceTooLarge));
+    let refused = try_commit_with(
+        "solver",
+        &dm(&["checker", "theory"], "both of you"),
+        ASIDES,
+        0,
+        false,
+        false,
+    );
+    assert_eq!(
+        refused,
+        Err(Error::AsideRefused {
+            reason: NoAsideReason::AudienceTooLarge
+        })
+    );
 }
 
 #[test]
@@ -205,18 +232,14 @@ fn a_post_asks_nobody() {
 }
 
 #[test]
-fn an_ask_the_policy_refuses_is_a_desk_row_that_still_records_whom_it_asked() {
+fn an_ask_the_policy_refuses_is_not_posted_unless_the_room_fallback_is_chosen() {
     let disabled = crate::aside::AsidePolicy {
         enabled: false,
         ..ASIDES
     };
-    let committed = commit_with(
-        "solver",
-        &ask("checker", "is the depth bound tight?"),
-        disabled,
-        0,
-        false,
-    );
+    let ask_it = ask("checker", "is the depth bound tight?");
+    assert!(try_commit_with("solver", &ask_it, disabled, 0, false, false).is_err());
+    let committed = try_commit_with("solver", &ask_it, disabled, 0, false, true).expect("room");
     assert_eq!(committed.audience, Audience::Desk, "fails toward the room");
     assert!(committed.refusal.is_some(), "and says why");
     assert_eq!(
