@@ -144,3 +144,4 @@ rather than restating it. Two run across several specifications:
   sentence, so a set of refusals cannot be probed for a roster. It settles what
   [`mention-dispatch.md`](mention-dispatch.md), [`responders.md`](responders.md)
   and [`approval.md`](approval.md) each left open.
+- [`working-memory.md`](working-memory.md) — the port seats carry observations across activations through, with the engine left to the host ([ADR 0029](../adr/0029-working-memory-is-a-host-adapter.md)).
