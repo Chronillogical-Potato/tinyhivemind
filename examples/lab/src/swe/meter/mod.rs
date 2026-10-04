@@ -29,6 +29,8 @@ pub enum Abort {
     },
     /// The model endpoint failed twice in a row.
     Llm(String),
+    /// The provider refused the prompt as longer than the model's context.
+    ContextOverflow(String),
 }
 
 impl fmt::Display for Abort {
@@ -37,6 +39,7 @@ impl fmt::Display for Abort {
             Self::TokenCap { used, cap } => write!(f, "token cap reached ({used}/{cap})"),
             Self::MaxTurns { calls, cap } => write!(f, "max turns reached ({calls}/{cap})"),
             Self::Llm(why) => write!(f, "model call failed: {why}"),
+            Self::ContextOverflow(_) => f.write_str("context_overflow"),
         }
     }
 }
@@ -63,6 +66,8 @@ pub struct Snapshot {
     pub output: u64,
     /// Model calls, all seats.
     pub calls: u64,
+    /// The largest prompt any single call reported.
+    pub max_prompt: u64,
     /// The same, per seat.
     pub seats: BTreeMap<String, SeatUsage>,
 }
@@ -73,6 +78,7 @@ pub struct Meter {
     input: AtomicU64,
     output: AtomicU64,
     calls: AtomicU64,
+    max_prompt: AtomicU64,
     seats: Mutex<BTreeMap<String, SeatUsage>>,
     token_cap: Option<u64>,
     max_calls: Option<u64>,
@@ -132,6 +138,7 @@ impl Meter {
     pub fn record(&self, seat: &str, input: u64, output: u64) {
         self.input.fetch_add(input, Ordering::SeqCst);
         self.output.fetch_add(output, Ordering::SeqCst);
+        self.max_prompt.fetch_max(input, Ordering::SeqCst);
         if let Ok(mut seats) = self.seats.lock() {
             let usage = seats.entry(seat.to_owned()).or_default();
             usage.input += input;
@@ -147,6 +154,7 @@ impl Meter {
             input: self.input.load(Ordering::SeqCst),
             output: self.output.load(Ordering::SeqCst),
             calls: self.calls.load(Ordering::SeqCst),
+            max_prompt: self.max_prompt.load(Ordering::SeqCst),
             seats: self.seats.lock().map(|s| s.clone()).unwrap_or_default(),
         }
     }

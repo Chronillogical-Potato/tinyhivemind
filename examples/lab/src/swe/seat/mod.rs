@@ -19,6 +19,7 @@ use tinyhivemind_core::runtime::speech::{CallArguments, ToolCall, Utterance, int
 use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
 
 use super::board::{Board, Committed};
+use super::context::{self, Policy, Settings};
 use super::llm::{Llm, ToolUse, tool_result};
 use super::meter::Abort;
 use super::sandbox::{Exec, refuse, truncate};
@@ -59,6 +60,8 @@ pub struct Activation<'a> {
     /// Whether text with no tool call becomes a `post` (hive) or is nudged
     /// (single agent).
     pub implicit_post: bool,
+    /// What to do when the prompt outgrows its budget.
+    pub context: Settings,
 }
 
 /// How an activation ended.
@@ -72,6 +75,10 @@ pub struct Outcome {
     pub abort: Option<Abort>,
     /// Model calls made.
     pub steps: usize,
+    /// The largest prompt any call of this activation reported.
+    pub max_prompt: u64,
+    /// How many times the context policy fired.
+    pub context_events: u32,
 }
 
 /// Run one activation to its end.
@@ -100,6 +107,7 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
             }
         };
         out.steps += 1;
+        let prompt = completion.input_tokens;
         finish_turn(
             env,
             act.seat,
@@ -109,6 +117,7 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
             started,
         );
         messages.push(completion.message.clone());
+        out.max_prompt = out.max_prompt.max(prompt);
         if !completion.content.trim().is_empty() {
             last_text.clone_from(&completion.content);
         }
@@ -134,12 +143,69 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
         if out.spoke.is_some() {
             return out;
         }
+        if prompt > act.context.budget {
+            apply_context(env, act, &mut messages, prompt, &mut out);
+        }
     }
     if act.implicit_post && out.spoke.is_none() {
         let note = format!("(stopped after {} steps) {last_text}", act.steps);
         commit_implicit(env, act, &mut out, &note);
     }
     out
+}
+
+/// Shrink `messages` under the activation's policy after a call whose prompt
+/// of `prompt` tokens went over budget; every firing is a `mark` in the trace.
+fn apply_context(
+    env: &Env<'_>,
+    act: &Activation<'_>,
+    messages: &mut Vec<Value>,
+    prompt: u64,
+    out: &mut Outcome,
+) {
+    let settings = act.context;
+    let mut detail = match settings.policy {
+        Policy::None => return,
+        Policy::Mask => {
+            let n = context::mask_observations(messages, settings.keep_recent);
+            if n == 0 {
+                return;
+            }
+            format!("masked {n} tool results")
+        }
+        Policy::Summarize => match summarize(env, act, messages) {
+            Some(removed) => format!("summarized {removed} messages"),
+            None => return,
+        },
+    };
+    detail = format!(
+        "{}: {detail} (prompt {prompt} > budget {}, policy {})",
+        act.seat,
+        settings.budget,
+        settings.policy.name()
+    );
+    out.context_events += 1;
+    env.tracer.emit(TraceEvent::Mark {
+        label: "context".into(),
+        detail,
+    });
+}
+
+/// One extra metered call that condenses the oldest half of `messages`.
+/// Returns how many messages it replaced, or `None` if there was nothing to
+/// summarize or the call failed (the conversation is then left as it was).
+fn summarize(env: &Env<'_>, act: &Activation<'_>, messages: &mut Vec<Value>) -> Option<usize> {
+    let cut = context::summary_cut(messages)?;
+    let log = context::render_for_summary(&messages[2..cut]);
+    let ask = [
+        json!({ "role": "system", "content": context::SUMMARIZER_SYSTEM }),
+        json!({ "role": "user", "content": log }),
+    ];
+    let done = env.llm.complete(act.seat, &ask, &[]).ok()?;
+    if done.content.trim().is_empty() {
+        return None;
+    }
+    Some(context::replace_prefix(messages, cut, done.content.trim()))
 }
 
 fn finish_turn(env: &Env<'_>, seat: &str, turn: u64, input: u64, output: u64, started: Instant) {

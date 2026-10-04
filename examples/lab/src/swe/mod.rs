@@ -11,6 +11,7 @@
 //! | Module | Role |
 //! | --- | --- |
 //! | [`meter`] | the shared token meter and the run caps |
+//! | [`context`] | masking / summarizing policy that bounds a seat's prompt |
 //! | [`llm`] | metered chat-completions client with tool calls |
 //! | [`sandbox`] | `Exec` over docker or stdio RPC, truncation, command policy |
 //! | [`tools`] | tool schemas from core's speech specs plus `bash` |
@@ -22,6 +23,7 @@
 
 pub mod board;
 pub mod config;
+pub mod context;
 pub mod hive;
 pub mod llm;
 pub mod meter;

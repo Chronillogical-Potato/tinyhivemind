@@ -107,6 +107,26 @@ impl Chat for CurlChat {
     }
 }
 
+/// Whether a provider error says the prompt did not fit the model's context.
+///
+/// Matches the phrasings OpenAI-compatible providers use; a retry would only
+/// fail the same way, so [`Llm::complete`] gives up at once.
+#[must_use]
+pub fn is_context_overflow(error: &str) -> bool {
+    let text = error.to_ascii_lowercase();
+    [
+        "context_length_exceeded",
+        "maximum context length",
+        "context length",
+        "context window",
+        "too many tokens",
+        "prompt is too long",
+        "input is too long",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
+}
+
 /// The metered client every seat shares.
 pub struct Llm {
     chat: Box<dyn Chat>,
@@ -151,7 +171,8 @@ impl Llm {
     /// # Errors
     ///
     /// [`Abort::TokenCap`] / [`Abort::MaxTurns`] before the call when a cap is
-    /// reached, or [`Abort::Llm`] when the call fails twice.
+    /// reached, [`Abort::ContextOverflow`] when the provider rejects the prompt as too
+    /// long (never retried), or [`Abort::Llm`] when the call fails twice.
     pub fn complete(
         &self,
         seat: &str,
@@ -161,11 +182,22 @@ impl Llm {
         self.meter.begin_call()?;
         let body = request_body(&self.model, messages, tools);
         let mut attempt = self.chat.send(&body).and_then(|v| parse_response(&v));
+        if let Err(why) = &attempt
+            && is_context_overflow(why)
+        {
+            return Err(Abort::ContextOverflow(why.clone()));
+        }
         if attempt.is_err() {
             std::thread::sleep(self.retry_pause);
             attempt = self.chat.send(&body).and_then(|v| parse_response(&v));
         }
-        let completion = attempt.map_err(Abort::Llm)?;
+        let completion = attempt.map_err(|why| {
+            if is_context_overflow(&why) {
+                Abort::ContextOverflow(why)
+            } else {
+                Abort::Llm(why)
+            }
+        })?;
         self.meter
             .record(seat, completion.input_tokens, completion.output_tokens);
         Ok(completion)
