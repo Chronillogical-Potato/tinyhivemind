@@ -137,3 +137,61 @@ fn extractive_fold_respects_the_budget() {
     assert!(text.len() <= 500);
     assert!(text.contains("* ^50"));
 }
+
+#[test]
+fn a_briefing_view_carries_the_watermark_it_was_read_at() {
+    let board = board();
+    let first = board.commit("lead", &post("plan")).expect("c");
+    let view = board.briefing_view("tester");
+    assert_eq!(view.through, first.sequence);
+    assert_eq!(view.rows, 1);
+    assert!(view.text.contains("@lead: plan"));
+}
+
+#[test]
+fn delta_shows_only_rows_after_the_watermark_and_no_duplicates() {
+    let board = board();
+    board.commit("lead", &post("old row")).expect("c");
+    let seen = board.briefing_view("tester");
+    board.commit("implementer", &post("new row")).expect("c");
+    let delta = board.delta("tester", Some(seen.through), seen.pins);
+    assert!(delta.text.contains("@implementer: new row"));
+    assert!(!delta.text.contains("old row"));
+    assert_eq!(delta.rows, 1);
+    let again = board.delta("tester", Some(delta.through), delta.pins);
+    assert_eq!(again.rows, 0);
+    assert!(again.text.contains("(nothing new)"));
+    assert!(!again.text.contains("new row"));
+}
+
+#[test]
+fn delta_never_echoes_the_seats_own_posts_but_moves_past_them() {
+    let board = board();
+    let seen = board.briefing_view("tester");
+    board.commit("lead", &post("please test")).expect("c");
+    let own = board.commit("tester", &post("tests pass")).expect("c");
+    let delta = board.delta("tester", Some(seen.through), seen.pins);
+    assert!(delta.text.contains("please test"));
+    assert!(!delta.text.contains("tests pass"));
+    assert_eq!(delta.rows, 1);
+    assert_eq!(delta.through, own.sequence);
+}
+
+#[test]
+fn delta_repeats_pins_only_when_they_changed() {
+    let board = board();
+    board
+        .commit("lead", &post("plan: edit parser.py\n!pin #plan"))
+        .expect("c");
+    let seen = board.briefing_view("tester");
+    assert!(seen.text.contains("## Pinned"));
+    board.commit("implementer", &post("patched")).expect("c");
+    let quiet = board.delta("tester", Some(seen.through), seen.pins);
+    assert!(!quiet.text.contains("## Pinned"));
+    board
+        .commit("lead", &post("constraint: no new deps\n!pin #rule"))
+        .expect("c");
+    let changed = board.delta("tester", Some(quiet.through), quiet.pins);
+    assert!(changed.text.contains("## Pinned"));
+    assert!(changed.text.contains("#rule"));
+}
