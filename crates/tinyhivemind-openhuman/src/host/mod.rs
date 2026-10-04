@@ -2,9 +2,9 @@
 mod activation;
 mod runner;
 mod types;
-use crate::{Error, Result};
+use crate::{Error, HiveMemory, Result};
 pub(crate) use activation::Activation;
-use openhuman_embed::{Agent, HostTools, HostTurnTools};
+use openhuman_embed::{Agent, AgentSpec, HostTools, HostTurnTools, Runtime};
 use runner::SuppliedRunner;
 use std::{
     collections::BTreeMap,
@@ -19,6 +19,7 @@ pub(crate) struct Inner {
     agents: Mutex<BTreeMap<String, Entry>>,
     management: Option<Management>,
     hooks: Arc<dyn TurnHooks>,
+    memory: Option<HiveMemory>,
 }
 struct Entry {
     agent: Agent,
@@ -57,6 +58,7 @@ impl OpenHumanHost {
                 agents: Mutex::new(BTreeMap::new()),
                 management: None,
                 hooks: Arc::new(DefaultHooks),
+                memory: None,
             }),
         })
     }
@@ -83,6 +85,25 @@ impl OpenHumanHost {
         inner.hooks = hooks;
         Ok(self)
     }
+    /// Share one hive memory among every seat registered from now on.
+    ///
+    /// Each seat then logs its turns under its own memory agent id (its seat
+    /// id) below the hive's root, and recalls the root's shared learnings and
+    /// peer turns. [`Self::register_spec`] binds a seat's spec itself; an
+    /// agent built elsewhere must carry the binding from
+    /// [`HiveMemory::bind`], or registration refuses it.
+    /// # Errors
+    /// Refuse changed settings once agents or another host clone exist.
+    pub fn with_hive_memory(mut self, memory: HiveMemory) -> Result<Self> {
+        let inner = self.configurable_inner()?;
+        inner.memory = Some(memory);
+        Ok(self)
+    }
+    /// The hive memory seats are bound to, when one was configured.
+    #[must_use]
+    pub fn hive_memory(&self) -> Option<&HiveMemory> {
+        self.inner.memory.as_ref()
+    }
     fn configurable_inner(&mut self) -> Result<&mut Inner> {
         if !self
             .inner
@@ -101,13 +122,34 @@ impl OpenHumanHost {
     /// when management was configured. Configuration remains owned by the agent.
     /// An existing host conversation should use [`Self::register_agent_in_session`].
     /// # Errors
-    /// Reject another runtime, conflicting handles, tool collisions or storage failures.
+    /// Reject another runtime, conflicting handles, tool collisions or storage
+    /// failures, and, with hive memory configured, a seat not bound to it.
     pub fn register_agent(&self, agent: Agent) -> Result<()> {
         self.register(agent, None)
+    }
+    /// Build a seat from `spec` on `runtime` and register it.
+    ///
+    /// With hive memory configured the spec is first bound to it, so the
+    /// seat recalls and writes the hive's shared memory; without, the spec is
+    /// built as given. Returns the registered handle.
+    /// # Errors
+    /// An unusable seat id for memory, the runtime refusing the spec, or any
+    /// [`Self::register_agent`] failure.
+    pub fn register_spec(&self, runtime: &Runtime, spec: AgentSpec) -> Result<Agent> {
+        let spec = match &self.inner.memory {
+            Some(memory) => memory.bind(spec)?,
+            None => spec,
+        };
+        let agent = runtime.agent(spec)?;
+        self.register_agent(agent.clone())?;
+        Ok(agent)
     }
     fn register(&self, agent: Agent, session_id: Option<&str>) -> Result<()> {
         if agent.runtime_id() != self.inner.runtime_id {
             return Err(Error::RuntimeMismatch);
+        }
+        if let Some(memory) = &self.inner.memory {
+            memory.check(&agent)?;
         }
         let mut entries = self.inner.agents.lock().map_err(|_| Error::Poisoned)?;
         let id = agent.id().to_owned();
