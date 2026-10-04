@@ -152,3 +152,37 @@ fn policy_names_round_trip() {
     }
     assert_eq!(Policy::parse("bogus"), None);
 }
+
+#[test]
+fn the_layered_policy_parses_from_both_names() {
+    assert_eq!(Policy::parse("mask+summarize"), Some(Policy::MaskThenSummarize));
+    assert_eq!(Policy::MaskThenSummarize.name(), "mask+summarize");
+}
+
+#[test]
+fn the_estimate_scales_the_reported_prompt_by_what_was_removed() {
+    assert_eq!(scaled_estimate(1000, 400, 100), 250);
+    assert_eq!(scaled_estimate(1000, 0, 0), 1000);
+}
+
+#[test]
+fn memory_is_inserted_once_after_the_opening_and_then_replaced() {
+    let mut m = session(2);
+    upsert_memory(&mut m, "first pack");
+    assert_eq!(m.len(), 7);
+    assert!(m[2]["content"].as_str().unwrap().contains("first pack"));
+    upsert_memory(&mut m, "second pack");
+    assert_eq!(m.len(), 7, "replaced, not stacked");
+    let body = m[2]["content"].as_str().unwrap();
+    assert!(body.contains("second pack") && !body.contains("first pack"));
+    assert_eq!(m[3]["role"], "assistant", "no tool result is parted");
+}
+
+#[test]
+fn dropped_text_lists_each_message_once_clipped() {
+    let m = session(2);
+    let dropped = dropped_text(&m[2..6]);
+    assert_eq!(dropped.len(), 4);
+    assert!(dropped[0].contains("echo 0"));
+    assert!(dropped.iter().all(|line| line.chars().count() <= 403));
+}
