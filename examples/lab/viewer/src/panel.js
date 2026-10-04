@@ -2,7 +2,7 @@
 // you pick, compares arms of one task, and follows runs that are still being
 // written. Falls back to nothing on a static build, where there is no /api.
 
-const MODE_ORDER = ["single", "hive"];
+const MODE_ORDER = ["single", "single-mem", "hive", "hive-briefing", "hive-session", "hive-session-mem"];
 
 function el(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);

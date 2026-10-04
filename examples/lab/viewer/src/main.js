@@ -254,7 +254,7 @@ function timeline(run, span, host) {
     { key: "rounds", label: "rounds", h: 26 },
     ...kinds.map((k) => ({ key: "c:" + k, label: k, h: 18 })),
     { key: "outcome", label: "outcome", h: 22 },
-    { key: "marks", label: "marks", h: 22 },
+    ...MARK_LANES.map((l) => ({ key: l.key, label: l.label, h: 22 })),
   ];
   let y = 4; for (const r of rows) { r.y = y; y += r.h + 4; }
   const H = y + 22, svg = newSvg(W, H, `Room timeline for ${run.name}`);
@@ -277,7 +277,7 @@ function timeline(run, span, host) {
     const ci = kinds.indexOf(k) % 8, cx = x(e.at_ms - a.t0), cy = r.y + r.h / 2;
     svg.append(hover(marker("diamond", cx, cy, 6, `var(${KIND_COLOR[ci]})`), `conducted: ${k}`, detail(e), `Conductor ${k} at ${e.at_ms - a.t0} milliseconds`));
   }
-  const O = rows.find((q) => q.key === "outcome"), M = rows.find((q) => q.key === "marks");
+  const O = rows.find((q) => q.key === "outcome");
   for (const e of a.outcomes) {
     const cx = x(e.at_ms - a.t0), cy = O.y + O.h / 2, g = s("g", {});
     g.append(marker("circle", cx, cy, 9, `var(${OUTCOME_FILL[e.event]})`));
@@ -285,9 +285,13 @@ function timeline(run, span, host) {
     svg.append(hover(g, e.event, detail(e), `Room ${e.event} at ${e.at_ms - a.t0} milliseconds`));
   }
   for (const e of a.marks) {
+    const lane = markLane(e), M = rows.find((q) => q.key === lane);
     const cx = x(e.at_ms - a.t0), cy = M.y + M.h / 2, isMark = e.event === "mark";
-    svg.append(hover(marker(isMark ? "triangle" : "square", cx, cy, 7, isMark ? "var(--s1)" : "var(--accent)"),
-      `${e.event}: ${e.label}`, detail(e), `${e.event} ${e.label}`));
+    const [shape, fill] = lane === "session" ? ["circle", "var(--s2)"]
+      : lane === "memory" ? ["diamond", memoryFailed(e) ? "var(--bad)" : "var(--s6)"]
+      : [isMark ? "triangle" : "square", isMark ? "var(--s1)" : "var(--accent)"];
+    svg.append(hover(marker(shape, cx, cy, lane === "marks" ? 7 : 6, fill),
+      `${e.event}: ${e.label}`, detail(e), `${e.event} ${e.label}${e.detail ? ": " + e.detail : ""}`));
   }
   host.replaceChildren(svg);
   const lg = h("div", { class: "legend" });
@@ -295,6 +299,9 @@ function timeline(run, span, host) {
   item(h("i", { class: "sw", style: "background:var(--blind);border:1px dashed var(--accent)" }), "blind round");
   item(h("i", { class: "sw", style: "background:var(--full);border:1px solid var(--accent)" }), "full-visibility round");
   kinds.forEach((k, i) => item(h("i", { class: "sw", style: `background:var(${KIND_COLOR[i % 8]});transform:rotate(45deg) scale(.8)` }), k));
+  item(h("i", { class: "sw", style: "background:var(--s2);border-radius:50%" }), "session (one per activation)");
+  item(h("i", { class: "sw", style: "background:var(--s6);transform:rotate(45deg) scale(.8)" }), "memory recall / store");
+  item(h("i", { class: "sw", style: "background:var(--bad);transform:rotate(45deg) scale(.8)" }), "memory error");
   item(document.createTextNode(""), "C converged, D deadlocked, E exhausted, I idle; triangle mark, square checkpoint");
   host.append(lg);
 }
