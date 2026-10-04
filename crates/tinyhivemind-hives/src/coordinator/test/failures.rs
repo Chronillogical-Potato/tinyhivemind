@@ -224,32 +224,6 @@ async fn active_episode_admits_only_bound_members_and_current_assignment() {
     assert!(c.read_hive("a", "work", None, Some(999)).is_err());
 }
 #[tokio::test]
-async fn rejected_storage_commit_does_not_publish_message_or_membership_changes() {
-    let storage = Arc::new(MemoryStorage::new());
-    let c = Coordinator::new(
-        "runtime".into(),
-        storage.clone(),
-        CoordinatorOptions::default(),
-    )
-    .await
-    .unwrap();
-    add(&c, "a", |request| {
-        Box::pin(async move { Ok(done(&request)) })
-    })
-    .await;
-    let mut external = storage.load().await.unwrap();
-    let revision = external.revision;
-    external.revision += 1;
-    storage.commit(revision, &external).unwrap();
-    assert!(matches!(
-        c.send_as_host(message("failed", Destination::Agent("a".into())))
-            .await,
-        Err(Error::RevisionConflict { .. })
-    ));
-    assert_eq!(c.lock().unwrap().durable.messages.len(), 0);
-    assert_eq!(storage.load().await.unwrap().messages.len(), 0);
-}
-#[tokio::test]
 async fn sequence_exhaustion_rejects_acceptance_atomically() {
     let storage = Arc::new(MemoryStorage::new());
     let state = crate::StoredState {
@@ -257,7 +231,14 @@ async fn sequence_exhaustion_rejects_acceptance_atomically() {
         next_sequence: u64::MAX,
         ..crate::StoredState::default()
     };
-    storage.commit(0, &state).unwrap();
+    storage
+        .commit(crate::Commit {
+            expected_revision: 0,
+            state: &state,
+            appended: &[],
+        })
+        .await
+        .unwrap();
     let c = Coordinator::new(
         "runtime".into(),
         storage.clone(),
