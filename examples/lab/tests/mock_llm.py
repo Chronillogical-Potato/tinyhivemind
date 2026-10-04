@@ -17,13 +17,13 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
-def tool_call(name, args):
+def tool_call(name, args, call_id="call_1"):
     return {
         "role": "assistant",
         "content": None,
         "tool_calls": [
             {
-                "id": "call_1",
+                "id": call_id,
                 "type": "function",
                 "function": {"name": name, "arguments": json.dumps(args)},
             }
@@ -36,6 +36,16 @@ def decide(messages):
     user = messages[1]["content"] if len(messages) > 1 else ""
     tool_results = [m for m in messages if m.get("role") == "tool"]
     done = len(tool_results)
+    if "You condense" in system:
+        return {"role": "assistant", "content": "wrote /tmp/hello.txt; then ran filler steps"}
+    if "working alone" in system and "LONGSESSION" in system:
+        # A long scripted session: 24 commands with ~2.5 KB of output each.
+        if done == 0:
+            return tool_call("bash", {"cmd": "echo hi > /tmp/hello.txt"}, "call_0")
+        if done < 24:
+            cmd = f"echo step {done}; head -c 2500 /dev/zero | tr '\\0' x"
+            return tool_call("bash", {"cmd": cmd}, f"call_{done}")
+        return tool_call("complete_episode", {"message": "long session finished"}, "call_end")
     if "You are the lead" in system:
         if "reported" in user:
             return tool_call("complete_episode", {"message": "hello.txt written and checked"})
