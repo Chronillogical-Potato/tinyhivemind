@@ -225,14 +225,14 @@ pub struct CommitRequest<'a> {
 ///   accept, silently.
 /// - **A refused aside is not a row.** A `dm`, `ask`, or aside marker the
 ///   desk's policy declines fails closed with
-///   [`Error::AsideRefused`](crate::error::Error::AsideRefused): a private
+///   [`Error::AsideRefused`]: a private
 ///   message is never published to the whole desk because a check failed. A
 ///   host that wants the room to hear it anyway calls
 ///   [`commit_utterance_to_room`].
 ///
 /// # Errors
 ///
-/// Returns [`Error::AsideRefused`](crate::error::Error::AsideRefused) when the
+/// Returns [`Error::AsideRefused`] when the
 /// utterance is private and the aside policy declines it, and a typed core
 /// error when the supplied roster or desk snapshot is malformed.
 /// [`UtteranceRejection::UnknownRecipient`] is not among them: a `dm` naming

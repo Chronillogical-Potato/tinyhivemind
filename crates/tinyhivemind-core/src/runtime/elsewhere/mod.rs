@@ -15,7 +15,7 @@ use crate::runtime::{
 
 /// Read the newest rows of every conversation in `query.conversations`
 /// except the one the turn is in, as `seat` reads them. "The one the turn is
-/// in" is decided by [`Conversation::equivalent_to`], so every General alias
+/// in" is decided by [`Conversation::equivalent_to`](crate::runtime::Conversation::equivalent_to), so every General alias
 /// (`main`, `general`, a blank id) is the same desk.
 ///
 /// A turn is shown its own channel by whoever runs it. This is the rest of
