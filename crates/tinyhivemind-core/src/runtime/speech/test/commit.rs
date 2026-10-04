@@ -2,7 +2,7 @@
 
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
-use super::support::{ASIDES, ask, commit, commit_with, dm, post, try_commit_with};
+use super::support::{ASIDES, ask, commit, dm, post, try_commit_with};
 use crate::error::Error;
 use crate::runtime::speech::Utterance;
 use crate::{
