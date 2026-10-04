@@ -11,7 +11,7 @@ repository's dependency-purity check.
 | Example | Purpose | Run |
 | --- | --- | --- |
 | [`hives/`](hives/README.md) | Offline reviewer handoff and one continuing agent session across three hives. | `cargo run --manifest-path examples/hives/Cargo.toml --bin one_hive` |
-| [`openhuman/`](openhuman/README.md) | Prove embedded routing and provide live completion-hive and hermetic DeepSWE binaries. | `cargo run --manifest-path examples/openhuman/Cargo.toml` |
+| [`openhuman/`](openhuman/README.md) | Run a basic offline OpenHuman hive, the integration proofs, or the live DeepSWE binaries. | `cargo run --manifest-path examples/openhuman/Cargo.toml --bin basic_hive` |
 
 Each directory is its own Cargo workspace. That boundary is load-bearing:
 normal TinyHiveMind builds, purity checks, and downstream path dependencies do

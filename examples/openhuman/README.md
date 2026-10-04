@@ -5,6 +5,22 @@ registration. TinyHivemind receives the existing handles through `OpenHumanHost`
 the host keeps control of providers, MCP servers, skills, memory, and prompts.
 Each agent continues one conversation across all its joined hives.
 
+For a short introduction, run the offline two-agent example:
+
+```sh
+cargo run --manifest-path examples/openhuman/Cargo.toml --bin basic_hive
+```
+
+For Docker-isolated offline and live OpenRouter runs, use the
+[basic hive run script](basic-hive/README.md).
+
+It creates Alice and Bob on one host runtime, starts ordinary conversations,
+registers those same agents in a hive, sends each a private task, removes Bob
+from the hive, and continues his original host conversation. A local scripted
+model uses the actual attached `hivemind_complete` tool; request captures verify
+that Bob's host and hive turns stayed in one session. This offline command
+needs no credentials or live provider.
+
 Run the deterministic example (Rust and `python3` are required):
 
 ```sh
@@ -83,6 +99,7 @@ registration, and membership APIs directly without exposing management tools.
 | File | Purpose |
 | --- | --- |
 | `src/main.rs` | Runs the offline acceptance example. |
+| `src/bin/basic_hive.rs` | Small offline or live host integration with two OpenHuman agents joining and leaving a hive. |
 | `src/proof/fixture.rs` | Host construction, private MCP fixtures, loopback provider captures. |
 | `src/proof/topology.rs` | Four hive shapes, session continuity, permanent tool assertions. |
 | `src/proof/dynamic.rs` | Authorized host factory and native dynamic management calls. |

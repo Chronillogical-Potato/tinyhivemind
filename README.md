@@ -386,8 +386,10 @@ through `hivemind_read` without scheduling automatic return turns.
 
 Run the [offline coordinator examples](examples/hives/README.md)
 for a reviewer handoff and a session shared across hives. The
-[standalone host example](examples/openhuman/README.md) covers four topologies
-and native MCP/skill proofs. The [OpenCompany migration guide](docs/opencompany-migration.md)
+[basic OpenHuman hive](examples/openhuman/basic-hive/README.md) runs two supplied
+agents in and out of a hive, offline or through OpenRouter. The
+[standalone host proof](examples/openhuman/README.md) covers four topologies
+and native MCP/skill integration. The [OpenCompany migration guide](docs/opencompany-migration.md)
 describes registration, recovery, and the required single-runtime boundary.
 
 ## Frequently asked questions
