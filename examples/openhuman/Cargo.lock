@@ -3520,6 +3520,8 @@ dependencies = [
  "thiserror",
  "tinyhivemind-core",
  "tinyhivemind-hives",
+ "tinymemory-api",
+ "tinymemory-tools",
  "tinytools",
  "tokio",
  "wiremock",
