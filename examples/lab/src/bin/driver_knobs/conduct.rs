@@ -76,6 +76,8 @@ pub struct Report {
     pub log: Vec<LogMessage>,
     pub snapshots: Vec<(String, usize)>,
     pub widest: usize,
+    /// Conversations each seat is in, and how many it has yet to be shown.
+    pub involving: Vec<(&'static str, usize, usize)>,
 }
 
 fn kind(event: &Event) -> &'static str {
@@ -367,6 +369,16 @@ async fn play_inner(
     host.report.conversations = conductor.conversations();
     host.report.discharged = conductor.discharged();
     host.report.finished = conductor.finished();
+    host.report.involving = ["coder", "tester", "planner"]
+        .iter()
+        .map(|seat| {
+            (
+                *seat,
+                conductor.conversations_involving(seat).len(),
+                conductor.shown_conversations(seat).len(),
+            )
+        })
+        .collect();
     result
 }
 
@@ -496,6 +508,10 @@ pub fn run(rig: &TraceRig) -> Res {
         );
     }
     println!("  -> {}", summary(&baseline));
+    println!(
+        "  conversations (involving, not yet shown) per seat: {:?}",
+        baseline.involving
+    );
 
     let mut table: Vec<(String, Scenario)> = Vec::new();
     for width in [1, 2, 4] {

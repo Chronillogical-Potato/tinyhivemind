@@ -11,6 +11,7 @@ mod consensus;
 mod division;
 mod market;
 mod room;
+mod sinks;
 mod sweep;
 
 use tinyhivemind_lab::{Res, TraceRig};
@@ -19,6 +20,7 @@ fn main() -> Res {
     let rig = TraceRig::from_args();
     sweep::run(&rig)?;
     market::run(&rig)?;
+    sinks::run()?;
     if let Some(path) = rig.path() {
         println!("\ntrace written to {path}");
     }

@@ -189,6 +189,11 @@ fn cases() -> Vec<Case> {
     ));
     all.push(case(
         "thresholds",
+        "a threshold for a seat not on the desk",
+        |_, r| r.thresholds = vec![AgentThreshold::new("ghost", 0)],
+    ));
+    all.push(case(
+        "thresholds",
         "every seat's threshold +1e9: nobody bids",
         |_, r| {
             r.thresholds = crate::room::CAST
