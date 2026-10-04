@@ -363,7 +363,7 @@ async fn a_newer_coordinator_fences_the_older_one_out_of_the_store() {
     }
     assert!(matches!(
         old.run_until_idle().await,
-        Ok(()) | Err(Error::Fenced { .. })
+        Ok(_) | Err(Error::Fenced { .. })
     ));
     // The new owner sees the old owner's committed work and keeps writing.
     new.create_hive(info("after")).await.unwrap();
