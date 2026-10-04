@@ -121,17 +121,27 @@ impl HiveMemoryStore {
     }
 
     /// `seat`'s memory, with packs held to `budget_chars`.
-    fn seat(&self, seat: &str, budget_chars: usize) -> std::result::Result<AgentMemory, SourceError> {
+    fn seat(
+        &self,
+        seat: &str,
+        budget_chars: usize,
+    ) -> std::result::Result<AgentMemory, SourceError> {
         let agent_id = self.hive.agent_id(seat)?;
         let budget_tokens = budget_chars.div_ceil(CHARS_PER_TOKEN).max(1);
         let policy = RecallPolicy {
             budget_tokens: self.policy.budget_tokens.min(budget_tokens),
             ..self.policy.clone()
         };
-        Ok(AgentMemory::new(self.engine.clone(), self.layout.clone(), &agent_id)?.with_policy(policy))
+        Ok(
+            AgentMemory::new(self.engine.clone(), self.layout.clone(), &agent_id)?
+                .with_policy(policy),
+        )
     }
 
-    async fn read(&self, request: &RecallRequest) -> std::result::Result<Vec<BriefingNote>, SourceError> {
+    async fn read(
+        &self,
+        request: &RecallRequest,
+    ) -> std::result::Result<Vec<BriefingNote>, SourceError> {
         let conversation = conversation(&request.conversation)?;
         let memory = self.seat(&request.seat, request.budget_chars)?;
         let focus = request.focus.clone();

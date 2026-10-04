@@ -13,8 +13,8 @@ use tinyhivemind_core::runtime::{
 };
 use tinymemory_api::conformance::ReferenceEngine;
 use tinymemory_api::{
-    EngineDescriptor, EngineHealth, ForgetReport, ForgetTarget, ItemKind, LearningKind,
-    ListPage, ListRequest, MemoryEngine, MetaFilter, StoreItem, StoreReceipt,
+    EngineDescriptor, EngineHealth, ForgetReport, ForgetTarget, ItemKind, LearningKind, ListPage,
+    ListRequest, MemoryEngine, MetaFilter, StoreItem, StoreReceipt,
 };
 use tinymemory_tools::{PostTurn, RecallPolicy};
 
@@ -58,24 +58,42 @@ fn headings(notes: &[BriefingNote]) -> Vec<&str> {
 }
 
 /// A seat's turn as `OpenHuman`'s lifecycle logs it for a bound seat.
-async fn openhuman_logs(engine: &Arc<ReferenceEngine>, hive: &str, seat: &str, thread: &str, text: &str) {
+async fn openhuman_logs(
+    engine: &Arc<ReferenceEngine>,
+    hive: &str,
+    seat: &str,
+    thread: &str,
+    text: &str,
+) {
     let mut config = RuntimeConfig::default();
     config.memory.agent_id = Some(seat.into());
     config.memory.root = Some(format!("team:{hive}"));
     let identity = MemoryIdentity::agent(seat).resolve(&config);
     let memory = agent_memory_on(engine.clone(), &config, &identity).unwrap();
-    memory.post_turn(PostTurn::new(thread, 1, text)).await.unwrap();
+    memory
+        .post_turn(PostTurn::new(thread, 1, text))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
 async fn a_remembered_entry_is_recalled_by_every_seat_of_the_hive() {
     let engine = Arc::new(ReferenceEngine::new());
     let hive = store(&engine, "h");
-    let entry = entries("builder", &[(EntryKind::Observation, "make test needs libssl-dev")]);
+    let entry = entries(
+        "builder",
+        &[(EntryKind::Observation, "make test needs libssl-dev")],
+    );
     hive.remember(&entry).await.unwrap();
     for seat in ["builder", "critic"] {
-        let notes = hive.recall(&ask(seat, RecallMoment::SessionStart)).await.unwrap();
-        let learnings = notes.iter().find(|note| note.heading == "Learnings").unwrap();
+        let notes = hive
+            .recall(&ask(seat, RecallMoment::SessionStart))
+            .await
+            .unwrap();
+        let learnings = notes
+            .iter()
+            .find(|note| note.heading == "Learnings")
+            .unwrap();
         assert_eq!(learnings.lines, ["Observation: make test needs libssl-dev"]);
     }
 }
@@ -86,29 +104,66 @@ async fn a_failed_attempt_is_marked_in_its_text_kind_and_tags() {
     let hive = store(&engine, "h");
     let entry = entries(
         "builder",
-        &[(EntryKind::FailedAttempt, "pip install without --user is denied")],
+        &[(
+            EntryKind::FailedAttempt,
+            "pip install without --user is denied",
+        )],
     );
     hive.remember(&entry).await.unwrap();
-    let notes = hive.recall(&ask("critic", RecallMoment::SessionStart)).await.unwrap();
+    let notes = hive
+        .recall(&ask("critic", RecallMoment::SessionStart))
+        .await
+        .unwrap();
     assert!(lines(&notes).contains(&"Failed attempt: pip install without --user is denied".into()));
     let page = engine
-        .list(ListRequest::new(MetaFilter::kinds([ItemKind::Learning]), 10))
+        .list(ListRequest::new(
+            MetaFilter::kinds([ItemKind::Learning]),
+            10,
+        ))
         .await
         .unwrap();
     let stored = &page.items[0];
     assert_eq!(stored.meta.namespace.to_string(), "team:h");
     assert_eq!(stored.meta.agent_id.as_deref(), Some("builder"));
     assert_eq!(stored.meta.thread_id.as_deref(), Some(RUN));
-    assert_eq!(stored.meta.tags, ["hive-entry:failed_attempt", "desk-through:7"]);
-    let StoreItem::Learning { kind, .. } = StoreItem::learning(
-        "",
-        LearningKind::Correction,
-        1.0,
-        stored.meta.clone(),
-    ) else {
-        unreachable!("a learning was built")
+    assert_eq!(
+        stored.meta.tags,
+        ["hive-entry:failed_attempt", "desk-through:7"]
+    );
+}
+
+#[test]
+fn entries_become_learnings_of_the_matching_kind() {
+    use super::super::convert::{EntryContext, entry_item};
+    let at = "team:h".parse().unwrap();
+    let context = EntryContext {
+        at: &at,
+        agent_id: "builder",
+        conversation: RUN,
+        through: None,
     };
-    assert_eq!(kind, LearningKind::Correction);
+    let cases = [
+        (EntryKind::Observation, LearningKind::Fact),
+        (EntryKind::FailedAttempt, LearningKind::Correction),
+        (EntryKind::Outcome, LearningKind::Fact),
+        (EntryKind::Note, LearningKind::Other),
+    ];
+    for (entry_kind, learning) in cases {
+        let entry = MemoryEntry {
+            kind: entry_kind,
+            text: " text ".into(),
+        };
+        let Some(StoreItem::Learning { kind, meta, .. }) = entry_item(&context, &entry) else {
+            panic!("{entry_kind:?} became no learning")
+        };
+        assert_eq!(kind, learning);
+        assert_eq!(meta.tags.len(), 1, "no desk tag without a watermark");
+    }
+    let blank = MemoryEntry {
+        kind: EntryKind::Note,
+        text: "\n ".into(),
+    };
+    assert!(entry_item(&context, &blank).is_none());
 }
 
 #[tokio::test]
@@ -123,32 +178,80 @@ async fn every_entry_kind_is_labelled() {
     ];
     hive.remember(&entries("builder", &all)).await.unwrap();
     hive.remember(&entries("builder", &[])).await.unwrap();
-    let recalled = lines(&hive.recall(&ask("critic", RecallMoment::SessionStart)).await.unwrap());
-    for line in ["Observation: one", "Failed attempt: two", "Outcome: three", "Note: four"] {
-        assert!(recalled.contains(&line.to_owned()), "{line} in {recalled:?}");
+    let recalled = lines(
+        &hive
+            .recall(&ask("critic", RecallMoment::SessionStart))
+            .await
+            .unwrap(),
+    );
+    for line in [
+        "Observation: one",
+        "Failed attempt: two",
+        "Outcome: three",
+        "Note: four",
+    ] {
+        assert!(
+            recalled.contains(&line.to_owned()),
+            "{line} in {recalled:?}"
+        );
     }
 }
 
 #[tokio::test]
 async fn recall_reads_the_turns_openhuman_seats_log() {
     let engine = Arc::new(ReferenceEngine::new());
-    openhuman_logs(&engine, "h", "builder", "session-9", "the fixture server listens on 8081").await;
+    openhuman_logs(
+        &engine,
+        "h",
+        "builder",
+        "session-9",
+        "the fixture server listens on 8081",
+    )
+    .await;
     let hive = store(&engine, "h");
-    let notes = hive.recall(&ask("critic", RecallMoment::SessionStart)).await.unwrap();
-    let team = notes.iter().find(|note| note.heading == "Team conversations").unwrap();
+    let notes = hive
+        .recall(&ask("critic", RecallMoment::SessionStart))
+        .await
+        .unwrap();
+    let team = notes
+        .iter()
+        .find(|note| note.heading == "Team conversations")
+        .unwrap();
     assert!(team.lines[0].contains("8081"), "{team:?}");
 }
 
 #[tokio::test]
 async fn rejoin_leaves_out_the_seat_own_history_and_session_start_does_not() {
     let engine = Arc::new(ReferenceEngine::new());
-    openhuman_logs(&engine, "h", "builder", "session-1", "builder ran the suite").await;
+    openhuman_logs(
+        &engine,
+        "h",
+        "builder",
+        "session-1",
+        "builder ran the suite",
+    )
+    .await;
     let hive = store(&engine, "h");
-    let start = hive.recall(&ask("builder", RecallMoment::SessionStart)).await.unwrap();
-    assert!(headings(&start).contains(&"This agent's history"), "{start:?}");
-    let rejoin = hive.recall(&ask("builder", RecallMoment::Rejoin)).await.unwrap();
-    assert!(!headings(&rejoin).contains(&"This agent's history"), "{rejoin:?}");
-    let peer = hive.recall(&ask("critic", RecallMoment::Rejoin)).await.unwrap();
+    let start = hive
+        .recall(&ask("builder", RecallMoment::SessionStart))
+        .await
+        .unwrap();
+    assert!(
+        headings(&start).contains(&"This agent's history"),
+        "{start:?}"
+    );
+    let rejoin = hive
+        .recall(&ask("builder", RecallMoment::Rejoin))
+        .await
+        .unwrap();
+    assert!(
+        !headings(&rejoin).contains(&"This agent's history"),
+        "{rejoin:?}"
+    );
+    let peer = hive
+        .recall(&ask("critic", RecallMoment::Rejoin))
+        .await
+        .unwrap();
     assert!(headings(&peer).contains(&"Team conversations"), "{peer:?}");
 }
 
@@ -157,8 +260,14 @@ async fn the_compaction_moment_takes_the_compaction_path() {
     let engine = Arc::new(ReferenceEngine::new());
     openhuman_logs(&engine, "h", "builder", RUN, "the build needs cmake 3.28").await;
     let hive = store(&engine, "h");
-    let start = hive.recall(&ask("builder", RecallMoment::SessionStart)).await.unwrap();
-    assert!(headings(&start).contains(&"Earlier in this thread"), "{start:?}");
+    let start = hive
+        .recall(&ask("builder", RecallMoment::SessionStart))
+        .await
+        .unwrap();
+    assert!(
+        headings(&start).contains(&"Earlier in this thread"),
+        "{start:?}"
+    );
     assert!(!headings(&start).contains(&"Earlier in this conversation"));
     let moment = RecallMoment::Compaction {
         dropped: vec!["configured the build with cmake".into()],
@@ -168,7 +277,10 @@ async fn the_compaction_moment_takes_the_compaction_path() {
         .iter()
         .find(|note| note.heading == "Earlier in this conversation")
         .unwrap();
-    assert!(summary.lines.iter().any(|line| line.contains("cmake 3.28")), "{summary:?}");
+    assert!(
+        summary.lines.iter().any(|line| line.contains("cmake 3.28")),
+        "{summary:?}"
+    );
 }
 
 #[tokio::test]
@@ -177,7 +289,10 @@ async fn two_hive_roots_on_one_engine_do_not_share() {
     let first = store(&engine, "hive-a");
     let second = store(&engine, "hive-b");
     first
-        .remember(&entries("builder", &[(EntryKind::Outcome, "tests pass in hive a")]))
+        .remember(&entries(
+            "builder",
+            &[(EntryKind::Outcome, "tests pass in hive a")],
+        ))
         .await
         .unwrap();
     openhuman_logs(&engine, "hive-a", "builder", "s", "hive a's turn").await;
@@ -185,7 +300,13 @@ async fn two_hive_roots_on_one_engine_do_not_share() {
         let notes = second.recall(&ask("builder", moment)).await.unwrap();
         assert!(notes.is_empty(), "{notes:?}");
     }
-    assert!(!first.recall(&ask("builder", RecallMoment::Rejoin)).await.unwrap().is_empty());
+    assert!(
+        !first
+            .recall(&ask("builder", RecallMoment::Rejoin))
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -193,9 +314,17 @@ async fn recalled_notes_stay_within_the_character_budget() {
     let engine = Arc::new(ReferenceEngine::new());
     let hive = store(&engine, "h");
     let many: Vec<_> = (0..20)
-        .map(|index| (EntryKind::Note, format!("finding number {index} about the build")))
+        .map(|index| {
+            (
+                EntryKind::Note,
+                format!("finding number {index} about the build"),
+            )
+        })
         .collect();
-    let borrowed: Vec<_> = many.iter().map(|(kind, text)| (*kind, text.as_str())).collect();
+    let borrowed: Vec<_> = many
+        .iter()
+        .map(|(kind, text)| (*kind, text.as_str()))
+        .collect();
     hive.remember(&entries("builder", &borrowed)).await.unwrap();
     let mut request = ask("critic", RecallMoment::SessionStart);
     request.budget_chars = 120;
@@ -212,13 +341,19 @@ async fn recall_failures_are_recall_errors() {
     let hive = store(&engine, "h");
     let mut blank = ask("critic", RecallMoment::SessionStart);
     blank.conversation = "  ".into();
-    assert!(matches!(hive.recall(&blank).await, Err(runtime::Error::Recall { .. })));
+    assert!(matches!(
+        hive.recall(&blank).await,
+        Err(runtime::Error::Recall { .. })
+    ));
     let unusable = ask("Bad Seat", RecallMoment::Rejoin);
     let error = hive.recall(&unusable).await.unwrap_err();
     let runtime::Error::Recall { source } = error else {
         panic!("expected a recall error, got {error:?}")
     };
-    assert!(matches!(source.downcast_ref::<Error>(), Some(Error::InvalidMemoryAgentId { .. })));
+    assert!(matches!(
+        source.downcast_ref::<Error>(),
+        Some(Error::InvalidMemoryAgentId { .. })
+    ));
 }
 
 #[tokio::test]
@@ -227,13 +362,26 @@ async fn remember_failures_are_remember_errors() {
     let hive = store(&engine, "h");
     let mut blank = entries("builder", &[(EntryKind::Note, "kept")]);
     blank.conversation = String::new();
-    assert!(matches!(hive.remember(&blank).await, Err(runtime::Error::Remember { .. })));
+    assert!(matches!(
+        hive.remember(&blank).await,
+        Err(runtime::Error::Remember { .. })
+    ));
     let unusable = entries("Bad Seat", &[(EntryKind::Note, "kept")]);
-    assert!(matches!(hive.remember(&unusable).await, Err(runtime::Error::Remember { .. })));
+    assert!(matches!(
+        hive.remember(&unusable).await,
+        Err(runtime::Error::Remember { .. })
+    ));
     let empty = entries("builder", &[(EntryKind::Note, "   ")]);
-    assert!(matches!(hive.remember(&empty).await, Err(runtime::Error::Remember { .. })));
+    assert!(matches!(
+        hive.remember(&empty).await,
+        Err(runtime::Error::Remember { .. })
+    ));
 
-    let down = HiveMemoryStore::new(Arc::new(Down::default()), HiveMemory::for_hive("h").unwrap()).unwrap();
+    let down = HiveMemoryStore::new(
+        Arc::new(Down::default()),
+        HiveMemory::for_hive("h").unwrap(),
+    )
+    .unwrap();
     let error = down
         .remember(&entries("builder", &[(EntryKind::Note, "kept")]))
         .await
@@ -266,7 +414,8 @@ fn the_store_takes_the_hive_budget_and_reports_itself() {
 fn from_config_needs_an_engine_openhuman_would_bind() {
     let mut config = RuntimeConfig::default();
     config.memory.engine = String::new();
-    let error = HiveMemoryStore::from_config(&config, HiveMemory::for_hive("h").unwrap()).unwrap_err();
+    let error =
+        HiveMemoryStore::from_config(&config, HiveMemory::for_hive("h").unwrap()).unwrap_err();
     assert!(matches!(error, Error::Memory(_)), "{error}");
 }
 
