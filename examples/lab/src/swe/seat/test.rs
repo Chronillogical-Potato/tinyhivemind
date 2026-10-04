@@ -367,13 +367,14 @@ fn summarize_spends_one_metered_call_and_replaces_the_oldest_messages() {
         long_bash(),
         Ok(text("NOTE: wrote the file")),
         long_bash(),
+        Ok(text("NOTE: wrote the file")),
         Ok(call("complete_episode", json!({ "message": "done" }))),
     ]);
     let out = go_with(&rig, SINGLE_TOOLS, false, 10, settings(Policy::Summarize));
     assert!(out.completed);
     let snap = rig.llm.meter().snapshot();
-    assert_eq!((snap.calls, snap.context_events), (5, 1));
-    assert_eq!(context_marks(&rig), 1);
+    assert_eq!((snap.calls, snap.context_events), (6, 2));
+    assert_eq!(context_marks(&rig), 2);
     let last = bodies.lock().expect("lock").pop().expect("a request");
     let messages = last["messages"].as_array().expect("messages");
     assert_eq!(messages[1]["content"], "go");
