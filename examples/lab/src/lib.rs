@@ -47,3 +47,13 @@ impl Clock for WallClock {
         u64::try_from(self.0.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 }
+
+mod cli;
+mod exec;
+mod log;
+mod tick;
+
+pub use cli::TraceRig;
+pub use exec::block_on;
+pub use log::{MemoryLog, agent, person};
+pub use tick::TickClock;
