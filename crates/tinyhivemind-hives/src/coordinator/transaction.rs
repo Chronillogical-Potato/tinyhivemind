@@ -64,9 +64,7 @@ impl Coordinator {
             return Ok(value);
         }
 
-        let attempt = self.persist(&snapshot, next).await;
-        let mut conflicts = 0;
-        self.settle(attempt, &mut conflicts)?;
+        self.persist(&snapshot, next).await?;
         Ok(value)
     }
     /// Copy live state under the live lock. Hold the writer gate.
@@ -122,14 +120,6 @@ impl Coordinator {
         drop(live);
         self.inner.committed.send_replace(revision);
         Ok(())
-    }
-    /// `Ok(true)` once committed. With single-writer fencing, there are no
-    /// retries: conflicts indicate we've been fenced or the store is corrupted.
-    pub(super) fn settle(&self, attempt: Result<()>, _conflicts: &mut usize) -> Result<bool> {
-        match attempt {
-            Ok(()) => Ok(true),
-            Err(error) => Err(error),
-        }
     }
     /// Persist interruptions recorded while a dropped drain could not await.
     pub(super) async fn flush_unpersisted(&self) -> Result<()> {

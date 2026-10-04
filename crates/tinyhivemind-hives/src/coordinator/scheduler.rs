@@ -105,8 +105,7 @@ impl Coordinator {
     }
     async fn advance_report(&self) -> Result<(bool, usize)> {
         let _gate = self.inner.writer.lock().await;
-        let mut conflicts = 0;
-        loop {
+        {
             let snapshot = self.snapshot()?;
             let original = &snapshot.base;
             let mut next = original.clone();
@@ -128,10 +127,8 @@ impl Coordinator {
                             .is_none_or(|old| old.failure.is_none())
                 })
                 .count();
-            let attempt = self.persist(&snapshot, next).await;
-            if self.settle(attempt, &mut conflicts)? {
-                return Ok((true, failures));
-            }
+            self.persist(&snapshot, next).await?;
+            Ok((true, failures))
         }
     }
     pub(super) async fn claim(&self, capacity: usize) -> Result<Vec<Claim>> {

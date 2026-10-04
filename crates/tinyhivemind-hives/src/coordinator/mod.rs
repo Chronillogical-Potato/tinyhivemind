@@ -40,7 +40,7 @@ struct Inner {
     notify: Notify,
     shutdown: AtomicBool,
     /// This coordinator's epoch, claimed at startup. Once a commit fails with
-    /// Error::Fenced (a newer coordinator has taken ownership), this flag is
+    /// `Error::Fenced` (a newer coordinator has taken ownership), this flag is
     /// set and all further writes return the error immediately.
     writer_epoch: u64,
     /// Set to true once fenced out by a newer coordinator.
