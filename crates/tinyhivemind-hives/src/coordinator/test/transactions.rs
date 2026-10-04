@@ -1,4 +1,4 @@
-//! Incremental commits outside the live lock, conflict reload, and retention.
+//! Incremental commits outside the live lock, writer fencing, retention, and the inbox bound.
 #![allow(clippy::unwrap_used)]
 use super::*;
 use crate::{Commit, DeliveryStatus, RetentionPolicy, Storage, StorageFuture, StoredState};
