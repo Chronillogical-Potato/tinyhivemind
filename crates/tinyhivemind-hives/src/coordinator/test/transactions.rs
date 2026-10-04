@@ -110,6 +110,60 @@ async fn second_coordinator_fences_first_coordinator_from_writing() {
     assert_eq!(stored.messages.len(), 0);
 }
 #[tokio::test]
+async fn second_coordinator_recovers_interrupted_turns_on_restart() {
+    let storage = Arc::new(MemoryStorage::new());
+    let c = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    let started = Arc::new(tokio::sync::Notify::new());
+    let signal = started.clone();
+    add(&c, "a", move |_| {
+        let signal = signal.clone();
+        Box::pin(async move {
+            signal.notify_one();
+            std::future::pending().await
+        })
+    })
+    .await;
+
+    // Send a message and cancel the turn mid-execution.
+    c.send_as_host(message("task", Destination::Agent("a".into())))
+        .await
+        .unwrap();
+    let mut drain = Box::pin(c.run_until_idle());
+    tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
+    drop(drain);
+
+    // The turn is running and there's an unpersisted interruption.
+    assert_eq!(c.interruptions().unwrap().len(), 1);
+
+    // A second coordinator starts up and claims ownership.
+    // During startup, it should recover the interrupted running turn.
+    let other = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    // The second coordinator sees the recovered interruption.
+    assert_eq!(other.interruptions().unwrap().len(), 1);
+
+    // The first coordinator is now fenced and cannot make further progress.
+    assert!(matches!(
+        c.send_as_host(message("blocked", Destination::Agent("a".into())))
+            .await,
+        Err(Error::Fenced { .. })
+    ));
+}
+
+#[tokio::test]
 async fn persistent_conflicts_and_storage_failures_publish_nothing() {
     let storage = Arc::new(Recording::default());
     let c = over(storage.clone(), CoordinatorOptions::default()).await;
