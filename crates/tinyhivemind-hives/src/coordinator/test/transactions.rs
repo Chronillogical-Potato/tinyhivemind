@@ -86,12 +86,10 @@ async fn a_write_racing_another_process_reloads_and_retries() {
     .await
     .unwrap();
     hive(&other, "elsewhere", &["a"]).await;
-    let mut revisions = c.subscribe();
     c.send_as_host(message("raced", Destination::Agent("a".into())))
         .await
         .unwrap();
-    assert!(revisions.has_changed().unwrap());
-    assert_eq!(*revisions.borrow_and_update(), 3);
+    assert_eq!(c.lock().unwrap().durable.revision, 3);
     assert_eq!(c.list_hives().unwrap()[0].hive_id, "elsewhere");
     let stored = storage.load().await.unwrap();
     assert_eq!(stored.messages.len(), 1);
@@ -118,7 +116,7 @@ async fn persistent_conflicts_and_storage_failures_publish_nothing() {
             .await,
         Err(Error::InvalidState(_))
     ));
-    assert!(c.read_transcript(None).unwrap().is_empty());
+    assert!(c.lock().unwrap().durable.messages.is_empty());
     assert!(storage.load().await.unwrap().messages.is_empty());
     // A bounded number of conflicts is absorbed by reload and retry.
     storage.conflicts.store(2, Ordering::SeqCst);
