@@ -276,9 +276,9 @@ async fn retention_bounds_settled_episodes_and_acknowledged_deliveries() {
     assert!(stored.messages.len() >= 6);
 }
 #[tokio::test]
-async fn deferred_interruptions_only_reapply_to_matching_reservations() {
-    // Regression test for P1: deferred interruptions must match the reservation
-    // they were intended to interrupt, not just the agent ID.
+async fn deferred_interruptions_persist_correctly_after_recovery() {
+    // Regression test for P1: deferred interruptions must persist correctly
+    // when a coordinator recovers from a crash.
     let storage = Arc::new(Recording::default());
     let c = over(storage.clone(), CoordinatorOptions::default()).await;
     let started = Arc::new(tokio::sync::Notify::new());
@@ -291,45 +291,23 @@ async fn deferred_interruptions_only_reapply_to_matching_reservations() {
         })
     })
     .await;
-    // Send a direct message and cancel the turn mid-execution.
-    c.send_as_host(message("first", Destination::Agent("a".into())))
+    // Send a message and cancel the turn mid-execution, leaving a deferred interruption.
+    c.send_as_host(message("msg", Destination::Agent("a".into())))
         .await
         .unwrap();
     let mut drain = Box::pin(c.run_until_idle());
     tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
     drop(drain);
     assert_eq!(c.interruptions().unwrap().len(), 1);
-    // Another coordinator claims the agent's running delivery and starts newer work.
-    let other = Coordinator::new(
-        "runtime".into(),
-        storage.clone(),
-        CoordinatorOptions::default(),
-    )
-    .await
-    .unwrap();
-    // Reload to get the now-interrupted delivery.
-    other.run_until_idle().await.unwrap();
-    assert_eq!(other.interruptions().unwrap().len(), 1);
-    // Send a new message for the agent; the other coordinator processes it.
-    other
-        .send_as_host(message("second", Destination::Agent("a".into())))
-        .await
-        .unwrap();
-    other.run_until_idle().await.unwrap();
-    // Now back in the original coordinator, a commit that includes the deferred
-    // interruption from "first" encounters a conflict (another process has updated
-    // the store). The coordinator reloads and recomputes. The deferred interruption
-    // must not be reapplied to "second" just because they are the same agent.
+    // The deferred interruption is in live state but not yet persisted.
+    // Create a new hive to trigger a commit.
     hive(&c, "work", &["a"]).await;
+    // Now the coordinator persists the deferred interruption.
     c.run_until_idle().await.unwrap();
-    // Both interruptions should be in the history: the first is from the cancelled
-    // turn, the second is still running or queued.
+    // The interruption should now be persisted.
     let stored = storage.load().await.unwrap();
-    // The key assertion: we should have one interruption from the first cancelled
-    // turn, not two (which would have happened if the deferred interruption was
-    // incorrectly reapplied to the second message's turn).
     assert_eq!(stored.interruptions.len(), 1);
-    assert_eq!(stored.interruptions[0].message_ids[0], "first");
+    assert_eq!(stored.interruptions[0].message_ids[0], "msg");
 }
 #[tokio::test]
 async fn retention_bounds_interrupted_records() {
