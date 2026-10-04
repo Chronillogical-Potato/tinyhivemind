@@ -111,6 +111,26 @@ pub enum Error {
         /// The channel the caller asked to fold.
         requested: String,
     },
+    /// The host memory store could not answer a recall.
+    ///
+    /// Raised by a [`crate::runtime::Recall`] implementation. The session
+    /// initializers in this crate degrade it to "no memory" rather than
+    /// failing the turn.
+    #[error("memory recall failed")]
+    Recall {
+        /// The host's original error.
+        #[source]
+        source: SourceError,
+    },
+    /// The host memory store could not persist a remember.
+    ///
+    /// Raised by a [`crate::runtime::Remember`] implementation.
+    #[error("memory remember failed")]
+    Remember {
+        /// The host's original error.
+        #[source]
+        source: SourceError,
+    },
 }
 
 /// A runtime result.
