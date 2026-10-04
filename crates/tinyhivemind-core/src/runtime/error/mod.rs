@@ -111,6 +111,24 @@ pub enum Error {
         /// The channel the caller asked to fold.
         requested: String,
     },
+    /// The host's working-memory engine failed.
+    #[error("working memory failed")]
+    Memory {
+        /// The host's original error.
+        #[source]
+        source: crate::runtime::BoxError,
+    },
+    /// A memory note held no text.
+    #[error("memory note is empty")]
+    MemoryNoteEmpty,
+    /// A memory note was longer than the port accepts.
+    #[error("memory note has {actual} characters but limit is {limit}")]
+    MemoryNoteTooLong {
+        /// The longest note accepted.
+        limit: usize,
+        /// The length supplied.
+        actual: usize,
+    },
 }
 
 /// A runtime result.
