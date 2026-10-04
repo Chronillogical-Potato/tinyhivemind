@@ -168,6 +168,22 @@ pub fn sharing() -> Res {
             .collect::<Vec<_>>()
             .join(",")
     );
+    let mut forged = initialized_state(conv.clone(), Sequence(0));
+    forged.present_above_watermark = (1..=PRESENT_SET_LIMIT as u64 + 1).map(Sequence).collect();
+    let too_large = block_on(prepare_delta(
+        &log,
+        &SharingQuery {
+            desired_conversation: &conv,
+            current_conversation: &conv,
+            state: &forged,
+            viewer: &viewer,
+            before: Sequence(9),
+        },
+    ));
+    println!(
+        "  a hand-built oversized state: {}",
+        too_large.err().map_or("accepted".into(), |e| e.to_string())
+    );
     println!(
         "  decoding an oversized SharingState: {}",
         serde_json::from_str::<SharingState>(&wire)

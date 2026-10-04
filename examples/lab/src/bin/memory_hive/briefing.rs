@@ -41,9 +41,17 @@ pub fn briefing() -> Res {
             must_surface: true,
             require_thread: false,
         },
+        // Snapshots carry no role or description; a host that has them builds
+        // the teammate record itself.
+        teammates: vec![BriefedTeammate {
+            id: "bob".into(),
+            label: "Bob".into(),
+            role: Some("reviewer".into()),
+            description: Some("owns the parser".into()),
+        }],
         ..base.clone()
     };
-    println!("\n  tuned brevity + asides add:");
+    println!("\n  tuned brevity + asides + a richer teammate add:");
     for line in added(&text, &tuned.system_text()) {
         println!("    + {line}");
     }

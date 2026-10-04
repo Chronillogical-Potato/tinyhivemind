@@ -2,6 +2,7 @@
 
 use tinyhivemind_core::aside::{Audience, Viewer};
 use tinyhivemind_core::runtime::{
+    Sequence,
     Conversation, ElsewhereQuery, THREAD_INDEX_LIMIT, gather_elsewhere, read_thread_index,
     render_row,
 };
@@ -56,6 +57,20 @@ pub fn elsewhere_and_threads() -> Res {
             );
         }
     }
+    let earlier = block_on(gather_elsewhere(
+        &log,
+        &ElsewhereQuery {
+            seat: "alice",
+            conversations: &conversations,
+            current: Some(&current),
+            before: Some(Sequence(3)),
+            window: 1,
+        },
+    ))?;
+    println!(
+        "  before ^3 with window 1: {} row(s) of ops",
+        earlier.iter().map(|e| e.rows.len()).sum::<usize>()
+    );
     // Nothing in the query says which desks the seat sits on: dave is on ops,
     // and `gather_elsewhere` reads eng for him all the same.
     let unrestricted = block_on(gather_elsewhere(
