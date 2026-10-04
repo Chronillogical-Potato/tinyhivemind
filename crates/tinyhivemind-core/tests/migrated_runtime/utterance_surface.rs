@@ -15,7 +15,8 @@ use tinyhivemind_core::runtime::{
     mention::MentionTarget,
     roster::{Person, Roster, RosterMember},
     speech::{
-        CallArguments, CommitRequest, CommittedUtterance, ToolCall, commit_utterance, interpret,
+        CallArguments, CommitRequest, CommittedUtterance, ToolCall, commit_utterance,
+        commit_utterance_to_room, interpret,
     },
 };
 
@@ -44,6 +45,15 @@ struct Row {
 /// a host folds it from its journal: the run of consecutive private rows at the
 /// tail is what the open aside has spent.
 fn play(script: &[(&str, &str, &str, &[&str])]) -> Vec<Row> {
+    play_as(script, false).expect("no aside in the script is refused")
+}
+
+/// [`play`], returning the first refusal, with the room fallback opted into
+/// when `room` is set.
+fn play_as(
+    script: &[(&str, &str, &str, &[&str])],
+    room: bool,
+) -> Result<Vec<Row>, tinyhivemind_core::error::Error> {
     let members: Vec<RosterMember> = ["lead", "solver", "theory", "checker"]
         .into_iter()
         .map(|id| RosterMember {
@@ -89,7 +99,7 @@ fn play(script: &[(&str, &str, &str, &[&str])]) -> Vec<Row> {
             .rev()
             .take_while(|row| !matches!(row.audience, Audience::Desk))
             .count();
-        let committed = commit_utterance(&CommitRequest {
+        let request = CommitRequest {
             utterance: &utterance,
             speaker_id: seat,
             conversation: &conversation,
@@ -98,14 +108,18 @@ fn play(script: &[(&str, &str, &str, &[&str])]) -> Vec<Row> {
             unsettled: false,
             roster: &roster,
             desks: &desks,
-        })
-        .expect("the fixture roster and desks are well formed");
+        };
+        let committed = if room {
+            commit_utterance_to_room(&request)?
+        } else {
+            commit_utterance(&request)?
+        };
         rows.push(row(&committed));
         if committed.closing {
             break;
         }
     }
-    rows
+    Ok(rows)
 }
 
 fn row(committed: &CommittedUtterance) -> Row {
@@ -216,13 +230,29 @@ fn a_desk_that_works_a_problem_and_closes_it_commits_exactly_these_rows() {
 }
 
 #[test]
-fn an_aside_that_outruns_its_budget_falls_back_to_the_room() {
+fn an_aside_that_outruns_its_budget_is_refused_not_posted() {
     let mut script: Vec<(&str, &str, &str, &[&str])> = Vec::new();
     for _ in 0..6 {
         script.push(("solver", "dm", "still checking", &["checker"]));
     }
     script.push(("solver", "dm", "one more", &["checker"]));
-    let played = play(&script);
+    assert_eq!(
+        play_as(&script, false),
+        Err(tinyhivemind_core::error::Error::AsideRefused {
+            reason: NoAsideReason::BudgetSpent
+        }),
+        "the seventh private message is never a public row",
+    );
+}
+
+#[test]
+fn an_aside_that_outruns_its_budget_falls_back_to_the_room_when_the_host_opts_in() {
+    let mut script: Vec<(&str, &str, &str, &[&str])> = Vec::new();
+    for _ in 0..6 {
+        script.push(("solver", "dm", "still checking", &["checker"]));
+    }
+    script.push(("solver", "dm", "one more", &["checker"]));
+    let played = play_as(&script, true).expect("room fallback commits");
 
     assert_eq!(played.len(), 7);
     for row in &played[..6] {
