@@ -190,12 +190,10 @@ impl Host<'_> {
                     Self::audience(&commit.only_for),
                 );
                 conductor.committed(at).await?;
-                if snapshots {
-                    if let Some(state) = conductor.snapshot() {
-                        self.report
-                            .snapshots
-                            .push((serde_json::to_string(&state)?, self.log.rows().len()));
-                    }
+                if let (true, Some(state)) = (snapshots, conductor.snapshot()) {
+                    self.report
+                        .snapshots
+                        .push((serde_json::to_string(&state)?, self.log.rows().len()));
                 }
             }
         }

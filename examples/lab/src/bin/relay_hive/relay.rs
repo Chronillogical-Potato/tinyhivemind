@@ -127,11 +127,8 @@ pub fn relay(policy: ReferralPolicy, tracer: &Tracer<'_>, narrate: bool) -> Rela
     let mut seat = "alice".to_owned();
     let mut handed = BUG.to_owned();
     let mut hop = 0_u32;
-    let mut turn = 0_u64;
-    let root = log.say(&desk, SessionAuthor::Operator, BUG);
-    let _ = root;
-    for _ in 0..12 {
-        turn += 1;
+    log.say(&desk, SessionAuthor::Operator, BUG);
+    for turn in 1..=12_u64 {
         tracer.emit(TraceEvent::TurnStarted {
             turn,
             seat: seat.clone(),
