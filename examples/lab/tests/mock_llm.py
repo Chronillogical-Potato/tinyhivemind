@@ -31,6 +31,9 @@ def tool_call(name, args, call_id="call_1"):
     }
 
 
+LONG = {"step": 0}
+
+
 def decide(messages):
     system = messages[0]["content"]
     user = messages[1]["content"] if len(messages) > 1 else ""
@@ -39,7 +42,11 @@ def decide(messages):
     if "You condense" in system:
         return {"role": "assistant", "content": "wrote /tmp/hello.txt; then ran filler steps"}
     if "working alone" in system and "LONGSESSION" in system:
-        # A long scripted session: 24 commands with ~2.5 KB of output each.
+        # A long scripted session: 24 commands with ~2.5 KB of output each. The
+        # step is counted here, not read off the transcript, because the context
+        # policies rewrite the transcript.
+        LONG["step"] = 0 if len(messages) == 2 else LONG["step"] + 1
+        done = LONG["step"]
         if done == 0:
             return tool_call("bash", {"cmd": "echo hi > /tmp/hello.txt"}, "call_0")
         if done < 24:
