@@ -213,3 +213,118 @@ async fn retention_bounds_settled_episodes_and_acknowledged_deliveries() {
     // The transcript itself is never pruned.
     assert!(stored.messages.len() >= 6);
 }
+#[tokio::test]
+async fn deferred_interruptions_only_reapply_to_matching_reservations() {
+    // Regression test for P1: deferred interruptions must match the reservation
+    // they were intended to interrupt, not just the agent ID.
+    let storage = Arc::new(Recording::default());
+    let c = over(storage.clone(), CoordinatorOptions::default()).await;
+    let started = Arc::new(tokio::sync::Notify::new());
+    let signal = started.clone();
+    add(&c, "a", move |request| {
+        let signal = signal.clone();
+        Box::pin(async move {
+            signal.notify_one();
+            std::future::pending().await
+        })
+    })
+    .await;
+    // Send a direct message and cancel the turn mid-execution.
+    c.send_as_host(message("first", Destination::Agent("a".into())))
+        .await
+        .unwrap();
+    let mut drain = Box::pin(c.run_until_idle());
+    tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
+    drop(drain);
+    assert_eq!(c.interruptions().unwrap().len(), 1);
+    // Another coordinator claims the agent's running delivery and starts newer work.
+    let other = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+    // Reload to get the now-interrupted delivery.
+    other.run_until_idle().await.unwrap();
+    assert_eq!(other.interruptions().unwrap().len(), 1);
+    // Send a new message for the agent; the other coordinator processes it.
+    other
+        .send_as_host(message("second", Destination::Agent("a".into())))
+        .await
+        .unwrap();
+    other.run_until_idle().await.unwrap();
+    // Now back in the original coordinator, a commit that includes the deferred
+    // interruption from "first" encounters a conflict (another process has updated
+    // the store). The coordinator reloads and recomputes. The deferred interruption
+    // must not be reapplied to "second" just because they are the same agent.
+    hive(&c, "work", &["a"]).await;
+    c.run_until_idle().await.unwrap();
+    // Both interruptions should be in the history: the first is from the cancelled
+    // turn, the second is still running or queued.
+    let stored = storage.load().await.unwrap();
+    // The key assertion: we should have one interruption from the first cancelled
+    // turn, not two (which would have happened if the deferred interruption was
+    // incorrectly reapplied to the second message's turn).
+    assert_eq!(stored.interruptions.len(), 1);
+    assert_eq!(stored.interruptions[0].message_ids[0], "first");
+}
+#[tokio::test]
+async fn retention_bounds_interrupted_records() {
+    // Regression test for P2: retention policy must also prune interrupted
+    // deliveries and interruption records, not just delivered ones.
+    let storage = Arc::new(Recording::default());
+    let c = over(
+        storage.clone(),
+        CoordinatorOptions {
+            retention: RetentionPolicy {
+                settled_episodes: Some(1),
+                delivered: Some(1),
+                interrupted: Some(1),
+            },
+            ..CoordinatorOptions::default()
+        },
+    )
+    .await;
+    add(&c, "a", |_| {
+        Box::pin(async { Ok(done(&("_").to_owned())) })
+    })
+    .await;
+    // Create multiple interruptions by sending direct messages and cancelling turns.
+    for i in 1..=3 {
+        let started = Arc::new(tokio::sync::Notify::new());
+        let signal = started.clone();
+        add(&c, "a", move |_| {
+            let signal = signal.clone();
+            Box::pin(async move {
+                signal.notify_one();
+                std::future::pending().await
+            })
+        })
+        .await;
+        c.send_as_host(message(
+            &format!("msg-{i}"),
+            Destination::Agent("a".into()),
+        ))
+        .await
+        .unwrap();
+        let mut drain = Box::pin(c.run_until_idle());
+        tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
+        drop(drain);
+    }
+    assert_eq!(c.interruptions().unwrap().len(), 3);
+    // Trigger a commit to apply retention.
+    hive(&c, "work", &["a"]).await;
+    c.run_until_idle().await.unwrap();
+    let stored = storage.load().await.unwrap();
+    // With interrupted=Some(1), only the most recent interruption should be kept.
+    assert_eq!(stored.interruptions.len(), 1);
+    assert_eq!(stored.interruptions[0].message_ids[0], "msg-3");
+    // Also check that interrupted deliveries were pruned.
+    let interrupted_deliveries = stored
+        .deliveries
+        .iter()
+        .filter(|d| d.status == DeliveryStatus::Interrupted)
+        .count();
+    assert_eq!(interrupted_deliveries, 1);
+}
