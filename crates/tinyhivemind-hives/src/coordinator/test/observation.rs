@@ -71,35 +71,35 @@ async fn subscribers_wake_on_every_committed_change() {
 #[tokio::test]
 async fn episode_snapshot_reports_open_waiting_settled_and_failed() {
     let c = setup().await;
-    let actions = c.clone();
-    add(&c, "a", move |request| {
-        let c = actions.clone();
-        Box::pin(async move {
-            let episode = request.episode.clone().unwrap();
-            let mut outcome = done(&request);
-            match request.messages[0].body.as_str() {
-                "park" => outcome.disposition = TurnDisposition::Parked,
-                "finish" => {
-                    c.submit_action(
-                        "a",
-                        &episode.episode_id,
-                        EpisodeAction::Complete {
-                            body: "done".into(),
-                        },
-                    )
-                    .await?;
+    for (agent, hive_id) in [("a", "parks"), ("b", "finishes"), ("c", "stalls")] {
+        let actions = c.clone();
+        add(&c, agent, move |request| {
+            let c = actions.clone();
+            Box::pin(async move {
+                let episode = request.episode.clone().unwrap();
+                let mut outcome = done(&request);
+                match request.agent_id.as_str() {
+                    "a" => outcome.disposition = TurnDisposition::Parked,
+                    "b" => {
+                        c.submit_action(
+                            "b",
+                            &episode.episode_id,
+                            EpisodeAction::Complete {
+                                body: "done".into(),
+                            },
+                        )
+                        .await?;
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
-            Ok(outcome)
+                Ok(outcome)
+            })
         })
-    })
-    .await;
-    for (hive_id, body) in [("parks", "park"), ("finishes", "finish"), ("stalls", "x")] {
-        hive(&c, hive_id, &["a"]).await;
-        let mut task = message(body, Destination::Hive(hive_id.into()));
-        task.message_id = format!("task-{hive_id}");
-        c.send_as_host(task).await.unwrap();
+        .await;
+        hive(&c, hive_id, &[agent]).await;
+        let mut task = message(hive_id, Destination::Hive(hive_id.into()));
+        task.sender = agent.into();
+        c.send(task).await.unwrap();
     }
     let opened = c.episodes().unwrap();
     assert_eq!(opened.len(), 3);
