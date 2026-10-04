@@ -8,19 +8,26 @@ use std::{
 };
 use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest};
 pub(super) struct SuppliedRunner {
-    pub agent: Agent,
+    /// Current handle. A turn holds a read guard for its whole duration, so
+    /// [`super::OpenHumanHost::replace_agent`], which takes the write guard,
+    /// applies only after any running turn. `None` after a failed replacement.
+    pub agent: Arc<tokio::sync::RwLock<Option<Agent>>>,
     pub hooks: Arc<dyn TurnHooks>,
     pub activation: Arc<Activation>,
     pub timeout: Duration,
 }
 impl AgentRunner for SuppliedRunner {
     fn run(&self, request: TurnRequest) -> TurnFuture {
-        let agent = self.agent.clone();
+        let handle = self.agent.clone();
         let hooks = self.hooks.clone();
         let activation = self.activation.clone();
         let timeout = self.timeout;
         Box::pin(async move {
             activation.wait().await;
+            let handle = handle.read_owned().await;
+            let agent = handle
+                .clone()
+                .ok_or_else(|| map_error(&Error::NoHandle(request.agent_id.clone())))?;
             let scope = TurnScope::from_request(&request);
             let usage = Arc::new(Mutex::new(None));
             let meter = usage.clone();

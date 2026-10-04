@@ -60,6 +60,9 @@ pub enum Error {
     /// A turn timeout of zero would fail every turn before it starts.
     #[error("turn timeout must be nonzero")]
     InvalidTurnTimeout,
+    /// A failed `replace_agent` left the agent without a live handle.
+    #[error("agent {0} has no live handle; retry replace_agent")]
+    NoHandle(String),
     /// Agent turn exceeded the wall.
     #[error("agent turn timed out")]
     TimedOut,

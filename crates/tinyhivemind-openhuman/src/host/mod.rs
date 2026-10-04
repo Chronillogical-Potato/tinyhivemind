@@ -24,7 +24,8 @@ pub(crate) struct Inner {
     turn_timeout: Duration,
 }
 struct Entry {
-    agent: Agent,
+    /// `None` while a replacement is being built, or after one failed.
+    agent: Option<Agent>,
     source: HostTools,
     runner: Arc<SuppliedRunner>,
     activation: Arc<Activation>,
@@ -191,7 +192,11 @@ impl OpenHumanHost {
     fn attach(&self, id: &str, agent: &Agent) -> Result<(Arc<SuppliedRunner>, Arc<Activation>)> {
         let mut entries = self.inner.agents.lock().map_err(|_| Error::Poisoned)?;
         if let Some(entry) = entries.get(id) {
-            if !entry.agent.same_agent(agent) {
+            if !entry
+                .agent
+                .as_ref()
+                .is_some_and(|known| known.same_agent(agent))
+            {
                 return Err(Error::AgentConflict(id.into()));
             }
             agent.attach_tools("hivemind", entry.source.clone())?;
@@ -212,7 +217,7 @@ impl OpenHumanHost {
         });
         agent.attach_tools("hivemind", source.clone())?;
         let runner = Arc::new(SuppliedRunner {
-            agent: agent.clone(),
+            agent: Arc::new(tokio::sync::RwLock::new(Some(agent.clone()))),
             hooks: self.inner.hooks.clone(),
             activation: activation.clone(),
             timeout: self.inner.turn_timeout,
@@ -221,13 +226,71 @@ impl OpenHumanHost {
         entries.insert(
             id.into(),
             Entry {
-                agent: agent.clone(),
+                agent: Some(agent.clone()),
                 source,
                 runner: runner.clone(),
                 activation: activation.clone(),
             },
         );
         Ok((runner, activation))
+    }
+    /// Rebuild the handle behind an already registered agent id — after the
+    /// host changed its configuration, say — and return the new handle.
+    ///
+    /// `OpenHuman` keeps agent ids unique while any clone of a handle is
+    /// alive, so the host cannot build the replacement first: this waits for
+    /// any running turn of the agent to finish, holds off new ones, drops the
+    /// adapter's handle and only then calls `build`. The host must not keep
+    /// clones of the old handle itself, or `build` fails with a duplicate id.
+    /// The durable registration, continuing session binding and queued work
+    /// are unchanged; the next turn continues the same session on the new
+    /// handle, which carries the hivemind tools.
+    /// # Errors
+    /// An id never registered with this host; `build`'s error; a built agent
+    /// with another id, runtime, or hive memory binding; a refused tool
+    /// attachment. After `build` ran, a failure leaves the agent without a
+    /// handle: its claimed turns fail until a retry succeeds.
+    pub async fn replace_agent(
+        &self,
+        agent_id: &str,
+        build: impl FnOnce() -> Result<Agent>,
+    ) -> Result<Agent> {
+        let (runner, source) = {
+            let entries = self.inner.agents.lock().map_err(|_| Error::Poisoned)?;
+            let entry = entries
+                .get(agent_id)
+                .ok_or_else(|| tinyhivemind_hives::Error::UnknownAgent(agent_id.into()))?;
+            (entry.runner.clone(), entry.source.clone())
+        };
+        let mut handle = runner.agent.write().await;
+        *handle = None;
+        self.set_entry_agent(agent_id, None)?;
+        let agent = build()?;
+        if agent.id() != agent_id {
+            return Err(Error::AgentConflict(agent.id().into()));
+        }
+        if agent.runtime_id() != self.inner.runtime_id {
+            return Err(Error::RuntimeMismatch);
+        }
+        if let Some(memory) = &self.inner.memory {
+            memory.check(&agent)?;
+        }
+        agent.attach_tools("hivemind", source)?;
+        *handle = Some(agent.clone());
+        self.set_entry_agent(agent_id, Some(agent.clone()))?;
+        Ok(agent)
+    }
+    fn set_entry_agent(&self, agent_id: &str, agent: Option<Agent>) -> Result<()> {
+        if let Some(entry) = self
+            .inner
+            .agents
+            .lock()
+            .map_err(|_| Error::Poisoned)?
+            .get_mut(agent_id)
+        {
+            entry.agent = agent;
+        }
+        Ok(())
     }
     /// Bind a supplied agent to an already running host conversation.
     ///

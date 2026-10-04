@@ -411,3 +411,5 @@ mod continuity;
 mod hooks;
 #[path = "memory_test.rs"]
 mod memory;
+#[path = "replace_test.rs"]
+mod replace;
