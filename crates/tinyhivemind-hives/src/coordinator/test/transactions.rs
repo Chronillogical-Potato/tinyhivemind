@@ -137,7 +137,8 @@ async fn retention_bounds_settled_episodes_and_acknowledged_deliveries() {
                 settled_episodes: Some(1),
                 delivered: Some(1),
                 interrupted: None,
-               pending_per_agent: None,            },
+                pending_per_agent: None,
+            },
             ..CoordinatorOptions::default()
         },
     )
@@ -226,7 +227,8 @@ async fn retention_bounds_interrupted_records() {
                 settled_episodes: Some(1),
                 delivered: Some(1),
                 interrupted: Some(1),
-               pending_per_agent: None,            },
+                pending_per_agent: None,
+            },
             ..CoordinatorOptions::default()
         },
     )
@@ -269,4 +271,55 @@ async fn retention_bounds_interrupted_records() {
         .filter(|d| d.status == DeliveryStatus::Interrupted)
         .count();
     assert_eq!(interrupted_deliveries, 1);
+}
+#[tokio::test]
+async fn a_full_inbox_refuses_the_send_and_stores_nothing() {
+    let c = Coordinator::new(
+        "runtime".into(),
+        Arc::new(MemoryStorage::new()),
+        CoordinatorOptions {
+            retention: RetentionPolicy {
+                pending_per_agent: Some(2),
+                ..RetentionPolicy::default()
+            },
+            ..CoordinatorOptions::default()
+        },
+    )
+    .await
+    .unwrap();
+    for id in ["offline", "other"] {
+        add(&c, id, |request| {
+            Box::pin(async move { Ok(done(&request)) })
+        })
+        .await;
+    }
+    // Nothing runs, so every delivery to `offline` stays pending.
+    for id in ["m1", "m2"] {
+        c.send_as_host(message(id, Destination::Agent("offline".into())))
+            .await
+            .unwrap();
+    }
+    let refused = c
+        .send_as_host(message("m3", Destination::Agent("offline".into())))
+        .await;
+    assert!(
+        matches!(&refused, Err(Error::InboxFull { agent_id, limit: 2 }) if agent_id == "offline"),
+        "{refused:?}"
+    );
+    assert!(
+        refused
+            .unwrap_err()
+            .to_string()
+            .contains("inbox of offline is full")
+    );
+    assert_eq!(c.read_transcript(None).unwrap().len(), 2);
+    // The bound is per recipient.
+    c.send_as_host(message("m4", Destination::Agent("other".into())))
+        .await
+        .unwrap();
+    // Draining the inbox makes room again.
+    c.run_until_idle().await.unwrap();
+    c.send_as_host(message("m5", Destination::Agent("offline".into())))
+        .await
+        .unwrap();
 }
