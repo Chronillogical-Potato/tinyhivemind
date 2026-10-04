@@ -57,3 +57,6 @@ pub use cli::TraceRig;
 pub use exec::block_on;
 pub use log::{MemoryLog, agent, person};
 pub use tick::TickClock;
+mod world;
+
+pub use world::World;

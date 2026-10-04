@@ -221,7 +221,7 @@ function waterfall(run, span, host) {
       const g = s("g", {});
       g.append(s("rect", { x: x0, y: by - 3, width: w, height: 20, fill: c.refused ? "var(--bad)" : "var(--tick)",
         "fill-opacity": c.refused ? 1 : 0.8, stroke: "var(--panel)", "stroke-width": 1 }));
-      if (c.refused) g.append(s("text", { x: x0 + w / 2, y: by - 5, "text-anchor": "middle", fill: "var(--bad)", style: "fill:var(--bad);font-weight:700" }, "×"));
+      if (c.refused) g.append(s("text", { x: x0 + w / 2, y: by - 4, "text-anchor": "middle", fill: "var(--bad)", style: "fill:var(--bad);font-weight:700;font-size:15px" }, "×"));
       svg.append(hover(g, `${c.tool}${c.refused ? " (refused)" : ""}`, c, `${c.seat} called ${c.tool}${c.refused ? ", refused" : ""}`));
     }
   }
