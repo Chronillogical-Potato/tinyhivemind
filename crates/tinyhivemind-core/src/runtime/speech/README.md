@@ -33,8 +33,11 @@ after the fact.
   the `UtteranceRejection` to hand back to the seat. It parses no JSON: a host
   maps its own wire onto `CallArguments`.
 - **`commit_utterance(request)`** is the fold from an accepted utterance to the
-  row a host appends — content, `Audience`, mentions, `closing`, and the reason
-  a requested aside was declined.
+  row a host appends — content, `Audience`, mentions, and `closing`. A private
+  utterance the aside policy declines is `Error::AsideRefused`, not a row.
+- **`commit_utterance_to_room(request)`** is the explicit opt-in to the old
+  behaviour: a declined aside becomes a desk row carrying the reason in
+  `refusal`.
 - **`tool_specs()`** states each tool once. The descriptions are contract text,
   not documentation: they are the only place a seat is told that what it writes
   outside a call reaches nobody. A host renders them verbatim.
@@ -43,10 +46,11 @@ after the fact.
 
 - **A tool call is a request to speak.** Nothing here appends, and nothing here
   waits. The host appends, and the host decides.
-- **A refused aside is a desk row.** The refusal travels beside the audience
-  rather than in place of it, so the message reaches the room either way. That
-  is the safe direction to fail in, and the caller can still say which way it
-  went.
+- **A refused aside is not a row.** A `dm`, `ask`, or aside marker the policy
+  declines (asides off, budget spent, audience too large) fails closed with
+  `Error::AsideRefused`: a private message is never published to the whole desk
+  because a check failed. A host that wants the room to hear it anyway calls
+  `commit_utterance_to_room` and reads `refusal`.
 - **A `dm`'s recipients are targets, not prose.** They are built from the `to`
   field directly. Spelling them back into `@a @b` and re-reading them through
   the mention grammar loses any id the grammar does not accept, silently — and
