@@ -398,5 +398,7 @@ fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
 
 #[path = "continuity_test.rs"]
 mod continuity;
+#[path = "hooks_test.rs"]
+mod hooks;
 #[path = "memory_test.rs"]
 mod memory;

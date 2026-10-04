@@ -43,3 +43,55 @@ fn management_request_wire_shape_keeps_host_template_and_identity_fields() {
         );
     }
 }
+#[test]
+fn turn_scope_names_the_episode_its_thread_and_distinct_senders() {
+    use super::TurnScope;
+    use tinyhivemind_hives::{Destination, EpisodeContext, Message, TurnRequest};
+    let row = |id: &str, sender: &str, thread| Message {
+        message_id: id.into(),
+        sequence: 0,
+        sender: sender.into(),
+        destination: Destination::Hive("work".into()),
+        body: String::new(),
+        thread,
+        episode_id: Some("episode:0".into()),
+        only_for: vec![],
+    };
+    let episode = EpisodeContext {
+        episode_id: "episode:0".into(),
+        hive_id: "work".into(),
+        thread: Some(7),
+        brief: "brief".into(),
+    };
+    let request = TurnRequest {
+        agent_id: "a".into(),
+        session_id: None,
+        messages: vec![row("m1", "b", None), row("m2", "c", Some(7)), row("m3", "b", None)],
+        memberships: vec![],
+        episode: Some(episode.clone()),
+        resumption: None,
+    };
+    let scope = TurnScope::from_request(&request);
+    assert_eq!(scope.agent_id, "a");
+    assert_eq!(scope.episode, Some(episode));
+    assert_eq!(scope.message_ids, ["m1", "m2", "m3"]);
+    assert_eq!(scope.senders, ["b", "c"]);
+    assert_eq!(scope.destination, Destination::Hive("work".into()));
+    assert_eq!(scope.thread, Some(7));
+    let mut direct = request;
+    direct.episode = None;
+    direct.messages = vec![Message {
+        destination: Destination::Agent("a".into()),
+        thread: None,
+        ..row("d1", tinyhivemind_hives::HOST_ID, None)
+    }];
+    let scope = TurnScope::from_request(&direct);
+    assert_eq!(scope.destination, Destination::Agent("a".into()));
+    assert_eq!(scope.thread, None);
+    assert_eq!(scope.senders, [tinyhivemind_hives::HOST_ID]);
+    direct.messages.clear();
+    assert_eq!(
+        TurnScope::from_request(&direct).destination,
+        Destination::Agent("a".into())
+    );
+}
