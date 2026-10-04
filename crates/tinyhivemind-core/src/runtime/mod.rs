@@ -7,8 +7,9 @@
 //! one bounded account behind a live tail through the [`crate::runtime::Digester`] port.
 //! The [`crate::runtime::speech`] module interprets a seat's call and turns an accepted
 //! utterance into a committed row. The [`mod@crate::runtime::recall`] module
-//! defines the host memory ports that feed a seat's persistent session. Core responder, referral, and approval
-//! decisions remain available through the re-exported core modules.
+//! defines the host memory ports that feed a seat's persistent session.
+//! Core responder, referral, and approval decisions remain available through
+//! the re-exported core modules.
 //! The host remains responsible for storage, transports, model clients, and
 //! choosing an async executor.
 //!
