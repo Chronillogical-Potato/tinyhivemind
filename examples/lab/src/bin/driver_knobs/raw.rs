@@ -68,9 +68,17 @@ fn drive(
         match block_on(driver.apply_committed(&state, event, routing)) {
             Ok(transition) => {
                 println!(
-                    "    ^{at} {who:<8} -> {}; queued for coder: {}",
+                    "    ^{at} {who:<8} -> {}; queued for coder: {}; still open: {:?}",
                     actions(&transition.actions),
-                    transition.state.ledger().queue_len("coder")
+                    transition.state.ledger().queue_len("coder"),
+                    transition
+                        .state
+                        .episode()
+                        .participants
+                        .iter()
+                        .filter(|p| p.is_pending())
+                        .map(|p| p.agent_id.as_str())
+                        .collect::<Vec<_>>()
                 );
                 state = transition.state;
             }
@@ -167,6 +175,19 @@ pub fn run() -> Res {
         &driver,
         None,
         setup(vec![broadcast("planner", 4, "anything")]),
+    );
+    // The author is still pending here: its handoff is refused for capacity,
+    // and its assignment closes all the same.
+    let driver = CompletionDriver::new(&hive, 2)?.with_queue_depth(1)?;
+    drive(
+        "queue_depth=1: planner fills coder's queue, then a pending writer's broadcast is refused",
+        &driver,
+        Some(routing(&narrow)),
+        vec![
+            complete("tester", 2),
+            broadcast("planner", 3, "write the rust parser"),
+            broadcast("writer", 4, "write the rust parser docs"),
+        ],
     );
     for budget in [None, Some(1), Some(2)] {
         let driver = CompletionDriver::new(&hive, 2)?.with_broadcast_budget(budget);
