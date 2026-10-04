@@ -51,7 +51,10 @@ fn every_seat_registered_with_hive_memory_is_bound_under_the_hive_root() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
-        assert_eq!(host.hive_memory().map(HiveMemory::root), Some("team:hive-1"));
+        assert_eq!(
+            host.hive_memory().map(HiveMemory::root),
+            Some("team:hive-1")
+        );
         for seat in ["scout", "critic", "writer"] {
             let agent = host.register_spec(&runtime, AgentSpec::new(seat)).unwrap();
             assert_eq!(bound(&agent), (Some(seat), Some("team:hive-1")));
@@ -66,7 +69,9 @@ fn seats_carry_no_binding_when_hive_memory_is_off() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         assert!(host.hive_memory().is_none());
-        let agent = host.register_spec(&runtime, AgentSpec::new("scout")).unwrap();
+        let agent = host
+            .register_spec(&runtime, AgentSpec::new("scout"))
+            .unwrap();
         assert_eq!(bound(&agent), (None, None));
         // An unbound agent built elsewhere registers as before.
         let other = runtime.agent(AgentSpec::new("critic")).unwrap();
@@ -97,16 +102,13 @@ fn rejects_a_seat_built_without_the_hive_binding() {
             matches!(&error, Error::UnboundSeat { seat, .. } if seat == "scout"),
             "{error}"
         );
-        let elsewhere = hive("hive-2")
-            .bind(AgentSpec::new("critic"))
-            .unwrap();
+        let elsewhere = hive("hive-2").bind(AgentSpec::new("critic")).unwrap();
         let error = host
             .register_agent(runtime.agent(elsewhere).unwrap())
             .unwrap_err();
         assert!(error.to_string().contains("team:hive-2"), "{error}");
-        let renamed = AgentSpec::new("writer").memory(
-            openhuman_embed::MemoryBinding::new("someone-else").root("team:hive-1"),
-        );
+        let renamed = AgentSpec::new("writer")
+            .memory(openhuman_embed::MemoryBinding::new("someone-else").root("team:hive-1"));
         let error = host
             .register_agent(runtime.agent(renamed).unwrap())
             .unwrap_err();
@@ -140,7 +142,9 @@ fn the_recall_budget_reaches_seats_through_the_runtime_config() {
         memory.configure(&mut config);
         let (runtime, _backend) = Box::pin(runtime_with(config)).await;
         let host = host_on(&runtime).with_hive_memory(memory.clone()).unwrap();
-        let agent = host.register_spec(&runtime, AgentSpec::new("scout")).unwrap();
+        let agent = host
+            .register_spec(&runtime, AgentSpec::new("scout"))
+            .unwrap();
         assert_eq!(agent.config().memory.recall.budget_tokens, 640);
         // One runtime per process: release this one before the next.
         drop((agent, host, runtime));
@@ -161,7 +165,8 @@ fn the_recall_budget_reaches_seats_through_the_runtime_config() {
 fn hive_memory_cannot_change_after_registration() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
-        host.register_spec(&runtime, AgentSpec::new("scout")).unwrap();
+        host.register_spec(&runtime, AgentSpec::new("scout"))
+            .unwrap();
         assert!(matches!(
             host.with_hive_memory(hive("hive-1")),
             Err(Error::ManagementAlreadyStarted)
