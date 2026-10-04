@@ -12,6 +12,7 @@
 mod error;
 mod host;
 pub mod journal;
+mod memory;
 #[cfg(any(test, feature = "offline"))]
 pub mod offline;
 mod tools;
@@ -21,3 +22,4 @@ pub use host::{
     RegisteredAgent, TURN_TIMEOUT, TurnHooks, TurnProgressSink,
 };
 pub use journal::MemoryLog;
+pub use memory::HiveMemory;
