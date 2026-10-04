@@ -1,12 +1,13 @@
 //! A runnable software-engineering hive and its matched single-agent baseline.
 //!
 //! The question this module exists to answer is whether dividing a task
-//! across a desk of seats, each reading a bounded briefing instead of its own
-//! growing history, beats one agent on tokens, wall clock and pass rate, with
-//! the same model, tools and token meter on both sides. All I/O lives here,
-//! because core is pure: the model is called through `curl`, commands run in a
-//! container through `docker exec` or through the Harbor agent over stdio, and
-//! telemetry goes to a JSONL file.
+//! across a desk of seats, each keeping its own session and reading only what
+//! is new on the shared desk (optionally with hive memory), beats one agent on
+//! tokens, wall clock and pass rate, with the same model, tools and token meter
+//! on both sides. All I/O lives here, because core is pure: the model is
+//! called through `curl`, commands run in a container through `docker exec` or
+//! through the Harbor agent over stdio, memory goes to CortexDB, and telemetry
+//! goes to a JSONL file.
 //!
 //! | Module | Role |
 //! | --- | --- |
