@@ -2,14 +2,12 @@
 //! incrementally outside the live lock, then publish it.
 //!
 //! Writers serialize on an async writer gate, so in-process writers never
-//! conflict; a [`Error::RevisionConflict`] therefore means another process
-//! committed to the same store. The writer reloads the store and recomputes
-//! its change from the reloaded state, a bounded number of times.
+//! conflict. With single-writer fencing, an [`Error::RevisionConflict`] or
+//! [`Error::Fenced`] indicates a newer coordinator has claimed ownership and
+//! no further writes are possible.
 use super::{Coordinator, interrupt};
 use crate::{Commit, Error, Result, StoredState};
-
-/// Reload-and-retry attempts after a storage revision conflict.
-const CONFLICT_RETRIES: usize = 4;
+use std::sync::atomic::Ordering;
 /// Held while a transaction computes and persists its next state.
 pub(super) type WriterGate<'a> = tokio::sync::MutexGuard<'a, ()>;
 /// A consistent base for one attempt and the cancelled-turn interruptions it
