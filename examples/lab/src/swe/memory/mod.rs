@@ -157,10 +157,8 @@ impl HiveMemory {
         budget_tokens: usize,
     ) -> Result<Self, String> {
         let layout = MemoryLayout::new(run_root(run_id)?).map_err(|error| error.to_string())?;
-        for seat in seats {
-            layout
-                .conversations(seat)
-                .map_err(|error| format!("bad seat id {seat:?}: {error}"))?;
+        if let Some(seat) = seats.iter().find(|seat| seat.trim().is_empty()) {
+            return Err(format!("bad seat id {seat:?}: a seat needs an id"));
         }
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
