@@ -546,6 +546,7 @@ pub fn replay(rig: &TraceRig) -> Res {
         for (index, (json, kept)) in whole.snapshots.iter().enumerate() {
             let state: ConductorState = serde_json::from_str(json)?;
             let rows = &whole.log[..*kept];
+            eprintln!("REPLAY {label} idx {index} kept {kept}");
             let quiet = rig.tracer("replay:silent");
             let resumed = play(&scn, &quiet, false, Some((json, rows)));
             let same = resumed.rows == log && resumed.error.is_none();
