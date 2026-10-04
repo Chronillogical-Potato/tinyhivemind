@@ -345,6 +345,7 @@ async fn a_newer_coordinator_fences_the_older_one_out_of_the_store() {
     let info = |id: &str| HiveInfo {
         hive_id: id.into(),
         name: id.into(),
+        description: None,
         members: Vec::new(),
     };
     for attempt in ["first", "second"] {

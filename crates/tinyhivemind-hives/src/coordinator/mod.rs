@@ -446,7 +446,10 @@ async fn claim(storage: &dyn Storage) -> Result<(StoredState, u64)> {
     loop {
         let mut durable = storage.load().await?;
         let previous = durable.revision;
-        let writer_epoch = durable.writer_epoch.checked_add(1).ok_or(Error::Exhausted)?;
+        let writer_epoch = durable
+            .writer_epoch
+            .checked_add(1)
+            .ok_or(Error::Exhausted)?;
         durable.writer_epoch = writer_epoch;
         let agents: Vec<_> = durable.running.keys().cloned().collect();
         for agent in agents {
