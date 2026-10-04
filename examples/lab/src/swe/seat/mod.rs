@@ -90,9 +90,7 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
             seat: act.seat.to_owned(),
         });
         let started = Instant::now();
-        let before = env.llm.meter().snapshot();
         let reply = env.llm.complete(act.seat, &messages, &act.tools);
-        let after = env.llm.meter().snapshot();
         let completion = match reply {
             Ok(completion) => completion,
             Err(abort) => {
@@ -106,7 +104,7 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
             env,
             act.seat,
             turn,
-            after.input.saturating_sub(before.input).min(completion.input_tokens.max(1)),
+            completion.input_tokens,
             completion.output_tokens,
             started,
         );
