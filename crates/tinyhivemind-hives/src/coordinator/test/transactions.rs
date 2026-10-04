@@ -69,10 +69,6 @@ async fn commits_append_only_new_transcript_rows() {
     assert!(stored.accepted.contains_key("one"));
 }
 #[tokio::test]
-
-#[tokio::test]
-
-#[tokio::test]
 async fn conflicts_and_storage_failures_are_fatal() {
     let storage = Arc::new(Recording::default());
     let c = over(storage.clone(), CoordinatorOptions::default()).await;
