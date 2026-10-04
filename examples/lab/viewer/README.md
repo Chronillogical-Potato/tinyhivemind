@@ -67,10 +67,12 @@ static file. Drag and drop of local files still works, and is all a static
    are red with a cross and the `reason` in the tooltip.
 2. **Timeline**: rounds (phase and visibility; dashed = blind), one row per
    conductor kind, outcome markers (C converged, D deadlocked, E exhausted,
-   I idle), then three mark lanes: `session` (green circle, one per seat
-   activation), `memory` (purple diamond per recall or store; red when the
-   call failed or timed out) and every other mark (triangle) or checkpoint
-   (square).
+   I idle), then three mark lanes: `session` (green circle per
+   `session_resumed`), `memory` (purple diamond per `recalled` or
+   `remembered`; red for a `memory` mark reporting a failed or timed-out
+   call) and every other mark (triangle) or checkpoint (square). Traces from
+   before the typed events used `session` / `memory` marks; they land in the
+   same lanes.
 3. **Tokens**: cumulative input/output/total over time, plus per-seat share.
 4. **Summary**: turns, tokens in/out, wall ms, p50/p95 turn latency (from
    `latency_ms`, nearest rank), max concurrent turns, tool calls, refusals,
