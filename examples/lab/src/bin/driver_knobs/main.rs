@@ -9,6 +9,7 @@
 
 mod conduct;
 mod fixture;
+mod fold;
 mod jev;
 mod raw;
 mod replay;
@@ -19,6 +20,7 @@ use tinyhivemind_lab::{Res, TraceRig};
 fn main() -> Res {
     let rig = TraceRig::from_args();
     raw::run()?;
+    fold::run()?;
     routing::run()?;
     jev::run()?;
     conduct::run(&rig)?;

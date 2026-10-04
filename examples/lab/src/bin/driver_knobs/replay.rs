@@ -47,6 +47,13 @@ pub fn run(rig: &TraceRig) -> Res {
             },
         ),
         (
+            "coder is a starter",
+            Scenario {
+                queue_work: true,
+                ..Scenario::default()
+            },
+        ),
+        (
             "planner spams, budget 1",
             Scenario {
                 spam: true,
