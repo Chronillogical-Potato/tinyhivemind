@@ -23,6 +23,8 @@
 mod compact;
 mod recall;
 
+pub use recall::finish as finish_memory;
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
