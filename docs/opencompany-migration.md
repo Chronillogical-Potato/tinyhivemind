@@ -164,4 +164,4 @@ called on its coordinator.
   continues.
 
 The decision record is
-[ADR 0031](adr/0031-the-coordinator-exposes-host-seams-over-async-incremental-storage.md).
+[ADR 0031](adr/0031-expose-host-seams-over-async-incremental-storage.md).
