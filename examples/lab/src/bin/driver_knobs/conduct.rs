@@ -553,6 +553,7 @@ pub fn replay(rig: &TraceRig) -> Res {
                 identical += 1;
             } else {
                 let first = resumed.rows.iter().zip(&log).position(|(a, b)| a != b).unwrap_or(resumed.rows.len().min(log.len()));
+                for (a, b) in resumed.rows.iter().zip(&log) { eprintln!("ROWS {} | {} | {:?} {:?} || {:?} {:?}", a.0, b.0, a.2, a.3.chars().take(25).collect::<String>(), b.2, b.3.chars().take(25).collect::<String>()); }
                 println!("    DEBUG idx {index} kept {kept} first diff at row {first}: resumed {:?} vs whole {:?} (lens {} / {})", resumed.rows.get(first), log.get(first), resumed.rows.len(), log.len());
                 if std::env::var("LAB_DEBUG2").is_ok() {
                     let again = play(&scn, &rig.tracer("x"), true, Some((json, rows)));
