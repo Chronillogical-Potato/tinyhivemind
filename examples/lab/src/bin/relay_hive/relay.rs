@@ -20,17 +20,26 @@ use crate::world;
 
 const BUG: &str = "checkout times out for EU users";
 
-/// What a desk does with a message it is handed. Rules, not a model.
-fn seat_says(desk: &str, handed: &str, routed: Option<&str>) -> String {
-    match (desk, routed) {
-        ("support", Some(to)) => format!("Triaged: {handed}. @{to} please take this."),
-        ("backend", Some(to)) => {
-            format!(
-                "The api is fine, but the tls handshake to eu-gw fails. @{to} can you check the certificate?"
-            )
-        }
-        ("infra", _) => "Found it: the certificate for eu-gw expired. Renewed.".into(),
-        (_, _) => format!("Looked at {handed:?}; no further desk fits."),
+/// What a desk makes of a message it is handed: its findings, and whether it
+/// needs another desk. Rules, not a model.
+fn findings(desk: &str, handed: &str) -> (String, bool) {
+    let answered = handed.contains("Renewed");
+    match desk {
+        "support" if answered => (format!("Customer update: {handed}"), false),
+        "support" => (format!("Triaged: {handed}."), true),
+        "backend" if answered => (
+            "Confirmed with infra: the certificate is renewed and checkout is healthy.".into(),
+            false,
+        ),
+        "backend" => (
+            "The api is fine, but the tls handshake to eu-gw fails; the certificate looks wrong."
+                .into(),
+            true,
+        ),
+        _ => (
+            "Found it: the certificate for eu-gw expired. Renewed.".into(),
+            false,
+        ),
     }
 }
 
@@ -127,8 +136,19 @@ pub fn relay(policy: ReferralPolicy, tracer: &Tracer<'_>, narrate: bool) -> Rela
             turn,
             seat: seat.clone(),
         });
-        let routed = pick_desk(&router, &desk, &handed);
-        let said = seat_says(&desk, &handed, routed.as_deref());
+        let (found, needs_help) = findings(&desk, &handed);
+        let routed = needs_help
+            .then(|| pick_desk(&router, &desk, &found))
+            .flatten();
+        let said = match routed
+            .as_deref()
+            .and_then(|to| desks.lead(to).ok().flatten().map(|lead| (to, lead)))
+        {
+            // The desk by name, and its lead by handle, so every reach has
+            // something it is allowed to act on.
+            Some((to, lead)) => format!("{found} @{to} please take this (@{lead})."),
+            None => found,
+        };
         let sequence = log.say(&desk, agent(&seat), &said);
         tracer.emit(TraceEvent::TurnFinished {
             turn,

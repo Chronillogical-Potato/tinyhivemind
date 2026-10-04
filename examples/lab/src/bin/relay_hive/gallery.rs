@@ -1,7 +1,7 @@
 //! Every reason a referral is refused, one input each.
 
 use tinyhivemind_core::dispatch::{DispatchConversation, DispatchKey};
-use tinyhivemind_core::mention::{MentionAuthor, resolve};
+use tinyhivemind_core::mention::{Mention, MentionAuthor, MentionTarget, resolve};
 use tinyhivemind_core::referral::{
     ReferralDecision, ReferralInput, ReferralOrigin, ReferralPolicy, ReferralReach, referral,
 };
@@ -41,6 +41,15 @@ pub fn run() -> Res {
             hop,
             origin,
         }
+    };
+    let with = |author: &str, desk: &str, target: MentionTarget, hop: u32| ReferralInput {
+        mentions: vec![Mention {
+            target,
+            text: "@x".into(),
+            offset: 0,
+            quiet: false,
+        }],
+        ..input(author, desk, "@x hi", hop, None)
     };
     let back = Some(ReferralOrigin {
         conversation: DispatchConversation {
