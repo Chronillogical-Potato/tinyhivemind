@@ -69,7 +69,7 @@ async fn commits_append_only_new_transcript_rows() {
     assert!(stored.accepted.contains_key("one"));
 }
 #[tokio::test]
-async fn second_coordinator_fences_first_coordinator_from_writing() {
+async fn second_coordinator_fences_first_coordinator_on_next_snapshot() {
     let storage = Arc::new(MemoryStorage::new());
     let c = Coordinator::new(
         "runtime".into(),
@@ -83,8 +83,12 @@ async fn second_coordinator_fences_first_coordinator_from_writing() {
     })
     .await;
 
-    // A second process claims ownership by starting a new coordinator.
-    // This increments writer_epoch, fencing the first coordinator.
+    // First coordinator writes, storing its epoch 1.
+    c.send_as_host(message("first", Destination::Agent("a".into())))
+        .await
+        .unwrap();
+
+    // A second process starts and increments epoch to 2.
     let other = Coordinator::new(
         "runtime".into(),
         storage.clone(),
@@ -93,21 +97,21 @@ async fn second_coordinator_fences_first_coordinator_from_writing() {
     .await
     .unwrap();
 
-    // The first coordinator is now fenced. Any attempt to write returns Fenced.
+    // Second coordinator writes, storing epoch 2 and fencing the first.
+    hive(&other, "elsewhere", &["a"]).await;
+
+    // Now when first coordinator tries to write again, it will detect the higher
+    // stored epoch when creating a snapshot, and be fenced.
     assert!(matches!(
         c.send_as_host(message("fenced", Destination::Agent("a".into())))
             .await,
         Err(Error::Fenced { coordinator: 1, stored: 2 })
     ));
 
-    // The second coordinator can create a hive and operate normally.
-    hive(&other, "elsewhere", &["a"]).await;
-    assert_eq!(other.list_hives().unwrap()[0].hive_id, "elsewhere");
-
     let stored = storage.load().await.unwrap();
-    // The hive was created, but the fenced message was never sent.
+    // The hive was created and the first message was sent, but the second was blocked.
     assert!(stored.hives.contains_key("elsewhere"));
-    assert_eq!(stored.messages.len(), 0);
+    assert_eq!(stored.messages.len(), 1);
 }
 #[tokio::test]
 async fn second_coordinator_recovers_interrupted_turns_on_restart() {
