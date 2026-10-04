@@ -7,6 +7,7 @@
 //!
 //! Run with `cargo run --bin driver_knobs [-- --trace out.jsonl]`.
 
+mod conduct;
 mod fixture;
 mod raw;
 mod routing;
@@ -17,6 +18,8 @@ fn main() -> Res {
     let rig = TraceRig::from_args();
     raw::run()?;
     routing::run()?;
+    conduct::run(&rig)?;
+    conduct::replay(&rig)?;
     if let Some(path) = rig.path() {
         println!("\ntrace written to {path}");
     }
