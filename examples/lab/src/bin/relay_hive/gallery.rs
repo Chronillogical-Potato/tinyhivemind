@@ -42,14 +42,14 @@ pub fn run() -> Res {
             origin,
         }
     };
-    let with = |author: &str, desk: &str, target: MentionTarget, hop: u32| ReferralInput {
+    let with = |author: &str, desk: &str, target: MentionTarget| ReferralInput {
         mentions: vec![Mention {
             target,
             text: "@x".into(),
             offset: 0,
             quiet: false,
         }],
-        ..input(author, desk, "@x hi", hop, None)
+        ..input(author, desk, "@x hi", 0, None)
     };
     let back = Some(ReferralOrigin {
         conversation: DispatchConversation {
@@ -80,14 +80,22 @@ pub fn run() -> Res {
             input("alice", "support", "just a note", 0, None),
         ),
         (
-            "SelfMention",
+            "SelfMention (hand-built mention)",
             open,
-            input("alice", "support", "@alice hi", 0, None),
+            with(
+                "alice",
+                "support",
+                MentionTarget::Agent { id: "alice".into() },
+            ),
         ),
         (
-            "TargetInactive",
+            "TargetInactive (hand-built mention)",
             open,
-            input("alice", "support", "@gus hi", 0, None),
+            with(
+                "alice",
+                "support",
+                MentionTarget::Agent { id: "gus".into() },
+            ),
         ),
         (
             "SelfDesk",
@@ -105,12 +113,18 @@ pub fn run() -> Res {
             input("alice", "support", "@hal hi", 0, None),
         ),
         (
-            "UnknownDesk (a desk mention needs a known desk)",
+            "UnknownDesk (hand-built mention)",
             open,
-            input("alice", "support", "@nowhere hi", 0, None),
+            with(
+                "alice",
+                "support",
+                MentionTarget::Desk {
+                    id: "nowhere".into(),
+                },
+            ),
         ),
         (
-            "HopOverflow",
+            "HopOverflow (unreachable: hop >= max_hops trips first)",
             ReferralPolicy {
                 max_hops: u32::MAX,
                 ..open
