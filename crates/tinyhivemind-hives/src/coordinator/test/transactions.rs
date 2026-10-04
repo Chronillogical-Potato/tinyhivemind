@@ -321,3 +321,56 @@ async fn a_full_inbox_refuses_the_send_and_stores_nothing() {
         .await
         .unwrap();
 }
+#[tokio::test]
+async fn a_newer_coordinator_fences_the_older_one_out_of_the_store() {
+    let storage = Arc::new(MemoryStorage::new());
+    let old = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+    // A clean start still persists its claim.
+    assert_eq!(storage.load().await.unwrap().writer_epoch, 1);
+    hive(&old, "before", &[]).await;
+    let new = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(storage.load().await.unwrap().writer_epoch, 2);
+    let info = |id: &str| HiveInfo {
+        hive_id: id.into(),
+        name: id.into(),
+        members: Vec::new(),
+    };
+    for attempt in ["first", "second"] {
+        let refused = old.create_hive(info(attempt)).await;
+        assert!(
+            matches!(
+                refused,
+                Err(Error::Fenced {
+                    coordinator: 1,
+                    stored: 2
+                })
+            ),
+            "{attempt}: {refused:?}"
+        );
+    }
+    assert!(matches!(
+        old.run_until_idle().await,
+        Ok(()) | Err(Error::Fenced { .. })
+    ));
+    // The new owner sees the old owner's committed work and keeps writing.
+    new.create_hive(info("after")).await.unwrap();
+    let hives: Vec<_> = new
+        .list_hives()
+        .unwrap()
+        .into_iter()
+        .map(|hive| hive.hive_id)
+        .collect();
+    assert_eq!(hives, ["after", "before"]);
+}
