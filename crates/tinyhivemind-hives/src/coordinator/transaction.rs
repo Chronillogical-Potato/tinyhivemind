@@ -114,16 +114,6 @@ impl Coordinator {
             })
             .await?;
 
-        // After successful commit, verify we still own the store.
-        // If another coordinator claimed it (higher epoch), we're fenced.
-        if next.writer_epoch != self.inner.writer_epoch {
-            self.inner.fenced.store(true, Ordering::Release);
-            return Err(Error::Fenced {
-                coordinator: self.inner.writer_epoch,
-                stored: next.writer_epoch,
-            });
-        }
-
         let revision = next.revision;
         let mut live = self.lock()?;
         live.unpersisted
