@@ -44,6 +44,7 @@
 //! - [`embed`] — host-neutral conversation surfaces and semantic routing.
 //! - [`typesafe`] — System One wire types and `JevRouter`.
 //! - [`driver`] — bound desks, completion scheduling, and conducted episodes.
+//! - [`telemetry`] — stamped run events and the sink a host receives them on.
 //!
 //! # Example
 //!
@@ -110,5 +111,6 @@ pub mod embed;
 pub mod hive;
 /// Runtime-neutral session projection and ports.
 pub mod runtime;
+pub mod telemetry;
 /// TypeSafe System One wire and Jev router.
 pub mod typesafe;
