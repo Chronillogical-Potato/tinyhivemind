@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::swe::context::Policy;
+use crate::swe::session::SessionMode;
 
 fn parse(line: &str) -> Result<Config, UsageError> {
     Config::parse(line.split_whitespace().map(str::to_owned))
@@ -21,7 +22,7 @@ fn context_flags_default_to_masking_at_sixty_thousand() {
     let c = parse("--mode single --task fix --container box").expect("parses");
     assert_eq!(c.single_context, Policy::Mask);
     assert_eq!((c.context_budget, c.context_keep), (60_000, 8));
-    assert_eq!(c.hive_settings().policy, Policy::Mask);
+    assert_eq!(c.hive_settings().policy, Policy::MaskThenSummarize);
 }
 
 #[test]
@@ -81,4 +82,45 @@ fn reads_a_task_file() {
     .expect("parses");
     std::fs::remove_file(&path).ok();
     assert_eq!(c.task, "do the thing");
+}
+
+#[test]
+fn sessions_persist_by_default_and_fresh_restores_masking() {
+    let c = parse("--mode hive --task x --stdio-rpc").expect("parses");
+    assert_eq!(c.seat_session, SessionMode::Persistent);
+    assert_eq!(c.hive_settings().policy, Policy::MaskThenSummarize);
+    let fresh = parse("--mode hive --task x --stdio-rpc --seat-session fresh").expect("parses");
+    assert_eq!(fresh.seat_session, SessionMode::Fresh);
+    assert_eq!(fresh.hive_settings().policy, Policy::Mask);
+    assert!(parse("--mode hive --task x --stdio-rpc --seat-session sticky").is_err());
+}
+
+#[test]
+fn hive_context_overrides_the_session_default() {
+    let c = parse("--mode hive --task x --stdio-rpc --hive-context mask").expect("parses");
+    assert_eq!(c.hive_settings().policy, Policy::Mask);
+    let c = parse("--mode hive --task x --stdio-rpc --seat-session fresh --hive-context summarize")
+        .expect("parses");
+    assert_eq!(c.hive_settings().policy, Policy::MaskThenSummarize);
+    assert!(parse("--mode hive --task x --stdio-rpc --hive-context none").is_err());
+}
+
+#[test]
+fn memory_flags_parse_with_defaults() {
+    let c = parse("--mode hive --task x --stdio-rpc").expect("parses");
+    assert_eq!(
+        (c.memory, c.memory_url.as_deref(), c.memory_budget, c.run_id.as_deref()),
+        (MemoryKind::None, None, 1200, None)
+    );
+    let c = parse(
+        "--mode single --task x --stdio-rpc --memory cortex --memory-url http://m:1 \
+         --memory-budget 300 --run-id trial-7",
+    )
+    .expect("parses");
+    assert_eq!(c.memory, MemoryKind::Cortex);
+    assert_eq!(c.memory_url.as_deref(), Some("http://m:1"));
+    assert_eq!((c.memory_budget, c.run_id.as_deref()), (300, Some("trial-7")));
+    assert_eq!(c.memory.name(), "cortex");
+    assert!(parse("--mode hive --task x --stdio-rpc --memory redis").is_err());
+    assert!(parse("--mode hive --task x --stdio-rpc --memory-budget 0").is_err());
 }
