@@ -13,6 +13,7 @@ mod pins;
 mod sharing;
 
 use tinyhivemind_core::runtime::Conversation;
+use tinyhivemind_core::telemetry::TraceEvent;
 use tinyhivemind_lab::{Res, TraceRig, World};
 
 pub(crate) fn eng() -> Conversation {
@@ -41,11 +42,22 @@ pub(crate) fn world() -> World {
 
 fn main() -> Res {
     let rig = TraceRig::from_args();
+    let tracer = rig.tracer("memory-hive");
+    let mark = |label: &str| {
+        tracer.emit(TraceEvent::Checkpoint {
+            label: label.into(),
+        })
+    };
     digest::digest(&rig)?;
+    mark("digest done");
     pins::pins()?;
+    mark("pins done");
     sharing::sharing()?;
+    mark("sharing done");
     briefing::briefing()?;
+    mark("briefing done");
     elsewhere::elsewhere_and_threads()?;
+    mark("elsewhere and threads done");
     if let Some(path) = rig.path() {
         println!("\ntrace written to {path}");
     }
