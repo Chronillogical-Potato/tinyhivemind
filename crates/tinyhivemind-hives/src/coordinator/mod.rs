@@ -43,8 +43,9 @@ struct Inner {
     /// `Error::Fenced` (a newer coordinator has taken ownership), this flag is
     /// set and all further writes return the error immediately.
     writer_epoch: u64,
-    /// Set to true once fenced out by a newer coordinator.
-    fenced: AtomicBool,
+    /// Highest writer epoch the store has reported above ours; nonzero once a
+    /// newer coordinator has fenced this one out.
+    fenced_by: AtomicU64,
 }
 /// Deferred interruption preserving the reservation it was intended to interrupt.
 /// Kept for P2 work to persist deferred interruptions until commit.
@@ -109,7 +110,7 @@ impl Coordinator {
                 notify: Notify::new(),
                 shutdown: AtomicBool::new(false),
                 writer_epoch,
-                fenced: AtomicBool::new(false),
+                fenced_by: AtomicU64::new(0),
             }),
         })
     }
