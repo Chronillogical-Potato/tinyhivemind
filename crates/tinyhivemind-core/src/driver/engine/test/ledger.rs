@@ -72,7 +72,7 @@ fn evaluation(request: &RoutingRequest, needs_clarification: u32) -> RoutingEval
 
 /// Routes every broadcast to the first candidate, alone.
 #[derive(Debug, Default)]
-struct FirstRouter {
+pub(super) struct FirstRouter {
     calls: std::sync::atomic::AtomicUsize,
 }
 
@@ -83,7 +83,7 @@ impl Router for FirstRouter {
     }
 }
 
-fn broadcast(message: &str) -> Utterance {
+pub(super) fn broadcast(message: &str) -> Utterance {
     Utterance::Broadcast {
         message: message.into(),
     }
@@ -121,7 +121,7 @@ fn concluded(to: &str) -> Utterance {
     }
 }
 
-fn apply(
+pub(super) fn apply(
     driver: &CompletionDriver<'_, Seat>,
     state: &DriverState,
     author: &str,

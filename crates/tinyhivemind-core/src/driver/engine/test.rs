@@ -4,6 +4,7 @@
 
 mod broadcast_fallback;
 mod coverage;
+mod full_queue;
 mod ledger;
 mod round;
 
