@@ -29,32 +29,65 @@ api="http://127.0.0.1:$(cat "$work/port")/v1"
 docker run -d --rm --network none --name "$name" "$image" sleep 600 >/dev/null
 task='Write the word hi into /tmp/hello.txt and check it.'
 
-check() { # mode
-  local mode="$1"
+check() { # label mode [extra swe_hive flags...]
+  local label="$1" mode="$2"
+  shift 2
   docker exec "$name" rm -f /tmp/hello.txt
   env -u OPENROUTER_API_KEY "$bin" --mode "$mode" --task "$task" --container "$name" \
-    --api-base "$api" --trace "$work/$mode.jsonl" --result "$work/$mode.json" \
-    --max-turns 30 --token-cap 100000 2>"$work/$mode.err"
-  [ "$(docker exec "$name" cat /tmp/hello.txt)" = "hi" ] || { echo "$mode: file missing"; exit 1; }
-  python3 - "$work/$mode.json" "$work/$mode.jsonl" "$mode" <<'PY'
-import json, sys
+    --api-base "$api" --trace "$work/$label.jsonl" --result "$work/$label.json" \
+    --max-turns 30 --token-cap 100000 "$@" 2>"$work/$label.err"
+  [ "$(docker exec "$name" cat /tmp/hello.txt)" = "hi" ] || { echo "$label: file missing"; exit 1; }
+  python3 - "$work/$label.json" "$work/$label.jsonl" "$mode" "$label" <<'PY'
+import json, re, sys
 result = json.load(open(sys.argv[1]))
 events = [json.loads(line) for line in open(sys.argv[2])]
+mode, label = sys.argv[3], sys.argv[4]
 kinds = {e["event"] for e in events}
 assert result["completed"] is True, result
-assert result["mode"] == sys.argv[3], result
+assert result["mode"] == mode, result
 assert result["tokens_in"] > 0 and result["tokens_out"] > 0 and result["turns"] > 0, result
 need = {"turn_started", "turn_finished", "tool_call", "mark"}
-if sys.argv[3] == "hive":
+if mode == "hive":
     need |= {"round", "converged"}
 assert need <= kinds, (need - kinds)
-print(f'{result["mode"]}: ok  turns={result["turns"]} in={result["tokens_in"]} '
-      f'out={result["tokens_out"]} wall_ms={result["wall_ms"]}')
+marks = [e for e in events if e["event"] == "mark"]
+sessions = [m["detail"] for m in marks if m.get("label") == "session"]
+assert sessions, "every activation is marked"
+memory = [m["detail"] for m in marks if m.get("label") == "memory"]
+lead = [re.search(r"activation (\d+) messages (\d+)", d).groups()
+        for d in sessions if d.startswith("lead:")]
+if label.startswith("hive-persistent"):
+    assert result["seat_session"] == "persistent", result
+    resumed = [int(n) for a, n in lead if int(a) > 1]
+    assert resumed and min(resumed) > 2, ("a woken lead resumes its session", sessions)
+if label == "hive-fresh":
+    assert result["seat_session"] == "fresh" and result["context_policy"] == "mask", result
+    assert all(int(n) == 2 for _, n in lead), ("fresh sessions restart", sessions)
+if label.endswith("-mem"):
+    assert result["memory"] == "cortex", result
+    assert any(" recall session_start " in d for d in memory), memory
+    assert any(" remember " in d and "error=" not in d for d in memory), memory
+else:
+    assert result["memory"] == "none" and not memory, (result["memory"], memory)
+print(f'{label}: ok  turns={result["turns"]} in={result["tokens_in"]} '
+      f'out={result["tokens_out"]} wall_ms={result["wall_ms"]} '
+      f'sessions={len(sessions)} memory_marks={len(memory)}')
 PY
 }
 
-check single
-check hive
+check single single
+check hive-persistent hive --seat-session persistent --memory none
+check hive-fresh hive --seat-session fresh
+
+# Memory against a live CortexDB, only when one is configured (see
+# docker/cortex/README.md); each run writes under its own team:<run-id>.
+if [ -n "${CORTEX_DB_URL:-}" ] && [ -n "${CORTEX_DB_KEY:-}" ]; then
+  check hive-persistent-mem hive --seat-session persistent --memory cortex --run-id "offline-hive-$$"
+  check single-mem single --memory cortex --run-id "offline-single-$$"
+  cp "$work/hive-persistent-mem.jsonl" "${SWE_OFFLINE_KEEP_TRACE:-/dev/null}" 2>/dev/null || true
+else
+  echo "memory: skipped (set CORTEX_DB_URL and CORTEX_DB_KEY to exercise --memory cortex)"
+fi
 
 # A long single-arm session (24 commands, ~2.5 KB each) under each context
 # policy and a small budget: mask and summarize must keep the largest prompt
