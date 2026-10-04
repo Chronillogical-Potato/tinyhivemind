@@ -6,6 +6,7 @@
 //! Run with `cargo run --bin gate_knobs`.
 
 mod approval;
+mod dispatch;
 mod identity;
 mod responder;
 
@@ -13,6 +14,7 @@ use tinyhivemind_lab::Res;
 
 fn main() -> Res {
     identity::run()?;
+    dispatch::run()?;
     responder::run()?;
     approval::run()?;
     Ok(())

@@ -2,9 +2,8 @@
 
 use tinyhivemind_core::aside::{Audience, Viewer};
 use tinyhivemind_core::runtime::{
-    Sequence,
-    Conversation, ElsewhereQuery, THREAD_INDEX_LIMIT, gather_elsewhere, read_thread_index,
-    render_row,
+    Conversation, ElsewhereQuery, Sequence, THREAD_INDEX_LIMIT, gather_elsewhere,
+    read_thread_index, render_row,
 };
 use tinyhivemind_lab::{MemoryLog, Res, agent, block_on, person, section};
 
