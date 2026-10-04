@@ -88,6 +88,41 @@ pub enum TraceEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
+    /// Host memory was recalled for a seat. `at_ms` is the instant the recall
+    /// returned.
+    Recalled {
+        /// The seat the memory was recalled for.
+        seat: String,
+        /// Why: a [`RecallMoment::label`](crate::runtime::RecallMoment::label),
+        /// such as `session_start`, `rejoin` or `compaction`.
+        moment: String,
+        /// Notes the store returned; zero when the recall failed or was empty.
+        notes: u32,
+        /// Characters of the framed block injected into the session.
+        chars: u64,
+        /// Wall time the host measured for the recall.
+        latency_ms: u64,
+    },
+    /// A seat's activation was written to host memory. `at_ms` is the instant
+    /// the write returned.
+    Remembered {
+        /// The seat whose activation was written.
+        seat: String,
+        /// Entries written.
+        entries: u32,
+        /// Wall time the host measured for the write.
+        latency_ms: u64,
+    },
+    /// A seat rejoined the persistent session it already held, rather than
+    /// opening a new one.
+    SessionResumed {
+        /// The seat.
+        seat: String,
+        /// Messages already in the seat's session when it resumed.
+        messages: u32,
+        /// Desk rows delivered since the seat's watermark.
+        delta_rows: u32,
+    },
     /// A durable state was captured, for resume or replay.
     Checkpoint {
         /// A host-chosen name for what was captured.
