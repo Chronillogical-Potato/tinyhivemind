@@ -43,7 +43,9 @@ impl AgentRunner for ScriptedAgent {
                     }
                 };
                 println!("{}: {action:?}", request.agent_id);
-                coordinator.submit_action(&request.agent_id, &episode.episode_id, action)?;
+                coordinator
+                    .submit_action(&request.agent_id, &episode.episode_id, action)
+                    .await?;
             }
             Ok(TurnOutcome {
                 session_id: request
@@ -62,30 +64,37 @@ async fn main() -> Result<()> {
         "example-runtime".into(),
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
-    )?;
+    )
+    .await?;
     for agent_id in ["planner", "reviewer"] {
-        coordinator.register_agent(AgentRegistration {
-            agent_id: agent_id.into(),
-            runtime_id: "example-runtime".into(),
-            runner: Arc::new(ScriptedAgent {
-                coordinator: coordinator.clone(),
-            }),
-        })?;
+        coordinator
+            .register_agent(AgentRegistration {
+                agent_id: agent_id.into(),
+                runtime_id: "example-runtime".into(),
+                runner: Arc::new(ScriptedAgent {
+                    coordinator: coordinator.clone(),
+                }),
+            })
+            .await?;
     }
-    coordinator.create_hive(HiveInfo {
-        hive_id: "release".into(),
-        name: "Release".into(),
-        description: Some("Review a rollout plan".into()),
-        members: vec!["planner".into(), "reviewer".into()],
-    })?;
-    coordinator.send_as_host(SendMessage {
-        message_id: "rollout-request".into(),
-        sender: String::new(),
-        destination: Destination::Hive("release".into()),
-        body: "Choose a safe rollout plan.".into(),
-        thread: None,
-        only_for: vec!["planner".into()],
-    })?;
+    coordinator
+        .create_hive(HiveInfo {
+            hive_id: "release".into(),
+            name: "Release".into(),
+            description: Some("Review a rollout plan".into()),
+            members: vec!["planner".into(), "reviewer".into()],
+        })
+        .await?;
+    coordinator
+        .send_as_host(SendMessage {
+            message_id: "rollout-request".into(),
+            sender: String::new(),
+            destination: Destination::Hive("release".into()),
+            body: "Choose a safe rollout plan.".into(),
+            thread: None,
+            only_for: vec!["planner".into()],
+        })
+        .await?;
 
     let report = coordinator.run_until_idle().await?;
     assert_eq!(report.completed, 4);

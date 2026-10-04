@@ -16,7 +16,7 @@ pub async fn run(agent_count: usize, hive_count: usize) -> anyhow::Result<()> {
         agents[0].runtime_id().into(),
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
-    )?;
+    ).await?;
     let host = OpenHumanHost::new(agents[0].runtime_id().into(), coordinator.clone())?;
     for agent in &agents {
         // Ordinary host conversations exist before the adapter is registered.
@@ -30,8 +30,8 @@ pub async fn run(agent_count: usize, hive_count: usize) -> anyhow::Result<()> {
             .session(&session)
             .send()
             .await?;
-        host.register_agent_in_session(agent.clone(), &session)?;
-        host.register_agent(agent.clone())?; // The identical handle is idempotent.
+        host.register_agent_in_session(agent.clone(), &session).await?;
+        host.register_agent(agent.clone()).await?; // The identical handle is idempotent.
     }
     for hive in 0..hive_count {
         let id = format!("hive{hive}");
@@ -40,9 +40,9 @@ pub async fn run(agent_count: usize, hive_count: usize) -> anyhow::Result<()> {
             name: id.clone(),
             description: None,
             members: Vec::new(),
-        })?;
+        }).await?;
         for agent in &agents {
-            coordinator.join_hive(&id, agent.id())?;
+            coordinator.join_hive(&id, agent.id()).await?;
         }
     }
     // Exercise the original native capabilities again after handoff, on
@@ -94,7 +94,7 @@ pub async fn run(agent_count: usize, hive_count: usize) -> anyhow::Result<()> {
             body: format!("HOST_HIVE_INPUT_{hive}; retain all earlier conversation."),
             thread: None,
             only_for: Vec::new(),
-        })?;
+        }).await?;
         let report = coordinator.run_until_idle().await?;
         anyhow::ensure!(
             report.completed == agent_count && report.failed == 0,

@@ -63,7 +63,7 @@ pub async fn run() -> anyhow::Result<()> {
         manager.runtime_id().into(),
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
-    )?;
+    ).await?;
     let calls = Arc::new(AtomicUsize::new(0));
     let host = OpenHumanHost::new(manager.runtime_id().into(), coordinator.clone())?
         .with_management(
@@ -74,7 +74,7 @@ pub async fn run() -> anyhow::Result<()> {
             }),
             Arc::new(Authorizer),
         )?;
-    host.register_agent(manager.clone())?;
+    host.register_agent(manager.clone()).await?;
     for (name, args) in [
         (
             "hivemind_create_hive",
@@ -109,7 +109,7 @@ pub async fn run() -> anyhow::Result<()> {
             .await?;
     }
     anyhow::ensure!(
-        calls.load(Ordering::SeqCst) == 3,
+        calls.load(Ordering::SeqCst).await == 3,
         "denied tool reached host factory"
     );
     anyhow::ensure!(
@@ -127,7 +127,7 @@ pub async fn run() -> anyhow::Result<()> {
         body: "Work from dynamically created hive".into(),
         thread: None,
         only_for: Vec::new(),
-    })?;
+    }).await?;
     queue_capabilities(&fixture, "specialist");
     let report = coordinator.run_until_idle().await?;
     anyhow::ensure!(
