@@ -34,15 +34,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
-use tinymemory_api::{ItemId, MemoryEngine, Namespace, Role, Turn, WriteOptions};
-use tinymemory_integrations::cortex::{CortexCredential, CortexEngine};
-use tinymemory_tools::{
-    AgentMemory, Compaction, ContextPack, HolisticRecall, MemoryLayout, RecallPolicy,
-    ScopeSection, SessionStart, holistic_recall,
-};
 use tinyhivemind_core::runtime::{
     BriefingNote, Error as CoreError, Recall, RecallFuture, RecallMoment, RecallRequest, Remember,
     RememberFuture, RememberRequest,
+};
+use tinymemory_api::{ItemId, MemoryEngine, Namespace, Role, Turn, WriteOptions};
+use tinymemory_integrations::cortex::{CortexCredential, CortexEngine};
+use tinymemory_tools::{
+    AgentMemory, Compaction, ContextPack, HolisticRecall, MemoryLayout, RecallPolicy, ScopeSection,
+    SessionStart, holistic_recall,
 };
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
@@ -287,7 +287,11 @@ impl Inner {
         let query = request.focus.clone().filter(|f| !f.trim().is_empty());
         HolisticRecall {
             budget_tokens: (request.budget_chars / CHARS_PER_TOKEN).max(1),
-            exclude_ids: self.lock().get(seat).map(|s| s.seen.clone()).unwrap_or_default(),
+            exclude_ids: self
+                .lock()
+                .get(seat)
+                .map(|s| s.seen.clone())
+                .unwrap_or_default(),
             ..HolisticRecall::new(query, sections)
         }
     }
@@ -346,8 +350,7 @@ impl Inner {
     }
 
     async fn store(&self, request: RememberRequest, budget_chars: usize) -> Result<(), CoreError> {
-        self.check(&request.conversation)
-            .map_err(remember_error)?;
+        self.check(&request.conversation).map_err(remember_error)?;
         let text = entries_text(&request);
         if text.trim().is_empty() {
             return Ok(());

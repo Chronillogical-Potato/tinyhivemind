@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use tinyhivemind_core::runtime::{
-    BriefingNote, EntryKind, Error as CoreError, Recall, RecallFuture, RecallMoment,
-    RecallRequest, Remember, RememberFuture, RememberRequest,
+    BriefingNote, EntryKind, Error as CoreError, Recall, RecallFuture, RecallMoment, RecallRequest,
+    Remember, RememberFuture, RememberRequest,
 };
 use tinyhivemind_core::telemetry::TraceEvent;
 
@@ -135,7 +135,11 @@ fn a_new_session_opens_with_the_pack_and_a_resumed_one_appends_it() {
     );
     let typed = recalled(&rig);
     assert_eq!(typed.len(), 2);
-    assert!(typed.iter().all(|(_, notes, chars)| *notes == 1 && *chars > 0));
+    assert!(
+        typed
+            .iter()
+            .all(|(_, notes, chars)| *notes == 1 && *chars > 0)
+    );
     assert!(memory_marks(&rig).is_empty(), "no failure, no mark");
 }
 
@@ -164,12 +168,24 @@ fn the_end_of_an_activation_stores_its_words_and_a_ledger_of_attempts() {
     let kinds: Vec<EntryKind> = stored[0].entries.iter().map(|e| e.kind).collect();
     assert_eq!(
         kinds,
-        [EntryKind::FailedAttempt, EntryKind::FailedAttempt, EntryKind::Outcome]
+        [
+            EntryKind::FailedAttempt,
+            EntryKind::FailedAttempt,
+            EntryKind::Outcome
+        ]
     );
-    assert!(stored[0].entries[0].text.contains("`pytest -x` (failed, exit 1) -> ModuleNotFoundError"));
+    assert!(
+        stored[0].entries[0]
+            .text
+            .contains("`pytest -x` (failed, exit 1) -> ModuleNotFoundError")
+    );
     assert!(stored[0].entries[1].text.contains("did not run"));
     assert_eq!(stored[0].entries[2].text, "pytest fails on foo");
-    assert!(events(&rig).iter().any(|e| matches!(e, TraceEvent::Remembered { entries: 3, .. })));
+    assert!(
+        events(&rig)
+            .iter()
+            .any(|e| matches!(e, TraceEvent::Remembered { entries: 3, .. }))
+    );
 }
 
 #[test]
@@ -215,10 +231,8 @@ fn a_failing_memory_is_reported_and_the_activation_carries_on() {
     assert!(out.spoke.is_some());
     let bodies = bodies.lock().expect("lock");
     assert_eq!(user_texts(&bodies[0]), ["go"]);
-    assert!(
-        memory_marks(&rig)
-            .iter()
-            .any(|m| m.contains("session_start") && m.contains("error=memory recall failed: timed out"))
-    );
+    assert!(memory_marks(&rig).iter().any(
+        |m| m.contains("session_start") && m.contains("error=memory recall failed: timed out")
+    ));
     assert_eq!(recalled(&rig), [("session_start".to_owned(), 0, 0)]);
 }

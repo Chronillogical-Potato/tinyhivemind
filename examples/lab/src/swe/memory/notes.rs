@@ -8,11 +8,11 @@
 //! every tinymemory recall section finds it), but written with
 //! [`WriteOptions::visible`] so a teammate's very next recall can rank it.
 
+use tinyhivemind_core::runtime::{BriefingNote, RememberRequest};
 use tinymemory_api::{
     ItemId, MemoryMeta, Namespace, Role, SourceKind, SourceRef, StoreItem, Turn, TurnRange,
 };
 use tinymemory_tools::ContextPack;
-use tinyhivemind_core::runtime::{BriefingNote, RememberRequest};
 
 use super::types::kind_label;
 

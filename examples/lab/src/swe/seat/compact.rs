@@ -11,9 +11,9 @@ use serde_json::json;
 use tinyhivemind_core::telemetry::TraceEvent;
 
 use super::super::context::{self, Policy};
-use tinyhivemind_core::runtime::RecallMoment;
 use super::super::session::SeatSession;
 use super::{Activation, Env, Outcome, Work, recall};
+use tinyhivemind_core::runtime::RecallMoment;
 
 /// Shrink `session` under the activation's policy after a call that reported
 /// a prompt of `prompt` tokens.

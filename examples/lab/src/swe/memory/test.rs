@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tinyhivemind_core::runtime::{
-    BriefingNote, EntryKind, Error as CoreError, MemoryEntry, Recall, RecallMoment,
-    RecallRequest, Remember, RememberRequest,
+    BriefingNote, EntryKind, Error as CoreError, MemoryEntry, Recall, RecallMoment, RecallRequest,
+    Remember, RememberRequest,
 };
 use tinymemory_api::conformance::ReferenceEngine;
 use tinymemory_api::{
@@ -197,7 +197,10 @@ impl MemoryEngine for Recording {
     async fn health(&self) -> EngineHealth {
         self.engine.health().await
     }
-    async fn recall(&self, req: tinymemory_api::RecallRequest) -> tinymemory_api::Result<RecallAnswer> {
+    async fn recall(
+        &self,
+        req: tinymemory_api::RecallRequest,
+    ) -> tinymemory_api::Result<RecallAnswer> {
         self.engine.recall(req).await
     }
     async fn fetch(&self, req: FetchRequest) -> tinymemory_api::Result<FetchPage> {
