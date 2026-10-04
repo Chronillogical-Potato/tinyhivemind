@@ -5,7 +5,8 @@ use tinyhivemind_core::aside::Audience;
 use tinyhivemind_core::hive::quorum::{ConsensusState, consensus, standings};
 use tinyhivemind_core::hive::trace::{TraceKind, read};
 use tinyhivemind_core::hive::{
-    AgentThreshold, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, project_for, step,
+    AgentThreshold, Basis, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Horizon, Phase,
+    project_for, step,
 };
 use tinyhivemind_core::runtime::{Conversation, Sequence, SessionAuthor, SessionMessage};
 use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
@@ -108,8 +109,19 @@ fn says(
         }
     };
     let traces = read(visible);
-    let at = visible.last().map_or(Sequence(0), |row| row.sequence);
-    let table = standings(&traces, at, &policy.quorum).unwrap_or_default();
+    // The seat must fold quorum exactly as `step` does or it will not see the
+    // consensus the episode has: same rows, same horizon, same basis.
+    let rows: Vec<Sequence> = visible
+        .iter()
+        .filter(|row| row.audience.is_desk())
+        .map(|row| row.sequence)
+        .collect();
+    let at = rows.last().copied().unwrap_or(Sequence(0));
+    let horizon = match policy.distance {
+        Basis::Sequence => Horizon::at(at),
+        Basis::Live => Horizon::over(at, &rows),
+    };
+    let table = standings(&traces, horizon, &policy.quorum).unwrap_or_default();
     if turn.phase == Phase::Commit {
         return match consensus(&table, &policy.quorum) {
             ConsensusState::Quorum { topic } => format!("!commit #{topic} recorded"),
