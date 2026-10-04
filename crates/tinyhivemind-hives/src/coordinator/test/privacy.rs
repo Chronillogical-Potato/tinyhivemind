@@ -147,10 +147,12 @@ async fn addressed_private_thread_keeps_turn_context_and_outputs_in_that_thread(
     follow.thread = Some(root.sequence);
     c.send(follow).await.unwrap();
     c.run_until_idle().await.unwrap();
-    let seen = seen.lock().unwrap();
-    assert_eq!(seen.len(), 2);
-    assert!(seen.iter().all(|request| request.agent_id != "c"
-        && request.episode.as_ref().unwrap().thread == Some(root.sequence)));
+    {
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 2);
+        assert!(seen.iter().all(|request| request.agent_id != "c"
+            && request.episode.as_ref().unwrap().thread == Some(root.sequence)));
+    }
     let thread = c.read_hive("a", "work", None, Some(root.sequence)).unwrap();
     assert!(
         thread

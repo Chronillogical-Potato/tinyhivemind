@@ -127,14 +127,14 @@ fn the_state_row_never_carries_the_transcript() {
     let mut state = state_at(1);
     let row = row(0, true);
     state.append(row.clone());
-    assert_eq!(state.messages, [row.message.clone()]);
+    assert_eq!(state.messages, std::slice::from_ref(&row.message));
     let json = serde_json::to_value(&state).unwrap();
     assert!(json.get("messages").is_none());
     assert!(json.get("accepted").is_none());
     let bounded = state.without_transcript();
     assert!(bounded.messages.is_empty() && bounded.accepted.is_empty());
     assert_eq!(state.rows_since(0), [row]);
-    assert!(state.rows_since(1).is_empty());
+    assert_eq!(state.rows_since(1).len(), 0);
 }
 #[test]
 fn retention_keeps_recent_settled_episodes_and_deliveries_only() {

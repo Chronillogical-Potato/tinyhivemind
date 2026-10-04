@@ -106,7 +106,8 @@ impl HiveTool {
                     body: text("body"),
                     thread: args["thread"].as_u64(),
                     only_for: strings(&args, "only_for"),
-                })?)?)
+                })
+                .await?)?)
             }
             Kind::Post | Kind::Ask | Kind::Broadcast | Kind::Complete => {
                 let body = text("body");
@@ -119,7 +120,7 @@ impl HiveTool {
                     Kind::Broadcast => EpisodeAction::Broadcast { body },
                     _ => EpisodeAction::Complete { body },
                 };
-                submit(coordinator, actor, &text("episode_id"), action)
+                submit(coordinator, actor, &text("episode_id"), action).await
             }
             Kind::CreateHive => {
                 host.manage(
@@ -171,13 +172,13 @@ mod direct_test;
 #[cfg(test)]
 mod test;
 
-fn submit(
+async fn submit(
     coordinator: &tinyhivemind_hives::Coordinator,
     actor: &str,
     episode: &str,
     action: EpisodeAction,
 ) -> Result<Value> {
-    coordinator.submit_action(actor, episode, action)?;
+    coordinator.submit_action(actor, episode, action).await?;
     Ok(serde_json::json!({"accepted":true}))
 }
 

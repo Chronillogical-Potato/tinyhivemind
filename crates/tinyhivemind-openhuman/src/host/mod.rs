@@ -124,8 +124,8 @@ impl OpenHumanHost {
     /// # Errors
     /// Reject another runtime, conflicting handles, tool collisions or storage
     /// failures, and, with hive memory configured, a seat not bound to it.
-    pub fn register_agent(&self, agent: Agent) -> Result<()> {
-        self.register(agent, None)
+    pub async fn register_agent(&self, agent: Agent) -> Result<()> {
+        self.register(agent, None).await
     }
     /// Build a seat from `spec` on `runtime` and register it.
     ///
@@ -135,42 +135,49 @@ impl OpenHumanHost {
     /// # Errors
     /// An unusable seat id for memory, the runtime refusing the spec, or any
     /// [`Self::register_agent`] failure.
-    pub fn register_spec(&self, runtime: &Runtime, spec: AgentSpec) -> Result<Agent> {
+    pub async fn register_spec(&self, runtime: &Runtime, spec: AgentSpec) -> Result<Agent> {
         let spec = match &self.inner.memory {
             Some(memory) => memory.bind(spec)?,
             None => spec,
         };
         let agent = runtime.agent(spec)?;
-        self.register_agent(agent.clone())?;
+        self.register_agent(agent.clone()).await?;
         Ok(agent)
     }
-    fn register(&self, agent: Agent, session_id: Option<&str>) -> Result<()> {
+    async fn register(&self, agent: Agent, session_id: Option<&str>) -> Result<()> {
         if agent.runtime_id() != self.inner.runtime_id {
             return Err(Error::RuntimeMismatch);
         }
         if let Some(memory) = &self.inner.memory {
             memory.check(&agent)?;
         }
-        let mut entries = self.inner.agents.lock().map_err(|_| Error::Poisoned)?;
         let id = agent.id().to_owned();
-        if let Some(entry) = entries.get(&id) {
-            if !entry.agent.same_agent(&agent) {
-                return Err(Error::AgentConflict(id));
+        let (runner, activation) = self.attach(&id, &agent)?;
+        self.register_runner(
+            AgentRegistration {
+                agent_id: id,
+                runtime_id: self.inner.runtime_id.clone(),
+                runner,
+            },
+            session_id,
+        )
+        .await?;
+        activation.activate();
+        Ok(())
+    }
+    /// Attach the permanent tools, reusing the identical source for a known
+    /// handle. The entry is retained even if durable registration then fails.
+    fn attach(&self, id: &str, agent: &Agent) -> Result<(Arc<SuppliedRunner>, Arc<Activation>)> {
+        let mut entries = self.inner.agents.lock().map_err(|_| Error::Poisoned)?;
+        if let Some(entry) = entries.get(id) {
+            if !entry.agent.same_agent(agent) {
+                return Err(Error::AgentConflict(id.into()));
             }
             agent.attach_tools("hivemind", entry.source.clone())?;
-            self.register_runner(
-                AgentRegistration {
-                    agent_id: id,
-                    runtime_id: self.inner.runtime_id.clone(),
-                    runner: entry.runner.clone(),
-                },
-                session_id,
-            )?;
-            entry.activation.activate();
-            return Ok(());
+            return Ok((entry.runner.clone(), entry.activation.clone()));
         }
         let weak: Weak<Inner> = Arc::downgrade(&self.inner);
-        let actor = id.clone();
+        let actor = id.to_owned();
         let managed = self.inner.management.is_some();
         let activation = Arc::new(Activation::default());
         let attached_activation = activation.clone();
@@ -190,24 +197,15 @@ impl OpenHumanHost {
         });
         // Keep the exact source for retry even if durable registration fails.
         entries.insert(
-            id.clone(),
+            id.into(),
             Entry {
-                agent,
+                agent: agent.clone(),
                 source,
                 runner: runner.clone(),
                 activation: activation.clone(),
             },
         );
-        self.register_runner(
-            AgentRegistration {
-                agent_id: id,
-                runtime_id: self.inner.runtime_id.clone(),
-                runner,
-            },
-            session_id,
-        )?;
-        activation.activate();
-        Ok(())
+        Ok((runner, activation))
     }
     /// Bind a supplied agent to an already running host conversation.
     ///
@@ -217,20 +215,22 @@ impl OpenHumanHost {
     /// its tools remain inactive until registration succeeds.
     /// # Errors
     /// Registration failures or conflicting continuing-session bindings.
-    pub fn register_agent_in_session(&self, agent: Agent, session_id: &str) -> Result<()> {
-        self.register(agent, Some(session_id))
+    pub async fn register_agent_in_session(&self, agent: Agent, session_id: &str) -> Result<()> {
+        self.register(agent, Some(session_id)).await
     }
-    fn register_runner(
+    async fn register_runner(
         &self,
         registration: AgentRegistration,
         session_id: Option<&str>,
     ) -> Result<()> {
         match session_id {
-            Some(session) => self
-                .inner
-                .coordinator
-                .register_agent_in_session(registration, session)?,
-            None => self.inner.coordinator.register_agent(registration)?,
+            Some(session) => {
+                self.inner
+                    .coordinator
+                    .register_agent_in_session(registration, session)
+                    .await?;
+            }
+            None => self.inner.coordinator.register_agent(registration).await?,
         }
         Ok(())
     }
@@ -256,21 +256,21 @@ impl OpenHumanHost {
         management.authorizer.authorize(actor, &request)?;
         match request {
             ManagementRequest::CreateHive(hive) => {
-                self.coordinator().create_hive(hive.clone())?;
+                self.coordinator().create_hive(hive.clone()).await?;
                 Ok(serde_json::to_value(hive)?)
             }
             ManagementRequest::CreateAgent { template, config } => {
                 let agent = management.factory.create(template, config).await?;
                 let id = agent.id().to_owned();
-                self.register_agent(agent)?;
+                self.register_agent(agent).await?;
                 Ok(serde_json::json!({"agent_id":id}))
             }
             ManagementRequest::JoinHive { hive_id, agent_id } => {
-                self.coordinator().join_hive(&hive_id, &agent_id)?;
+                self.coordinator().join_hive(&hive_id, &agent_id).await?;
                 Ok(serde_json::json!({"joined":true}))
             }
             ManagementRequest::LeaveHive { hive_id, agent_id } => {
-                self.coordinator().leave_hive(&hive_id, &agent_id)?;
+                self.coordinator().leave_hive(&hive_id, &agent_id).await?;
                 Ok(serde_json::json!({"left":true}))
             }
         }

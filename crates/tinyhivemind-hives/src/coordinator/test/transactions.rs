@@ -121,8 +121,8 @@ async fn persistent_conflicts_and_storage_failures_publish_nothing() {
             .await,
         Err(Error::InvalidState(_))
     ));
-    assert!(c.lock().unwrap().durable.messages.is_empty());
-    assert!(storage.load().await.unwrap().messages.is_empty());
+    assert_eq!(c.lock().unwrap().durable.messages.len(), 0);
+    assert_eq!(storage.load().await.unwrap().messages.len(), 0);
     // A bounded number of conflicts is absorbed by reload and retry.
     storage.conflicts.store(2, Ordering::SeqCst);
     c.send_as_host(message("eventually", Destination::Agent("a".into())))
@@ -151,7 +151,7 @@ async fn a_cancelled_turn_is_persisted_by_the_next_drain() {
     tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
     drop(drain);
     assert_eq!(c.interruptions().unwrap().len(), 1);
-    assert!(storage.load().await.unwrap().interruptions.is_empty());
+    assert_eq!(storage.load().await.unwrap().interruptions.len(), 0);
     // A commit computed from a base without the interruption keeps it live.
     hive(&c, "work", &["a"]).await;
     assert_eq!(c.interruptions().unwrap().len(), 1);
