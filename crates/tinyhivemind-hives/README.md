@@ -29,5 +29,5 @@ See [source modules](src/README.md), the
 [accepted specification](../../docs/specs/dynamic-hives.md), and the
 [repository overview](../../README.md).
 
-Start with the [offline coordinator examples](examples/README.md) to see a
+Start with the [offline coordinator examples](../../examples/hives/README.md) to see a
 reviewer handoff and one continuing agent session across three hives.

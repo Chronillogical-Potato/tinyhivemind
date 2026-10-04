@@ -1,6 +1,6 @@
 //! One supplied agent keeps its session while working in three hives.
 //!
-//! Run with `cargo run -p tinyhivemind-hives --example shared_agent`.
+//! Run with `cargo run --manifest-path examples/hives/Cargo.toml --bin shared_agent`.
 
 use std::sync::Arc;
 use tinyhivemind_hives::{

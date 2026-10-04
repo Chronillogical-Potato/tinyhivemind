@@ -1,6 +1,6 @@
 //! A planner asks a reviewer before completing one hive assignment.
 //!
-//! Run with `cargo run -p tinyhivemind-hives --example one_hive`.
+//! Run with `cargo run --manifest-path examples/hives/Cargo.toml --bin one_hive`.
 
 use std::sync::Arc;
 use tinyhivemind_hives::{

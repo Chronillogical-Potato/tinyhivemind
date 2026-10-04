@@ -384,7 +384,7 @@ factory and authorizer. The host can also create hives, register agents, and
 change membership directly while scheduling runs. Direct replies can be read
 through `hivemind_read` without scheduling automatic return turns.
 
-Run the [offline coordinator examples](crates/tinyhivemind-hives/examples/README.md)
+Run the [offline coordinator examples](examples/hives/README.md)
 for a reviewer handoff and a session shared across hives. The
 [standalone host example](examples/openhuman/README.md) covers four topologies
 and native MCP/skill proofs. The [OpenCompany migration guide](docs/opencompany-migration.md)
