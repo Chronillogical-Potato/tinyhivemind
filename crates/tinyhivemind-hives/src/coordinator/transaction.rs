@@ -71,8 +71,18 @@ impl Coordinator {
     }
     /// Commit `next` over `snapshot` and publish it. Hold the writer gate.
     pub(super) async fn persist(&self, snapshot: &Snapshot, mut next: StoredState) -> Result<()> {
+        // Ensure we're not already fenced out.
+        if self.inner.fenced.load(Ordering::Acquire) {
+            return Err(Error::Fenced {
+                coordinator: self.inner.writer_epoch,
+                stored: snapshot.base.writer_epoch,
+            });
+        }
+
         let base = &snapshot.base;
         next.revision = base.revision.checked_add(1).ok_or(Error::Exhausted)?;
+        next.writer_epoch = self.inner.writer_epoch;
+
         self.inner.options.retention.apply(&mut next);
         let appended = next.rows_since(base.messages.len());
         self.inner
@@ -83,12 +93,22 @@ impl Coordinator {
                 appended: &appended,
             })
             .await?;
+
+        // After successful commit, verify we still own the store.
+        // If another coordinator claimed it (higher epoch), we're fenced.
+        if next.writer_epoch != self.inner.writer_epoch {
+            self.inner.fenced.store(true, Ordering::Release);
+            return Err(Error::Fenced {
+                coordinator: self.inner.writer_epoch,
+                stored: next.writer_epoch,
+            });
+        }
+
         let revision = next.revision;
         let mut live = self.lock()?;
         live.unpersisted
             .retain(|agent, _| !snapshot.flushed.contains(agent));
         live.durable = next;
-        live.reapply_unpersisted();
         drop(live);
         self.inner.committed.send_replace(revision);
         Ok(())
