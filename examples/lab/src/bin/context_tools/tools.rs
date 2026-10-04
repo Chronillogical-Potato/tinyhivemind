@@ -110,13 +110,17 @@ pub fn run(tracer: &Tracer<'_>) -> Res {
         ("search", Some("x"), &[], None),
         ("post", None, &[], None),
     ];
-    for (name, message, to, limit) in cases {
-        println!("  {name:<17} -> {}", call(name, message, to, limit));
+    for (turn, (name, message, to, limit)) in cases.into_iter().enumerate() {
+        let outcome = call(name, message, to, limit);
+        println!("  {name:<17} -> {outcome}");
+        let reason = outcome.strip_prefix("REFUSED: ").map(str::to_owned);
         tracer.emit(TraceEvent::ToolCall {
+            turn: turn as u64,
             seat: "alice".into(),
             tool: name.into(),
             latency_ms: 0,
-            refused: call(name, message, to, limit).starts_with("REFUSED"),
+            refused: reason.is_some(),
+            reason,
         });
     }
 
