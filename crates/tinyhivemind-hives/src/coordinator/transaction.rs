@@ -161,30 +161,3 @@ impl Coordinator {
         }
     }
 }
-impl super::LiveState {
-    /// Re-apply unpersisted interruptions to freshly published state, but only
-    /// when the currently running reservation matches the one that was interrupted.
-    /// This prevents interrupting newer work started by another coordinator after
-    /// a conflict reload.
-    fn reapply_unpersisted(&mut self) {
-        let unpersisted = std::mem::take(&mut self.unpersisted);
-        for (agent, deferred) in unpersisted {
-            // Check if the currently running reservation matches the interrupted one.
-            let should_reapply = self.durable.running.get(&agent).is_some_and(|running| {
-                running.delivery_sequence == deferred.delivery_sequence
-                    && running
-                        .request
-                        .episode
-                        .as_ref()
-                        .map(|ep| ep.episode_id.clone())
-                        == deferred.episode_id
-            });
-
-            if should_reapply {
-                interrupt(&mut self.durable, &agent, &deferred.reason);
-            }
-            // If the reservation no longer matches, drop the deferred interruption
-            // and the affected work will be recovered as interrupted on next restart.
-        }
-    }
-}
