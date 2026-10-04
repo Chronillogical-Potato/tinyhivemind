@@ -123,33 +123,13 @@ impl Coordinator {
         self.inner.committed.send_replace(revision);
         Ok(())
     }
-    /// `Ok(true)` once committed; `Ok(false)` after reloading for a retry.
-    /// Once fenced, returns the Fenced error immediately (not retryable).
-    pub(super) async fn settle(&self, attempt: Result<()>, conflicts: &mut usize) -> Result<bool> {
+    /// `Ok(true)` once committed. With single-writer fencing, there are no
+    /// retries: conflicts indicate we've been fenced or the store is corrupted.
+    pub(super) async fn settle(&self, attempt: Result<()>, _conflicts: &mut usize) -> Result<bool> {
         match attempt {
             Ok(()) => Ok(true),
-            Err(Error::Fenced { .. }) => Err(attempt.unwrap_err()),
-            Err(Error::RevisionConflict { .. }) if *conflicts < CONFLICT_RETRIES => {
-                *conflicts += 1;
-                self.reload().await?;
-                Ok(false)
-            }
             Err(error) => Err(error),
         }
-    }
-    /// Replace live state with the store's newer committed state.
-    async fn reload(&self) -> Result<()> {
-        let loaded = self.inner.storage.load().await?;
-        let revision = loaded.revision;
-        let mut live = self.lock()?;
-        if revision < live.durable.revision {
-            return Ok(());
-        }
-        live.durable = loaded;
-        live.reapply_unpersisted();
-        drop(live);
-        self.inner.committed.send_replace(revision);
-        Ok(())
     }
     /// Persist interruptions recorded while a dropped drain could not await.
     pub(super) async fn flush_unpersisted(&self) -> Result<()> {
