@@ -125,18 +125,18 @@ fn a_new_session_opens_with_the_pack_and_a_resumed_one_appends_it() {
     let users = user_texts(bodies.last().expect("request"));
     assert!(users[0].starts_with(MEMORY_HEADER) && users[0].ends_with("go"));
     assert!(users[1].starts_with("DELTA") && users[1].contains("PACK-rejoin"));
-    let names: Vec<&str> = recalls
-        .lock()
-        .expect("lock")
-        .iter()
-        .map(Moment::name)
-        .collect();
+    let recalls = recalls.lock().expect("lock");
+    let names: Vec<&str> = recalls.iter().map(|r| r.moment.label()).collect();
     assert_eq!(names, ["session_start", "rejoin"]);
     assert!(
-        memory_marks(&rig)
+        recalls
             .iter()
-            .any(|m| m.contains("recall rejoin"))
+            .all(|r| r.conversation == "team:test" && r.budget_chars == 2000)
     );
+    let typed = recalled(&rig);
+    assert_eq!(typed.len(), 2);
+    assert!(typed.iter().all(|(_, notes, chars)| *notes == 1 && *chars > 0));
+    assert!(memory_marks(&rig).is_empty(), "no failure, no mark");
 }
 
 struct Failing;
