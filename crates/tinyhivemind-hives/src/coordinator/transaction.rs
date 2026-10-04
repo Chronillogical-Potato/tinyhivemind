@@ -70,8 +70,20 @@ impl Coordinator {
         Ok(value)
     }
     /// Copy live state under the live lock. Hold the writer gate.
+    /// Detects if this coordinator has been fenced by another process that
+    /// incremented the epoch.
     pub(super) fn snapshot(&self) -> Result<Snapshot> {
         let live = self.lock()?;
+
+        // Check if we've been fenced (another coordinator has claimed higher epoch).
+        if live.durable.writer_epoch > self.inner.writer_epoch {
+            self.inner.fenced.store(true, Ordering::Release);
+            return Err(Error::Fenced {
+                coordinator: self.inner.writer_epoch,
+                stored: live.durable.writer_epoch,
+            });
+        }
+
         Ok(Snapshot {
             base: live.durable.clone(),
             flushed: live.unpersisted.keys().cloned().collect(),
