@@ -55,6 +55,13 @@ openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "9c
 openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "9c475c174ca5506f67ed471ec34ef14617316122", default-features = false }
 tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "8e5008c375f9e717e6cbb81fa9532599b98ff0a8" }
 tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "8e5008c375f9e717e6cbb81fa9532599b98ff0a8" }
+# The memory engine contract and the per-agent lifecycle OpenHuman runs its
+# seats' memory through, for the adapter's `Recall`/`Remember` over the same
+# engine and layout. Git sources pinned at the commit OpenHuman's tree vendors
+# and patched onto that copy below, for the same one-copy reason as the tool
+# crates; `.github/scripts/assert-openhuman-pin.sh` checks the rev.
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "4b1832311fce41152ce143e7ce209e62f82c6add" }
+tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", rev = "4b1832311fce41152ce143e7ce209e62f82c6add" }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.
