@@ -1,7 +1,7 @@
 //! The shared in-memory transcript a hive's seats read and write.
 //!
 //! The board is the lab's host side of core's runtime: an append-only
-//! [`MemoryLog`] (the host-owned journal), core's `commit_utterance` deciding
+//! [`MemoryLog`] (the host-owned journal), core's `commit_utterance_to_room` deciding
 //! what each spoken tool call becomes, and core's pins, digest and projection
 //! deciding what each seat is shown. There is no second journal: the digest is
 //! host state that supersedes itself, and every row stays in the log.
@@ -22,7 +22,7 @@ use tinyhivemind_core::runtime::digest::{
     ChannelDigest, ChannelHead, DigestOutcome, DigestPolicy, apply_digest, refold,
 };
 use tinyhivemind_core::runtime::pins::{PIN_LIMIT, read_pinboard};
-use tinyhivemind_core::runtime::speech::{CommitRequest, Utterance, commit_utterance};
+use tinyhivemind_core::runtime::speech::{CommitRequest, Utterance, commit_utterance_to_room};
 use tinyhivemind_core::runtime::{
     Conversation, Sequence, SessionQuery, project_session, render_row,
 };
@@ -117,7 +117,9 @@ impl Board {
             desk_id: DESK.into(),
             thread_root: None,
         };
-        let committed = commit_utterance(&CommitRequest {
+        // This desk runs with asides off and wants an `ask` heard by the room,
+        // so it opts into the fallback rather than treating the refusal as fatal.
+        let committed = commit_utterance_to_room(&CommitRequest {
             utterance,
             speaker_id: speaker,
             conversation: &conversation,
