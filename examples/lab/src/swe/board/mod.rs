@@ -39,7 +39,7 @@ pub const DESK: &str = "swe";
 const DELTA_WINDOW: usize = 40;
 
 /// A rendered view of the desk and the point in the log it was read at.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct View {
     /// What the seat is shown.
     pub text: String,
