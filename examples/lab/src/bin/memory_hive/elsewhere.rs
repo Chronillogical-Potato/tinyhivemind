@@ -87,8 +87,8 @@ pub fn elsewhere_and_threads() -> Res {
         world.desk_records()[1].members,
         unrestricted[0].rows.len()
     );
-    // Conversation::equivalent_to treats `main` and `General` as one desk;
-    // gather_elsewhere compares raw ids, so it does not skip the current one.
+    // Conversation::equivalent_to treats `main` and `General` as one desk, and
+    // gather_elsewhere skips the current conversation by the same rule.
     let main_desk = Conversation {
         desk_id: "main".into(),
         desk_name: "General".into(),
@@ -104,7 +104,7 @@ pub fn elsewhere_and_threads() -> Res {
         main_desk.equivalent_to(&alias)
     );
     let both = [alias];
-    let leaked = block_on(gather_elsewhere(
+    let skipped = block_on(gather_elsewhere(
         &log,
         &ElsewhereQuery {
             seat: "alice",
@@ -115,8 +115,8 @@ pub fn elsewhere_and_threads() -> Res {
         },
     ))?;
     println!(
-        "  gather_elsewhere with current=main and listed=general returns {} conversation(s) (0 expected if aliases matched)",
-        leaked.len()
+        "  gather_elsewhere with current=main and listed=general returns {} conversation(s) (0: the alias is the current desk)",
+        skipped.len()
     );
 
     section("threads: the index a viewer gets of a desk");

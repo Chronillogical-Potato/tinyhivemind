@@ -6,7 +6,7 @@ use tinyhivemind_core::mention::{Mention, MentionTarget};
 use tinyhivemind_core::runtime::speech::fence::extract_post;
 use tinyhivemind_core::runtime::speech::{
     CallArguments, CommitRequest, ParameterKind, READ_DEFAULT, READ_MAX, ToolCall, Utterance,
-    addressed_peers, check_recipients, commit_utterance, interpret, read_limit, tool_specs,
+    addressed_peers, check_recipients, commit_utterance, commit_utterance_to_room, interpret, read_limit, tool_specs,
 };
 use tinyhivemind_core::telemetry::{TraceEvent, Tracer};
 use tinyhivemind_lab::{Res, World, section};
@@ -268,7 +268,7 @@ pub fn run(tracer: &Tracer<'_>) -> Res {
     for (label, policy) in policies {
         println!("  -- {label}");
         for utterance in &utterances {
-            let committed = commit_utterance(&CommitRequest {
+            let request = CommitRequest {
                 utterance,
                 speaker_id: "alice",
                 conversation: &conversation,
@@ -277,7 +277,21 @@ pub fn run(tracer: &Tracer<'_>) -> Res {
                 unsettled: false,
                 roster: &roster,
                 desks: &desks,
-            })?;
+            };
+            // A declined aside fails closed: no row exists to print. The
+            // opt-in room fallback is shown beside it.
+            let committed = match commit_utterance(&request) {
+                Ok(committed) => committed,
+                Err(refused) => {
+                    let room = commit_utterance_to_room(&request)?;
+                    println!(
+                        "    {:<44} {refused}; commit_utterance_to_room -> audience={:?}",
+                        format!("{:?}", utterance.message()),
+                        room.audience
+                    );
+                    continue;
+                }
+            };
             let ids: Vec<String> = committed
                 .mentions
                 .iter()

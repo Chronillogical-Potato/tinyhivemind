@@ -177,7 +177,7 @@ pub fn run() -> Res {
         setup(vec![broadcast("planner", 4, "anything")]),
     );
     // The author is still pending here: its handoff is refused for capacity,
-    // and its assignment closes all the same.
+    // so no seat is run and the author's assignment stays open (F22).
     let driver = CompletionDriver::new(&hive, 2)?.with_queue_depth(1)?;
     drive(
         "queue_depth=1: planner fills coder's queue, then a pending writer's broadcast is refused",
