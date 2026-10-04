@@ -600,10 +600,10 @@ fn offline_config() -> RuntimeConfig {
     config.agent.tool_dispatcher = "auto".into();
     config.local_ai.runtime_enabled = false;
     config.runtime_python.enabled = false;
-    config.memory_tree.spacy_enabled = false;
-    config.memory_tree.embedding_endpoint = None;
-    config.memory_tree.embedding_model = None;
-    config.memory_tree.embedding_strict = false;
+    // No memory engine answers a scripted run: skip the per-turn recall pack
+    // and the per-turn conversation log.
+    config.memory.recall.enabled = false;
+    config.memory.conversations.enabled = false;
     config.agent.compact_context = true;
     config.default_temperature = 0.0;
     config
