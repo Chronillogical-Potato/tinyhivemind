@@ -101,6 +101,20 @@ fn two_failures_abort_without_charging_tokens() {
 }
 
 #[test]
+fn a_context_overflow_is_recognised_and_not_retried() {
+    let client = llm(
+        vec![Err("http 400: maximum context length is 131072 tokens".into())],
+        None,
+    );
+    assert!(matches!(
+        client.complete("x", &[], &[]),
+        Err(Abort::ContextOverflow(_))
+    ));
+    assert!(is_context_overflow("provider error: context_length_exceeded"));
+    assert!(!is_context_overflow("http 429: rate limited"));
+}
+
+#[test]
 fn a_reached_cap_refuses_the_call_before_sending() {
     let client = llm(vec![Ok(reply("ok", None))], Some(10));
     client.complete("x", &[], &[]).expect("first call fits");

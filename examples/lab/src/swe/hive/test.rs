@@ -139,6 +139,7 @@ fn a_scripted_episode_converges_when_the_lead_completes() {
         &Params {
             round_width: 2,
             steps: 4,
+            context: Settings::OFF,
         },
     );
     assert!(report.completed, "report: {report:?}");
@@ -193,6 +194,7 @@ fn the_meter_cap_stops_the_hive_as_exhausted() {
         &Params {
             round_width: 2,
             steps: 4,
+            context: Settings::OFF,
         },
     );
     assert!(!report.completed);

@@ -16,6 +16,25 @@ fn parses_a_container_run_with_defaults() {
 }
 
 #[test]
+fn context_flags_default_to_masking_at_sixty_thousand() {
+    let c = parse("--mode single --task fix --container box").expect("parses");
+    assert_eq!(c.single_context, Policy::Mask);
+    assert_eq!((c.context_budget, c.context_keep), (60_000, 8));
+    assert_eq!(c.hive_settings().policy, Policy::Mask);
+}
+
+#[test]
+fn parses_the_context_flags_and_rejects_a_bad_policy() {
+    let c = parse(
+        "--mode single --task x --stdio-rpc --single-context summarize --context-budget 900 --context-keep 3",
+    )
+    .expect("parses");
+    assert_eq!(c.single_settings().policy, Policy::Summarize);
+    assert_eq!((c.context_budget, c.context_keep), (900, 3));
+    assert!(parse("--mode single --task x --stdio-rpc --single-context nope").is_err());
+}
+
+#[test]
 fn parses_every_numeric_flag() {
     let c = parse(
         "--mode hive --task x --stdio-rpc --max-turns 9 --round-width 3 --token-cap 5000 \
