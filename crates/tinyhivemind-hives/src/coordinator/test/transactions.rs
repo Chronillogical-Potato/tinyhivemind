@@ -164,34 +164,32 @@ async fn second_coordinator_recovers_interrupted_turns_on_restart() {
 }
 
 #[tokio::test]
-async fn persistent_conflicts_and_storage_failures_publish_nothing() {
+async fn conflicts_and_storage_failures_are_fatal() {
     let storage = Arc::new(Recording::default());
     let c = over(storage.clone(), CoordinatorOptions::default()).await;
     add(&c, "a", |request| {
         Box::pin(async move { Ok(done(&request)) })
     })
     .await;
-    storage.conflicts.store(usize::MAX, Ordering::SeqCst);
+
+    // With single-writer fencing, any conflict is fatal (not retried).
+    storage.conflicts.store(1, Ordering::SeqCst);
     assert!(matches!(
-        c.send_as_host(message("never", Destination::Agent("a".into())))
+        c.send_as_host(message("conflict", Destination::Agent("a".into())))
             .await,
         Err(Error::RevisionConflict { .. })
     ));
-    storage.conflicts.store(0, Ordering::SeqCst);
+    assert_eq!(c.lock().unwrap().durable.messages.len(), 0);
+    assert_eq!(storage.load().await.unwrap().messages.len(), 0);
+
+    // Storage failures are also fatal.
     storage.fail_next_commits(1);
     assert!(matches!(
         c.send_as_host(message("offline", Destination::Agent("a".into())))
             .await,
         Err(Error::InvalidState(_))
     ));
-    assert_eq!(c.lock().unwrap().durable.messages.len(), 0);
     assert_eq!(storage.load().await.unwrap().messages.len(), 0);
-    // A bounded number of conflicts is absorbed by reload and retry.
-    storage.conflicts.store(2, Ordering::SeqCst);
-    c.send_as_host(message("eventually", Destination::Agent("a".into())))
-        .await
-        .unwrap();
-    assert_eq!(storage.load().await.unwrap().messages.len(), 1);
 }
 #[tokio::test]
 async fn a_cancelled_turn_is_persisted_by_the_next_drain() {
