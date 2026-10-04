@@ -25,7 +25,8 @@ async fn private_child_contract(storage: Arc<dyn Storage>) {
                             agents: vec!["b".into()],
                             body: "private question".into(),
                         },
-                    )?;
+                    )
+                    .await?;
                 } else {
                     if ep.thread.is_some() {
                         c.submit_action(
@@ -34,7 +35,8 @@ async fn private_child_contract(storage: Arc<dyn Storage>) {
                             EpisodeAction::Post {
                                 body: "private post".into(),
                             },
-                        )?;
+                        )
+                        .await?;
                     }
                     c.submit_action(
                         &request.agent_id,
@@ -46,7 +48,8 @@ async fn private_child_contract(storage: Arc<dyn Storage>) {
                                 "done".into()
                             },
                         },
-                    )?;
+                    )
+                    .await?;
                 }
                 Ok(done(&request))
             })
@@ -119,14 +122,16 @@ async fn addressed_private_thread_keeps_turn_context_and_outputs_in_that_thread(
                     EpisodeAction::Post {
                         body: "thread post".into(),
                     },
-                )?;
+                )
+                .await?;
                 c.submit_action(
                     &request.agent_id,
                     &ep.episode_id,
                     EpisodeAction::Complete {
                         body: "thread done".into(),
                     },
-                )?;
+                )
+                .await?;
                 Ok(done(&request))
             })
         })

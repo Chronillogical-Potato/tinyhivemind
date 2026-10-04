@@ -41,14 +41,16 @@ async fn private_initial_contract(storage: Arc<dyn crate::Storage>) {
                     EpisodeAction::Post {
                         body: "secret post".into(),
                     },
-                )?;
+                )
+                .await?;
                 c.submit_action(
                     &request.agent_id,
                     &request.episode.as_ref().unwrap().episode_id,
                     EpisodeAction::Complete {
                         body: "secret completion".into(),
                     },
-                )?;
+                )
+                .await?;
                 Ok(TurnOutcome {
                     reply: Some("secret reply".into()),
                     ..done(&request)

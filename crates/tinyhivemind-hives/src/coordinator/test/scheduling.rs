@@ -79,7 +79,8 @@ async fn active_turn_keeps_membership_snapshot_after_leave_and_new_turn_is_block
                 EpisodeAction::Complete {
                     body: "done".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(done(&request))
         })
     })
@@ -153,7 +154,8 @@ async fn zero_broadcast_budget_discharges_the_assignment() {
                 EpisodeAction::Broadcast {
                     body: "delegate".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(done(&request))
         })
     })

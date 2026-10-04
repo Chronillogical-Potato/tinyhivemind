@@ -196,7 +196,8 @@ async fn one_agent_continues_one_session_across_three_hives() {
                 EpisodeAction::Complete {
                     body: "done".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(done(&request))
         })
     })
@@ -241,7 +242,8 @@ async fn conductor_opens_child_ask_and_delivers_its_conclusion() {
                             agents: vec!["b".into()],
                             body: "question".into(),
                         },
-                    )?;
+                    )
+                    .await?;
                 } else {
                     c.submit_action(
                         &request.agent_id,
@@ -253,7 +255,8 @@ async fn conductor_opens_child_ask_and_delivers_its_conclusion() {
                                 "done".into()
                             },
                         },
-                    )?;
+                    )
+                    .await?;
                 }
                 Ok(done(&request))
             })

@@ -28,7 +28,8 @@ async fn parked_episode_and_direct_turn_resume_only_after_release() {
                         EpisodeAction::Complete {
                             body: "approved".into(),
                         },
-                    )?;
+                    )
+                    .await?;
                 }
                 Ok(outcome)
             })
@@ -38,10 +39,10 @@ async fn parked_episode_and_direct_turn_resume_only_after_release() {
         c.send_as_host(message("task", destination)).await.unwrap();
         assert_eq!(c.run_until_idle().await.unwrap().parked, 1);
         assert_eq!(c.run_until_idle().await.unwrap().completed, 0);
-        assert_eq!(calls.load(Ordering::SeqCst).await, 1);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
         c.release("a").await.unwrap();
         assert_eq!(c.run_until_idle().await.unwrap().completed, 1);
-        assert_eq!(calls.load(Ordering::SeqCst).await, 2);
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 }
 #[tokio::test]
@@ -259,7 +260,8 @@ async fn sqlite_reopens_conductor_checkpoint_and_resumes_parked_agent() {
                 EpisodeAction::Post {
                     body: "waiting".into(),
                 },
-            )?;
+            )
+            .await?;
             let mut outcome = done(&request);
             outcome.disposition = TurnDisposition::Parked;
             Ok(outcome)
@@ -293,7 +295,8 @@ async fn sqlite_reopens_conductor_checkpoint_and_resumes_parked_agent() {
                         EpisodeAction::Complete {
                             body: "approved".into(),
                         },
-                    )?;
+                    )
+                    .await?;
                     Ok(done(&request))
                 })
             }))),

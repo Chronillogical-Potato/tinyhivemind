@@ -173,6 +173,7 @@ async fn active_episode_admits_only_bound_members_and_current_assignment() {
                         body: "forged".into()
                     }
                 )
+                .await
                 .is_err()
             );
             for agents in [vec![], vec!["unknown".into()], vec!["a".into()]] {
@@ -185,24 +186,27 @@ async fn active_episode_admits_only_bound_members_and_current_assignment() {
                             body: "question".into()
                         }
                     )
+                    .await
                     .is_err()
                 );
             }
-            assert!(c.bind_session("a", "switched").is_err());
+            assert!(c.bind_session("a", "switched").await.is_err());
             c.submit_action(
                 "a",
                 ep,
                 EpisodeAction::Post {
                     body: "progress".into(),
                 },
-            )?;
+            )
+            .await?;
             c.submit_action(
                 "a",
                 ep,
                 EpisodeAction::Complete {
                     body: "done".into(),
                 },
-            )?;
+            )
+            .await?;
             let mut result = done(&request);
             result.reply = Some("text reply".into());
             Ok(result)
@@ -289,6 +293,7 @@ async fn joining_after_episode_creation_cannot_inject_an_unbound_child_participa
                         body: "late join".into()
                     }
                 )
+                .await
                 .is_err()
             );
             c.submit_action(
@@ -297,7 +302,8 @@ async fn joining_after_episode_creation_cannot_inject_an_unbound_child_participa
                 EpisodeAction::Complete {
                     body: "done".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(done(&request))
         })
     })

@@ -24,14 +24,16 @@ async fn failed_actions_and_session_contract(
                 EpisodeAction::Post {
                     body: "SUPPRESSED_POST".into(),
                 },
-            )?;
+            )
+            .await?;
             c.submit_action(
                 "a",
                 &episode.episode_id,
                 EpisodeAction::Complete {
                     body: "SUPPRESSED_COMPLETION".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(TurnOutcome {
                 session_id: "committed-host-session".into(),
                 reply: Some("SUPPRESSED_REPLY".into()),
