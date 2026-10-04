@@ -157,6 +157,26 @@ fn cases() -> Vec<Case> {
     ] {
         all.push(case("weights", label, move |p, _| p.weights = weights));
     }
+    for cap in [10, 50, 100] {
+        all.push(case(
+            "dominance_cap (eli eager)",
+            format!("dominance_cap={cap}, eli threshold -4000"),
+            move |p, r| {
+                p.dominance_cap = cap;
+                r.thresholds = vec![AgentThreshold::new("eli", -4_000)];
+            },
+        ));
+    }
+    for cap in [1, 3, 10] {
+        all.push(case(
+            "repetition_cap (eli eager)",
+            format!("repetition_cap={cap}, eli threshold -4000"),
+            move |p, r| {
+                p.repetition_cap = cap;
+                r.thresholds = vec![AgentThreshold::new("eli", -4_000)];
+            },
+        ));
+    }
     let mut eager = AgentThreshold::new("eli", -50_000);
     eager.affinity = vec![("z".into(), 100)];
     let shy = AgentThreshold::new("ada", 50_000);
