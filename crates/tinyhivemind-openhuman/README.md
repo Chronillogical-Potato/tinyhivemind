@@ -64,7 +64,15 @@ base config size the per-turn pack.
 The host supplies the engine: `[memory] engine = "cortexdb"`,
 `[memory.engines.cortexdb] endpoint = "<url>"`, and the API key in the keychain
 under `memory-cortexdb`. Seat sessions persist in OpenHuman across turns, and
-compaction is the only thing that drops history from the live context. See
+compaction is the only thing that drops history from the live context.
+
+`HiveMemoryStore` implements core's `Recall` and `Remember` ports over the same
+engine and namespace. Use `HiveMemoryStore::from_config(&config, memory)` for
+the engine OpenHuman binds, or `HiveMemoryStore::new(engine, memory)` for one
+the host supplies. It serves session-start, rejoin and compaction recalls and
+structured entries (failed attempts are marked). OpenHuman already injects a
+memory pack into every bound seat's turn, so the adapter's runner adds no
+second block. See
 [`src/memory`](src/memory/README.md) and the wiki's Host integration page.
 
 The host must keep its `OpenHumanHost` alive while attached tools are in use.

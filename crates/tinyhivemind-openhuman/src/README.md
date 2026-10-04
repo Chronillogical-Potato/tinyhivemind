@@ -4,7 +4,7 @@
 | --- | --- |
 | `host/` | Supplied handle registration, continuing sessions, host hooks and management |
 | `tools/` | Stable native specifications, argument validation and bound execution |
-| `memory/` | Hive-shared OpenHuman memory: the hive root, per-seat memory agent ids and seat binding |
+| `memory/` | Hive-shared OpenHuman memory: the hive root, per-seat memory agent ids, seat binding, and core `Recall`/`Remember` |
 | `journal/` | Optional in-memory host log used by standalone research examples |
 | `offline/` | Feature gated loopback backend and host runtime configuration fixtures |
 | `error.rs` | Typed adapter errors |
