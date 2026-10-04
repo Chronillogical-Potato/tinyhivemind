@@ -221,7 +221,7 @@ async fn deferred_interruptions_only_reapply_to_matching_reservations() {
     let c = over(storage.clone(), CoordinatorOptions::default()).await;
     let started = Arc::new(tokio::sync::Notify::new());
     let signal = started.clone();
-    add(&c, "a", move |request| {
+    add(&c, "a", move |_request| {
         let signal = signal.clone();
         Box::pin(async move {
             signal.notify_one();
