@@ -36,7 +36,10 @@ LONG = {"step": 0}
 
 def decide(messages):
     system = messages[0]["content"]
-    user = messages[1]["content"] if len(messages) > 1 else ""
+    # The newest user message: a persistent hive session keeps its opening at
+    # messages[1] and appends each wake's desk delta after it.
+    users = [m.get("content") or "" for m in messages if m.get("role") == "user"]
+    user = users[-1] if users else ""
     tool_results = [m for m in messages if m.get("role") == "tool"]
     done = len(tool_results)
     if "You condense" in system:
