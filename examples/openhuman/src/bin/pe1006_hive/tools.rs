@@ -4,12 +4,12 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use serde_json::{Value, json};
-use tinyhivemind_tools::{MemoryTools, memory_tool_definitions};
 use super::memory_support::{Compaction, MarkdownMemory};
+use serde_json::{Value, json};
 use tinyhivemind_core::runtime::speech::{
     CallArguments, ParameterKind, ToolCall, Utterance, interpret, tool_specs,
 };
+use tinyhivemind_tools::{MemoryTools, memory_tool_definitions};
 
 #[derive(Clone, Debug)]
 pub(super) struct Server {
@@ -140,10 +140,7 @@ fn call(request: &Value, server: &Server) -> Result<String, String> {
 /// A hive memory tool, answered over the shared markdown file. Each seat's
 /// server is its own process, so the engine is rebuilt from the path per call.
 fn call_memory(request: &Value, server: &Server, name: &str) -> Result<String, String> {
-    let path = server
-        .memory
-        .as_ref()
-        .ok_or("this hive serves no memory")?;
+    let path = server.memory.as_ref().ok_or("this hive serves no memory")?;
     let tools = MemoryTools::new(std::sync::Arc::new(MarkdownMemory::new(
         path,
         Compaction::DEFAULT,

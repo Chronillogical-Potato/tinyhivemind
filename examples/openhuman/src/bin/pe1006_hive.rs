@@ -78,6 +78,8 @@ const TASK: &str = TASK_1006;
 
 /// The hive's shared working memory, inside the durable workspace so it outlives a run.
 const MEMORY_FILE: &str = "HIVE_MEMORY.md";
+/// Characters of recalled memory a seat's turn opens with.
+const MEMORY_BRIEF_CHARS: usize = 3_000;
 const SEALED: &str = "Use only the statement, this desk transcript, and computations in the shared workspace. Do not search the web, inspect this repository, use inherited solution memory, or read outside the workspace. Never invent a residue. Keep the desk message below 1800 characters and name concrete files or checks.";
 const PRIOR_FAILURE: &str = "Prior hive runs were rejected. Candidate residues 58302041 and 14193671 came from invalid methods and must not be reused. A later run fabricated 123456789, which is not even a canonical residue modulo 101001001; its claimed verifier actually failed at k=1 and its solver printed a different value. One run fitted an order-60 Berlekamp-Massey recurrence from only 120 terms and tested it on no held-out suffix; that is interpolation, not proof. Another used a finite-state factor language that already overcounts at k=5, and its claimed code failed the supplied k=10 sample when actually executed. Do not use Berlekamp-Massey, guessed recurrences, fitted scaling factors, or a finite forbidden-pattern DFA. Derive an exact identity from Fibonacci/Sturmian/Ostrowski structure, and validate any implementation well beyond the cases used to derive it.";
 const RESEARCH_POLICY: &str = "You are the only seat allowed to access the public web. Use shell commands such as curl to search and fetch public sources. Return direct source URLs, distinguish a claimed answer from a derivation, and never treat one copied number as verification. Do not inspect this repository, inherited solution files, or any filesystem path outside the named workspace. Keep the desk message below 1800 characters.";
@@ -278,6 +280,11 @@ async fn run() -> anyhow::Result<()> {
     println!("workspace: {}", workspace.display());
     println!("run_dir: {}", run_dir.display());
 
+    let hive_memory = memory_support::MarkdownMemory::new(
+        workspace.join(MEMORY_FILE),
+        memory_support::Compaction::DEFAULT,
+    );
+    println!("hive_memory: {}", hive_memory.path().display());
     let mut transcript = Vec::new();
     let mut visibility = Visibility::default();
     let mut snapshots = TurnSnapshots::new(&run_dir)?;
@@ -330,6 +337,11 @@ async fn run() -> anyhow::Result<()> {
             })
             .collect();
         let mut remaining: Vec<_> = round_agents.keys().cloned().collect();
+        let mut memory_briefs = BTreeMap::new();
+        for id in &remaining {
+            let brief = memory_support::briefing(&hive_memory, id, MEMORY_BRIEF_CHARS).await;
+            memory_briefs.insert(id.clone(), brief);
+        }
         let mut round_utterances = BTreeMap::new();
         while !remaining.is_empty() {
             ensure_round_fits(turns, remaining.len())?;
@@ -350,6 +362,7 @@ async fn run() -> anyhow::Result<()> {
                             task,
                             prior_failure,
                             problem: &problem,
+                            memory: memory_briefs.get(id).cloned().flatten(),
                         },
                         &mut snapshots,
                     )

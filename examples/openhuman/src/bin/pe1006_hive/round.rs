@@ -19,6 +19,8 @@ pub(super) struct TurnContext<'a> {
     pub(super) task: &'a str,
     pub(super) prior_failure: &'a str,
     pub(super) problem: &'a str,
+    /// The shared hive memory as this seat should open its turn with it.
+    pub(super) memory: Option<String>,
 }
 
 pub(super) struct PreparedSeatTurn {
@@ -56,7 +58,7 @@ pub(super) fn prepare_seat_turn(
         SEALED
     };
     let prompt = format!(
-        "{}{}\n\n## New desk messages\n{}\n\n## This assignment\n{}\n\nThe durable shared workspace is `{}`. Read `AGENTS.md` and `MEMORY.md` before working. Write role-prefixed artifacts there and update `MEMORY.md` only with reproduced, evidence-linked learnings. Do not write or read `/tmp/openhuman` or any other directory.\n\nYou MUST end this turn with exactly one TinyHiveMind action through `mcp_call_tool` on server `tinyhive`: call remote tool `broadcast` with a self-contained message when another teammate should take work, or `complete_episode` with your evidence-dense final result when your assignment is done. First use `mcp_list_tools` if needed. Text outside that MCP call is private thinking and is not delivered to the team.",
+        "{}{}\n\n{}## New desk messages\n{}\n\n## This assignment\n{}\n\nThe durable shared workspace is `{}`. Read `AGENTS.md` and `MEMORY.md` before working. Write role-prefixed artifacts there and update `MEMORY.md` only with reproduced, evidence-linked learnings. The hive also keeps a shared working memory: call `hive_memory_recall` through `mcp_call_tool` on server `tinyhive` before repeating a command or derivation, and `hive_memory_note` to record a finding, a failed attempt and why it failed, or a decision, one fact per note. Do not write or read `/tmp/openhuman` or any other directory.\n\nYou MUST end this turn with exactly one TinyHiveMind action through `mcp_call_tool` on server `tinyhive`: call remote tool `broadcast` with a self-contained message when another teammate should take work, or `complete_episode` with your evidence-dense final result when your assignment is done. First use `mcp_list_tools` if needed. Text outside that MCP call is private thinking and is not delivered to the team.",
         if first {
             format!(
                 "## Official statement\n{}\n\n## Prior experiment status\n{}\n\n",
@@ -66,6 +68,11 @@ pub(super) fn prepare_seat_turn(
             String::new()
         },
         policy,
+        context
+            .memory
+            .as_deref()
+            .map(|memory| format!("## Hive memory\nShared across seats and earlier runs. Do not redo what it records.\n{memory}\n\n"))
+            .unwrap_or_default(),
         if delta.is_empty() { "(none)" } else { &delta },
         context.assignment,
         agent.action_dir().display(),

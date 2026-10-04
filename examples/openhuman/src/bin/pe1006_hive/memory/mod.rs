@@ -32,8 +32,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use tinyhivemind_core::runtime::memory::recall;
 use tinyhivemind_core::runtime::{
-    BoxError, MemoryEntry, MemoryFuture, MemoryNote, MemoryQuery, MemoryScope, WorkingMemory,
+    BoxError, MEMORY_LIMIT, MemoryEntry, MemoryFuture, MemoryNote, MemoryQuery, MemoryScope,
+    WorkingMemory, memory_note,
 };
 
 const HEADER: &str = "# Hive memory\n";
@@ -118,6 +120,20 @@ impl MarkdownMemory {
     }
 }
 
+/// What `seat` opens its turn with: the hive's recalled memory as prompt text,
+/// cut to `budget_chars`, or `None` when the file holds nothing for it.
+///
+/// A memory that cannot be read costs the seat its recall and nothing else.
+pub(super) async fn briefing(
+    memory: &MarkdownMemory,
+    seat: &str,
+    budget_chars: usize,
+) -> Option<String> {
+    let entries = recall(memory, seat, "", MEMORY_LIMIT).await.ok()?;
+    let note = memory_note(&entries, budget_chars)?;
+    Some(format!("{}:\n{}", note.heading, note.lines.join("\n")))
+}
+
 impl WorkingMemory for MarkdownMemory {
     fn recall<'a>(&'a self, query: &'a MemoryQuery) -> MemoryFuture<'a, Vec<MemoryEntry>> {
         Box::pin(async move { self.recall_now(query).map_err(|e| Box::new(e) as BoxError) })
@@ -128,7 +144,10 @@ impl WorkingMemory for MarkdownMemory {
     }
 
     fn forget<'a>(&'a self, seat: &'a str, id: &'a str) -> MemoryFuture<'a, ()> {
-        Box::pin(async move { self.forget_now(seat, id).map_err(|e| Box::new(e) as BoxError) })
+        Box::pin(async move {
+            self.forget_now(seat, id)
+                .map_err(|e| Box::new(e) as BoxError)
+        })
     }
 }
 
@@ -168,7 +187,9 @@ impl Store {
         let mut kept: Vec<MemoryEntry> = Vec::new();
         for entry in self.compacted.drain(..).rev() {
             let repeated = kept.iter().any(|k| {
-                k.scope == entry.scope && k.author == entry.author && fold(&k.text) == fold(&entry.text)
+                k.scope == entry.scope
+                    && k.author == entry.author
+                    && fold(&k.text) == fold(&entry.text)
             });
             if !repeated {
                 kept.push(entry);
@@ -193,7 +214,10 @@ impl Store {
             .filter(|entry| Self::visible(entry, &query.seat))
             .map(|entry| {
                 let text = entry.text.to_lowercase();
-                let hits = words.iter().filter(|word| text.contains(word.as_str())).count();
+                let hits = words
+                    .iter()
+                    .filter(|word| text.contains(word.as_str()))
+                    .count();
                 (hits, number(&entry.id), entry)
             })
             .collect();
@@ -254,7 +278,10 @@ fn line(entry: &MemoryEntry) -> String {
         MemoryScope::Hive => "hive",
         MemoryScope::Seat => "seat",
     };
-    format!("- {} | {scope} | {} | {}\n", entry.id, entry.author, entry.text)
+    format!(
+        "- {} | {scope} | {} | {}\n",
+        entry.id, entry.author, entry.text
+    )
 }
 
 fn parse_entry(rest: &str) -> Option<MemoryEntry> {
@@ -309,7 +336,11 @@ struct Lock(PathBuf);
 impl Lock {
     fn take(path: &Path) -> io::Result<Self> {
         for _ in 0..LOCK_ATTEMPTS {
-            match fs::OpenOptions::new().write(true).create_new(true).open(path) {
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+            {
                 Ok(_) => return Ok(Self(path.to_owned())),
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                     let stale = fs::metadata(path)
@@ -326,7 +357,10 @@ impl Lock {
                 Err(error) => return Err(error),
             }
         }
-        Err(io::Error::new(io::ErrorKind::TimedOut, "hive memory is locked"))
+        Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "hive memory is locked",
+        ))
     }
 }
 
