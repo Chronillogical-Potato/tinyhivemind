@@ -30,6 +30,9 @@ fn world() -> World {
         .retire("erin")
 }
 
+/// One scripted call: tool name, message, recipients, read limit.
+type Case<'a> = (&'a str, Option<&'a str>, &'a [&'a str], Option<u64>);
+
 fn call(name: &str, message: Option<&str>, to: &[&str], limit: Option<u64>) -> String {
     let to: Vec<String> = to.iter().map(|id| (*id).to_owned()).collect();
     match interpret(
@@ -87,7 +90,7 @@ pub fn run(tracer: &Tracer<'_>) -> Res {
     );
 
     section("interpret: a seat's call becomes an utterance, or a sentence it can read");
-    let cases: [(&str, Option<&str>, &[&str], Option<u64>); 16] = [
+    let cases: [Case; 16] = [
         ("post", Some("  B holds at 10^18  "), &[], None),
         ("post", Some("   "), &[], None),
         ("broadcast", Some("someone take the migration"), &[], None),
