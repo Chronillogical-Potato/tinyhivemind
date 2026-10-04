@@ -303,12 +303,9 @@ async fn retention_bounds_interrupted_records() {
             })
         })
         .await;
-        c.send_as_host(message(
-            &format!("msg-{i}"),
-            Destination::Agent("a".into()),
-        ))
-        .await
-        .unwrap();
+        c.send_as_host(message(&format!("msg-{i}"), Destination::Agent("a".into())))
+            .await
+            .unwrap();
         let mut drain = Box::pin(c.run_until_idle());
         tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
         drop(drain);
