@@ -50,7 +50,8 @@ impl std::fmt::Debug for HiveMemoryStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HiveMemoryStore")
             .field("engine", &self.engine.descriptor().id)
-            .field("root", &self.hive.root())
+            .field("layout", &self.layout)
+            .field("hive", &self.hive)
             .field("policy", &self.policy)
             .finish()
     }

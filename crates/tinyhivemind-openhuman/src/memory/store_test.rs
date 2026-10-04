@@ -153,11 +153,15 @@ fn entries_become_learnings_of_the_matching_kind() {
             kind: entry_kind,
             text: " text ".into(),
         };
-        let Some(StoreItem::Learning { kind, meta, .. }) = entry_item(&context, &entry) else {
-            panic!("{entry_kind:?} became no learning")
-        };
-        assert_eq!(kind, learning);
-        assert_eq!(meta.tags.len(), 1, "no desk tag without a watermark");
+        let item = entry_item(&context, &entry);
+        assert!(
+            matches!(
+                &item,
+                Some(StoreItem::Learning { kind, meta, .. })
+                    if *kind == learning && meta.tags.len() == 1
+            ),
+            "{entry_kind:?} became {item:?}"
+        );
     }
     let blank = MemoryEntry {
         kind: EntryKind::Note,
@@ -300,13 +304,11 @@ async fn two_hive_roots_on_one_engine_do_not_share() {
         let notes = second.recall(&ask("builder", moment)).await.unwrap();
         assert!(notes.is_empty(), "{notes:?}");
     }
-    assert!(
-        !first
-            .recall(&ask("builder", RecallMoment::Rejoin))
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    let own = first
+        .recall(&ask("builder", RecallMoment::Rejoin))
+        .await
+        .unwrap();
+    assert_eq!(headings(&own), ["Learnings", "Team conversations"]);
 }
 
 #[tokio::test]
@@ -347,13 +349,14 @@ async fn recall_failures_are_recall_errors() {
     ));
     let unusable = ask("Bad Seat", RecallMoment::Rejoin);
     let error = hive.recall(&unusable).await.unwrap_err();
-    let runtime::Error::Recall { source } = error else {
-        panic!("expected a recall error, got {error:?}")
-    };
-    assert!(matches!(
-        source.downcast_ref::<Error>(),
-        Some(Error::InvalidMemoryAgentId { .. })
-    ));
+    assert!(
+        matches!(
+            &error,
+            runtime::Error::Recall { source }
+                if matches!(source.downcast_ref::<Error>(), Some(Error::InvalidMemoryAgentId { .. }))
+        ),
+        "{error:?}"
+    );
 }
 
 #[tokio::test]
@@ -386,10 +389,13 @@ async fn remember_failures_are_remember_errors() {
         .remember(&entries("builder", &[(EntryKind::Note, "kept")]))
         .await
         .unwrap_err();
-    let runtime::Error::Remember { source } = error else {
-        panic!("expected a remember error, got {error:?}")
-    };
-    assert!(source.to_string().contains("engine down"), "{source}");
+    assert!(
+        matches!(
+            &error,
+            runtime::Error::Remember { source } if source.to_string().contains("engine down")
+        ),
+        "{error:?}"
+    );
 }
 
 #[test]
