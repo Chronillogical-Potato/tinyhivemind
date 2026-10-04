@@ -140,6 +140,31 @@ impl RetentionPolicy {
                 !drop
             });
         }
+        if let Some(keep) = self.interrupted {
+            // Prune oldest interrupted deliveries while keeping the most recent.
+            let interrupted = |d: &Delivery| d.status == DeliveryStatus::Interrupted;
+            let mut excess = state
+                .deliveries
+                .iter()
+                .filter(|d| interrupted(d))
+                .count()
+                .saturating_sub(keep);
+            state.deliveries.retain(|delivery| {
+                let drop = excess > 0 && interrupted(delivery);
+                excess -= usize::from(drop);
+                !drop
+            });
+            // Prune oldest interrupted turn records as well.
+            excess = state
+                .interruptions
+                .len()
+                .saturating_sub(keep);
+            state.interruptions.retain(|_| {
+                let drop = excess > 0;
+                excess = excess.saturating_sub(1);
+                !drop
+            });
+        }
     }
 }
 /// Durable identity; a new process must reattach its live runner.
