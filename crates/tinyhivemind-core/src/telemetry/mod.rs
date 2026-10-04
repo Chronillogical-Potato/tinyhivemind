@@ -22,9 +22,10 @@
 //! let tracer = Tracer::new("run-1", &sink, &clock);
 //!
 //! clock.set(40);
-//! tracer.emit(TraceEvent::TurnStarted { seat: "alice".into() });
+//! tracer.emit(TraceEvent::TurnStarted { turn: 0, seat: "alice".into() });
 //! clock.set(1_240);
 //! tracer.emit(TraceEvent::TurnFinished {
+//!     turn: 0,
 //!     seat: "alice".into(),
 //!     input_tokens: 900,
 //!     output_tokens: 120,

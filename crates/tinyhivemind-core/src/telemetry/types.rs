@@ -49,13 +49,20 @@ pub enum TraceEvent {
         /// What it reported.
         conducted: ConductEvent,
     },
-    /// A seat's turn began.
+    /// A seat's turn began. `at_ms` is the instant it began.
     TurnStarted {
+        /// Host-assigned id, unique within the run, that ties this turn's
+        /// start, finish and tool calls together even when one seat has
+        /// several turns in flight.
+        turn: u64,
         /// The seat.
         seat: String,
     },
-    /// A seat's turn ended.
+    /// A seat's turn ended. `at_ms` is the instant it ended, so the turn
+    /// spans `at_ms - latency_ms` to `at_ms`.
     TurnFinished {
+        /// The id given at [`TraceEvent::TurnStarted`].
+        turn: u64,
         /// The seat.
         seat: String,
         /// Prompt tokens the turn consumed.
@@ -65,8 +72,10 @@ pub enum TraceEvent {
         /// Wall time the host measured for the turn.
         latency_ms: u64,
     },
-    /// A seat called a tool.
+    /// A seat called a tool. `at_ms` is the instant the call returned.
     ToolCall {
+        /// The turn the call was made in.
+        turn: u64,
         /// The seat.
         seat: String,
         /// The tool name.
@@ -75,6 +84,9 @@ pub enum TraceEvent {
         latency_ms: u64,
         /// Whether the call was refused.
         refused: bool,
+        /// Why it was refused, when it was and the host knows.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
     },
     /// A durable state was captured, for resume or replay.
     Checkpoint {

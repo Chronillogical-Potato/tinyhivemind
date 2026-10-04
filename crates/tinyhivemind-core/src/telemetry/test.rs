@@ -79,6 +79,7 @@ fn pins_the_wire_form() {
         seq: 1,
         at_ms: 20,
         event: TraceEvent::TurnFinished {
+            turn: 2,
             seat: "alice".into(),
             input_tokens: 3,
             output_tokens: 4,
@@ -88,7 +89,7 @@ fn pins_the_wire_form() {
     let json = serde_json::to_string(&stamped).unwrap();
     assert_eq!(
         json,
-        r#"{"run":"r","seq":1,"at_ms":20,"event":"turn_finished","seat":"alice","input_tokens":3,"output_tokens":4,"latency_ms":5}"#
+        r#"{"run":"r","seq":1,"at_ms":20,"event":"turn_finished","turn":2,"seat":"alice","input_tokens":3,"output_tokens":4,"latency_ms":5}"#
     );
     assert_eq!(serde_json::from_str::<Stamped>(&json).unwrap(), stamped);
     let round = serde_json::to_value(TraceEvent::Round {
@@ -107,4 +108,22 @@ fn null_sink_discards_and_debug_names_the_run() {
     let tracer = Tracer::new("quiet", &NullSink, &clock);
     tracer.emit(TraceEvent::Idle);
     assert!(format!("{tracer:?}").contains("quiet"));
+}
+
+#[test]
+fn tool_call_omits_an_absent_refusal_reason() {
+    let call = |reason: Option<&str>| TraceEvent::ToolCall {
+        turn: 1,
+        seat: "a".into(),
+        tool: "post".into(),
+        latency_ms: 3,
+        refused: reason.is_some(),
+        reason: reason.map(Into::into),
+    };
+    let plain = serde_json::to_value(call(None)).unwrap();
+    assert!(plain.get("reason").is_none());
+    let refused = serde_json::to_value(call(Some("not a member"))).unwrap();
+    assert_eq!(refused["reason"], "not a member");
+    let back: TraceEvent = serde_json::from_value(plain).unwrap();
+    assert_eq!(back, call(None));
 }

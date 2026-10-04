@@ -11,6 +11,7 @@ fn main() {
         seat: "alice".into(),
     });
     tracer.emit(TraceEvent::TurnFinished {
+        turn: 0,
         seat: "alice".into(),
         input_tokens: 10,
         output_tokens: 2,
