@@ -1,0 +1,62 @@
+# A CortexDB server holding the hive's memory for `swe_hive --memory cortex`.
+#
+# Default: embeddings and enrichment through OpenRouter (OPENROUTER_API_KEY).
+# `--profile mock`: a deterministic inference double, no credential, for CI and
+# offline runs (set CORTEX_INFERENCE_URL=http://mock-inference:8080/v1).
+# See README.md in this directory.
+name: hive-cortex
+
+services:
+  cortex:
+    image: cortexdb/cortexdb:${CORTEXDB_VERSION:-v0.10.4}
+    command: ["3141", "/data"]
+    environment:
+      CORTEX_API_KEY: ${CORTEX_DB_KEY:-hive-cortex-local}
+      CORTEX_DEPLOYMENT_PRESET: dev_local
+      CORTEX_TELEMETRY: "0"
+      CORTEX_EMBEDDING_URL: ${CORTEX_INFERENCE_URL:-https://openrouter.ai/api/v1}
+      CORTEX_EMBEDDING_API_KEY: ${CORTEX_INFERENCE_KEY:-${OPENROUTER_API_KEY:-unset}}
+      OPENAI_API_KEY: ${CORTEX_INFERENCE_KEY:-${OPENROUTER_API_KEY:-unset}}
+      CORTEX_EMBEDDING_MODEL: ${CORTEX_EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      CORTEX_EMBEDDING_DIMS: ${CORTEX_EMBEDDING_DIMS:-1536}
+      CORTEX_LLM_URL: ${CORTEX_INFERENCE_URL:-https://openrouter.ai/api/v1}
+      CORTEX_ENTITY_API_KEY: ${CORTEX_INFERENCE_KEY:-${OPENROUTER_API_KEY:-unset}}
+      CORTEX_LLM_MODEL: ${CORTEX_EXTRACTION_MODEL:-openai/gpt-4.1-mini}
+      CORTEX_ENRICHMENT_URL: ${CORTEX_INFERENCE_URL:-https://openrouter.ai/api/v1}
+      CORTEX_ENRICHMENT_API_KEY: ${CORTEX_INFERENCE_KEY:-${OPENROUTER_API_KEY:-unset}}
+      CORTEX_ENRICHMENT_MODEL: ${CORTEX_ENRICHMENT_MODEL:-openai/gpt-4.1-mini}
+      CORTEX_ENRICHMENT_DELAY_SECONDS: "0"
+      CORTEX_ANSWER_PROVIDER: openai
+      CORTEX_ANSWER_URL: ${CORTEX_INFERENCE_URL:-https://openrouter.ai/api/v1}
+      CORTEX_ANSWER_API_KEY: ${CORTEX_INFERENCE_KEY:-${OPENROUTER_API_KEY:-unset}}
+      CORTEX_ANSWER_MODEL: ${CORTEX_ANSWER_MODEL:-openai/gpt-4.1-mini}
+      CORTEX_VERIFIER_URL: ${CORTEX_INFERENCE_URL:-https://openrouter.ai/api/v1}
+      CORTEX_VERIFIER_API_KEY: ${CORTEX_INFERENCE_KEY:-${OPENROUTER_API_KEY:-unset}}
+      CORTEX_VERIFIER_MODEL: ${CORTEX_VERIFIER_MODEL:-openai/gpt-4.1-mini}
+      CORTEX_VERIFIER_MAX_TOKENS: "16384"
+      CORTEX_ENTITY_GRAPH: "1"
+      CORTEX_V1_LAYERS_AUTO: "1"
+      CORTEX_AUTO_ROUTE: "1"
+      CORTEX_CONSOLIDATION_MIN_AGE_HOURS: "0"
+    ports: ["127.0.0.1:${CORTEXDB_PORT:-3141}:3141"]
+    volumes:
+      - cortex-data:/data
+      - ./cortex.toml:/data/cortex.toml:ro
+    depends_on:
+      mock-inference:
+        condition: service_healthy
+        required: false
+
+  mock-inference:
+    profiles: ["mock"]
+    build:
+      context: .
+      dockerfile: mock-inference.Dockerfile
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+volumes:
+  cortex-data:
