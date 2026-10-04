@@ -1,5 +1,5 @@
 //! Coordinator payloads and the host runner boundary.
-use crate::Result;
+use crate::{Result, RetentionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin, sync::Arc};
 use tinyhivemind_core::driver::ConductPolicy;
@@ -40,6 +40,8 @@ pub struct CoordinatorOptions {
     pub conduct_policy: ConductPolicy,
     /// Broadcasts per assignment; `None` preserves the driver's default.
     pub broadcast_budget: Option<u32>,
+    /// Bounds on settled records kept in the state row; keeps all by default.
+    pub retention: RetentionPolicy,
 }
 impl Default for CoordinatorOptions {
     fn default() -> Self {
@@ -47,6 +49,7 @@ impl Default for CoordinatorOptions {
             round_width: 1,
             conduct_policy: ConductPolicy::default(),
             broadcast_budget: None,
+            retention: RetentionPolicy::default(),
         }
     }
 }
