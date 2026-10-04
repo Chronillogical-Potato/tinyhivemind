@@ -201,13 +201,8 @@ impl HiveMemory {
         Self::new(Arc::new(engine), run_id, seats, budget_tokens)
     }
 
-    /// The same memory under other timeouts.
-    ///
-    /// # Panics
-    ///
-    /// Never in practice: the shared state is only cloned into tasks by the
-    /// port calls, so before the first call this memory holds the only
-    /// reference (and the call falls back to keeping the old timeouts if not).
+    /// The same memory under other timeouts. Call it before the first port
+    /// call: once a task holds the shared state, the old timeouts stay.
     #[must_use]
     pub fn with_timeouts(mut self, timeouts: Timeouts) -> Self {
         if let Some(inner) = Arc::get_mut(&mut self.inner) {
