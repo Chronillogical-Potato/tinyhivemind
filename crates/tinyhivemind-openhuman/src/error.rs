@@ -53,6 +53,10 @@ pub enum Error {
         /// What differs from the hive's binding.
         reason: String,
     },
+    /// `OpenHuman` has no memory engine bound for the config (memory is off,
+    /// or the engine's credential is missing).
+    #[error(transparent)]
+    Memory(#[from] openhuman_core::memory::MemoryError),
     /// Agent turn exceeded the wall.
     #[error("agent turn timed out")]
     TimedOut,
