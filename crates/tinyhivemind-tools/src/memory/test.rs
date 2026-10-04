@@ -79,12 +79,12 @@ fn serves_three_tools_each_with_an_object_schema() {
 async fn a_note_is_attributed_to_the_calling_seat_and_recalled() {
     let t = tools(false);
     let said = t
-        .call("solver", "memory_note", &json!({"text": "use --no-cache"}))
+        .call("solver", "hive_memory_note", &json!({"text": "use --no-cache"}))
         .await
         .unwrap();
     assert_eq!(said, "remembered as m0");
     let got = t
-        .call("reviewer", "memory_recall", &json!({}))
+        .call("reviewer", "hive_memory_recall", &json!({}))
         .await
         .unwrap();
     assert_eq!(got, "m0 [solver] use --no-cache");
@@ -95,13 +95,13 @@ async fn a_private_note_is_not_recalled_by_a_peer() {
     let t = tools(false);
     t.call(
         "solver",
-        "memory_note",
+        "hive_memory_note",
         &json!({"text": "hunch", "scope": "seat"}),
     )
     .await
     .unwrap();
     let peer = t
-        .call("reviewer", "memory_recall", &json!({}))
+        .call("reviewer", "hive_memory_recall", &json!({}))
         .await
         .unwrap();
     assert_eq!(peer, "nothing remembered");
@@ -110,17 +110,17 @@ async fn a_private_note_is_not_recalled_by_a_peer() {
 #[tokio::test]
 async fn forget_drops_an_entry() {
     let t = tools(false);
-    t.call("a", "memory_note", &json!({"text": "stale"}))
+    t.call("a", "hive_memory_note", &json!({"text": "stale"}))
         .await
         .unwrap();
     assert_eq!(
-        t.call("a", "memory_forget", &json!({"id": "m0"}))
+        t.call("a", "hive_memory_forget", &json!({"id": "m0"}))
             .await
             .unwrap(),
         "forgot m0"
     );
     assert_eq!(
-        t.call("a", "memory_recall", &json!({})).await.unwrap(),
+        t.call("a", "hive_memory_recall", &json!({})).await.unwrap(),
         "nothing remembered"
     );
 }
@@ -128,10 +128,10 @@ async fn forget_drops_an_entry() {
 #[tokio::test]
 async fn refuses_missing_and_malformed_arguments() {
     let t = tools(false);
-    assert!(t.call("a", "memory_note", &json!({})).await.is_err());
-    assert!(t.call("a", "memory_forget", &json!({})).await.is_err());
+    assert!(t.call("a", "hive_memory_note", &json!({})).await.is_err());
+    assert!(t.call("a", "hive_memory_forget", &json!({})).await.is_err());
     let bad = t
-        .call("a", "memory_note", &json!({"text": "x", "scope": "galaxy"}))
+        .call("a", "hive_memory_note", &json!({"text": "x", "scope": "galaxy"}))
         .await
         .unwrap_err();
     assert!(bad.contains("galaxy"));
@@ -142,13 +142,13 @@ async fn refuses_missing_and_malformed_arguments() {
 async fn refuses_a_blank_or_oversized_note_in_the_ports_words() {
     let t = tools(false);
     let blank = t
-        .call("a", "memory_note", &json!({"text": " "}))
+        .call("a", "hive_memory_note", &json!({"text": " "}))
         .await
         .unwrap_err();
     assert_eq!(blank, "memory note is empty");
     let long = "x".repeat(MEMORY_NOTE_CHARS + 1);
     let over = t
-        .call("a", "memory_note", &json!({"text": long}))
+        .call("a", "hive_memory_note", &json!({"text": long}))
         .await
         .unwrap_err();
     assert!(over.contains("limit"));
@@ -158,9 +158,9 @@ async fn refuses_a_blank_or_oversized_note_in_the_ports_words() {
 async fn an_engine_failure_never_leaks_its_message_to_the_seat() {
     let t = tools(true);
     for (name, args) in [
-        ("memory_recall", json!({})),
-        ("memory_note", json!({"text": "x"})),
-        ("memory_forget", json!({"id": "m0"})),
+        ("hive_memory_recall", json!({})),
+        ("hive_memory_note", json!({"text": "x"})),
+        ("hive_memory_forget", json!({"id": "m0"})),
     ] {
         let err = t.call("a", name, &args).await.unwrap_err();
         assert!(!err.contains("secret"), "{err}");

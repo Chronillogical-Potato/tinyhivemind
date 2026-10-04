@@ -33,10 +33,10 @@ shared one.
 - `WorkingMemory::{recall, record, forget}` in
   `tinyhivemind_core::runtime::memory`; notes <= 1000 characters; recalls <= 12
   entries; engine order trusted.
-- `memory_note(entries, budget)` folds entries into one `BriefingNote` for the
+- `hive_memory_note(entries, budget)` folds entries into one `BriefingNote` for the
   turn's briefing, so a seat need not spend a call to read it.
-- `tinyhivemind_tools::MemoryTools` serves `memory_recall`, `memory_note` and
-  `memory_forget`; the seat id comes from the host.
+- `tinyhivemind_tools::MemoryTools` serves `hive_memory_recall`, `hive_memory_note` and
+  `hive_memory_forget`; the seat id comes from the host.
 
 ## Invariants
 
@@ -51,7 +51,7 @@ adapter proves the port by recording from one seat and recalling from another.
 
 ## Open questions
 
-- Who injects `memory_note` into the briefing: the hives coordinator
+- Who injects `hive_memory_note` into the briefing: the hives coordinator
   (`conduct.rs`) or the host?
 - Whether the repeat-command guard (#99) and observation ledger (#98) are
   producers into this port or separate folds feeding it.

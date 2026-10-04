@@ -1,6 +1,6 @@
 //! The hive's memory tools, served over a host's [`WorkingMemory`].
 //!
-//! Three tools -- `memory_recall`, `memory_note`, `memory_forget` -- let a seat
+//! Three tools -- `hive_memory_recall`, `hive_memory_note`, `hive_memory_forget` -- let a seat
 //! carry observations, claims and dead ends across activations. They are the
 //! hive's half of the contract: names, descriptions, argument schemas and the
 //! words a seat is answered in. The other half is the host's: the
@@ -17,7 +17,7 @@
 //! use tinyhivemind_tools::memory_tool_definitions;
 //!
 //! let names: Vec<_> = memory_tool_definitions().into_iter().map(|t| t.name).collect();
-//! assert_eq!(names, ["memory_recall", "memory_note", "memory_forget"]);
+//! assert_eq!(names, ["hive_memory_recall", "hive_memory_note", "hive_memory_forget"]);
 //! ```
 
 use serde_json::{Value, json};
@@ -28,14 +28,14 @@ use tinyhivemind_core::runtime::{
 use tinytools::ToolSpec;
 
 /// The tool names this module serves, in the order a seat meets them.
-pub const MEMORY_TOOLS: [&str; 3] = ["memory_recall", "memory_note", "memory_forget"];
+pub const MEMORY_TOOLS: [&str; 3] = ["hive_memory_recall", "hive_memory_note", "hive_memory_forget"];
 
 /// The memory tools as native `tinytools::ToolSpec` values.
 #[must_use]
 pub fn memory_tool_definitions() -> Vec<ToolSpec> {
     vec![
         ToolSpec {
-            name: "memory_recall".to_owned(),
+            name: "hive_memory_recall".to_owned(),
             description: "Look up what the hive already knows before repeating work: findings, \
                           failed attempts, decisions. Check here first when you resume."
                 .to_owned(),
@@ -57,7 +57,7 @@ pub fn memory_tool_definitions() -> Vec<ToolSpec> {
             }),
         },
         ToolSpec {
-            name: "memory_note".to_owned(),
+            name: "hive_memory_note".to_owned(),
             description: format!(
                 "Remember something for later: a finding, a command that failed and why, a \
                  decision. One fact per note, at most {MEMORY_NOTE_CHARS} characters."
@@ -77,8 +77,8 @@ pub fn memory_tool_definitions() -> Vec<ToolSpec> {
             }),
         },
         ToolSpec {
-            name: "memory_forget".to_owned(),
-            description: "Drop an entry that is wrong or stale, by the id memory_recall showed."
+            name: "hive_memory_forget".to_owned(),
+            description: "Drop an entry that is wrong or stale, by the id hive_memory_recall showed."
                 .to_owned(),
             parameters: json!({
                 "type": "object",
@@ -123,7 +123,7 @@ impl MemoryTools {
     /// fails. The error never carries the engine's own message.
     pub async fn call(&self, seat: &str, name: &str, arguments: &Value) -> Result<String, String> {
         match name {
-            "memory_recall" => {
+            "hive_memory_recall" => {
                 let query = arguments.get("query").and_then(Value::as_str).unwrap_or("");
                 let limit = arguments
                     .get("limit")
@@ -141,11 +141,11 @@ impl MemoryTools {
                     .collect::<Vec<_>>()
                     .join("\n"))
             }
-            "memory_note" => {
+            "hive_memory_note" => {
                 let text = arguments
                     .get("text")
                     .and_then(Value::as_str)
-                    .ok_or("memory_note needs `text`")?;
+                    .ok_or("hive_memory_note needs `text`")?;
                 let scope = match arguments.get("scope").and_then(Value::as_str) {
                     None | Some("hive") => MemoryScope::Hive,
                     Some("seat") => MemoryScope::Seat,
@@ -166,11 +166,11 @@ impl MemoryTools {
                     Err(_) => Err("memory is unavailable; carry on without it".to_owned()),
                 }
             }
-            "memory_forget" => {
+            "hive_memory_forget" => {
                 let id = arguments
                     .get("id")
                     .and_then(Value::as_str)
-                    .ok_or("memory_forget needs `id`")?;
+                    .ok_or("hive_memory_forget needs `id`")?;
                 self.memory
                     .forget(seat, id)
                     .await

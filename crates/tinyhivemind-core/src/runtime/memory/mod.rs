@@ -24,7 +24,7 @@
 //! # Example
 //!
 //! ```
-//! use tinyhivemind_core::runtime::{MemoryEntry, MemoryScope, memory_note};
+//! use tinyhivemind_core::runtime::{MemoryEntry, MemoryScope, hive_memory_note};
 //!
 //! let entries = vec![MemoryEntry {
 //!     id: "m1".into(),
@@ -32,7 +32,7 @@
 //!     scope: MemoryScope::Hive,
 //!     text: "the eval harness needs --no-cache; plain runs hang".into(),
 //! }];
-//! let note = memory_note(&entries, 1_000).expect("one entry renders");
+//! let note = hive_memory_note(&entries, 1_000).expect("one entry renders");
 //! assert_eq!(note.heading, "Working memory");
 //! assert!(note.lines[0].contains("solver"));
 //! ```
@@ -139,7 +139,7 @@ pub async fn record(memory: &(dyn WorkingMemory + '_), note: &MemoryNote) -> Res
 /// spends a bounded amount whatever the engine returned. `None` when there is
 /// nothing to say, or the budget fits no entry.
 #[must_use]
-pub fn memory_note(entries: &[MemoryEntry], budget_chars: usize) -> Option<BriefingNote> {
+pub fn hive_memory_note(entries: &[MemoryEntry], budget_chars: usize) -> Option<BriefingNote> {
     let mut spent = 0_usize;
     let mut lines = Vec::new();
     for entry in entries.iter().take(MEMORY_LIMIT) {

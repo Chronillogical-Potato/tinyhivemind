@@ -19,7 +19,7 @@ seam between the two, so the hive stays unopinionated about storage.
 | `MemoryScope` | `Hive` (shared) or `Seat` (private); the engine decides how to honor it |
 | `recall(..)` / `record(..)` | bounded, validated calls over a port |
 | `validate_note(note)` | rejects a blank or over-long note |
-| `memory_note(entries, budget)` | entries as one `BriefingNote`, cut to a character budget |
+| `hive_memory_note(entries, budget)` | entries as one `BriefingNote`, cut to a character budget |
 | `MEMORY_LIMIT` / `MEMORY_NOTE_CHARS` | 12 / 1000 |
 
 ## Constraints worth knowing
@@ -29,7 +29,7 @@ seam between the two, so the hive stays unopinionated about storage.
 - Everything crossing the port is bounded, so a generous engine cannot spend a
   seat's window.
 - A missing or failing memory costs recall only; callers degrade the briefing.
-- The seat-facing tools (`memory_recall`, `memory_note`, `memory_forget`) live
+- The seat-facing tools (`hive_memory_recall`, `hive_memory_note`, `hive_memory_forget`) live
   in `tinyhivemind-tools`; a host implements `WorkingMemory` and hands it over.
 
 | File | What it holds |

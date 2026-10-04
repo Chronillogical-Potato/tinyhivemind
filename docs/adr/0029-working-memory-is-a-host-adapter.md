@@ -19,7 +19,7 @@ The hive does not own a memory engine. `tinyhivemind-core` defines the
 `WorkingMemory` port (`recall`, `record`, `forget`) with bounded inputs and a
 pure fold that renders recalled entries as one `BriefingNote`. The host
 implements the port over whatever it likes. `tinyhivemind-tools` serves the
-seat-facing tools (`memory_recall`, `memory_note`, `memory_forget`) over the
+seat-facing tools (`hive_memory_recall`, `hive_memory_note`, `hive_memory_forget`) over the
 host's implementation and takes the seat id from the host, not the call.
 Examples keep only the tool wiring and one minimal markdown reference adapter.
 
