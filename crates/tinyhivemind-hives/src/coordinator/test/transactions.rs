@@ -69,6 +69,34 @@ async fn commits_append_only_new_transcript_rows() {
     assert!(stored.accepted.contains_key("one"));
 }
 #[tokio::test]
+async fn second_coordinator_claims_higher_writer_epoch() {
+    // This test verifies that when a second coordinator starts, it claims
+    // a higher writer_epoch, which will fence out the first coordinator if it
+    // tries to write after the second coordinator persists its epoch.
+    let storage = Arc::new(MemoryStorage::new());
+
+    let c1 = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    let c2 = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    // Verify that each coordinator has a different epoch.
+    assert_eq!(c1.inner.writer_epoch, 1);
+    assert_eq!(c2.inner.writer_epoch, 2);
+}
+
+#[tokio::test]
 async fn second_coordinator_fences_first_coordinator_on_next_snapshot() {
     let storage = Arc::new(MemoryStorage::new());
     let c = Coordinator::new(
