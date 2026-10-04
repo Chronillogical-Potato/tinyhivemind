@@ -66,6 +66,10 @@ pub struct TurnRequest {
     pub memberships: Vec<HiveInfo>,
     /// Active conductor assignment, absent for direct messages.
     pub episode: Option<EpisodeContext>,
+    /// Host note from [`crate::Coordinator::release_with`], delivered once
+    /// on the first turn claimed after the release.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resumption: Option<String>,
 }
 /// Successfully returned runner state.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -144,6 +144,9 @@ pub struct AgentRecord {
     pub session_id: Option<String>,
     /// Agent waits for explicit host release.
     pub parked: bool,
+    /// Release note awaiting the agent's next claimed turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resumption: Option<String>,
 }
 /// One direct-agent inbox entry.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

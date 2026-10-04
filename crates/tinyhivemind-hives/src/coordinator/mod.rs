@@ -317,13 +317,26 @@ impl Coordinator {
         .await
     }
     /// Release a parked agent after the host settles its approval.
+    /// Equivalent to [`Self::release_with`] without a note.
     /// # Errors
     /// Returns unknown agent, invalid conductor snapshots or storage errors.
     pub async fn release(&self, agent_id: &str) -> Result<()> {
+        self.release_with(agent_id, None).await
+    }
+    /// Release a parked agent, attaching a host note — an approval decision,
+    /// say — to the next turn it is claimed for, as
+    /// [`TurnRequest::resumption`]. A later note replaces an undelivered one;
+    /// `None` leaves an undelivered note in place.
+    /// # Errors
+    /// Returns unknown agent, invalid conductor snapshots or storage errors.
+    pub async fn release_with(&self, agent_id: &str, note: Option<String>) -> Result<()> {
         self.update(|state| {
             known_agent(state, agent_id)?;
             if let Some(agent) = state.agents.get_mut(agent_id) {
                 agent.parked = false;
+                if let Some(note) = &note {
+                    agent.resumption = Some(note.clone());
+                }
             }
             conduct::release(state, agent_id, &self.inner.options)
         })

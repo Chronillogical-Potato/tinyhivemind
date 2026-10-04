@@ -300,6 +300,7 @@ mod lifecycle;
 mod observation;
 mod privacy;
 mod registration;
+mod release;
 mod review_regressions;
 mod scheduling;
 mod starters;

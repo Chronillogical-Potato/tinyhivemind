@@ -210,16 +210,17 @@ impl Coordinator {
                     (messages, Some(context), Some(turn), None)
                 }
             };
-            let session_id = next
-                .agents
-                .get(&agent_id)
-                .and_then(|agent| agent.session_id.clone());
+            let agent = next.agents.get_mut(&agent_id);
+            let (session_id, resumption) = agent.map_or((None, None), |agent| {
+                (agent.session_id.clone(), agent.resumption.take())
+            });
             let request = TurnRequest {
                 agent_id: agent_id.clone(),
                 session_id,
                 messages,
                 memberships,
                 episode,
+                resumption,
             };
             next.running.insert(
                 agent_id.clone(),
