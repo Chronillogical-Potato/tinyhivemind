@@ -76,7 +76,7 @@ sessions = resumed
 memory = recalled + remembered
 print(f'{label}: ok  turns={result["turns"]} in={result["tokens_in"]} '
       f'out={result["tokens_out"]} wall_ms={result["wall_ms"]} '
-      f'sessions={len(sessions)} memory_marks={len(memory)}')
+      f'resumed={len(sessions)} memory_events={len(memory)}')
 PY
 }
 
