@@ -24,7 +24,7 @@
 //! # Example
 //!
 //! ```
-//! use tinyhivemind_core::runtime::{MemoryEntry, MemoryScope, hive_memory_note};
+//! use tinyhivemind_core::runtime::{MemoryEntry, MemoryScope, memory_note};
 //!
 //! let entries = vec![MemoryEntry {
 //!     id: "m1".into(),

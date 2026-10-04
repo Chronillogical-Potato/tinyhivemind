@@ -51,7 +51,7 @@ adapter proves the port by recording from one seat and recalling from another.
 
 ## Open questions
 
-- Who injects `hive_memory_note` into the briefing: the hives coordinator
+- Who injects `memory_note` into the briefing: the hives coordinator
   (`conduct.rs`) or the host?
 - Whether the repeat-command guard (#99) and observation ledger (#98) are
   producers into this port or separate folds feeding it.
