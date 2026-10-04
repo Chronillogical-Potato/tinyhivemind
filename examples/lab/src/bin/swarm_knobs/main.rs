@@ -6,6 +6,9 @@
 //!
 //! Run with `cargo run --bin swarm_knobs [-- --trace out.jsonl]`.
 
+mod attention;
+mod consensus;
+mod division;
 mod market;
 mod room;
 mod sweep;
