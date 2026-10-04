@@ -117,7 +117,7 @@ handle after its running turn. Through the adapter, the host can also set a
 turn's working directory and timeout, and gate outbound tools behind a send
 policy. Every hook receives the turn's scope: agent, episode, messages,
 senders, destination and thread. See
-[ADR 0031](../adr/0031-the-coordinator-exposes-host-seams-over-async-incremental-storage.md).
+[ADR 0031](../adr/0031-expose-host-seams-over-async-incremental-storage.md).
 
 ## Acceptance
 
