@@ -135,9 +135,18 @@ impl Coordinator {
             return;
         };
         for agent in agents {
-            if live.durable.running.contains_key(&agent) {
+            if let Some(running) = live.durable.running.get(&agent) {
+                let deferred = super::DeferredInterruption {
+                    reason: REASON.into(),
+                    delivery_sequence: running.delivery_sequence,
+                    episode_id: running
+                        .request
+                        .episode
+                        .as_ref()
+                        .map(|ep| ep.episode_id.clone()),
+                };
                 interrupt(&mut live.durable, &agent, REASON);
-                live.unpersisted.insert(agent, REASON.into());
+                live.unpersisted.insert(agent, deferred);
             }
         }
     }
