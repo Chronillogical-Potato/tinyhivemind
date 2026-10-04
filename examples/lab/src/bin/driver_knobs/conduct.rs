@@ -164,7 +164,6 @@ impl Host<'_> {
         match step {
             Step::Event(event) => {
                 *self.report.events.entry(kind(&event)).or_default() += 1;
-                if std::env::var("LAB_DEBUG").is_ok() { eprintln!("EVENT {event:?}"); }
                 self.tracer.conducted(&event);
             }
             Step::Note(note) => {
@@ -321,10 +320,6 @@ async fn play_inner(
             Conductor::open(&driver, routing, scn.policy, door)?
         }
     };
-    if let (Some((json, _)), true) = (resume, std::env::var("LAB_DEBUG").is_ok()) {
-        let again = conductor.snapshot().map(|s| serde_json::to_string(&s)).transpose()?;
-        eprintln!("ROUNDTRIP equal={} \n IN  {json}\n OUT {:?}", again.as_deref() == Some(json), again);
-    }
     let mut parked_once = false;
     for _ in 0..200 {
         host.drain(&mut conductor, snapshots).await?;
@@ -339,7 +334,6 @@ async fn play_inner(
         }
         let turns = conductor.turns()?;
         host.report.widest = host.report.widest.max(turns.len());
-        if std::env::var("LAB_DEBUG3").is_ok() { eprintln!("WAVE {} turns {:?} head {}", conductor.waves(), turns.iter().map(|t| (&t.seat, t.thread().map(|s| s.0), t.since.map(|s| s.0))).collect::<Vec<_>>(), host.log.head()); }
         for turn in &turns {
             host.turn_ids += 1;
             let n = host.turn_ids;
@@ -402,7 +396,6 @@ async fn play_inner(
             }
         }
     }
-    if std::env::var("LAB_DEBUG").is_ok() { if let Some(state) = conductor.snapshot() { eprintln!("FINAL {}", serde_json::to_string(&state)?); } }
     host.report.waves = conductor.waves();
     host.report.turns = conductor.turns_run();
     host.report.conversations = conductor.conversations();
@@ -546,7 +539,6 @@ pub fn replay(rig: &TraceRig) -> Res {
         for (index, (json, kept)) in whole.snapshots.iter().enumerate() {
             let state: ConductorState = serde_json::from_str(json)?;
             let rows = &whole.log[..*kept];
-            eprintln!("REPLAY {label} idx {index} kept {kept}");
             let quiet = rig.tracer("replay:silent");
             let resumed = play(&scn, &quiet, false, Some((json, rows)));
             let same = resumed.rows == log && resumed.error.is_none();
