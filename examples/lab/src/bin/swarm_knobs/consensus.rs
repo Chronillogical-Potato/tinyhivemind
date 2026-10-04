@@ -107,7 +107,6 @@ pub fn exchange_rounds() -> Res {
     Ok(())
 }
 
-
 pub fn evaluated_quorum(rig: &TraceRig) -> Res {
     section("quorum by evaluation: probabilities instead of head counts");
     let tracer = rig.tracer("swarm:evaluated");
@@ -227,7 +226,6 @@ pub fn evaluated_quorum(rig: &TraceRig) -> Res {
     Ok(())
 }
 
-
 pub fn trace_grammar() {
     section("trace grammar: resolve, revalidation, TRACE_CAP");
     let body = "!propose #x plan ^1\n```\n!propose #fenced inside code\n```\n!refute #x\n!defer\n!support #x ^2 ^2";
@@ -261,4 +259,3 @@ pub fn trace_grammar() {
         resolve(&flood, None, &agent("ada"), Sequence(9)).len()
     );
 }
-

@@ -15,8 +15,8 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
-use std::sync::mpsc::{self, Sender};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -86,7 +86,10 @@ impl StdioExec {
                 let Some(reply) = decode_reply(&line) else {
                     continue;
                 };
-                let sender = waiting.lock().ok().and_then(|mut map| map.remove(&reply.id));
+                let sender = waiting
+                    .lock()
+                    .ok()
+                    .and_then(|mut map| map.remove(&reply.id));
                 if let Some(sender) = sender {
                     let _ = sender.send(reply);
                 }

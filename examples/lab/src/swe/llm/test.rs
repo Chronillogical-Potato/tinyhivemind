@@ -17,8 +17,7 @@ impl Chat for Script {
 fn reply(content: &str, tool: Option<(&str, &str)>) -> Value {
     let mut message = json!({ "role": "assistant", "content": content });
     if let Some((name, args)) = tool {
-        message["tool_calls"] =
-            json!([{ "id": "c1", "type": "function", "function": { "name": name, "arguments": args } }]);
+        message["tool_calls"] = json!([{ "id": "c1", "type": "function", "function": { "name": name, "arguments": args } }]);
     }
     json!({ "choices": [{ "message": message }], "usage": { "prompt_tokens": 11, "completion_tokens": 4 } })
 }
@@ -57,7 +56,11 @@ fn empty_arguments_mean_an_empty_object() {
 #[test]
 fn provider_error_body_is_an_error() {
     let body = json!({ "error": { "message": "rate limited" } });
-    assert!(parse_response(&body).expect_err("error").contains("rate limited"));
+    assert!(
+        parse_response(&body)
+            .expect_err("error")
+            .contains("rate limited")
+    );
     assert!(parse_response(&json!({})).is_err());
 }
 

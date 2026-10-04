@@ -100,7 +100,10 @@ pub fn parse_arguments(args: &Value) -> Arguments {
         _ => Vec::new(),
     };
     Arguments {
-        message: args.get("message").and_then(Value::as_str).map(str::to_owned),
+        message: args
+            .get("message")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
         to,
         limit: args.get("limit").and_then(Value::as_u64),
     }

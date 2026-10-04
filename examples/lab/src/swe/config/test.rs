@@ -23,7 +23,10 @@ fn parses_every_numeric_flag() {
     )
     .expect("parses");
     assert_eq!(c.target, Target::StdioRpc);
-    assert_eq!((c.max_turns, c.round_width, c.token_cap, c.steps_per_turn), (9, 3, Some(5000), 4));
+    assert_eq!(
+        (c.max_turns, c.round_width, c.token_cap, c.steps_per_turn),
+        (9, 3, Some(5000), 4)
+    );
     assert!(c.trace.is_some() && c.result.is_some());
 }
 
@@ -45,8 +48,15 @@ fn reads_a_task_file() {
     let path = std::env::temp_dir().join(format!("swe_task_{}.txt", std::process::id()));
     std::fs::write(&path, "do the thing").expect("write");
     let c = Config::parse(
-        ["--mode", "single", "--task-file", path.to_str().expect("utf8"), "--container", "b"]
-            .map(str::to_owned),
+        [
+            "--mode",
+            "single",
+            "--task-file",
+            path.to_str().expect("utf8"),
+            "--container",
+            "b",
+        ]
+        .map(str::to_owned),
     )
     .expect("parses");
     std::fs::remove_file(&path).ok();

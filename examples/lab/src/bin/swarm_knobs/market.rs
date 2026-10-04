@@ -33,7 +33,6 @@ pub fn journal() -> Vec<SessionMessage> {
     ]
 }
 
-
 pub fn run(rig: &TraceRig) -> Res {
     attention::attention();
     attention::salience_table()?;

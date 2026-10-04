@@ -59,6 +59,8 @@ pub use log::{MemoryLog, agent, person, row};
 pub use tick::TickClock;
 mod world;
 
+pub mod swe;
+
 pub use world::World;
 mod report;
 

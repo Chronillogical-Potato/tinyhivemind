@@ -23,7 +23,6 @@ fn show(list: &[Bid]) -> String {
         .join(" ")
 }
 
-
 pub fn attention() {
     section("bids: dominance_cap, repetition_cap, weights and thresholds on one transcript");
     let rows = journal();
@@ -165,7 +164,6 @@ pub fn attention() {
     );
 }
 
-
 pub fn salience_table() -> Res {
     section("salience: one Support trace read at growing distances");
     let rows = journal();
@@ -266,4 +264,3 @@ pub fn salience_table() -> Res {
     );
     Ok(())
 }
-

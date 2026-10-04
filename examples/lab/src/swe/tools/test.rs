@@ -7,7 +7,12 @@ use super::*;
 fn names(tools: &[Value]) -> Vec<String> {
     tools
         .iter()
-        .map(|t| t["function"]["name"].as_str().unwrap_or_default().to_owned())
+        .map(|t| {
+            t["function"]["name"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned()
+        })
         .collect()
 }
 
@@ -15,13 +20,23 @@ fn names(tools: &[Value]) -> Vec<String> {
 fn hive_list_is_bash_then_core_order() {
     assert_eq!(
         names(&tool_list(HIVE_TOOLS)),
-        ["bash", "post", "broadcast", "ask", "complete_episode", "read"]
+        [
+            "bash",
+            "post",
+            "broadcast",
+            "ask",
+            "complete_episode",
+            "read"
+        ]
     );
 }
 
 #[test]
 fn single_list_has_bash_and_complete_only() {
-    assert_eq!(names(&tool_list(SINGLE_TOOLS)), ["bash", "complete_episode"]);
+    assert_eq!(
+        names(&tool_list(SINGLE_TOOLS)),
+        ["bash", "complete_episode"]
+    );
 }
 
 #[test]

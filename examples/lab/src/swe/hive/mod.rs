@@ -81,7 +81,15 @@ pub fn route_broadcast(author: &str, message: &str) -> &'static str {
         let words: &[&str] = match role {
             Role::Tester => &["test", "verify", "reproduce", "run ", "check", "pytest"],
             Role::Reviewer => &["review", "audit", "regress", "edge case", "diff"],
-            Role::Implementer => &["fix", "implement", "edit", "change", "patch", "write", "add"],
+            Role::Implementer => &[
+                "fix",
+                "implement",
+                "edit",
+                "change",
+                "patch",
+                "write",
+                "add",
+            ],
             Role::Lead => &[],
         };
         words.iter().filter(|word| lower.contains(*word)).count()
@@ -107,10 +115,16 @@ pub fn run(env: &Env<'_>, task: &str, params: &Params) -> Report {
     loop {
         if queue.is_empty() {
             if unreported > 0 {
-                enqueue(&mut queue, lead_wake("Teammates reported; decide the next step."));
+                enqueue(
+                    &mut queue,
+                    lead_wake("Teammates reported; decide the next step."),
+                );
             } else if !nudged {
                 nudged = true;
-                enqueue(&mut queue, lead_wake("The desk is idle. Delegate or complete."));
+                enqueue(
+                    &mut queue,
+                    lead_wake("The desk is idle. Delegate or complete."),
+                );
             } else {
                 env.tracer.emit(TraceEvent::Idle);
                 break;
@@ -148,23 +162,33 @@ pub fn run(env: &Env<'_>, task: &str, params: &Params) -> Report {
             }
             for target in &done.addressed {
                 if Role::from_id(target).is_some() {
-                    enqueue(&mut queue, Wake {
-                        seat: target.clone(),
-                        reason: BidReason::Addressed,
-                        note: format!("@{} addressed you.", wake.seat),
-                    });
+                    enqueue(
+                        &mut queue,
+                        Wake {
+                            seat: target.clone(),
+                            reason: BidReason::Addressed,
+                            note: format!("@{} addressed you.", wake.seat),
+                        },
+                    );
                 }
             }
             if done.broadcasting && done.addressed.is_empty() {
                 let target = route_broadcast(&wake.seat, &done.content);
-                enqueue(&mut queue, Wake {
-                    seat: target.into(),
-                    reason: BidReason::Salience,
-                    note: format!("@{} routed work to you.", wake.seat),
-                });
+                enqueue(
+                    &mut queue,
+                    Wake {
+                        seat: target.into(),
+                        reason: BidReason::Salience,
+                        note: format!("@{} routed work to you.", wake.seat),
+                    },
+                );
             }
         }
-        unreported = if lead_ran { spoke_non_lead } else { unreported + spoke_non_lead };
+        unreported = if lead_ran {
+            spoke_non_lead
+        } else {
+            unreported + spoke_non_lead
+        };
         if let Some(generation) = env.board.maintain() {
             env.tracer.emit(TraceEvent::Checkpoint {
                 label: format!("digest-{generation}"),

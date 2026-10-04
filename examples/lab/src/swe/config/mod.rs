@@ -173,7 +173,9 @@ fn parse_mode(value: &str) -> Result<Mode, UsageError> {
     match value {
         "hive" => Ok(Mode::Hive),
         "single" => Ok(Mode::Single),
-        other => Err(UsageError(format!("--mode must be hive or single, not {other}"))),
+        other => Err(UsageError(format!(
+            "--mode must be hive or single, not {other}"
+        ))),
     }
 }
 

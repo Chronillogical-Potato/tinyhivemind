@@ -27,10 +27,12 @@ pub fn directory_and_division() -> Res {
         desk(6, "di", "!defer #ui not mine"),
         desk(7, "ada", "!evidence #ui mock is ready ^1"),
         desk(8, "ben", "!question #ui who owns the copy?"),
+        desk(9, "cy", "!object >2 ^2 the schema count is wrong"),
     ];
     let traces = read(&rows);
-    let mut priors = vec![AgentThreshold::new("di", 0)];
+    let mut priors = vec![AgentThreshold::new("di", 0), AgentThreshold::new("eli", 0)];
     priors[0].affinity = vec![(TopicId::from("ui"), 90)];
+    priors[1].affinity = vec![(TopicId::from("db"), 80)];
     let policies = [
         ("DEFAULT", DirectoryPolicy::DEFAULT),
         (
@@ -88,7 +90,7 @@ pub fn directory_and_division() -> Res {
     ];
     let mut kept = None;
     for (label, policy) in policies {
-        let dir = directory(&traces, Sequence(8), &policy, &priors)?;
+        let dir = directory(&traces, Sequence(9), &policy, &priors)?;
         let entries: Vec<String> = dir
             .entries()
             .iter()
@@ -111,7 +113,7 @@ pub fn directory_and_division() -> Res {
         "  directory with half_life=0: {}; with window=0: {}",
         directory(
             &traces,
-            Sequence(8),
+            Sequence(9),
             &DirectoryPolicy {
                 half_life: 0,
                 ..DirectoryPolicy::DEFAULT
@@ -122,7 +124,7 @@ pub fn directory_and_division() -> Res {
         .map_or("ok".into(), |e| e.to_string()),
         directory(
             &traces,
-            Sequence(8),
+            Sequence(9),
             &DirectoryPolicy {
                 window: 0,
                 ..DirectoryPolicy::DEFAULT
@@ -267,4 +269,3 @@ pub fn directory_and_division() -> Res {
     );
     Ok(())
 }
-

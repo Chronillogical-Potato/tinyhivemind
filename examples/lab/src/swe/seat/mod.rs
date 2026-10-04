@@ -172,7 +172,13 @@ fn commit_implicit(env: &Env<'_>, act: &Activation<'_>, out: &mut Outcome, text:
     }
 }
 
-fn handle(env: &Env<'_>, act: &Activation<'_>, turn: u64, call: &ToolUse, out: &mut Outcome) -> String {
+fn handle(
+    env: &Env<'_>,
+    act: &Activation<'_>,
+    turn: u64,
+    call: &ToolUse,
+    out: &mut Outcome,
+) -> String {
     let started = Instant::now();
     let (content, refusal) = match &call.args {
         Err(why) => (format!("error: {why}"), Some(why.clone())),
@@ -201,7 +207,11 @@ fn bash(env: &Env<'_>, seat: &str, args: &Value) -> (String, Option<String>) {
     });
     match env.exec.exec(cmd, env.cmd_timeout) {
         Ok(done) => (
-            format!("exit={}\n{}", done.exit, truncate(&done.stdout, env.output_limit)),
+            format!(
+                "exit={}\n{}",
+                done.exit,
+                truncate(&done.stdout, env.output_limit)
+            ),
             None,
         ),
         Err(why) => (format!("error: {why}"), Some(why)),

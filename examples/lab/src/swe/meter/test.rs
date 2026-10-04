@@ -19,7 +19,13 @@ fn token_cap_refuses_the_next_call_once_reached() {
     let meter = Meter::new(Some(100), None);
     assert!(meter.check().is_ok());
     meter.record("a", 60, 40);
-    assert_eq!(meter.check(), Err(Abort::TokenCap { used: 100, cap: 100 }));
+    assert_eq!(
+        meter.check(),
+        Err(Abort::TokenCap {
+            used: 100,
+            cap: 100
+        })
+    );
 }
 
 #[test]

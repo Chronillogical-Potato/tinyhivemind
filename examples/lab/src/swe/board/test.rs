@@ -39,7 +39,12 @@ fn an_ask_addresses_its_target_and_complete_episode_completes() {
         .expect("ask");
     assert_eq!(ask.addressed, ["tester"]);
     let done = board
-        .commit("lead", &Utterance::CompleteEpisode { message: "done".into() })
+        .commit(
+            "lead",
+            &Utterance::CompleteEpisode {
+                message: "done".into(),
+            },
+        )
         .expect("complete");
     assert!(done.completes);
 }
@@ -53,8 +58,12 @@ fn an_unknown_speaker_is_an_error_not_a_row() {
 #[test]
 fn briefing_shows_pins_then_recent_rows() {
     let board = board();
-    board.commit("lead", &post("plan: edit parser.py\n!pin #plan")).expect("c");
-    board.commit("implementer", &post("patched parser.py")).expect("c");
+    board
+        .commit("lead", &post("plan: edit parser.py\n!pin #plan"))
+        .expect("c");
+    board
+        .commit("implementer", &post("patched parser.py"))
+        .expect("c");
     let text = board.briefing("tester");
     let pinned = text.find("## Pinned").expect("pins");
     let recent = text.find("## Recent").expect("recent");
@@ -67,15 +76,24 @@ fn briefing_shows_pins_then_recent_rows() {
 fn old_rows_fold_into_a_bounded_digest_and_leave_the_tail() {
     let board = board();
     for n in 0..40 {
-        board.commit("lead", &post(&format!("note number {n} about the parser"))).expect("c");
+        board
+            .commit("lead", &post(&format!("note number {n} about the parser")))
+            .expect("c");
     }
     assert_eq!(board.maintain(), Some(1));
     let text = board.briefing("tester");
     assert!(text.contains("## Earlier on the desk (digest)"));
     assert!(text.contains("note number 39"));
     let live = text.split("## Recent desk messages").nth(1).expect("tail");
-    assert!(!live.contains("note number 0 "), "folded rows leave the tail");
-    assert!(text.len() < 6000, "briefing stays bounded, was {}", text.len());
+    assert!(
+        !live.contains("note number 0 "),
+        "folded rows leave the tail"
+    );
+    assert!(
+        text.len() < 6000,
+        "briefing stays bounded, was {}",
+        text.len()
+    );
 }
 
 #[test]
@@ -92,8 +110,8 @@ fn read_returns_a_bounded_window() {
 
 #[test]
 fn extractive_fold_respects_the_budget() {
-    use tinyhivemind_core::runtime::{Conversation, Sequence, SessionMessage};
     use tinyhivemind_core::runtime::digest::DigestRequest;
+    use tinyhivemind_core::runtime::{Conversation, Sequence, SessionMessage};
     let messages = (1..=50)
         .map(|n| SessionMessage {
             sequence: Sequence(n),
@@ -104,7 +122,11 @@ fn extractive_fold_respects_the_budget() {
         })
         .collect();
     let request = DigestRequest {
-        conversation: Conversation { desk_id: "swe".into(), desk_name: "s".into(), thread_root: None },
+        conversation: Conversation {
+            desk_id: "swe".into(),
+            desk_name: "s".into(),
+            thread_root: None,
+        },
         prior: None,
         messages,
         through: Sequence(50),

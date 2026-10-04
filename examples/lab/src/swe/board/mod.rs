@@ -23,7 +23,9 @@ use tinyhivemind_core::runtime::digest::{
 };
 use tinyhivemind_core::runtime::pins::{PIN_LIMIT, read_pinboard};
 use tinyhivemind_core::runtime::speech::{CommitRequest, Utterance, commit_utterance};
-use tinyhivemind_core::runtime::{Conversation, Sequence, SessionQuery, project_session, render_row};
+use tinyhivemind_core::runtime::{
+    Conversation, Sequence, SessionQuery, project_session, render_row,
+};
 
 use crate::{MemoryLog, World, agent, block_on};
 
@@ -161,7 +163,12 @@ impl Board {
             .log
             .rows()
             .iter()
-            .filter(|row| inner.digest.as_ref().is_none_or(|d| row.sequence > d.through))
+            .filter(|row| {
+                inner
+                    .digest
+                    .as_ref()
+                    .is_none_or(|d| row.sequence > d.through)
+            })
             .map(|row| row.content.len())
             .sum();
         let pins = block_on(read_pinboard(
@@ -217,7 +224,11 @@ impl Board {
         if !pins.is_empty() {
             text.push_str("## Pinned\n");
             for pin in &pins {
-                let label = pin.label.as_deref().map(|l| format!(" #{l}")).unwrap_or_default();
+                let label = pin
+                    .label
+                    .as_deref()
+                    .map(|l| format!(" #{l}"))
+                    .unwrap_or_default();
                 let excerpt = pin.excerpt.as_deref().unwrap_or_default();
                 text.push_str(&format!("[{}]{label} {excerpt}\n", pin.sequence));
             }
