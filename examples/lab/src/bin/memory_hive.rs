@@ -23,10 +23,10 @@ use tinyhivemind_core::runtime::sharing::{
     prepare_delta,
 };
 use tinyhivemind_core::runtime::{
-    BriefingNote, BrevityPolicy, Conversation, ElsewhereQuery, MentionDispatchContext, Pin,
-    SESSION_WINDOW, Sequence, SessionQuery, TeamBriefing, THREAD_INDEX_LIMIT, THREAD_INDEX_SCAN,
-    THREAD_OPENING_CHARS, gather_elsewhere, initialize_session, initialize_session_with_context,
-    project_session, read_thread_index, render_row,
+    BrevityPolicy, BriefingNote, Conversation, ElsewhereQuery, MentionDispatchContext, Pin,
+    SESSION_WINDOW, Sequence, SessionQuery, THREAD_INDEX_LIMIT, THREAD_INDEX_SCAN,
+    THREAD_OPENING_CHARS, TeamBriefing, gather_elsewhere, initialize_session,
+    initialize_session_with_context, project_session, read_thread_index, render_row,
 };
 use tinyhivemind_core::telemetry::TraceEvent;
 use tinyhivemind_lab::{MemoryLog, TraceRig, World, agent, block_on, person};
@@ -102,7 +102,12 @@ fn world() -> World {
         .agent("carol")
         .agent("dave")
         .agent("erin")
-        .desk("eng", "Engineering", "Build the product", &["alice", "bob", "carol"])
+        .desk(
+            "eng",
+            "Engineering",
+            "Build the product",
+            &["alice", "bob", "carol"],
+        )
         .desk("ops", "Operations", "Keep it running", &["dave", "erin"])
 }
 
@@ -172,17 +177,37 @@ fn digest(rig: &TraceRig) -> Res {
         } else {
             Audience::Desk
         };
-        log.append("eng", None, agent(authors[(n % 3) as usize]), &body, audience);
+        log.append(
+            "eng",
+            None,
+            agent(authors[(n % 3) as usize]),
+            &body,
+            audience,
+        );
     }
     let conv = eng();
-    let pins = block_on(read_pinboard(&log, &conv, &Viewer::Operator, PIN_LIMIT, None))?;
+    let pins = block_on(read_pinboard(
+        &log,
+        &conv,
+        &Viewer::Operator,
+        PIN_LIMIT,
+        None,
+    ))?;
 
     section("digest: refold with an honest scripted Digester, to a fixed point");
     let honest = Scripted::new(Mode::Honest);
     let mut account: Option<ChannelDigest> = None;
     let head = ChannelHead::at(log.head());
     for step in 1..=8 {
-        let outcome = block_on(refold(&log, Some(&honest), &conv, account.as_ref(), head, &pins, policy))?;
+        let outcome = block_on(refold(
+            &log,
+            Some(&honest),
+            &conv,
+            account.as_ref(),
+            head,
+            &pins,
+            policy,
+        ))?;
         println!("  step {step}: {}", describe(&outcome));
         tracer.emit(TraceEvent::Mark {
             label: "digest.refold".into(),
@@ -215,12 +240,27 @@ fn digest(rig: &TraceRig) -> Res {
         narrowed.messages.len(),
         narrowed.covered_through
     );
-    println!("  without an account the window is untouched: {}", apply_digest(None, &window).messages.len());
+    println!(
+        "  without an account the window is untouched: {}",
+        apply_digest(None, &window).messages.len()
+    );
 
     section("digest: every way a fold fails to become an account");
-    for (label, mode) in [("blank", Mode::Blank), ("verbose", Mode::Verbose), ("broken", Mode::Broken)] {
+    for (label, mode) in [
+        ("blank", Mode::Blank),
+        ("verbose", Mode::Verbose),
+        ("broken", Mode::Broken),
+    ] {
         let scripted = Scripted::new(mode);
-        let out = block_on(refold(&log, Some(&scripted), &conv, None, head, &pins, policy))?;
+        let out = block_on(refold(
+            &log,
+            Some(&scripted),
+            &conv,
+            None,
+            head,
+            &pins,
+            policy,
+        ))?;
         println!("  {label:<8}-> {}", describe(&out));
     }
     let none = block_on(refold(&log, None, &conv, None, head, &pins, policy))?;
@@ -234,8 +274,14 @@ fn digest(rig: &TraceRig) -> Res {
         budget_chars: 10,
         pinned: Vec::new(),
     };
-    println!("  regressed   -> {:?}", accept_digest(held.as_ref(), &request, "older"));
-    println!("  too large   -> {:?}", accept_digest(None, &request, "this text is longer than ten"));
+    println!(
+        "  regressed   -> {:?}",
+        accept_digest(held.as_ref(), &request, "older")
+    );
+    println!(
+        "  too large   -> {:?}",
+        accept_digest(None, &request, "this text is longer than ten")
+    );
     println!("  empty       -> {:?}", accept_digest(None, &request, "  "));
     assert_eq!(
         accept_digest(None, &request, " "),
@@ -248,8 +294,19 @@ fn digest(rig: &TraceRig) -> Res {
         desk_name: "Operations".into(),
         thread_root: None,
     };
-    let wrong = block_on(refold(&log, Some(&honest), &other, account.as_ref(), head, &pins, policy));
-    println!("  account of another channel: {}", wrong.err().map_or("ok".into(), |e| e.to_string()));
+    let wrong = block_on(refold(
+        &log,
+        Some(&honest),
+        &other,
+        account.as_ref(),
+        head,
+        &pins,
+        policy,
+    ));
+    println!(
+        "  account of another channel: {}",
+        wrong.err().map_or("ok".into(), |e| e.to_string())
+    );
     let mut deep = MemoryLog::default();
     for n in 1..=2100 {
         deep.say("eng", agent("alice"), &format!("row {n}"));
@@ -260,7 +317,10 @@ fn digest(rig: &TraceRig) -> Res {
         Some(Sequence(1)),
         deep.head(),
     );
-    println!("  scan past SCAN_LIMIT: {}", block_on(gap).err().map_or("ok".into(), |e| e.to_string()));
+    println!(
+        "  scan past SCAN_LIMIT: {}",
+        block_on(gap).err().map_or("ok".into(), |e| e.to_string())
+    );
     Ok(())
 }
 
@@ -279,7 +339,11 @@ fn pins() -> Res {
         "constants: PIN_LIMIT={PIN_LIMIT} PIN_SCAN={PIN_SCAN} PIN_EXCERPT_CHARS={PIN_EXCERPT_CHARS} PIN_MARKER_CAP={PIN_MARKER_CAP}"
     );
     let mut log = MemoryLog::default();
-    log.say("eng", agent("alice"), "The rate limiter resets at midnight UTC.");
+    log.say(
+        "eng",
+        agent("alice"),
+        "The rate limiter resets at midnight UTC.",
+    );
     log.say("eng", agent("bob"), "Use sqlx for the new service.");
     log.say("eng", agent("carol"), "!pin ^1 #limits resets at midnight");
     log.say("eng", agent("bob"), "!pin ^2 #stack");
@@ -290,14 +354,18 @@ fn pins() -> Res {
         None,
         agent("alice"),
         "ship friday, tell nobody",
-        Audience::Aside { members: vec!["bob".into()] },
+        Audience::Aside {
+            members: vec!["bob".into()],
+        },
     );
     log.append(
         "eng",
         None,
         agent("alice"),
         &format!("!pin ^{secret} #secret"),
-        Audience::Aside { members: vec!["bob".into()] },
+        Audience::Aside {
+            members: vec!["bob".into()],
+        },
     );
     log.say("eng", agent("bob"), "!pin #self a long opening that goes on and on and on and on and on and on and on and on and on and on and on and on and on and on");
     log.say("eng", agent("bob"), "!unpin");
@@ -310,17 +378,35 @@ fn pins() -> Res {
         let board = fold_pins(log.rows(), viewer, PIN_LIMIT);
         println!("  {name}: {}", board_line(&board));
     }
-    println!("  limit 1 (newest marker wins): {}", board_line(&fold_pins(log.rows(), &Viewer::Operator, 1)));
-    println!("  limit 0: {}", board_line(&fold_pins(log.rows(), &Viewer::Operator, 0)));
+    println!(
+        "  limit 1 (newest marker wins): {}",
+        board_line(&fold_pins(log.rows(), &Viewer::Operator, 1))
+    );
+    println!(
+        "  limit 0: {}",
+        board_line(&fold_pins(log.rows(), &Viewer::Operator, 0))
+    );
     let tail: Vec<_> = log.rows().iter().skip(2).cloned().collect();
     println!(
         "  rows scanned from ^3 only, so ^1 is outside the scan: {}",
         board_line(&fold_pins(&tail, &Viewer::Operator, PIN_LIMIT))
     );
     let conv = eng();
-    let early = block_on(read_pinboard(&log, &conv, &Viewer::Operator, PIN_LIMIT, Some(Sequence(5))))?;
+    let early = block_on(read_pinboard(
+        &log,
+        &conv,
+        &Viewer::Operator,
+        PIN_LIMIT,
+        Some(Sequence(5)),
+    ))?;
     println!("  read_pinboard before ^5: {}", board_line(&early));
-    let board = block_on(read_pinboard(&log, &conv, &Viewer::Operator, PIN_LIMIT, None))?;
+    let board = block_on(read_pinboard(
+        &log,
+        &conv,
+        &Viewer::Operator,
+        PIN_LIMIT,
+        None,
+    ))?;
     if let Some(note) = pin_note(&board) {
         println!("  pin_note -> {}:", note.heading);
         for line in note.lines {
@@ -331,7 +417,10 @@ fn pins() -> Res {
 
     let storm: String = (1..=12).map(|n| format!("!pin ^{n} #m{n}\n")).collect();
     let found = read_directives(&storm, &agent("alice"), Sequence(99));
-    println!("  12 markers in one message yield {} (cap {PIN_MARKER_CAP})", found.len());
+    println!(
+        "  12 markers in one message yield {} (cap {PIN_MARKER_CAP})",
+        found.len()
+    );
     println!(
         "  `!unpin` with no target yields {} directives",
         read_directives("!unpin", &agent("alice"), Sequence(1)).len()
@@ -346,12 +435,23 @@ fn board_line(board: &[Pin]) -> String {
             format!(
                 "^{}{}{}",
                 p.sequence,
-                p.label.as_deref().map(|l| format!("#{l}")).unwrap_or_default(),
-                if p.excerpt.is_none() { "(no excerpt)" } else { "" }
+                p.label
+                    .as_deref()
+                    .map(|l| format!("#{l}"))
+                    .unwrap_or_default(),
+                if p.excerpt.is_none() {
+                    "(no excerpt)"
+                } else {
+                    ""
+                }
             )
         })
         .collect();
-    if parts.is_empty() { "(empty)".into() } else { parts.join(" ") }
+    if parts.is_empty() {
+        "(empty)".into()
+    } else {
+        parts.join(" ")
+    }
 }
 
 fn sharing() -> Res {
@@ -366,7 +466,9 @@ fn sharing() -> Res {
         None,
         agent("alice"),
         "whisper to bob",
-        Audience::Aside { members: vec!["bob".into()] },
+        Audience::Aside {
+            members: vec!["bob".into()],
+        },
     );
     log.say("eng", agent("bob"), "another new row");
     let conv = eng();
@@ -387,9 +489,22 @@ fn sharing() -> Res {
             let rows: Vec<String> = delta
                 .messages
                 .iter()
-                .map(|m| format!("^{}:{}", m.sequence, if m.elided.is_some() { "<elided>" } else { "text" }))
+                .map(|m| {
+                    format!(
+                        "^{}:{}",
+                        m.sequence,
+                        if m.elided.is_some() {
+                            "<elided>"
+                        } else {
+                            "text"
+                        }
+                    )
+                })
                 .collect();
-            println!("  {who}: delta {rows:?} next watermark ^{}", delta.next_state.watermark);
+            println!(
+                "  {who}: delta {rows:?} next watermark ^{}",
+                delta.next_state.watermark
+            );
         }
     }
     let mut seeded = state.clone();
@@ -408,10 +523,17 @@ fn sharing() -> Res {
     if let SharingPlan::Delta(delta) = plan {
         println!(
             "  after note_present(^6): delta carries {:?}",
-            delta.messages.iter().map(|m| m.sequence.0).collect::<Vec<_>>()
+            delta
+                .messages
+                .iter()
+                .map(|m| m.sequence.0)
+                .collect::<Vec<_>>()
         );
     }
-    let other = Conversation { thread_root: Some(Sequence(2)), ..conv.clone() };
+    let other = Conversation {
+        thread_root: Some(Sequence(2)),
+        ..conv.clone()
+    };
     let changed = block_on(prepare_delta(
         &log,
         &SharingQuery {
@@ -467,7 +589,10 @@ fn sharing() -> Res {
             before: Sequence(3),
         },
     ));
-    println!("  before below watermark -> error: {}", regress.err().map_or("none".into(), |e| e.to_string()));
+    println!(
+        "  before below watermark -> error: {}",
+        regress.err().map_or("none".into(), |e| e.to_string())
+    );
     let mut full = initialized_state(conv.clone(), Sequence(0));
     let mut overflow = None;
     for n in 1..=(PRESENT_SET_LIMIT as u64 + 1) {
@@ -475,15 +600,23 @@ fn sharing() -> Res {
             overflow = Some(error.to_string());
         }
     }
-    println!("  note_present past PRESENT_SET_LIMIT={PRESENT_SET_LIMIT} -> {}", overflow.unwrap_or_default());
+    println!(
+        "  note_present past PRESENT_SET_LIMIT={PRESENT_SET_LIMIT} -> {}",
+        overflow.unwrap_or_default()
+    );
     let wire = format!(
         "{{\"conversation\":{},\"watermark\":0,\"present_above_watermark\":[{}]}}",
         serde_json::to_string(&conv)?,
-        (1..=PRESENT_SET_LIMIT + 1).map(|n| n.to_string()).collect::<Vec<_>>().join(",")
+        (1..=PRESENT_SET_LIMIT + 1)
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
     );
     println!(
         "  decoding an oversized SharingState: {}",
-        serde_json::from_str::<SharingState>(&wire).err().map_or("accepted".into(), |e| e.to_string())
+        serde_json::from_str::<SharingState>(&wire)
+            .err()
+            .map_or("accepted".into(), |e| e.to_string())
     );
     Ok(())
 }
@@ -507,15 +640,27 @@ fn briefing() -> Res {
     println!("{text}");
 
     let tuned = TeamBriefing {
-        brevity: BrevityPolicy { message_chars: 80, window: 12 },
-        asides: AsidePolicy { enabled: true, max_members: 2, max_messages: 3, must_surface: true, require_thread: false },
+        brevity: BrevityPolicy {
+            message_chars: 80,
+            window: 12,
+        },
+        asides: AsidePolicy {
+            enabled: true,
+            max_members: 2,
+            max_messages: 3,
+            must_surface: true,
+            require_thread: false,
+        },
         ..base.clone()
     };
     println!("\n  tuned brevity + asides add:");
     for line in added(&text, &tuned.system_text()) {
         println!("    + {line}");
     }
-    let policy = MentionDispatchPolicy { enabled: true, max_hops: 2 };
+    let policy = MentionDispatchPolicy {
+        enabled: true,
+        max_hops: 2,
+    };
     for hop in [0, 2] {
         let ctx = MentionDispatchContext { policy, hop };
         println!(
@@ -525,7 +670,13 @@ fn briefing() -> Res {
             added(&text, &base.system_text_with_dispatch(ctx)).len()
         );
     }
-    let off = MentionDispatchContext { policy: MentionDispatchPolicy { enabled: false, max_hops: 2 }, hop: 0 };
+    let off = MentionDispatchContext {
+        policy: MentionDispatchPolicy {
+            enabled: false,
+            max_hops: 2,
+        },
+        hop: 0,
+    };
     println!("  dispatch disabled: may_dispatch={}", off.may_dispatch());
     let brevity = BrevityPolicy::default();
     println!(
@@ -544,7 +695,9 @@ fn briefing() -> Res {
             None,
             agent("alice"),
             &format!("aside {n}"),
-            Audience::Aside { members: vec!["bob".into()] },
+            Audience::Aside {
+                members: vec!["bob".into()],
+            },
         );
     }
     log.say("eng", agent("carol"), "Noted.");
@@ -564,12 +717,19 @@ fn briefing() -> Res {
         heading: "Earlier in this channel".into(),
         lines: vec!["[digest] checkout timeout under investigation".into()],
     };
-    let rich = block_on(initialize_session_with_context(&log, &query, base, vec![note]))?;
+    let rich = block_on(initialize_session_with_context(
+        &log,
+        &query,
+        base,
+        vec![note],
+    ))?;
     println!("  context.system_text():");
     for line in rich.context.system_text().unwrap_or_default().lines() {
         println!("    {line}");
     }
-    println!("  THREAD_INDEX_LIMIT={THREAD_INDEX_LIMIT} THREAD_INDEX_SCAN={THREAD_INDEX_SCAN} THREAD_OPENING_CHARS={THREAD_OPENING_CHARS}");
+    println!(
+        "  THREAD_INDEX_LIMIT={THREAD_INDEX_LIMIT} THREAD_INDEX_SCAN={THREAD_INDEX_SCAN} THREAD_OPENING_CHARS={THREAD_OPENING_CHARS}"
+    );
     Ok(())
 }
 
@@ -580,25 +740,55 @@ fn elsewhere_and_threads() -> Res {
     log.say("eng", agent("alice"), "Deploying the gateway at noon.");
     log.say("ops", agent("dave"), "Pager is quiet.");
     log.say("ops", agent("erin"), "Disk on db-2 at 91%.");
-    log.append("ops", None, agent("dave"), "private to erin", Audience::Aside { members: vec!["erin".into()] });
+    log.append(
+        "ops",
+        None,
+        agent("dave"),
+        "private to erin",
+        Audience::Aside {
+            members: vec!["erin".into()],
+        },
+    );
     let conversations = [
         eng(),
-        Conversation { desk_id: "ops".into(), desk_name: "Operations".into(), thread_root: None },
+        Conversation {
+            desk_id: "ops".into(),
+            desk_name: "Operations".into(),
+            thread_root: None,
+        },
     ];
     let current = eng();
     let seen = block_on(gather_elsewhere(
         &log,
-        &ElsewhereQuery { seat: "alice", conversations: &conversations, current: Some(&current), before: None, window: 5 },
+        &ElsewhereQuery {
+            seat: "alice",
+            conversations: &conversations,
+            current: Some(&current),
+            before: None,
+            window: 5,
+        },
     ))?;
     for e in &seen {
-        println!("  alice sees {} (desk {}):", e.conversation.desk_name, e.conversation.desk_id);
+        println!(
+            "  alice sees {} (desk {}):",
+            e.conversation.desk_name, e.conversation.desk_id
+        );
         for row in &e.rows {
-            println!("    {}", render_row(row).unwrap_or_else(|| "<elided aside stub>".into()));
+            println!(
+                "    {}",
+                render_row(row).unwrap_or_else(|| "<elided aside stub>".into())
+            );
         }
     }
     let unrestricted = block_on(gather_elsewhere(
         &log,
-        &ElsewhereQuery { seat: "alice", conversations: &conversations[..1], current: None, before: None, window: 5 },
+        &ElsewhereQuery {
+            seat: "alice",
+            conversations: &conversations[..1],
+            current: None,
+            before: None,
+            window: 5,
+        },
     ))?;
     println!(
         "  alice may read eng from outside it; nothing checks desk membership: {} row(s) (members: {:?})",
@@ -608,14 +798,33 @@ fn elsewhere_and_threads() -> Res {
 
     section("threads: the index a viewer gets of a desk");
     let mut log = MemoryLog::default();
-    let a = log.say("eng", person("sam"), "Why does checkout time out under load?");
-    let b = log.say("eng", person("sam"), &format!("Second thread {}", "with a rather long opening ".repeat(4)));
+    let a = log.say(
+        "eng",
+        person("sam"),
+        "Why does checkout time out under load?",
+    );
+    let b = log.say(
+        "eng",
+        person("sam"),
+        &format!("Second thread {}", "with a rather long opening ".repeat(4)),
+    );
     log.reply("eng", a, agent("alice"), "Gateway retry.");
     log.reply("eng", a, agent("bob"), "Confirmed.");
     log.reply("eng", b, agent("carol"), "Looking.");
-    log.append("eng", None, agent("alice"), "private root", Audience::Aside { members: vec!["bob".into()] });
+    log.append(
+        "eng",
+        None,
+        agent("alice"),
+        "private root",
+        Audience::Aside {
+            members: vec!["bob".into()],
+        },
+    );
     let conv = eng();
-    for (name, viewer) in [("operator", Viewer::Operator), ("carol", Viewer::Agent { id: "carol".into() })] {
+    for (name, viewer) in [
+        ("operator", Viewer::Operator),
+        ("carol", Viewer::Agent { id: "carol".into() }),
+    ] {
         let mut index = block_on(read_thread_index(&log, &conv, &viewer, THREAD_INDEX_LIMIT))?;
         // `landed` is board state core does not hold: the host fills it in.
         for line in &mut index {
@@ -625,13 +834,25 @@ fn elsewhere_and_threads() -> Res {
         }
         println!("  {name}:");
         for line in &index {
-            println!("    [{}] {:?} replies={} latest=^{} landed={:?}", line.root, line.opening, line.replies, line.latest, line.landed);
+            println!(
+                "    [{}] {:?} replies={} latest=^{} landed={:?}",
+                line.root, line.opening, line.replies, line.latest, line.landed
+            );
         }
     }
     println!(
         "  limit 1: {} line(s); inside a thread: {} line(s); limit 0: {} line(s)",
         block_on(read_thread_index(&log, &conv, &Viewer::Operator, 1))?.len(),
-        block_on(read_thread_index(&log, &Conversation { thread_root: Some(a), ..conv.clone() }, &Viewer::Operator, 5))?.len(),
+        block_on(read_thread_index(
+            &log,
+            &Conversation {
+                thread_root: Some(a),
+                ..conv.clone()
+            },
+            &Viewer::Operator,
+            5
+        ))?
+        .len(),
         block_on(read_thread_index(&log, &conv, &Viewer::Operator, 0))?.len()
     );
     Ok(())
