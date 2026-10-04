@@ -67,7 +67,7 @@ use crate::{
     aside::{AsideDecision, AsideInput, AsidePolicy, Audience, aside},
     desk::DeskSet,
     dispatch::DispatchConversation,
-    error::Result,
+    error::{Error, Result},
     mention::{Mention, MentionAuthor, MentionTarget, resolve},
     roster::Roster,
 };
