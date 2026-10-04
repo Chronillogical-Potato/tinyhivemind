@@ -87,8 +87,10 @@ details summary { cursor: pointer; padding: 4px 0; }
   <h1>Hive Lab Run Viewer</h1>
   <p class="muted">Inspect telemetry from one or more runs: per-seat waterfall, room timeline, token cost, and a side-by-side summary. Everything stays in your browser.</p>
 
-  <section class="card drop" id="drop" aria-label="Load runs">
-    <p><strong>Drop one or more <code>.jsonl</code> run files here</strong></p>
+  <section class="card" id="runs-panel" aria-label="Runs on disk"></section>
+
+  <section class="card drop" id="drop" aria-label="Load runs from files">
+    <p><strong>Or drop one or more <code>.jsonl</code> run files here</strong></p>
     <div class="bar centered">
       <label class="btn">Choose files<input type="file" id="picker" accept=".jsonl,.json,.ndjson,.txt,application/json" multiple></label>
             <button type="button" id="clear">Clear</button>
