@@ -4,7 +4,8 @@ fn the_offline_config_reaches_out_to_nothing() {
     let config = super::config();
     assert!(!config.local_ai.runtime_enabled);
     assert!(!config.runtime_python.enabled);
-    assert!(config.memory_tree.embedding_endpoint.is_none());
+    assert!(!config.memory.recall.enabled);
+    assert!(!config.memory.conversations.enabled);
 }
 
 /// The dialect the scripted route is written in, pinned.

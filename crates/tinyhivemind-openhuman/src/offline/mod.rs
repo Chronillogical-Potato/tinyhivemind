@@ -19,10 +19,10 @@ pub fn config() -> RuntimeConfig {
     config.agent.tool_dispatcher = "auto".into();
     config.local_ai.runtime_enabled = false;
     config.runtime_python.enabled = false;
-    config.memory_tree.spacy_enabled = false;
-    config.memory_tree.embedding_endpoint = None;
-    config.memory_tree.embedding_model = None;
-    config.memory_tree.embedding_strict = false;
+    // The memory lifecycle recalls a pack before every turn and logs every
+    // turn after it; offline there is no engine to answer either.
+    config.memory.recall.enabled = false;
+    config.memory.conversations.enabled = false;
     config
 }
 
