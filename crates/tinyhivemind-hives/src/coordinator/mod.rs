@@ -110,17 +110,6 @@ impl Coordinator {
                     appended: &[],
                 })
                 .await?;
-        } else {
-            // No running turns, but still commit the epoch claim so we own the store.
-            let previous = durable.revision;
-            durable.revision = previous.checked_add(1).ok_or(Error::Exhausted)?;
-            storage
-                .commit(Commit {
-                    expected_revision: previous,
-                    state: &durable,
-                    appended: &[],
-                })
-                .await?;
         }
 
         let (committed, _) = watch::channel(durable.revision);
