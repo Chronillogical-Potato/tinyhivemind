@@ -6,7 +6,7 @@ data_path = "/data/cortex"
 wal_sync = true
 
 [engine]
-vector_dimensions = 3072
+vector_dimensions = 1536
 hnsw_m = 32
 hnsw_ef_construction = 500
 hnsw_ef_search = 200
