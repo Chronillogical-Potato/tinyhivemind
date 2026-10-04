@@ -251,10 +251,16 @@ pub fn scaled_estimate(prompt: u64, before: usize, after: usize) -> u64 {
     u64::try_from(scaled).unwrap_or(u64::MAX)
 }
 
-/// Put `pack` (already framed under [`MEMORY_HEADER`]) right after the
-/// opening user message, replacing the pack an earlier compaction left there.
+/// Put `pack` right after the opening user message, under [`MEMORY_HEADER`]
+/// (added unless the pack already starts with it), replacing the pack an
+/// earlier compaction left there.
 pub fn upsert_memory(messages: &mut Vec<Value>, pack: &str) {
-    let message = json!({ "role": "user", "content": pack });
+    let framed = if pack.starts_with(MEMORY_HEADER) {
+        pack.to_owned()
+    } else {
+        format!("{MEMORY_HEADER}\n{pack}")
+    };
+    let message = json!({ "role": "user", "content": framed });
     let held = messages
         .get(2)
         .and_then(|m| m["content"].as_str())

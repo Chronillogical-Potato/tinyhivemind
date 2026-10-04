@@ -1,10 +1,13 @@
 //! A seat's session persists across activations; only compaction shrinks it.
 
+use std::sync::Mutex;
+
 use serde_json::{Value, json};
 use tinyhivemind_core::telemetry::TraceEvent;
 
 use super::support::*;
 use crate::swe::context::{Policy, Settings};
+use crate::swe::llm::Chat;
 use crate::swe::session::{SessionMode, Sessions};
 use crate::swe::tools::HIVE_TOOLS;
 
@@ -105,23 +108,35 @@ fn without_compaction_nothing_is_ever_removed() {
     assert_eq!(sizes, [6, 11, 16]);
 }
 
+/// Pops the script, except that a summarizer request gets a note.
+struct Summarizing(Mutex<Vec<Value>>);
+
+impl Chat for Summarizing {
+    fn send(&self, body: &Value) -> Result<Value, String> {
+        let system = body["messages"][0]["content"].as_str().unwrap_or_default();
+        if system.contains("You condense") {
+            return Ok(text("NOTE: summary of earlier work"));
+        }
+        Ok(self.0.lock().expect("lock").remove(0))
+    }
+}
+
 #[test]
 fn compaction_is_what_shrinks_a_long_session() {
     let mut script = Vec::new();
-    for n in 0..4 {
-        script.push(long_bash());
-        script.push(long_bash());
-        script.push(Ok(call("post", json!({ "message": format!("round {n}") }))));
+    for n in 0..3 {
+        for _ in 0..3 {
+            script.push(long_bash().expect("call"));
+        }
+        script.push(call("post", json!({ "message": format!("round {n}") })));
     }
-    // The summarizer's reply comes from the same script when it fires.
-    script.insert(5, Ok(text("NOTE: summary of earlier work")));
-    let (rig, _) = recorded(script);
+    let rig = Rig::over(Box::new(Summarizing(Mutex::new(script))), None);
     let settings = Settings {
         policy: Policy::Summarize,
         budget: 50,
         keep_recent: 1,
     };
-    let mut sizes = Vec::new();
+    let mut sizes = vec![0];
     for _ in 0..3 {
         activate(
             &rig,
@@ -133,10 +148,17 @@ fn compaction_is_what_shrinks_a_long_session() {
         sizes.push(rig.sessions.len_of("lead"));
     }
     assert!(context_marks(&rig) >= 1);
+    // Each activation adds a user message and four exchanges (9 messages)
+    // unless a summary took some out.
     assert!(
-        sizes.windows(2).any(|w| w[1] < w[0] + 8),
+        sizes.windows(2).any(|w| w[1] < w[0] + 9),
         "a summary removed messages: {sizes:?}"
     );
+    let summary = rig.sessions.take("lead").messages[2]["content"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(summary.contains("NOTE: summary of earlier work"));
 }
 
 #[test]
