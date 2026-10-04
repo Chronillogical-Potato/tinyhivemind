@@ -1,0 +1,19 @@
+{
+  "aborted": null,
+  "activations": 1,
+  "completed": true,
+  "mode": "single",
+  "model": "openai/gpt-oss-120b:nitro",
+  "rounds": 0,
+  "seats": {
+    "agent": {
+      "calls": 13,
+      "in": 50190,
+      "out": 2897
+    }
+  },
+  "tokens_in": 50190,
+  "tokens_out": 2897,
+  "turns": 13,
+  "wall_ms": 13480
+}

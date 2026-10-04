@@ -1,0 +1,45 @@
+{
+    "id": "4c3e2061-f6d2-4971-b0a9-4bdc0fcbce64",
+    "started_at": "2026-10-04T08:44:54.329610",
+    "updated_at": "2026-10-04T08:50:41.677036",
+    "finished_at": "2026-10-04T08:50:41.677036",
+    "n_total_trials": 5,
+    "stats": {
+        "n_completed_trials": 5,
+        "n_errored_trials": 0,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "swe-hive__gpt-oss-120b:nitro__pick": {
+                "n_trials": 5,
+                "n_errors": 0,
+                "metrics": [
+                    {
+                        "mean": 0.4
+                    }
+                ],
+                "pass_at_k": {},
+                "reward_stats": {
+                    "reward": {
+                        "1.0": [
+                            "multi-source-data-merger__9h7vyso",
+                            "fix-git__dZXuhbg"
+                        ],
+                        "0.0": [
+                            "largest-eigenval__sMhDmu6",
+                            "vulnerable-secret__ydiLmrY",
+                            "cancel-async-tasks__RVnaAWa"
+                        ]
+                    }
+                },
+                "exception_stats": {}
+            }
+        },
+        "n_input_tokens": 653530,
+        "n_cache_tokens": null,
+        "n_output_tokens": 50399,
+        "cost_usd": null
+    }
+}

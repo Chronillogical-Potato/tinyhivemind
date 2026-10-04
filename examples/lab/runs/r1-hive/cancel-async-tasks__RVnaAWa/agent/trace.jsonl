@@ -1,0 +1,38 @@
+{"run":"hive-2106768","seq":0,"at_ms":0,"event":"mark","label":"run start","detail":"hive openai/gpt-oss-120b:nitro max_turns 60 round_width 2"}
+{"run":"hive-2106768","seq":1,"at_ms":0,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"addressed"}]}
+{"run":"hive-2106768","seq":2,"at_ms":0,"event":"turn_started","turn":0,"seat":"lead"}
+{"run":"hive-2106768","seq":3,"at_ms":664,"event":"turn_finished","turn":0,"seat":"lead","input_tokens":1274,"output_tokens":32,"latency_ms":664}
+{"run":"hive-2106768","seq":4,"at_ms":664,"event":"mark","label":"exec","detail":"lead: ls -R"}
+{"run":"hive-2106768","seq":5,"at_ms":730,"event":"tool_call","turn":0,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2106768","seq":6,"at_ms":730,"event":"turn_started","turn":1,"seat":"lead"}
+{"run":"hive-2106768","seq":7,"at_ms":1259,"event":"turn_finished","turn":1,"seat":"lead","input_tokens":1320,"output_tokens":42,"latency_ms":529}
+{"run":"hive-2106768","seq":8,"at_ms":1259,"event":"mark","label":"exec","detail":"lead: ls -R ."}
+{"run":"hive-2106768","seq":9,"at_ms":1326,"event":"tool_call","turn":1,"seat":"lead","tool":"bash","latency_ms":66,"refused":false}
+{"run":"hive-2106768","seq":10,"at_ms":1326,"event":"turn_started","turn":2,"seat":"lead"}
+{"run":"hive-2106768","seq":11,"at_ms":2350,"event":"turn_finished","turn":2,"seat":"lead","input_tokens":1367,"output_tokens":445,"latency_ms":1023}
+{"run":"hive-2106768","seq":12,"at_ms":2350,"event":"tool_call","turn":2,"seat":"lead","tool":"broadcast","latency_ms":0,"refused":false}
+{"run":"hive-2106768","seq":13,"at_ms":2350,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"implementer","reason":"salience"}]}
+{"run":"hive-2106768","seq":14,"at_ms":2350,"event":"turn_started","turn":3,"seat":"implementer"}
+{"run":"hive-2106768","seq":15,"at_ms":3145,"event":"turn_finished","turn":3,"seat":"implementer","input_tokens":1324,"output_tokens":276,"latency_ms":794}
+{"run":"hive-2106768","seq":16,"at_ms":3145,"event":"mark","label":"exec","detail":"implementer: ls -R"}
+{"run":"hive-2106768","seq":17,"at_ms":3209,"event":"tool_call","turn":3,"seat":"implementer","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2106768","seq":18,"at_ms":3209,"event":"turn_started","turn":4,"seat":"implementer"}
+{"run":"hive-2106768","seq":19,"at_ms":4477,"event":"turn_finished","turn":4,"seat":"implementer","input_tokens":1370,"output_tokens":851,"latency_ms":1268}
+{"run":"hive-2106768","seq":20,"at_ms":4477,"event":"mark","label":"exec","detail":"implementer: apply_patch <<'PATCH'\n*** Begin Patch\n*** Add File: /app/run.py\n+\"\"\"Utility to run a collection of async tasks with a co\n... [2476 bytes truncated] ...\nny in‑progress cleanup execute.\n+        await asyncio.gather(*wrappers, return_exceptions=True)\n+\n*** End Patch\nPATCH"}
+{"run":"hive-2106768","seq":21,"at_ms":4539,"event":"tool_call","turn":4,"seat":"implementer","tool":"bash","latency_ms":61,"refused":false}
+{"run":"hive-2106768","seq":22,"at_ms":4539,"event":"turn_started","turn":5,"seat":"implementer"}
+{"run":"hive-2106768","seq":23,"at_ms":5497,"event":"turn_finished","turn":5,"seat":"implementer","input_tokens":2136,"output_tokens":679,"latency_ms":957}
+{"run":"hive-2106768","seq":24,"at_ms":5497,"event":"mark","label":"exec","detail":"implementer: cat <<'EOF' > /app/run.py\n\"\"\"Utility to run a collection of async tasks with a concurrency limit.\n\nThe public API is ``r\n... [2357 bytes truncated] ...\nning tasks to let any in‑progress cleanup execute.\n        await asyncio.gather(*wrappers, return_exceptions=True)\nEOF"}
+{"run":"hive-2106768","seq":25,"at_ms":5565,"event":"tool_call","turn":5,"seat":"implementer","tool":"bash","latency_ms":68,"refused":false}
+{"run":"hive-2106768","seq":26,"at_ms":5565,"event":"turn_started","turn":6,"seat":"implementer"}
+{"run":"hive-2106768","seq":27,"at_ms":6164,"event":"turn_finished","turn":6,"seat":"implementer","input_tokens":2813,"output_tokens":103,"latency_ms":599}
+{"run":"hive-2106768","seq":28,"at_ms":6164,"event":"mark","label":"exec","detail":"implementer: python - <<'PY'\nimport sys, importlib.util, pathlib\np = pathlib.Path('/app/run.py')\nspec = importlib.util.spec_from_file\n... [25 bytes truncated] ...\n importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nprint('module loaded', hasattr(mod, 'run_tasks'))\nPY"}
+{"run":"hive-2106768","seq":29,"at_ms":6426,"event":"tool_call","turn":6,"seat":"implementer","tool":"bash","latency_ms":261,"refused":false}
+{"run":"hive-2106768","seq":30,"at_ms":6426,"event":"turn_started","turn":7,"seat":"implementer"}
+{"run":"hive-2106768","seq":31,"at_ms":6999,"event":"turn_finished","turn":7,"seat":"implementer","input_tokens":2933,"output_tokens":53,"latency_ms":573}
+{"run":"hive-2106768","seq":32,"at_ms":6999,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"quiet"}]}
+{"run":"hive-2106768","seq":33,"at_ms":6999,"event":"turn_started","turn":8,"seat":"lead"}
+{"run":"hive-2106768","seq":34,"at_ms":7582,"event":"turn_finished","turn":8,"seat":"lead","input_tokens":1424,"output_tokens":162,"latency_ms":582}
+{"run":"hive-2106768","seq":35,"at_ms":7582,"event":"tool_call","turn":8,"seat":"lead","tool":"complete_episode","latency_ms":0,"refused":false}
+{"run":"hive-2106768","seq":36,"at_ms":7582,"event":"converged","topic":"task"}
+{"run":"hive-2106768","seq":37,"at_ms":7582,"event":"mark","label":"run end","detail":"completed true"}

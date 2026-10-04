@@ -1,0 +1,143 @@
+{
+    "id": "2780c2e2-b8cd-4273-8abf-5322d36db33a",
+    "task_name": "terminal-bench/largest-eigenval",
+    "trial_name": "largest-eigenval__sMhDmu6",
+    "trial_uri": "file:///tmp/claude-1000/-home-enamakel-work-libraries-tinyhivemind/1dc124ef-7ace-49cf-8a7f-ec80562aeb23/scratchpad/tb/jobs/r1-hive/largest-eigenval__sMhDmu6",
+    "task_id": {
+        "path": "/tmp/claude-1000/-home-enamakel-work-libraries-tinyhivemind/1dc124ef-7ace-49cf-8a7f-ec80562aeb23/scratchpad/tb/pick/largest-eigenval"
+    },
+    "source": "pick",
+    "task_checksum": "7671fdba8d526caaa35987ef58fd60d68ad0e9c59a5a15c05b2838c49c8be65b",
+    "config": {
+        "task": {
+            "path": "/tmp/claude-1000/-home-enamakel-work-libraries-tinyhivemind/1dc124ef-7ace-49cf-8a7f-ec80562aeb23/scratchpad/tb/pick/largest-eigenval",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "pick"
+        },
+        "trial_name": "largest-eigenval__sMhDmu6",
+        "trials_dir": "/tmp/claude-1000/-home-enamakel-work-libraries-tinyhivemind/1dc124ef-7ace-49cf-8a7f-ec80562aeb23/scratchpad/tb/jobs/r1-hive",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "hive_agent:HiveAgent",
+            "import_path": null,
+            "model_name": "openai/gpt-oss-120b:nitro",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {
+                "mode": "hive",
+                "token_cap": 600000,
+                "max_turns": 60
+            },
+            "mcp_servers": []
+        },
+        "user_agent": null,
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "extra_instructions": [],
+        "job_id": "4c3e2061-f6d2-4971-b0a9-4bdc0fcbce64",
+        "source_trial": null
+    },
+    "agent_info": {
+        "name": "swe-hive",
+        "version": "0.1.0",
+        "model_info": {
+            "name": "gpt-oss-120b:nitro",
+            "provider": "openai"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 173515,
+        "n_cache_tokens": null,
+        "n_output_tokens": 19257,
+        "cost_usd": null,
+        "model_usage": null,
+        "rollout_details": null,
+        "metadata": {
+            "swe_hive": {
+                "aborted": "max turns reached (60/60)",
+                "activations": 7,
+                "completed": false,
+                "mode": "hive",
+                "model": "openai/gpt-oss-120b:nitro",
+                "rounds": 7,
+                "seats": {
+                    "lead": {
+                        "calls": 60,
+                        "in": 173515,
+                        "out": 19257
+                    }
+                },
+                "tokens_in": 173515,
+                "tokens_out": 19257,
+                "turns": 60,
+                "wall_ms": 50638
+            },
+            "mode": "hive"
+        }
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0.0
+        }
+    },
+    "verifier_environment_mode": "shared",
+    "exception_info": null,
+    "started_at": "2026-10-04T05:46:11.106229Z",
+    "finished_at": "2026-10-04T05:47:23.095551Z",
+    "environment_setup": {
+        "started_at": "2026-10-04T05:46:11.106737Z",
+        "finished_at": "2026-10-04T05:46:13.601193Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-10-04T05:46:13.601212Z",
+        "finished_at": "2026-10-04T05:46:13.601267Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-10-04T05:46:13.601304Z",
+        "finished_at": "2026-10-04T05:47:06.398696Z"
+    },
+    "verifier": {
+        "started_at": "2026-10-04T05:47:06.613471Z",
+        "finished_at": "2026-10-04T05:47:11.996281Z"
+    },
+    "step_results": null
+}

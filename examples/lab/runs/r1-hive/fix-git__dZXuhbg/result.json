@@ -1,0 +1,143 @@
+{
+    "id": "87a49e07-b46d-4263-989c-f0093e478ab6",
+    "task_name": "terminal-bench/fix-git",
+    "trial_name": "fix-git__dZXuhbg",
+    "trial_uri": "file:///tmp/claude-1000/-home-enamakel-work-libraries-tinyhivemind/1dc124ef-7ace-49cf-8a7f-ec80562aeb23/scratchpad/tb/jobs/r1-hive/fix-git__dZXuhbg",
+    "task_id": {
+        "path": "/tmp/claude-1000/-home-enamakel-work-libraries-tinyhivemind/1dc124ef-7ace-49cf-8a7f-ec80562aeb23/scratchpad/tb/pick/fix-git"
+    },
+    "source": "pick",
+    "task_checksum": "4e8ac33e841019dedf5be92401763602b8128d6236e368053b5cf6bf0f59ee36",
+    "config": {
+        "task": {
+            "path": "/tmp/claude-1000/-home-enamakel-work-libraries-tinyhivemind/1dc124ef-7ace-49cf-8a7f-ec80562aeb23/scratchpad/tb/pick/fix-git",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "pick"
+        },
+        "trial_name": "fix-git__dZXuhbg",
+        "trials_dir": "/tmp/claude-1000/-home-enamakel-work-libraries-tinyhivemind/1dc124ef-7ace-49cf-8a7f-ec80562aeb23/scratchpad/tb/jobs/r1-hive",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "hive_agent:HiveAgent",
+            "import_path": null,
+            "model_name": "openai/gpt-oss-120b:nitro",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {
+                "mode": "hive",
+                "token_cap": 600000,
+                "max_turns": 60
+            },
+            "mcp_servers": []
+        },
+        "user_agent": null,
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "extra_instructions": [],
+        "job_id": "4c3e2061-f6d2-4971-b0a9-4bdc0fcbce64",
+        "source_trial": null
+    },
+    "agent_info": {
+        "name": "swe-hive",
+        "version": "0.1.0",
+        "model_info": {
+            "name": "gpt-oss-120b:nitro",
+            "provider": "openai"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 153237,
+        "n_cache_tokens": null,
+        "n_output_tokens": 6346,
+        "cost_usd": null,
+        "model_usage": null,
+        "rollout_details": null,
+        "metadata": {
+            "swe_hive": {
+                "aborted": "max turns reached (60/60)",
+                "activations": 8,
+                "completed": false,
+                "mode": "hive",
+                "model": "openai/gpt-oss-120b:nitro",
+                "rounds": 8,
+                "seats": {
+                    "lead": {
+                        "calls": 60,
+                        "in": 153237,
+                        "out": 6346
+                    }
+                },
+                "tokens_in": 153237,
+                "tokens_out": 6346,
+                "turns": 60,
+                "wall_ms": 43006
+            },
+            "mode": "hive"
+        }
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1.0
+        }
+    },
+    "verifier_environment_mode": "shared",
+    "exception_info": null,
+    "started_at": "2026-10-04T05:49:27.985742Z",
+    "finished_at": "2026-10-04T05:50:41.674830Z",
+    "environment_setup": {
+        "started_at": "2026-10-04T05:49:27.986362Z",
+        "finished_at": "2026-10-04T05:49:30.479246Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-10-04T05:49:30.479266Z",
+        "finished_at": "2026-10-04T05:49:30.479343Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-10-04T05:49:30.479396Z",
+        "finished_at": "2026-10-04T05:50:15.637303Z"
+    },
+    "verifier": {
+        "started_at": "2026-10-04T05:50:15.851543Z",
+        "finished_at": "2026-10-04T05:50:30.723441Z"
+    },
+    "step_results": null
+}

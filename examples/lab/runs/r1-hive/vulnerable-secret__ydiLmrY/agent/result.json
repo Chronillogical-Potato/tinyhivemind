@@ -1,0 +1,19 @@
+{
+  "aborted": "max turns reached (60/60)",
+  "activations": 7,
+  "completed": false,
+  "mode": "hive",
+  "model": "openai/gpt-oss-120b:nitro",
+  "rounds": 7,
+  "seats": {
+    "lead": {
+      "calls": 60,
+      "in": 158360,
+      "out": 10903
+    }
+  },
+  "tokens_in": 158360,
+  "tokens_out": 10903,
+  "turns": 60,
+  "wall_ms": 46845
+}

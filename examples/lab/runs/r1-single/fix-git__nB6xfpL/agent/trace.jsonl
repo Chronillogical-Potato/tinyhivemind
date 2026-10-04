@@ -1,0 +1,87 @@
+{"run":"single-2028056","seq":0,"at_ms":0,"event":"mark","label":"run start","detail":"single openai/gpt-oss-120b:nitro max_turns 60 round_width 2"}
+{"run":"single-2028056","seq":1,"at_ms":0,"event":"turn_started","turn":0,"seat":"agent"}
+{"run":"single-2028056","seq":2,"at_ms":1917,"event":"turn_finished","turn":0,"seat":"agent","input_tokens":419,"output_tokens":69,"latency_ms":1916}
+{"run":"single-2028056","seq":3,"at_ms":1917,"event":"mark","label":"exec","detail":"agent: ls -R"}
+{"run":"single-2028056","seq":4,"at_ms":1981,"event":"tool_call","turn":0,"seat":"agent","tool":"bash","latency_ms":64,"refused":false}
+{"run":"single-2028056","seq":5,"at_ms":1981,"event":"turn_started","turn":1,"seat":"agent"}
+{"run":"single-2028056","seq":6,"at_ms":2600,"event":"turn_finished","turn":1,"seat":"agent","input_tokens":1146,"output_tokens":38,"latency_ms":618}
+{"run":"single-2028056","seq":7,"at_ms":2600,"event":"mark","label":"exec","detail":"agent: git status"}
+{"run":"single-2028056","seq":8,"at_ms":2717,"event":"tool_call","turn":1,"seat":"agent","tool":"bash","latency_ms":116,"refused":false}
+{"run":"single-2028056","seq":9,"at_ms":2717,"event":"turn_started","turn":2,"seat":"agent"}
+{"run":"single-2028056","seq":10,"at_ms":3304,"event":"turn_finished","turn":2,"seat":"agent","input_tokens":1201,"output_tokens":84,"latency_ms":587}
+{"run":"single-2028056","seq":11,"at_ms":3304,"event":"mark","label":"exec","detail":"agent: git reflog --date=relative | head -20"}
+{"run":"single-2028056","seq":12,"at_ms":3370,"event":"tool_call","turn":2,"seat":"agent","tool":"bash","latency_ms":65,"refused":false}
+{"run":"single-2028056","seq":13,"at_ms":3370,"event":"turn_started","turn":3,"seat":"agent"}
+{"run":"single-2028056","seq":14,"at_ms":3906,"event":"turn_finished","turn":3,"seat":"agent","input_tokens":1387,"output_tokens":51,"latency_ms":535}
+{"run":"single-2028056","seq":15,"at_ms":3906,"event":"mark","label":"exec","detail":"agent: git branch -a"}
+{"run":"single-2028056","seq":16,"at_ms":3972,"event":"tool_call","turn":3,"seat":"agent","tool":"bash","latency_ms":65,"refused":false}
+{"run":"single-2028056","seq":17,"at_ms":3972,"event":"turn_started","turn":4,"seat":"agent"}
+{"run":"single-2028056","seq":18,"at_ms":4672,"event":"turn_finished","turn":4,"seat":"agent","input_tokens":1435,"output_tokens":120,"latency_ms":700}
+{"run":"single-2028056","seq":19,"at_ms":4672,"event":"mark","label":"exec","detail":"agent: git log --oneline --decorate --graph --all --max-count=20"}
+{"run":"single-2028056","seq":20,"at_ms":4746,"event":"tool_call","turn":4,"seat":"agent","tool":"bash","latency_ms":74,"refused":false}
+{"run":"single-2028056","seq":21,"at_ms":4746,"event":"turn_started","turn":5,"seat":"agent"}
+{"run":"single-2028056","seq":22,"at_ms":5295,"event":"turn_finished","turn":5,"seat":"agent","input_tokens":1729,"output_tokens":93,"latency_ms":548}
+{"run":"single-2028056","seq":23,"at_ms":5295,"event":"mark","label":"exec","detail":"agent: git fsck --lost-found"}
+{"run":"single-2028056","seq":24,"at_ms":5576,"event":"tool_call","turn":5,"seat":"agent","tool":"bash","latency_ms":280,"refused":false}
+{"run":"single-2028056","seq":25,"at_ms":5576,"event":"turn_started","turn":6,"seat":"agent"}
+{"run":"single-2028056","seq":26,"at_ms":6171,"event":"turn_finished","turn":6,"seat":"agent","input_tokens":1826,"output_tokens":102,"latency_ms":594}
+{"run":"single-2028056","seq":27,"at_ms":6171,"event":"mark","label":"exec","detail":"agent: git reflog --date=iso"}
+{"run":"single-2028056","seq":28,"at_ms":6242,"event":"tool_call","turn":6,"seat":"agent","tool":"bash","latency_ms":71,"refused":false}
+{"run":"single-2028056","seq":29,"at_ms":6242,"event":"turn_started","turn":7,"seat":"agent"}
+{"run":"single-2028056","seq":30,"at_ms":6745,"event":"turn_finished","turn":7,"seat":"agent","input_tokens":2068,"output_tokens":68,"latency_ms":502}
+{"run":"single-2028056","seq":31,"at_ms":6745,"event":"mark","label":"exec","detail":"agent: git show c499730 --stat"}
+{"run":"single-2028056","seq":32,"at_ms":6818,"event":"tool_call","turn":7,"seat":"agent","tool":"bash","latency_ms":73,"refused":false}
+{"run":"single-2028056","seq":33,"at_ms":6818,"event":"turn_started","turn":8,"seat":"agent"}
+{"run":"single-2028056","seq":34,"at_ms":7460,"event":"turn_finished","turn":8,"seat":"agent","input_tokens":2209,"output_tokens":183,"latency_ms":641}
+{"run":"single-2028056","seq":35,"at_ms":7460,"event":"mark","label":"exec","detail":"agent: git branch temp-change c499730"}
+{"run":"single-2028056","seq":36,"at_ms":7526,"event":"tool_call","turn":8,"seat":"agent","tool":"bash","latency_ms":66,"refused":false}
+{"run":"single-2028056","seq":37,"at_ms":7527,"event":"turn_started","turn":9,"seat":"agent"}
+{"run":"single-2028056","seq":38,"at_ms":8063,"event":"turn_finished","turn":9,"seat":"agent","input_tokens":2257,"output_tokens":40,"latency_ms":536}
+{"run":"single-2028056","seq":39,"at_ms":8063,"event":"mark","label":"exec","detail":"agent: git diff master temp-change"}
+{"run":"single-2028056","seq":40,"at_ms":8126,"event":"tool_call","turn":9,"seat":"agent","tool":"bash","latency_ms":63,"refused":false}
+{"run":"single-2028056","seq":41,"at_ms":8127,"event":"turn_started","turn":10,"seat":"agent"}
+{"run":"single-2028056","seq":42,"at_ms":8686,"event":"turn_finished","turn":10,"seat":"agent","input_tokens":3519,"output_tokens":73,"latency_ms":559}
+{"run":"single-2028056","seq":43,"at_ms":8686,"event":"mark","label":"exec","detail":"agent: git checkout master"}
+{"run":"single-2028056","seq":44,"at_ms":8759,"event":"tool_call","turn":10,"seat":"agent","tool":"bash","latency_ms":73,"refused":false}
+{"run":"single-2028056","seq":45,"at_ms":8759,"event":"turn_started","turn":11,"seat":"agent"}
+{"run":"single-2028056","seq":46,"at_ms":9804,"event":"turn_finished","turn":11,"seat":"agent","input_tokens":3568,"output_tokens":87,"latency_ms":1044}
+{"run":"single-2028056","seq":47,"at_ms":9804,"event":"mark","label":"exec","detail":"agent: git merge --no-ff temp-change -m 'Merge changes from lost commit (Move to Stanford)'}"}
+{"run":"single-2028056","seq":48,"at_ms":9874,"event":"tool_call","turn":11,"seat":"agent","tool":"bash","latency_ms":70,"refused":false}
+{"run":"single-2028056","seq":49,"at_ms":9874,"event":"turn_started","turn":12,"seat":"agent"}
+{"run":"single-2028056","seq":50,"at_ms":10551,"event":"turn_finished","turn":12,"seat":"agent","input_tokens":3664,"output_tokens":52,"latency_ms":676}
+{"run":"single-2028056","seq":51,"at_ms":10551,"event":"mark","label":"exec","detail":"agent: sed -n '1,120p' _includes/about.md"}
+{"run":"single-2028056","seq":52,"at_ms":10620,"event":"tool_call","turn":12,"seat":"agent","tool":"bash","latency_ms":69,"refused":false}
+{"run":"single-2028056","seq":53,"at_ms":10620,"event":"turn_started","turn":13,"seat":"agent"}
+{"run":"single-2028056","seq":54,"at_ms":11508,"event":"turn_finished","turn":13,"seat":"agent","input_tokens":3941,"output_tokens":437,"latency_ms":888}
+{"run":"single-2028056","seq":55,"at_ms":11508,"event":"mark","label":"exec","detail":"agent: apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: _includes/about.md\n@@\n-<<<<<<< HEAD\n-I am a sixth PhD candidate a\n... [1140 bytes truncated] ...\n data scientist and the second full-time employee at [HealthRhythms](https://www.healthrhythms.com).\n*** End Patch\nPATCH"}
+{"run":"single-2028056","seq":56,"at_ms":11578,"event":"tool_call","turn":13,"seat":"agent","tool":"bash","latency_ms":70,"refused":false}
+{"run":"single-2028056","seq":57,"at_ms":11578,"event":"turn_started","turn":14,"seat":"agent"}
+{"run":"single-2028056","seq":58,"at_ms":12261,"event":"turn_finished","turn":14,"seat":"agent","input_tokens":4344,"output_tokens":162,"latency_ms":682}
+{"run":"single-2028056","seq":59,"at_ms":12261,"event":"mark","label":"exec","detail":"agent: printf '%s\n' 'I am a Postdoctoral Researcher at Stanford CS.' '' 'Previously, I was a Student Researcher at [Google Rese\n... [131 bytes truncated] ...\nata scientist and the second full-time employee at [HealthRhythms](https://www.healthrhythms.com).' > _includes/about.md"}
+{"run":"single-2028056","seq":60,"at_ms":12337,"event":"tool_call","turn":14,"seat":"agent","tool":"bash","latency_ms":76,"refused":false}
+{"run":"single-2028056","seq":61,"at_ms":12337,"event":"turn_started","turn":15,"seat":"agent"}
+{"run":"single-2028056","seq":62,"at_ms":13220,"event":"turn_finished","turn":15,"seat":"agent","input_tokens":4474,"output_tokens":66,"latency_ms":882}
+{"run":"single-2028056","seq":63,"at_ms":13220,"event":"mark","label":"exec","detail":"agent: cat _includes/about.md"}
+{"run":"single-2028056","seq":64,"at_ms":13284,"event":"tool_call","turn":15,"seat":"agent","tool":"bash","latency_ms":64,"refused":false}
+{"run":"single-2028056","seq":65,"at_ms":13284,"event":"turn_started","turn":16,"seat":"agent"}
+{"run":"single-2028056","seq":66,"at_ms":13918,"event":"turn_finished","turn":16,"seat":"agent","input_tokens":4596,"output_tokens":54,"latency_ms":633}
+{"run":"single-2028056","seq":67,"at_ms":13918,"event":"mark","label":"exec","detail":"agent: sed -n '1,200p' _layouts/default.html"}
+{"run":"single-2028056","seq":68,"at_ms":13984,"event":"tool_call","turn":16,"seat":"agent","tool":"bash","latency_ms":66,"refused":false}
+{"run":"single-2028056","seq":69,"at_ms":13984,"event":"turn_started","turn":17,"seat":"agent"}
+{"run":"single-2028056","seq":70,"at_ms":14723,"event":"turn_finished","turn":17,"seat":"agent","input_tokens":5727,"output_tokens":62,"latency_ms":738}
+{"run":"single-2028056","seq":71,"at_ms":14723,"event":"mark","label":"exec","detail":"agent: git add _includes/about.md"}
+{"run":"single-2028056","seq":72,"at_ms":14790,"event":"tool_call","turn":17,"seat":"agent","tool":"bash","latency_ms":67,"refused":false}
+{"run":"single-2028056","seq":73,"at_ms":14790,"event":"turn_started","turn":18,"seat":"agent"}
+{"run":"single-2028056","seq":74,"at_ms":16120,"event":"turn_finished","turn":18,"seat":"agent","input_tokens":5774,"output_tokens":1506,"latency_ms":1329}
+{"run":"single-2028056","seq":75,"at_ms":16120,"event":"turn_started","turn":19,"seat":"agent"}
+{"run":"single-2028056","seq":76,"at_ms":16777,"event":"turn_finished","turn":19,"seat":"agent","input_tokens":5801,"output_tokens":64,"latency_ms":657}
+{"run":"single-2028056","seq":77,"at_ms":16777,"event":"mark","label":"exec","detail":"agent: git commit -m 'Merge lost changes: update about section to Postdoc at Stanford'}"}
+{"run":"single-2028056","seq":78,"at_ms":16843,"event":"tool_call","turn":19,"seat":"agent","tool":"bash","latency_ms":65,"refused":false}
+{"run":"single-2028056","seq":79,"at_ms":16843,"event":"turn_started","turn":20,"seat":"agent"}
+{"run":"single-2028056","seq":80,"at_ms":17523,"event":"turn_finished","turn":20,"seat":"agent","input_tokens":5988,"output_tokens":46,"latency_ms":680}
+{"run":"single-2028056","seq":81,"at_ms":17523,"event":"mark","label":"exec","detail":"agent: git status"}
+{"run":"single-2028056","seq":82,"at_ms":17604,"event":"tool_call","turn":20,"seat":"agent","tool":"bash","latency_ms":80,"refused":false}
+{"run":"single-2028056","seq":83,"at_ms":17604,"event":"turn_started","turn":21,"seat":"agent"}
+{"run":"single-2028056","seq":84,"at_ms":18225,"event":"turn_finished","turn":21,"seat":"agent","input_tokens":6043,"output_tokens":65,"latency_ms":621}
+{"run":"single-2028056","seq":85,"at_ms":18225,"event":"tool_call","turn":21,"seat":"agent","tool":"complete_episode","latency_ms":0,"refused":false}
+{"run":"single-2028056","seq":86,"at_ms":18225,"event":"mark","label":"run end","detail":"completed true"}

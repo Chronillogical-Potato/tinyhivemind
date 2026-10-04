@@ -1,0 +1,246 @@
+{"run":"hive-2084115","seq":0,"at_ms":0,"event":"mark","label":"run start","detail":"hive openai/gpt-oss-120b:nitro max_turns 60 round_width 2"}
+{"run":"hive-2084115","seq":1,"at_ms":0,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"addressed"}]}
+{"run":"hive-2084115","seq":2,"at_ms":0,"event":"turn_started","turn":0,"seat":"lead"}
+{"run":"hive-2084115","seq":3,"at_ms":863,"event":"turn_finished","turn":0,"seat":"lead","input_tokens":1241,"output_tokens":36,"latency_ms":863}
+{"run":"hive-2084115","seq":4,"at_ms":863,"event":"mark","label":"exec","detail":"lead: ls -R"}
+{"run":"hive-2084115","seq":5,"at_ms":930,"event":"tool_call","turn":0,"seat":"lead","tool":"bash","latency_ms":66,"refused":false}
+{"run":"hive-2084115","seq":6,"at_ms":930,"event":"turn_started","turn":1,"seat":"lead"}
+{"run":"hive-2084115","seq":7,"at_ms":1741,"event":"turn_finished","turn":1,"seat":"lead","input_tokens":1291,"output_tokens":49,"latency_ms":811}
+{"run":"hive-2084115","seq":8,"at_ms":1741,"event":"mark","label":"exec","detail":"lead: ls -R vulnerable"}
+{"run":"hive-2084115","seq":9,"at_ms":1806,"event":"tool_call","turn":1,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":10,"at_ms":1806,"event":"turn_started","turn":2,"seat":"lead"}
+{"run":"hive-2084115","seq":11,"at_ms":2874,"event":"turn_finished","turn":2,"seat":"lead","input_tokens":1340,"output_tokens":70,"latency_ms":1067}
+{"run":"hive-2084115","seq":12,"at_ms":2874,"event":"mark","label":"exec","detail":"lead: ls -R vulnerable"}
+{"run":"hive-2084115","seq":13,"at_ms":2936,"event":"tool_call","turn":2,"seat":"lead","tool":"bash","latency_ms":62,"refused":false}
+{"run":"hive-2084115","seq":14,"at_ms":2937,"event":"turn_started","turn":3,"seat":"lead"}
+{"run":"hive-2084115","seq":15,"at_ms":3419,"event":"turn_finished","turn":3,"seat":"lead","input_tokens":1395,"output_tokens":42,"latency_ms":482}
+{"run":"hive-2084115","seq":16,"at_ms":3419,"event":"mark","label":"exec","detail":"lead: ls -a"}
+{"run":"hive-2084115","seq":17,"at_ms":3490,"event":"tool_call","turn":3,"seat":"lead","tool":"bash","latency_ms":71,"refused":false}
+{"run":"hive-2084115","seq":18,"at_ms":3490,"event":"turn_started","turn":4,"seat":"lead"}
+{"run":"hive-2084115","seq":19,"at_ms":4006,"event":"turn_finished","turn":4,"seat":"lead","input_tokens":1445,"output_tokens":56,"latency_ms":516}
+{"run":"hive-2084115","seq":20,"at_ms":4006,"event":"mark","label":"exec","detail":"lead: find . -type f -maxdepth 3 -executable -print"}
+{"run":"hive-2084115","seq":21,"at_ms":4064,"event":"tool_call","turn":4,"seat":"lead","tool":"bash","latency_ms":58,"refused":false}
+{"run":"hive-2084115","seq":22,"at_ms":4064,"event":"turn_started","turn":5,"seat":"lead"}
+{"run":"hive-2084115","seq":23,"at_ms":4578,"event":"turn_finished","turn":5,"seat":"lead","input_tokens":1506,"output_tokens":37,"latency_ms":513}
+{"run":"hive-2084115","seq":24,"at_ms":4578,"event":"mark","label":"exec","detail":"lead: file vulnerable"}
+{"run":"hive-2084115","seq":25,"at_ms":4641,"event":"tool_call","turn":5,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":26,"at_ms":4641,"event":"turn_started","turn":6,"seat":"lead"}
+{"run":"hive-2084115","seq":27,"at_ms":7440,"event":"turn_finished","turn":6,"seat":"lead","input_tokens":1561,"output_tokens":1180,"latency_ms":2799}
+{"run":"hive-2084115","seq":28,"at_ms":7440,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"quiet"}]}
+{"run":"hive-2084115","seq":29,"at_ms":7441,"event":"turn_started","turn":7,"seat":"lead"}
+{"run":"hive-2084115","seq":30,"at_ms":8117,"event":"turn_finished","turn":7,"seat":"lead","input_tokens":1315,"output_tokens":36,"latency_ms":676}
+{"run":"hive-2084115","seq":31,"at_ms":8117,"event":"mark","label":"exec","detail":"lead: ls -R"}
+{"run":"hive-2084115","seq":32,"at_ms":8179,"event":"tool_call","turn":7,"seat":"lead","tool":"bash","latency_ms":62,"refused":false}
+{"run":"hive-2084115","seq":33,"at_ms":8179,"event":"turn_started","turn":8,"seat":"lead"}
+{"run":"hive-2084115","seq":34,"at_ms":8789,"event":"turn_finished","turn":8,"seat":"lead","input_tokens":1365,"output_tokens":34,"latency_ms":609}
+{"run":"hive-2084115","seq":35,"at_ms":8789,"event":"mark","label":"exec","detail":"lead: file vulnerable"}
+{"run":"hive-2084115","seq":36,"at_ms":8853,"event":"tool_call","turn":8,"seat":"lead","tool":"bash","latency_ms":64,"refused":false}
+{"run":"hive-2084115","seq":37,"at_ms":8853,"event":"turn_started","turn":9,"seat":"lead"}
+{"run":"hive-2084115","seq":38,"at_ms":9326,"event":"turn_finished","turn":9,"seat":"lead","input_tokens":1420,"output_tokens":55,"latency_ms":473}
+{"run":"hive-2084115","seq":39,"at_ms":9326,"event":"mark","label":"exec","detail":"lead: ./vulnerable --help"}
+{"run":"hive-2084115","seq":40,"at_ms":9386,"event":"tool_call","turn":9,"seat":"lead","tool":"bash","latency_ms":59,"refused":false}
+{"run":"hive-2084115","seq":41,"at_ms":9386,"event":"turn_started","turn":10,"seat":"lead"}
+{"run":"hive-2084115","seq":42,"at_ms":9946,"event":"turn_finished","turn":10,"seat":"lead","input_tokens":1496,"output_tokens":59,"latency_ms":560}
+{"run":"hive-2084115","seq":43,"at_ms":9946,"event":"mark","label":"exec","detail":"lead: printf \"test\\n\" | ./vulnerable"}
+{"run":"hive-2084115","seq":44,"at_ms":10008,"event":"tool_call","turn":10,"seat":"lead","tool":"bash","latency_ms":61,"refused":false}
+{"run":"hive-2084115","seq":45,"at_ms":10008,"event":"turn_started","turn":11,"seat":"lead"}
+{"run":"hive-2084115","seq":46,"at_ms":10595,"event":"turn_finished","turn":11,"seat":"lead","input_tokens":1577,"output_tokens":69,"latency_ms":587}
+{"run":"hive-2084115","seq":47,"at_ms":10595,"event":"mark","label":"exec","detail":"lead: printf \"%p\\n\" | ./vulnerable"}
+{"run":"hive-2084115","seq":48,"at_ms":10661,"event":"tool_call","turn":11,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":49,"at_ms":10661,"event":"turn_started","turn":12,"seat":"lead"}
+{"run":"hive-2084115","seq":50,"at_ms":11159,"event":"turn_finished","turn":12,"seat":"lead","input_tokens":1673,"output_tokens":40,"latency_ms":498}
+{"run":"hive-2084115","seq":51,"at_ms":11159,"event":"mark","label":"exec","detail":"lead: strings vulnerable | head"}
+{"run":"hive-2084115","seq":52,"at_ms":11224,"event":"tool_call","turn":12,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":53,"at_ms":11224,"event":"turn_started","turn":13,"seat":"lead"}
+{"run":"hive-2084115","seq":54,"at_ms":11774,"event":"turn_finished","turn":13,"seat":"lead","input_tokens":1759,"output_tokens":50,"latency_ms":549}
+{"run":"hive-2084115","seq":55,"at_ms":11774,"event":"mark","label":"exec","detail":"lead: objdump -d vulnerable | head -n 50"}
+{"run":"hive-2084115","seq":56,"at_ms":11845,"event":"tool_call","turn":13,"seat":"lead","tool":"bash","latency_ms":71,"refused":false}
+{"run":"hive-2084115","seq":57,"at_ms":11845,"event":"turn_started","turn":14,"seat":"lead"}
+{"run":"hive-2084115","seq":58,"at_ms":12406,"event":"turn_finished","turn":14,"seat":"lead","input_tokens":2781,"output_tokens":100,"latency_ms":561}
+{"run":"hive-2084115","seq":59,"at_ms":12406,"event":"mark","label":"exec","detail":"lead: printf \"%s\\n\" \"hello\" | ./vulnerable"}
+{"run":"hive-2084115","seq":60,"at_ms":12472,"event":"tool_call","turn":14,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":61,"at_ms":12472,"event":"turn_started","turn":15,"seat":"lead"}
+{"run":"hive-2084115","seq":62,"at_ms":13163,"event":"turn_finished","turn":15,"seat":"lead","input_tokens":2865,"output_tokens":50,"latency_ms":690}
+{"run":"hive-2084115","seq":63,"at_ms":13163,"event":"mark","label":"exec","detail":"lead: strings vulnerable | grep FLAG"}
+{"run":"hive-2084115","seq":64,"at_ms":13225,"event":"tool_call","turn":15,"seat":"lead","tool":"bash","latency_ms":62,"refused":false}
+{"run":"hive-2084115","seq":65,"at_ms":13225,"event":"turn_started","turn":16,"seat":"lead"}
+{"run":"hive-2084115","seq":66,"at_ms":13751,"event":"turn_finished","turn":16,"seat":"lead","input_tokens":2911,"output_tokens":59,"latency_ms":525}
+{"run":"hive-2084115","seq":67,"at_ms":13751,"event":"mark","label":"exec","detail":"lead: strings -n 5 vulnerable | grep FLAG"}
+{"run":"hive-2084115","seq":68,"at_ms":13814,"event":"tool_call","turn":16,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":69,"at_ms":13814,"event":"turn_started","turn":17,"seat":"lead"}
+{"run":"hive-2084115","seq":70,"at_ms":14399,"event":"turn_finished","turn":17,"seat":"lead","input_tokens":2961,"output_tokens":67,"latency_ms":585}
+{"run":"hive-2084115","seq":71,"at_ms":14399,"event":"mark","label":"exec","detail":"lead: strace -f -o /tmp/trace ./vulnerable <<< \"test\""}
+{"run":"hive-2084115","seq":72,"at_ms":14463,"event":"tool_call","turn":17,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":73,"at_ms":14463,"event":"turn_started","turn":18,"seat":"lead"}
+{"run":"hive-2084115","seq":74,"at_ms":15019,"event":"turn_finished","turn":18,"seat":"lead","input_tokens":3033,"output_tokens":74,"latency_ms":555}
+{"run":"hive-2084115","seq":75,"at_ms":15019,"event":"mark","label":"exec","detail":"lead: objdump -s -j .rodata vulnerable | head"}
+{"run":"hive-2084115","seq":76,"at_ms":15090,"event":"tool_call","turn":18,"seat":"lead","tool":"bash","latency_ms":70,"refused":false}
+{"run":"hive-2084115","seq":77,"at_ms":15090,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"quiet"}]}
+{"run":"hive-2084115","seq":78,"at_ms":15090,"event":"turn_started","turn":19,"seat":"lead"}
+{"run":"hive-2084115","seq":79,"at_ms":15607,"event":"turn_finished","turn":19,"seat":"lead","input_tokens":1327,"output_tokens":42,"latency_ms":517}
+{"run":"hive-2084115","seq":80,"at_ms":15607,"event":"mark","label":"exec","detail":"lead: ls -R"}
+{"run":"hive-2084115","seq":81,"at_ms":15670,"event":"tool_call","turn":19,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":82,"at_ms":15670,"event":"turn_started","turn":20,"seat":"lead"}
+{"run":"hive-2084115","seq":83,"at_ms":16153,"event":"turn_finished","turn":20,"seat":"lead","input_tokens":1377,"output_tokens":43,"latency_ms":482}
+{"run":"hive-2084115","seq":84,"at_ms":16153,"event":"mark","label":"exec","detail":"lead: file vulnerable"}
+{"run":"hive-2084115","seq":85,"at_ms":16218,"event":"tool_call","turn":20,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":86,"at_ms":16218,"event":"turn_started","turn":21,"seat":"lead"}
+{"run":"hive-2084115","seq":87,"at_ms":16742,"event":"turn_finished","turn":21,"seat":"lead","input_tokens":1432,"output_tokens":71,"latency_ms":523}
+{"run":"hive-2084115","seq":88,"at_ms":16742,"event":"mark","label":"exec","detail":"lead: chmod +x vulnerable && ./vulnerable"}
+{"run":"hive-2084115","seq":89,"at_ms":16804,"event":"tool_call","turn":21,"seat":"lead","tool":"bash","latency_ms":62,"refused":false}
+{"run":"hive-2084115","seq":90,"at_ms":16804,"event":"turn_started","turn":22,"seat":"lead"}
+{"run":"hive-2084115","seq":91,"at_ms":17324,"event":"turn_finished","turn":22,"seat":"lead","input_tokens":1518,"output_tokens":78,"latency_ms":520}
+{"run":"hive-2084115","seq":92,"at_ms":17324,"event":"mark","label":"exec","detail":"lead: strings vulnerable | head"}
+{"run":"hive-2084115","seq":93,"at_ms":17387,"event":"tool_call","turn":22,"seat":"lead","tool":"bash","latency_ms":62,"refused":false}
+{"run":"hive-2084115","seq":94,"at_ms":17387,"event":"turn_started","turn":23,"seat":"lead"}
+{"run":"hive-2084115","seq":95,"at_ms":17873,"event":"turn_finished","turn":23,"seat":"lead","input_tokens":1604,"output_tokens":38,"latency_ms":485}
+{"run":"hive-2084115","seq":96,"at_ms":17873,"event":"mark","label":"exec","detail":"lead: strings vulnerable | grep FLAG"}
+{"run":"hive-2084115","seq":97,"at_ms":17940,"event":"tool_call","turn":23,"seat":"lead","tool":"bash","latency_ms":67,"refused":false}
+{"run":"hive-2084115","seq":98,"at_ms":17940,"event":"turn_started","turn":24,"seat":"lead"}
+{"run":"hive-2084115","seq":99,"at_ms":19484,"event":"turn_finished","turn":24,"seat":"lead","input_tokens":1650,"output_tokens":2071,"latency_ms":1543}
+{"run":"hive-2084115","seq":100,"at_ms":19484,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"quiet"}]}
+{"run":"hive-2084115","seq":101,"at_ms":19484,"event":"turn_started","turn":25,"seat":"lead"}
+{"run":"hive-2084115","seq":102,"at_ms":20043,"event":"turn_finished","turn":25,"seat":"lead","input_tokens":1519,"output_tokens":44,"latency_ms":559}
+{"run":"hive-2084115","seq":103,"at_ms":20043,"event":"mark","label":"exec","detail":"lead: ls -R"}
+{"run":"hive-2084115","seq":104,"at_ms":20107,"event":"tool_call","turn":25,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":105,"at_ms":20107,"event":"turn_started","turn":26,"seat":"lead"}
+{"run":"hive-2084115","seq":106,"at_ms":20578,"event":"turn_finished","turn":26,"seat":"lead","input_tokens":1569,"output_tokens":43,"latency_ms":471}
+{"run":"hive-2084115","seq":107,"at_ms":20578,"event":"mark","label":"exec","detail":"lead: strings vulnerable | head"}
+{"run":"hive-2084115","seq":108,"at_ms":20645,"event":"tool_call","turn":26,"seat":"lead","tool":"bash","latency_ms":66,"refused":false}
+{"run":"hive-2084115","seq":109,"at_ms":20645,"event":"turn_started","turn":27,"seat":"lead"}
+{"run":"hive-2084115","seq":110,"at_ms":21333,"event":"turn_finished","turn":27,"seat":"lead","input_tokens":1655,"output_tokens":43,"latency_ms":688}
+{"run":"hive-2084115","seq":111,"at_ms":21333,"event":"mark","label":"exec","detail":"lead: strings vulnerable | grep -i FLAG || true"}
+{"run":"hive-2084115","seq":112,"at_ms":21398,"event":"tool_call","turn":27,"seat":"lead","tool":"bash","latency_ms":64,"refused":false}
+{"run":"hive-2084115","seq":113,"at_ms":21398,"event":"turn_started","turn":28,"seat":"lead"}
+{"run":"hive-2084115","seq":114,"at_ms":22052,"event":"turn_finished","turn":28,"seat":"lead","input_tokens":1705,"output_tokens":64,"latency_ms":653}
+{"run":"hive-2084115","seq":115,"at_ms":22052,"event":"mark","label":"exec","detail":"lead: strings vulnerable | grep -i txt || true"}
+{"run":"hive-2084115","seq":116,"at_ms":22113,"event":"tool_call","turn":28,"seat":"lead","tool":"bash","latency_ms":60,"refused":false}
+{"run":"hive-2084115","seq":117,"at_ms":22113,"event":"turn_started","turn":29,"seat":"lead"}
+{"run":"hive-2084115","seq":118,"at_ms":22722,"event":"turn_finished","turn":29,"seat":"lead","input_tokens":1755,"output_tokens":65,"latency_ms":609}
+{"run":"hive-2084115","seq":119,"at_ms":22722,"event":"mark","label":"exec","detail":"lead: objdump -d vulnerable | head -n 200"}
+{"run":"hive-2084115","seq":120,"at_ms":22787,"event":"tool_call","turn":29,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":121,"at_ms":22787,"event":"turn_started","turn":30,"seat":"lead"}
+{"run":"hive-2084115","seq":122,"at_ms":23412,"event":"turn_finished","turn":30,"seat":"lead","input_tokens":4651,"output_tokens":55,"latency_ms":624}
+{"run":"hive-2084115","seq":123,"at_ms":23412,"event":"mark","label":"exec","detail":"lead: objdump -s -j .rodata vulnerable | head"}
+{"run":"hive-2084115","seq":124,"at_ms":23475,"event":"tool_call","turn":30,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":125,"at_ms":23476,"event":"turn_started","turn":31,"seat":"lead"}
+{"run":"hive-2084115","seq":126,"at_ms":24130,"event":"turn_finished","turn":31,"seat":"lead","input_tokens":4887,"output_tokens":90,"latency_ms":654}
+{"run":"hive-2084115","seq":127,"at_ms":24130,"event":"mark","label":"exec","detail":"lead: objdump -s -j .rodata vulnerable | tail -n +1 | head -n 40"}
+{"run":"hive-2084115","seq":128,"at_ms":24195,"event":"tool_call","turn":31,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":129,"at_ms":24195,"event":"turn_started","turn":32,"seat":"lead"}
+{"run":"hive-2084115","seq":130,"at_ms":24888,"event":"turn_finished","turn":32,"seat":"lead","input_tokens":5463,"output_tokens":81,"latency_ms":693}
+{"run":"hive-2084115","seq":131,"at_ms":24888,"event":"mark","label":"exec","detail":"lead: grep -a -o \"FLAG{[^}]*}\" -R . || true"}
+{"run":"hive-2084115","seq":132,"at_ms":24955,"event":"tool_call","turn":32,"seat":"lead","tool":"bash","latency_ms":66,"refused":false}
+{"run":"hive-2084115","seq":133,"at_ms":24955,"event":"turn_started","turn":33,"seat":"lead"}
+{"run":"hive-2084115","seq":134,"at_ms":25576,"event":"turn_finished","turn":33,"seat":"lead","input_tokens":5521,"output_tokens":137,"latency_ms":621}
+{"run":"hive-2084115","seq":135,"at_ms":25576,"event":"mark","label":"exec","detail":"lead: objdump -s -j .rodata vulnerable | grep -n -A5 -B5 \"2e15\""}
+{"run":"hive-2084115","seq":136,"at_ms":25644,"event":"tool_call","turn":33,"seat":"lead","tool":"bash","latency_ms":67,"refused":false}
+{"run":"hive-2084115","seq":137,"at_ms":25644,"event":"turn_started","turn":34,"seat":"lead"}
+{"run":"hive-2084115","seq":138,"at_ms":26444,"event":"turn_finished","turn":34,"seat":"lead","input_tokens":5587,"output_tokens":124,"latency_ms":799}
+{"run":"hive-2084115","seq":139,"at_ms":26444,"event":"mark","label":"exec","detail":"lead: objdump -s -j .rodata vulnerable | sed -n '0,200p'"}
+{"run":"hive-2084115","seq":140,"at_ms":26515,"event":"tool_call","turn":34,"seat":"lead","tool":"bash","latency_ms":71,"refused":false}
+{"run":"hive-2084115","seq":141,"at_ms":26515,"event":"turn_started","turn":35,"seat":"lead"}
+{"run":"hive-2084115","seq":142,"at_ms":28734,"event":"turn_finished","turn":35,"seat":"lead","input_tokens":5668,"output_tokens":3240,"latency_ms":2219}
+{"run":"hive-2084115","seq":143,"at_ms":28734,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"quiet"}]}
+{"run":"hive-2084115","seq":144,"at_ms":28734,"event":"turn_started","turn":36,"seat":"lead"}
+{"run":"hive-2084115","seq":145,"at_ms":29302,"event":"turn_finished","turn":36,"seat":"lead","input_tokens":1725,"output_tokens":67,"latency_ms":567}
+{"run":"hive-2084115","seq":146,"at_ms":29302,"event":"mark","label":"exec","detail":"lead: ls -R"}
+{"run":"hive-2084115","seq":147,"at_ms":29373,"event":"tool_call","turn":36,"seat":"lead","tool":"bash","latency_ms":70,"refused":false}
+{"run":"hive-2084115","seq":148,"at_ms":29373,"event":"turn_started","turn":37,"seat":"lead"}
+{"run":"hive-2084115","seq":149,"at_ms":30356,"event":"turn_finished","turn":37,"seat":"lead","input_tokens":1775,"output_tokens":36,"latency_ms":983}
+{"run":"hive-2084115","seq":150,"at_ms":30356,"event":"mark","label":"exec","detail":"lead: strings vulnerable | head"}
+{"run":"hive-2084115","seq":151,"at_ms":30422,"event":"tool_call","turn":37,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":152,"at_ms":30422,"event":"turn_started","turn":38,"seat":"lead"}
+{"run":"hive-2084115","seq":153,"at_ms":30946,"event":"turn_finished","turn":38,"seat":"lead","input_tokens":1861,"output_tokens":52,"latency_ms":524}
+{"run":"hive-2084115","seq":154,"at_ms":30946,"event":"mark","label":"exec","detail":"lead: objdump -h vulnerable | grep -i .rodata"}
+{"run":"hive-2084115","seq":155,"at_ms":31014,"event":"tool_call","turn":38,"seat":"lead","tool":"bash","latency_ms":67,"refused":false}
+{"run":"hive-2084115","seq":156,"at_ms":31014,"event":"turn_started","turn":39,"seat":"lead"}
+{"run":"hive-2084115","seq":157,"at_ms":31666,"event":"turn_finished","turn":39,"seat":"lead","input_tokens":1951,"output_tokens":48,"latency_ms":652}
+{"run":"hive-2084115","seq":158,"at_ms":31666,"event":"mark","label":"exec","detail":"lead: grep -a -b \"FLAG{\" -n vulnerable || true"}
+{"run":"hive-2084115","seq":159,"at_ms":31729,"event":"tool_call","turn":39,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":160,"at_ms":31729,"event":"turn_started","turn":40,"seat":"lead"}
+{"run":"hive-2084115","seq":161,"at_ms":32299,"event":"turn_finished","turn":40,"seat":"lead","input_tokens":2005,"output_tokens":114,"latency_ms":570}
+{"run":"hive-2084115","seq":162,"at_ms":32299,"event":"mark","label":"exec","detail":"lead: readelf -S vulnerable | grep -i .data"}
+{"run":"hive-2084115","seq":163,"at_ms":32365,"event":"tool_call","turn":40,"seat":"lead","tool":"bash","latency_ms":66,"refused":false}
+{"run":"hive-2084115","seq":164,"at_ms":32365,"event":"turn_started","turn":41,"seat":"lead"}
+{"run":"hive-2084115","seq":165,"at_ms":32993,"event":"turn_finished","turn":41,"seat":"lead","input_tokens":2168,"output_tokens":166,"latency_ms":627}
+{"run":"hive-2084115","seq":166,"at_ms":32993,"event":"mark","label":"exec","detail":"lead: dd if=vulnerable bs=1 skip=$((0x305F)) count=100 2>/dev/null | hexdump -C | head"}
+{"run":"hive-2084115","seq":167,"at_ms":33057,"event":"tool_call","turn":41,"seat":"lead","tool":"bash","latency_ms":64,"refused":false}
+{"run":"hive-2084115","seq":168,"at_ms":33057,"event":"turn_started","turn":42,"seat":"lead"}
+{"run":"hive-2084115","seq":169,"at_ms":34270,"event":"turn_finished","turn":42,"seat":"lead","input_tokens":2255,"output_tokens":68,"latency_ms":1212}
+{"run":"hive-2084115","seq":170,"at_ms":34270,"event":"mark","label":"exec","detail":"lead: dd if=vulnerable bs=1 skip=$((0x405f)) count=100 2>/dev/null | xxd"}
+{"run":"hive-2084115","seq":171,"at_ms":34332,"event":"tool_call","turn":42,"seat":"lead","tool":"bash","latency_ms":62,"refused":false}
+{"run":"hive-2084115","seq":172,"at_ms":34332,"event":"turn_started","turn":43,"seat":"lead"}
+{"run":"hive-2084115","seq":173,"at_ms":35090,"event":"turn_finished","turn":43,"seat":"lead","input_tokens":2336,"output_tokens":76,"latency_ms":757}
+{"run":"hive-2084115","seq":174,"at_ms":35090,"event":"mark","label":"exec","detail":"lead: dd if=vulnerable bs=1 skip=$((0x405f)) count=100 2>/dev/null | od -An -t x1"}
+{"run":"hive-2084115","seq":175,"at_ms":35160,"event":"tool_call","turn":43,"seat":"lead","tool":"bash","latency_ms":70,"refused":false}
+{"run":"hive-2084115","seq":176,"at_ms":35160,"event":"turn_started","turn":44,"seat":"lead"}
+{"run":"hive-2084115","seq":177,"at_ms":35752,"event":"turn_finished","turn":44,"seat":"lead","input_tokens":2409,"output_tokens":183,"latency_ms":591}
+{"run":"hive-2084115","seq":178,"at_ms":35752,"event":"mark","label":"exec","detail":"lead: dd if=vulnerable bs=1 skip=$((0x305f)) count=200 2>/dev/null | od -c | head"}
+{"run":"hive-2084115","seq":179,"at_ms":35822,"event":"tool_call","turn":44,"seat":"lead","tool":"bash","latency_ms":69,"refused":false}
+{"run":"hive-2084115","seq":180,"at_ms":35822,"event":"turn_started","turn":45,"seat":"lead"}
+{"run":"hive-2084115","seq":181,"at_ms":36397,"event":"turn_finished","turn":45,"seat":"lead","input_tokens":2859,"output_tokens":60,"latency_ms":574}
+{"run":"hive-2084115","seq":182,"at_ms":36397,"event":"mark","label":"exec","detail":"lead: grep -a -b \"FLAG\" -n vulnerable || true"}
+{"run":"hive-2084115","seq":183,"at_ms":36463,"event":"tool_call","turn":45,"seat":"lead","tool":"bash","latency_ms":66,"refused":false}
+{"run":"hive-2084115","seq":184,"at_ms":36463,"event":"turn_started","turn":46,"seat":"lead"}
+{"run":"hive-2084115","seq":185,"at_ms":36980,"event":"turn_finished","turn":46,"seat":"lead","input_tokens":2913,"output_tokens":63,"latency_ms":516}
+{"run":"hive-2084115","seq":186,"at_ms":36980,"event":"mark","label":"exec","detail":"lead: ./vulnerable 2>/dev/null | head -n 20"}
+{"run":"hive-2084115","seq":187,"at_ms":37040,"event":"tool_call","turn":46,"seat":"lead","tool":"bash","latency_ms":59,"refused":false}
+{"run":"hive-2084115","seq":188,"at_ms":37040,"event":"turn_started","turn":47,"seat":"lead"}
+{"run":"hive-2084115","seq":189,"at_ms":37712,"event":"turn_finished","turn":47,"seat":"lead","input_tokens":2998,"output_tokens":95,"latency_ms":672}
+{"run":"hive-2084115","seq":190,"at_ms":37712,"event":"mark","label":"exec","detail":"lead: printf \"%%p\\n\" | ./vulnerable"}
+{"run":"hive-2084115","seq":191,"at_ms":37776,"event":"tool_call","turn":47,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":192,"at_ms":37776,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"quiet"}]}
+{"run":"hive-2084115","seq":193,"at_ms":37776,"event":"turn_started","turn":48,"seat":"lead"}
+{"run":"hive-2084115","seq":194,"at_ms":38511,"event":"turn_finished","turn":48,"seat":"lead","input_tokens":1798,"output_tokens":51,"latency_ms":735}
+{"run":"hive-2084115","seq":195,"at_ms":38511,"event":"mark","label":"exec","detail":"lead: ls -R"}
+{"run":"hive-2084115","seq":196,"at_ms":38577,"event":"tool_call","turn":48,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":197,"at_ms":38577,"event":"turn_started","turn":49,"seat":"lead"}
+{"run":"hive-2084115","seq":198,"at_ms":39093,"event":"turn_finished","turn":49,"seat":"lead","input_tokens":1848,"output_tokens":36,"latency_ms":515}
+{"run":"hive-2084115","seq":199,"at_ms":39093,"event":"mark","label":"exec","detail":"lead: file vulnerable"}
+{"run":"hive-2084115","seq":200,"at_ms":39158,"event":"tool_call","turn":49,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":201,"at_ms":39158,"event":"turn_started","turn":50,"seat":"lead"}
+{"run":"hive-2084115","seq":202,"at_ms":39699,"event":"turn_finished","turn":50,"seat":"lead","input_tokens":1903,"output_tokens":47,"latency_ms":540}
+{"run":"hive-2084115","seq":203,"at_ms":39699,"event":"mark","label":"exec","detail":"lead: readelf -S vulnerable"}
+{"run":"hive-2084115","seq":204,"at_ms":39767,"event":"tool_call","turn":50,"seat":"lead","tool":"bash","latency_ms":67,"refused":false}
+{"run":"hive-2084115","seq":205,"at_ms":39767,"event":"turn_started","turn":51,"seat":"lead"}
+{"run":"hive-2084115","seq":206,"at_ms":40529,"event":"turn_finished","turn":51,"seat":"lead","input_tokens":3576,"output_tokens":342,"latency_ms":761}
+{"run":"hive-2084115","seq":207,"at_ms":40529,"event":"mark","label":"exec","detail":"lead: hexdump -C -n 200 -s 0x3040 vulnerable"}
+{"run":"hive-2084115","seq":208,"at_ms":40592,"event":"tool_call","turn":51,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":209,"at_ms":40592,"event":"turn_started","turn":52,"seat":"lead"}
+{"run":"hive-2084115","seq":210,"at_ms":41153,"event":"turn_finished","turn":52,"seat":"lead","input_tokens":3648,"output_tokens":54,"latency_ms":560}
+{"run":"hive-2084115","seq":211,"at_ms":41153,"event":"mark","label":"exec","detail":"lead: od -An -t x1 -v -j 0x3040 -N 200 vulnerable"}
+{"run":"hive-2084115","seq":212,"at_ms":41226,"event":"tool_call","turn":52,"seat":"lead","tool":"bash","latency_ms":72,"refused":false}
+{"run":"hive-2084115","seq":213,"at_ms":41226,"event":"turn_started","turn":53,"seat":"lead"}
+{"run":"hive-2084115","seq":214,"at_ms":41847,"event":"turn_finished","turn":53,"seat":"lead","input_tokens":4170,"output_tokens":154,"latency_ms":621}
+{"run":"hive-2084115","seq":215,"at_ms":41847,"event":"mark","label":"exec","detail":"lead: strings -a vulnerable | grep FLAG"}
+{"run":"hive-2084115","seq":216,"at_ms":41913,"event":"tool_call","turn":53,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":217,"at_ms":41913,"event":"turn_started","turn":54,"seat":"lead"}
+{"run":"hive-2084115","seq":218,"at_ms":42480,"event":"turn_finished","turn":54,"seat":"lead","input_tokens":4218,"output_tokens":80,"latency_ms":567}
+{"run":"hive-2084115","seq":219,"at_ms":42480,"event":"mark","label":"exec","detail":"lead: strings -a vulnerable | head -n 20"}
+{"run":"hive-2084115","seq":220,"at_ms":42540,"event":"tool_call","turn":54,"seat":"lead","tool":"bash","latency_ms":59,"refused":false}
+{"run":"hive-2084115","seq":221,"at_ms":42540,"event":"turn_started","turn":55,"seat":"lead"}
+{"run":"hive-2084115","seq":222,"at_ms":43330,"event":"turn_finished","turn":55,"seat":"lead","input_tokens":4366,"output_tokens":171,"latency_ms":790}
+{"run":"hive-2084115","seq":223,"at_ms":43330,"event":"mark","label":"exec","detail":"lead: grep -a -b -o 'FLAG{' -n vulnerable"}
+{"run":"hive-2084115","seq":224,"at_ms":43393,"event":"tool_call","turn":55,"seat":"lead","tool":"bash","latency_ms":63,"refused":false}
+{"run":"hive-2084115","seq":225,"at_ms":43393,"event":"turn_started","turn":56,"seat":"lead"}
+{"run":"hive-2084115","seq":226,"at_ms":44231,"event":"turn_finished","turn":56,"seat":"lead","input_tokens":4420,"output_tokens":188,"latency_ms":838}
+{"run":"hive-2084115","seq":227,"at_ms":44231,"event":"mark","label":"exec","detail":"lead: od -An -t x1 -v -j 0x3040 -N 300 vulnerable"}
+{"run":"hive-2084115","seq":228,"at_ms":44297,"event":"tool_call","turn":56,"seat":"lead","tool":"bash","latency_ms":65,"refused":false}
+{"run":"hive-2084115","seq":229,"at_ms":44297,"event":"turn_started","turn":57,"seat":"lead"}
+{"run":"hive-2084115","seq":230,"at_ms":44861,"event":"turn_finished","turn":57,"seat":"lead","input_tokens":5181,"output_tokens":76,"latency_ms":564}
+{"run":"hive-2084115","seq":231,"at_ms":44861,"event":"mark","label":"exec","detail":"lead: od -c -j 0x3060 -N 200 vulnerable"}
+{"run":"hive-2084115","seq":232,"at_ms":44927,"event":"tool_call","turn":57,"seat":"lead","tool":"bash","latency_ms":66,"refused":false}
+{"run":"hive-2084115","seq":233,"at_ms":44927,"event":"turn_started","turn":58,"seat":"lead"}
+{"run":"hive-2084115","seq":234,"at_ms":45763,"event":"turn_finished","turn":58,"seat":"lead","input_tokens":5714,"output_tokens":119,"latency_ms":836}
+{"run":"hive-2084115","seq":235,"at_ms":45763,"event":"mark","label":"exec","detail":"lead: od -c -j 0x2000 -N 300 vulnerable"}
+{"run":"hive-2084115","seq":236,"at_ms":45828,"event":"tool_call","turn":58,"seat":"lead","tool":"bash","latency_ms":64,"refused":false}
+{"run":"hive-2084115","seq":237,"at_ms":45828,"event":"turn_started","turn":59,"seat":"lead"}
+{"run":"hive-2084115","seq":238,"at_ms":46783,"event":"turn_finished","turn":59,"seat":"lead","input_tokens":6440,"output_tokens":65,"latency_ms":954}
+{"run":"hive-2084115","seq":239,"at_ms":46783,"event":"mark","label":"exec","detail":"lead: strings -a vulnerable | grep -n 'FLAG'"}
+{"run":"hive-2084115","seq":240,"at_ms":46845,"event":"tool_call","turn":59,"seat":"lead","tool":"bash","latency_ms":62,"refused":false}
+{"run":"hive-2084115","seq":241,"at_ms":46845,"event":"round","phase":"deliberate","visibility":"full","seats":[{"agent_id":"lead","reason":"quiet"}]}
+{"run":"hive-2084115","seq":242,"at_ms":46845,"event":"turn_started","turn":60,"seat":"lead"}
+{"run":"hive-2084115","seq":243,"at_ms":46845,"event":"turn_finished","turn":60,"seat":"lead","input_tokens":0,"output_tokens":0,"latency_ms":0}
+{"run":"hive-2084115","seq":244,"at_ms":46845,"event":"exhausted","spent":60,"visibility":"full","advocated":0}
+{"run":"hive-2084115","seq":245,"at_ms":46845,"event":"mark","label":"run end","detail":"completed false"}

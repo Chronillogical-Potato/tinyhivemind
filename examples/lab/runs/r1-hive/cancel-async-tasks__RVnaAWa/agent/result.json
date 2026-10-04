@@ -1,0 +1,24 @@
+{
+  "aborted": null,
+  "activations": 3,
+  "completed": true,
+  "mode": "hive",
+  "model": "openai/gpt-oss-120b:nitro",
+  "rounds": 3,
+  "seats": {
+    "implementer": {
+      "calls": 5,
+      "in": 10576,
+      "out": 1962
+    },
+    "lead": {
+      "calls": 4,
+      "in": 5385,
+      "out": 681
+    }
+  },
+  "tokens_in": 15961,
+  "tokens_out": 2643,
+  "turns": 9,
+  "wall_ms": 7582
+}

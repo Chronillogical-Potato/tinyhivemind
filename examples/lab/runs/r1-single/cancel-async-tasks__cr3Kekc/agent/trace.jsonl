@@ -1,0 +1,59 @@
+{"run":"single-1995978","seq":0,"at_ms":0,"event":"mark","label":"run start","detail":"single openai/gpt-oss-120b:nitro max_turns 60 round_width 2"}
+{"run":"single-1995978","seq":1,"at_ms":0,"event":"turn_started","turn":0,"seat":"agent"}
+{"run":"single-1995978","seq":2,"at_ms":729,"event":"turn_finished","turn":0,"seat":"agent","input_tokens":508,"output_tokens":247,"latency_ms":729}
+{"run":"single-1995978","seq":3,"at_ms":729,"event":"mark","label":"exec","detail":"agent: ls -R"}
+{"run":"single-1995978","seq":4,"at_ms":793,"event":"tool_call","turn":0,"seat":"agent","tool":"bash","latency_ms":64,"refused":false}
+{"run":"single-1995978","seq":5,"at_ms":793,"event":"turn_started","turn":1,"seat":"agent"}
+{"run":"single-1995978","seq":6,"at_ms":2057,"event":"turn_finished","turn":1,"seat":"agent","input_tokens":554,"output_tokens":1279,"latency_ms":1263}
+{"run":"single-1995978","seq":7,"at_ms":2057,"event":"mark","label":"exec","detail":"agent: apply_patch <<'PATCH'\n*** Begin Patch\n*** Add File: run.py\n+\"\"\"Utility to run a collection of asynchronous callables wit\n... [3024 bytes truncated] ...\nns=True)\n+        # Re‑raise the original exception so callers can handle it.\n+        raise exc\n+\n*** End Patch\nPATCH"}
+{"run":"single-1995978","seq":8,"at_ms":2121,"event":"tool_call","turn":1,"seat":"agent","tool":"bash","latency_ms":64,"refused":false}
+{"run":"single-1995978","seq":9,"at_ms":2121,"event":"turn_started","turn":2,"seat":"agent"}
+{"run":"single-1995978","seq":10,"at_ms":2976,"event":"turn_finished","turn":2,"seat":"agent","input_tokens":1449,"output_tokens":915,"latency_ms":855}
+{"run":"single-1995978","seq":11,"at_ms":2976,"event":"mark","label":"exec","detail":"agent: apply_patch <<'PATCH'\n*** Begin Patch\n*** Add File: run.py\n+\"\"\"Utility to run a collection of asynchronous callables wit\n... [3024 bytes truncated] ...\nns=True)\n+        # Re‑raise the original exception so callers can handle it.\n+        raise exc\n+\n*** End Patch\nPATCH"}
+{"run":"single-1995978","seq":12,"at_ms":3051,"event":"tool_call","turn":2,"seat":"agent","tool":"bash","latency_ms":75,"refused":false}
+{"run":"single-1995978","seq":13,"at_ms":3051,"event":"turn_started","turn":3,"seat":"agent"}
+{"run":"single-1995978","seq":14,"at_ms":3855,"event":"turn_finished","turn":3,"seat":"agent","input_tokens":2344,"output_tokens":793,"latency_ms":804}
+{"run":"single-1995978","seq":15,"at_ms":3855,"event":"mark","label":"exec","detail":"agent: apply_patch <<'PATCH'\n*** Begin Patch\n*** Add File: run.py\n+\"\"\"Utility to run a collection of asynchronous callables wit\n... [2498 bytes truncated] ...\n     p.cancel()\n+        await asyncio.gather(*pending, return_exceptions=True)\n+        raise exc\n+\n*** End Patch\nPATCH"}
+{"run":"single-1995978","seq":16,"at_ms":3932,"event":"tool_call","turn":3,"seat":"agent","tool":"bash","latency_ms":77,"refused":false}
+{"run":"single-1995978","seq":17,"at_ms":3932,"event":"turn_started","turn":4,"seat":"agent"}
+{"run":"single-1995978","seq":18,"at_ms":4774,"event":"turn_finished","turn":4,"seat":"agent","input_tokens":3125,"output_tokens":742,"latency_ms":841}
+{"run":"single-1995978","seq":19,"at_ms":4774,"event":"mark","label":"exec","detail":"agent: cat > run.py <<'EOF'\n\"\"\"Utility to run a collection of asynchronous callables with a concurrency limit.\n\nThe public entr\n... [1962 bytes truncated] ...\n in pending:\n            p.cancel()\n        await asyncio.gather(*pending, return_exceptions=True)\n        raise exc\nEOF"}
+{"run":"single-1995978","seq":20,"at_ms":4839,"event":"tool_call","turn":4,"seat":"agent","tool":"bash","latency_ms":65,"refused":false}
+{"run":"single-1995978","seq":21,"at_ms":4839,"event":"turn_started","turn":5,"seat":"agent"}
+{"run":"single-1995978","seq":22,"at_ms":5426,"event":"turn_finished","turn":5,"seat":"agent","input_tokens":3715,"output_tokens":79,"latency_ms":586}
+{"run":"single-1995978","seq":23,"at_ms":5426,"event":"mark","label":"exec","detail":"agent: ls -R"}
+{"run":"single-1995978","seq":24,"at_ms":5483,"event":"tool_call","turn":5,"seat":"agent","tool":"bash","latency_ms":57,"refused":false}
+{"run":"single-1995978","seq":25,"at_ms":5483,"event":"turn_started","turn":6,"seat":"agent"}
+{"run":"single-1995978","seq":26,"at_ms":6552,"event":"turn_finished","turn":6,"seat":"agent","input_tokens":3764,"output_tokens":76,"latency_ms":1068}
+{"run":"single-1995978","seq":27,"at_ms":6552,"event":"mark","label":"exec","detail":"agent: sed -n '1,200p' run.py"}
+{"run":"single-1995978","seq":28,"at_ms":6611,"event":"tool_call","turn":6,"seat":"agent","tool":"bash","latency_ms":59,"refused":false}
+{"run":"single-1995978","seq":29,"at_ms":6611,"event":"turn_started","turn":7,"seat":"agent"}
+{"run":"single-1995978","seq":30,"at_ms":7350,"event":"turn_finished","turn":7,"seat":"agent","input_tokens":4297,"output_tokens":109,"latency_ms":738}
+{"run":"single-1995978","seq":31,"at_ms":7350,"event":"mark","label":"exec","detail":"agent: apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: run.py\n@@\n-import asyncio\n-from collections.ab c import Awaitable, Callable\n+import asyncio\n+from collections.abc import Awaitable, Callable\n*** End Patch\nPATCH"}
+{"run":"single-1995978","seq":32,"at_ms":7412,"event":"tool_call","turn":7,"seat":"agent","tool":"bash","latency_ms":62,"refused":false}
+{"run":"single-1995978","seq":33,"at_ms":7412,"event":"turn_started","turn":8,"seat":"agent"}
+{"run":"single-1995978","seq":34,"at_ms":8256,"event":"turn_finished","turn":8,"seat":"agent","input_tokens":4405,"output_tokens":604,"latency_ms":843}
+{"run":"single-1995978","seq":35,"at_ms":8256,"event":"mark","label":"exec","detail":"agent: cat > run.py <<'EOF'\n\"\"\"Utility to run a collection of asynchronous callables with a concurrency limit.\n\nThe public entr\n... [1961 bytes truncated] ...\n in pending:\n            p.cancel()\n        await asyncio.gather(*pending, return_exceptions=True)\n        raise exc\nEOF"}
+{"run":"single-1995978","seq":36,"at_ms":8320,"event":"tool_call","turn":8,"seat":"agent","tool":"bash","latency_ms":64,"refused":false}
+{"run":"single-1995978","seq":37,"at_ms":8320,"event":"turn_started","turn":9,"seat":"agent"}
+{"run":"single-1995978","seq":38,"at_ms":8951,"event":"turn_finished","turn":9,"seat":"agent","input_tokens":4995,"output_tokens":54,"latency_ms":631}
+{"run":"single-1995978","seq":39,"at_ms":8951,"event":"mark","label":"exec","detail":"agent: python - <<'PY'\nimport run\nprint(run.__doc__[:60])\nPY"}
+{"run":"single-1995978","seq":40,"at_ms":9252,"event":"tool_call","turn":9,"seat":"agent","tool":"bash","latency_ms":300,"refused":false}
+{"run":"single-1995978","seq":41,"at_ms":9252,"event":"turn_started","turn":10,"seat":"agent"}
+{"run":"single-1995978","seq":42,"at_ms":9941,"event":"turn_finished","turn":10,"seat":"agent","input_tokens":5069,"output_tokens":91,"latency_ms":688}
+{"run":"single-1995978","seq":43,"at_ms":9941,"event":"mark","label":"exec","detail":"agent: mkdir -p app && mv run.py app/"}
+{"run":"single-1995978","seq":44,"at_ms":10016,"event":"tool_call","turn":10,"seat":"agent","tool":"bash","latency_ms":74,"refused":false}
+{"run":"single-1995978","seq":45,"at_ms":10016,"event":"turn_started","turn":11,"seat":"agent"}
+{"run":"single-1995978","seq":46,"at_ms":10981,"event":"turn_finished","turn":11,"seat":"agent","input_tokens":5120,"output_tokens":443,"latency_ms":964}
+{"run":"single-1995978","seq":47,"at_ms":10981,"event":"mark","label":"exec","detail":"agent: python - <<'PY'\nimport sys, os\nsys.path.append('app')\nfrom run import run_tasks\nprint(run_tasks)\nPY"}
+{"run":"single-1995978","seq":48,"at_ms":11114,"event":"tool_call","turn":11,"seat":"agent","tool":"bash","latency_ms":133,"refused":false}
+{"run":"single-1995978","seq":49,"at_ms":11114,"event":"turn_started","turn":12,"seat":"agent"}
+{"run":"single-1995978","seq":50,"at_ms":11862,"event":"turn_finished","turn":12,"seat":"agent","input_tokens":5208,"output_tokens":261,"latency_ms":748}
+{"run":"single-1995978","seq":51,"at_ms":11862,"event":"mark","label":"exec","detail":"agent: python - <<'PY'\nimport asyncio, sys, os\nsys.path.append('app')\nfrom run import run_tasks\n\nasync def task1():\n    try:\n  \n... [482 bytes truncated] ...\n_for(runner(), timeout=0.3)\n    except asyncio.TimeoutError:\n        print('timeout, cancelled')\n\nasyncio.run(main())\nPY"}
+{"run":"single-1995978","seq":52,"at_ms":12302,"event":"tool_call","turn":12,"seat":"agent","tool":"bash","latency_ms":440,"refused":false}
+{"run":"single-1995978","seq":53,"at_ms":12302,"event":"turn_started","turn":13,"seat":"agent"}
+{"run":"single-1995978","seq":54,"at_ms":13345,"event":"turn_finished","turn":13,"seat":"agent","input_tokens":5494,"output_tokens":365,"latency_ms":1042}
+{"run":"single-1995978","seq":55,"at_ms":13345,"event":"turn_started","turn":14,"seat":"agent"}
+{"run":"single-1995978","seq":56,"at_ms":14171,"event":"turn_finished","turn":14,"seat":"agent","input_tokens":5485,"output_tokens":98,"latency_ms":826}
+{"run":"single-1995978","seq":57,"at_ms":14171,"event":"tool_call","turn":14,"seat":"agent","tool":"complete_episode","latency_ms":0,"refused":false}
+{"run":"single-1995978","seq":58,"at_ms":14171,"event":"mark","label":"run end","detail":"completed true"}
