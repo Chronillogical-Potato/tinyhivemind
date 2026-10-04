@@ -8,6 +8,7 @@ because core is pure. The `swe_hive` binary (`src/bin/swe_hive.rs`) drives it.
 | Directory | Role |
 | --- | --- |
 | `meter/` | shared token meter and the `--token-cap` / `--max-turns` caps |
+| `context/` | pure masking / summarizing of a seat's conversation (`--single-context`, `--context-budget`) |
 | `llm/` | chat-completions client over `curl`, tool-call parsing, retry once |
 | `sandbox/` | `Exec` over `docker exec` or stdio JSON-lines RPC; command policy; truncation |
 | `tools/` | tool schemas: `bash` plus core `tool_specs` rendered verbatim |
