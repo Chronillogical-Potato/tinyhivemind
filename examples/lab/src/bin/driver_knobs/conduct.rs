@@ -553,6 +553,13 @@ pub fn replay(rig: &TraceRig) -> Res {
             } else {
                 let first = resumed.rows.iter().zip(&log).position(|(a, b)| a != b).unwrap_or(resumed.rows.len().min(log.len()));
                 println!("    DEBUG idx {index} kept {kept} first diff at row {first}: resumed {:?} vs whole {:?} (lens {} / {})", resumed.rows.get(first), log.get(first), resumed.rows.len(), log.len());
+                if std::env::var("LAB_DEBUG2").is_ok() {
+                    let again = play(&scn, &rig.tracer("x"), true, Some((json, rows)));
+                    for (a, b) in whole.snapshots.iter().skip(index + 1).zip(&again.snapshots) {
+                        let (va, vb): (serde_json::Value, serde_json::Value) = (serde_json::from_str(&a.0)?, serde_json::from_str(&b.0)?);
+                        if va != vb { eprintln!("SNAP DIFF at kept {}:\n WHOLE {}\n RESUM {}", a.1, a.0, b.0); break; }
+                    }
+                }
                 mismatched.push((index, state.mid_wave_is_empty(), resumed.error));
             }
         }
