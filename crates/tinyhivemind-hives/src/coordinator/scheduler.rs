@@ -129,7 +129,7 @@ impl Coordinator {
                 })
                 .count();
             let attempt = self.persist(&snapshot, next).await;
-            if self.settle(attempt, &mut conflicts).await? {
+            if self.settle(attempt, &mut conflicts)? {
                 return Ok((true, failures));
             }
         }
