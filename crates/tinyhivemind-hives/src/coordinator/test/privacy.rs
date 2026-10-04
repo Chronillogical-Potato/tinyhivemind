@@ -8,7 +8,8 @@ async fn private_child_contract(storage: Arc<dyn Storage>) {
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     for id in ["a", "b", "c"] {
         let c2 = c.clone();
@@ -49,7 +50,8 @@ async fn private_child_contract(storage: Arc<dyn Storage>) {
                 }
                 Ok(done(&request))
             })
-        }).await;
+        })
+        .await;
     }
     hive(&c, "work", &["a", "b", "c"]).await;
     let mut task = message("task", Destination::Hive("work".into()));
@@ -58,7 +60,9 @@ async fn private_child_contract(storage: Arc<dyn Storage>) {
     c.run_until_idle().await.unwrap();
     for coordinator in [
         &c,
-        &Coordinator::new("reopened".into(), storage, CoordinatorOptions::default()).await.unwrap(),
+        &Coordinator::new("reopened".into(), storage, CoordinatorOptions::default())
+            .await
+            .unwrap(),
     ] {
         let outsider = coordinator.read_hive("c", "work", None, None).unwrap();
         assert!(!outsider.iter().any(|row| row.body.starts_with("private")));
@@ -125,7 +129,8 @@ async fn addressed_private_thread_keeps_turn_context_and_outputs_in_that_thread(
                 )?;
                 Ok(done(&request))
             })
-        }).await;
+        })
+        .await;
     }
     hive(&c, "work", &["a", "b", "c"]).await;
     let mut initial = message("private root", Destination::Hive("work".into()));

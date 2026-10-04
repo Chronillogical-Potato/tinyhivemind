@@ -198,8 +198,7 @@ impl Coordinator {
                 }
                 Work::Episode(index, turn_index) => {
                     let turn = next.episodes[index].pending[turn_index].clone();
-                    let (messages, brief) =
-                        conduct::open(next, index, &turn, &self.inner.options)?;
+                    let (messages, brief) = conduct::open(next, index, &turn, &self.inner.options)?;
                     let record = &next.episodes[index];
                     let context = EpisodeContext {
                         episode_id: record.episode_id.clone(),

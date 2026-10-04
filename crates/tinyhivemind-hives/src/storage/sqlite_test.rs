@@ -48,7 +48,11 @@ async fn sqlite_rejects_invalid_schema_and_revision_without_mutation() {
         .unwrap();
     let store = SqliteStorage::open(&path).unwrap();
     assert!(store.load().await.is_err());
-    assert!(commit(&store, 0, &state_at(1), &[row(0, false)]).await.is_err());
+    assert!(
+        commit(&store, 0, &state_at(1), &[row(0, false)])
+            .await
+            .is_err()
+    );
     let rows: i64 = connection
         .query_row("SELECT COUNT(*) FROM hivemind_messages", [], |r| r.get(0))
         .unwrap();
@@ -91,7 +95,13 @@ async fn sqlite_migrates_a_version_one_snapshot_into_the_transcript_table() {
     assert!(!state.contains("\"messages\""));
     drop(store);
     assert_eq!(
-        SqliteStorage::open(&path).unwrap().load().await.unwrap().messages.len(),
+        SqliteStorage::open(&path)
+            .unwrap()
+            .load()
+            .await
+            .unwrap()
+            .messages
+            .len(),
         2
     );
 }

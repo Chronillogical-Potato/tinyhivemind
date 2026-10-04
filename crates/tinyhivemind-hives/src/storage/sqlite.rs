@@ -27,7 +27,10 @@ impl SqliteStorage {
         )?;
         connection.execute(
             "INSERT OR IGNORE INTO hivemind_snapshot VALUES (1, ?1, '0', ?2)",
-            params![SCHEMA_VERSION, serde_json::to_string(&StoredState::default())?],
+            params![
+                SCHEMA_VERSION,
+                serde_json::to_string(&StoredState::default())?
+            ],
         )?;
         let version: i64 = connection.query_row(
             "SELECT schema_version FROM hivemind_snapshot WHERE id=1",

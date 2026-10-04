@@ -6,13 +6,17 @@ async fn failed_runner_does_not_strand_other_agents_or_replay_failed_work() {
     let c = setup().await;
     add(&c, "a", |_| {
         Box::pin(async { Err(Error::InvalidIdentifier("scripted failure")) })
-    }).await;
+    })
+    .await;
     add(&c, "b", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    }).await;
-    c.send_as_host(message("bad", Destination::Agent("a".into()))).await
+    })
+    .await;
+    c.send_as_host(message("bad", Destination::Agent("a".into())))
+        .await
         .unwrap();
-    c.send_as_host(message("good", Destination::Agent("b".into()))).await
+    c.send_as_host(message("good", Destination::Agent("b".into())))
+        .await
         .unwrap();
     let report = c.run_until_idle().await.unwrap();
     assert_eq!(report.failed, 1);
@@ -28,7 +32,8 @@ async fn rejects_invalid_options_definitions_destinations_and_stale_actions() {
             String::new(),
             Arc::new(MemoryStorage::new()),
             CoordinatorOptions::default()
-        ).await
+        )
+        .await
         .is_err()
     );
     assert!(
@@ -39,20 +44,23 @@ async fn rejects_invalid_options_definitions_destinations_and_stale_actions() {
                 round_width: 0,
                 ..CoordinatorOptions::default()
             }
-        ).await
+        )
+        .await
         .is_err()
     );
     let c = setup().await;
     add(&c, "a", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    }).await;
+    })
+    .await;
     assert!(
         c.create_hive(HiveInfo {
             hive_id: "unknown".into(),
             name: "Unknown".into(),
             description: None,
             members: vec!["absent".into()]
-        }).await
+        })
+        .await
         .is_err()
     );
     assert!(
@@ -61,7 +69,8 @@ async fn rejects_invalid_options_definitions_destinations_and_stale_actions() {
             name: "Duplicate".into(),
             description: None,
             members: vec!["a".into(), "a".into()]
-        }).await
+        })
+        .await
         .is_err()
     );
     hive(&c, "work", &["a"]).await;
@@ -71,17 +80,20 @@ async fn rejects_invalid_options_definitions_destinations_and_stale_actions() {
             name: "Changed".into(),
             description: None,
             members: vec!["a".into()]
-        }).await
+        })
+        .await
         .is_err()
     );
     assert!(c.join_hive("missing", "a").await.is_err());
     assert!(c.leave_hive("work", "missing").await.is_err());
     assert!(
-        c.send_as_host(message("missing", Destination::Agent("missing".into()))).await
+        c.send_as_host(message("missing", Destination::Agent("missing".into())))
+            .await
             .is_err()
     );
     assert!(
-        c.send_as_host(message("missing-hive", Destination::Hive("missing".into()))).await
+        c.send_as_host(message("missing-hive", Destination::Hive("missing".into())))
+            .await
             .is_err()
     );
     assert!(
@@ -91,7 +103,8 @@ async fn rejects_invalid_options_definitions_destinations_and_stale_actions() {
             EpisodeAction::Complete {
                 body: "done".into()
             }
-        ).await
+        )
+        .await
         .is_err()
     );
     assert!(c.release("missing").await.is_err());
@@ -134,8 +147,10 @@ async fn failed_disposition_and_empty_session_release_reservations() {
                     disposition,
                 })
             })
-        }).await;
-        c.send_as_host(message("bad", Destination::Agent("a".into()))).await
+        })
+        .await;
+        c.send_as_host(message("bad", Destination::Agent("a".into())))
+            .await
             .unwrap();
         c.run_until_idle().await.unwrap();
         assert_eq!(c.interruptions().unwrap().len(), 1);
@@ -192,9 +207,11 @@ async fn active_episode_admits_only_bound_members_and_current_assignment() {
             result.reply = Some("text reply".into());
             Ok(result)
         })
-    }).await;
+    })
+    .await;
     hive(&c, "work", &["a"]).await;
-    c.send_as_host(message("task", Destination::Hive("work".into()))).await
+    c.send_as_host(message("task", Destination::Hive("work".into())))
+        .await
         .unwrap();
     c.run_until_idle().await.unwrap();
     let rows = c.read_hive("a", "work", Some(0), None).unwrap();
@@ -209,17 +226,20 @@ async fn rejected_storage_commit_does_not_publish_message_or_membership_changes(
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     add(&c, "a", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    }).await;
+    })
+    .await;
     let mut external = storage.load().await.unwrap();
     let revision = external.revision;
     external.revision += 1;
     storage.commit(revision, &external).unwrap();
     assert!(matches!(
-        c.send_as_host(message("failed", Destination::Agent("a".into()))).await,
+        c.send_as_host(message("failed", Destination::Agent("a".into())))
+            .await,
         Err(Error::RevisionConflict { .. })
     ));
     assert_eq!(c.lock().unwrap().durable.messages.len(), 0);
@@ -238,13 +258,16 @@ async fn sequence_exhaustion_rejects_acceptance_atomically() {
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     add(&c, "a", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    }).await;
+    })
+    .await;
     assert!(matches!(
-        c.send_as_host(message("full", Destination::Agent("a".into()))).await,
+        c.send_as_host(message("full", Destination::Agent("a".into())))
+            .await,
         Err(Error::Exhausted)
     ));
     assert_eq!(storage.load().await.unwrap().messages.len(), 0);
@@ -277,12 +300,15 @@ async fn joining_after_episode_creation_cannot_inject_an_unbound_child_participa
             )?;
             Ok(done(&request))
         })
-    }).await;
+    })
+    .await;
     add(&c, "b", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    }).await;
+    })
+    .await;
     hive(&c, "work", &["a"]).await;
-    c.send_as_host(message("task", Destination::Hive("work".into()))).await
+    c.send_as_host(message("task", Destination::Hive("work".into())))
+        .await
         .unwrap();
     c.join_hive("work", "b").await.unwrap();
     c.run_until_idle().await.unwrap();

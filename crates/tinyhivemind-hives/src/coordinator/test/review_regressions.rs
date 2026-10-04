@@ -6,9 +6,11 @@ async fn leaving_between_prepare_and_claim_retires_the_pending_turn() {
     let c = setup().await;
     add(&c, "a", |_| {
         Box::pin(async { panic!("removed member ran") })
-    }).await;
+    })
+    .await;
     hive(&c, "work", &["a"]).await;
-    c.send_as_host(message("task", Destination::Hive("work".into()))).await
+    c.send_as_host(message("task", Destination::Hive("work".into())))
+        .await
         .unwrap();
     assert!(c.advance().await.unwrap());
     assert_eq!(c.lock().unwrap().durable.episodes[0].pending.len(), 1);
@@ -25,7 +27,8 @@ async fn private_initial_contract(storage: Arc<dyn crate::Storage>) {
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     for id in ["a", "b", "outsider"] {
         let coordinator = c.clone();
@@ -51,15 +54,17 @@ async fn private_initial_contract(storage: Arc<dyn crate::Storage>) {
                     ..done(&request)
                 })
             })
-        }).await;
+        })
+        .await;
     }
     hive(&c, "work", &["a", "b", "outsider"]).await;
     let mut initial = message("secret input", Destination::Hive("work".into()));
     initial.only_for = vec!["b".into()];
     c.send(initial).await.unwrap();
     c.run_until_idle().await.unwrap();
-    let reopened =
-        Coordinator::new("reopened".into(), storage, CoordinatorOptions::default()).await.unwrap();
+    let reopened = Coordinator::new("reopened".into(), storage, CoordinatorOptions::default())
+        .await
+        .unwrap();
     for c in [&c, &reopened] {
         for participant in ["a", "b"] {
             let rows = c.read_hive(participant, "work", None, None).unwrap();
@@ -92,7 +97,8 @@ async fn direct_reply_contract(storage: Arc<dyn crate::Storage>) {
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     for id in ["a", "b", "outsider"] {
         add(&c, id, |request| {
@@ -102,15 +108,18 @@ async fn direct_reply_contract(storage: Arc<dyn crate::Storage>) {
                     ..done(&request)
                 })
             })
-        }).await;
+        })
+        .await;
     }
     let receipt = c
-        .send(message("question", Destination::Agent("b".into()))).await
+        .send(message("question", Destination::Agent("b".into())))
+        .await
         .unwrap();
     assert_eq!(c.run_until_idle().await.unwrap().completed, 1);
     assert_eq!(c.run_until_idle().await.unwrap().completed, 0);
-    let reopened =
-        Coordinator::new("reopened".into(), storage, CoordinatorOptions::default()).await.unwrap();
+    let reopened = Coordinator::new("reopened".into(), storage, CoordinatorOptions::default())
+        .await
+        .unwrap();
     for c in [&c, &reopened] {
         for (actor, peer) in [("a", "b"), ("b", "a")] {
             let rows = c.read_direct(actor, peer, None).unwrap();

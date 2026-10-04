@@ -32,7 +32,8 @@ async fn parked_episode_and_direct_turn_resume_only_after_release() {
                 }
                 Ok(outcome)
             })
-        }).await;
+        })
+        .await;
         hive(&c, "work", &["a"]).await;
         c.send_as_host(message("task", destination)).await.unwrap();
         assert_eq!(c.run_until_idle().await.unwrap().parked, 1);
@@ -50,18 +51,23 @@ async fn recovery_accepts_new_runtime_and_retains_session_and_pending_messages()
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     add(&c, "a", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    }).await;
-    c.send_as_host(message("first", Destination::Agent("a".into()))).await
+    })
+    .await;
+    c.send_as_host(message("first", Destination::Agent("a".into())))
+        .await
         .unwrap();
     c.run_until_idle().await.unwrap();
-    c.send_as_host(message("second", Destination::Agent("a".into()))).await
+    c.send_as_host(message("second", Destination::Agent("a".into())))
+        .await
         .unwrap();
-    let recovered =
-        Coordinator::new("new-runtime".into(), storage, CoordinatorOptions::default()).await.unwrap();
+    let recovered = Coordinator::new("new-runtime".into(), storage, CoordinatorOptions::default())
+        .await
+        .unwrap();
     assert_eq!(recovered.run_until_idle().await.unwrap().completed, 0);
     recovered
         .register_agent(AgentRegistration {
@@ -74,7 +80,8 @@ async fn recovery_accepts_new_runtime_and_retains_session_and_pending_messages()
                     Ok(done(&request))
                 })
             }))),
-        }).await
+        })
+        .await
         .unwrap();
     assert_eq!(recovered.run_until_idle().await.unwrap().completed, 1);
 }
@@ -85,7 +92,8 @@ async fn dropped_drain_records_interruption_and_never_replays_started_turn() {
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     let started = Arc::new(tokio::sync::Notify::new());
     let signal = started.clone();
@@ -95,8 +103,10 @@ async fn dropped_drain_records_interruption_and_never_replays_started_turn() {
             signal.notify_one();
             std::future::pending().await
         })
-    }).await;
-    c.send_as_host(message("uncertain", Destination::Agent("a".into()))).await
+    })
+    .await;
+    c.send_as_host(message("uncertain", Destination::Agent("a".into())))
+        .await
         .unwrap();
     let mut drain = Box::pin(c.run_until_idle());
     tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
@@ -105,7 +115,9 @@ async fn dropped_drain_records_interruption_and_never_replays_started_turn() {
     assert_eq!(interruptions.len(), 1);
     assert_eq!(interruptions[0].message_ids, ["uncertain"]);
     assert_eq!(c.run_until_idle().await.unwrap().completed, 0);
-    let recovered = Coordinator::new("new".into(), storage, CoordinatorOptions::default()).await.unwrap();
+    let recovered = Coordinator::new("new".into(), storage, CoordinatorOptions::default())
+        .await
+        .unwrap();
     assert_eq!(recovered.interruptions().unwrap().len(), 1);
     assert_eq!(recovered.run_until_idle().await.unwrap().completed, 0);
 }
@@ -116,16 +128,21 @@ async fn durable_running_claim_is_interrupted_on_crash_recovery() {
         "runtime".into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     add(&c, "a", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    }).await;
-    c.send_as_host(message("uncertain", Destination::Agent("a".into()))).await
+    })
+    .await;
+    c.send_as_host(message("uncertain", Destination::Agent("a".into())))
+        .await
         .unwrap();
     let claims = c.claim(1).await.unwrap();
     assert_eq!(claims.len(), 1);
-    let recovered = Coordinator::new("new".into(), storage, CoordinatorOptions::default()).await.unwrap();
+    let recovered = Coordinator::new("new".into(), storage, CoordinatorOptions::default())
+        .await
+        .unwrap();
     assert_eq!(recovered.interruptions().unwrap().len(), 1);
     assert_eq!(recovered.run_until_idle().await.unwrap().completed, 0);
 }
@@ -149,11 +166,14 @@ async fn run_wakes_on_dynamic_registration_and_shutdown_waits_for_active_turn() 
             wait.notified().await;
             Ok(done(&request))
         })
-    }).await;
+    })
+    .await;
     hive(&c, "dynamic", &["a"]).await;
-    c.send_as_host(message("one", Destination::Agent("a".into()))).await
+    c.send_as_host(message("one", Destination::Agent("a".into())))
+        .await
         .unwrap();
-    c.send_as_host(message("two", Destination::Agent("a".into()))).await
+    c.send_as_host(message("two", Destination::Agent("a".into())))
+        .await
         .unwrap();
     tokio::select! { () = started.notified() => {}, result = &mut running => { assert!(result.is_err()); } }
     c.shutdown();
@@ -180,7 +200,8 @@ async fn supplied_session_binding_is_idempotent_and_cannot_switch_history() {
             assert_eq!(request.session_id.as_deref(), Some("existing-session"));
             Ok(done(&request))
         })
-    }).await;
+    })
+    .await;
     c.bind_session("a", "existing-session").await.unwrap();
     c.bind_session("a", "existing-session").await.unwrap();
     assert!(matches!(
@@ -189,7 +210,8 @@ async fn supplied_session_binding_is_idempotent_and_cannot_switch_history() {
     ));
     assert!(c.bind_session("absent", "session").await.is_err());
     assert!(c.bind_session("a", "").await.is_err());
-    c.send_as_host(message("task", Destination::Agent("a".into()))).await
+    c.send_as_host(message("task", Destination::Agent("a".into())))
+        .await
         .unwrap();
     c.run_until_idle().await.unwrap();
     c.bind_session("a", "existing-session").await.unwrap();
@@ -205,9 +227,11 @@ async fn runner_cannot_replace_a_bound_continuing_session() {
                 disposition: TurnDisposition::Completed,
             })
         })
-    }).await;
+    })
+    .await;
     c.bind_session("a", "existing").await.unwrap();
-    c.send_as_host(message("task", Destination::Agent("a".into()))).await
+    c.send_as_host(message("task", Destination::Agent("a".into())))
+        .await
         .unwrap();
     let report = c.run_until_idle().await.unwrap();
     assert_eq!(report.failed, 1);
@@ -222,7 +246,9 @@ async fn sqlite_reopens_conductor_checkpoint_and_resumes_parked_agent() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("hives.sqlite");
     let storage = Arc::new(crate::SqliteStorage::open(&path).unwrap());
-    let c = Coordinator::new("runtime".into(), storage, CoordinatorOptions::default()).await.unwrap();
+    let c = Coordinator::new("runtime".into(), storage, CoordinatorOptions::default())
+        .await
+        .unwrap();
     let c2 = c.clone();
     add(&c, "a", move |request| {
         let c = c2.clone();
@@ -238,16 +264,19 @@ async fn sqlite_reopens_conductor_checkpoint_and_resumes_parked_agent() {
             outcome.disposition = TurnDisposition::Parked;
             Ok(outcome)
         })
-    }).await;
+    })
+    .await;
     hive(&c, "work", &["a"]).await;
-    c.send_as_host(message("task", Destination::Hive("work".into()))).await
+    c.send_as_host(message("task", Destination::Hive("work".into())))
+        .await
         .unwrap();
     c.run_until_idle().await.unwrap();
     let recovered = Coordinator::new(
         "restarted".into(),
         Arc::new(crate::SqliteStorage::open(&path).unwrap()),
         CoordinatorOptions::default(),
-    ).await
+    )
+    .await
     .unwrap();
     let c2 = recovered.clone();
     recovered
@@ -268,7 +297,8 @@ async fn sqlite_reopens_conductor_checkpoint_and_resumes_parked_agent() {
                     Ok(done(&request))
                 })
             }))),
-        }).await
+        })
+        .await
         .unwrap();
     recovered.release("a").await.unwrap();
     assert_eq!(recovered.run_until_idle().await.unwrap().completed, 1);
