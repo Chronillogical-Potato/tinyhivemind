@@ -13,10 +13,18 @@ stored at the end of every activation and before every compaction recall.
 | --- | --- |
 | `mod.rs` | `Env`, `Activation`, `Outcome`, `run` and the model loop; `bash` records the ledger |
 | `compact.rs` | `none` / `mask` / `summarize` / `mask+summarize` over the session, the `context` mark, the compaction recall |
-| `recall.rs` | opening or resuming the session, the two memory calls and their `memory` marks, ledger lines |
+| `recall.rs` | opening or resuming the session, core `Recall` / `Remember` calls framed with core `frame_recalled`, their typed events, ledger lines |
 | `test/` | scripted-model tests, see [`test/README.md`](test/README.md) |
 
-Telemetry per activation: a `session` mark (`<seat>: activation N messages M
-delta_rows R mode persistent|fresh`), turns and tool calls, an `exec` mark per
-command, a `context` mark per compaction and a `memory` mark per memory call
-(`<seat>: recall|remember <moment> chars= items= latency_ms= [error=]`).
+Telemetry per activation: core's typed `session_resumed { seat, messages,
+delta_rows }` when a session resumes, turns and tool calls, an `exec` mark per
+command, a `context` mark per compaction, `recalled { seat, moment, notes,
+chars, latency_ms }` and `remembered { seat, entries, latency_ms }` per memory
+call, and a `memory` mark (`<seat>: recall|remember <moment> error=...`) only
+when a call fails, since the typed events carry no reason.
+
+Memory goes through core's ports (`tinyhivemind_core::runtime::recall`): a
+seat builds a `RecallRequest` at a `RecallMoment` and a `RememberRequest` of
+`MemoryEntry` values (a command that exited 0 is an `Observation`, any other a
+`FailedAttempt`; the seat's post is an `Outcome`, otherwise its last text a
+`Note`), and drives the port's future with the lab's `block_on`.

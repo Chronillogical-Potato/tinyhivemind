@@ -23,8 +23,8 @@ roots.
 | `index.html` | Page shell, styles, theme tokens |
 | `src/main.js` | Parsing, analysis, SVG rendering (no chart libraries) |
 | `src/panel.js` | The runs table: load, compare, live follow, URL state |
-| `src/marks.js` | Which timeline lane a mark goes to (`session`, `memory`, other) |
-| `src/marks.test.js` | `npm test`: lane and memory-error classification |
+| `src/marks.js` | Which timeline lane a mark-like event goes to (`session_resumed` → session; `recalled`, `remembered`, failed-call marks → memory; other marks) and its tooltip title |
+| `src/marks.test.js` | `npm test`: lanes, titles and memory-error classification |
 | `server/scan.js` | Finds and describes traces; resolves ids safely |
 | `server/plugin.js` | Vite plugin serving `/api/runs`, `/api/runs/<id>`, `/api/events` |
 | `server/scan.test.js` | `npm test`: scanner, arm and path-escape tests |

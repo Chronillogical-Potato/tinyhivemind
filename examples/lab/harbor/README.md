@@ -67,8 +67,9 @@ Compare arms on the same tasks by running once with `mode=hive` and once with
 | `run_id` | `--run-id` | fresh per trial | the memory namespace root `team:<run-id>` and the trace's run id |
 
 `CORTEX_DB_KEY` comes from the host environment only, like the model key.
-`result.json` records `seat_session` and `memory`; the trace has a `session`
-mark per activation and a `memory` mark per recall or store.
+`result.json` records `seat_session` and `memory`; the trace has core's typed
+`session_resumed` event per resumed session and `recalled` / `remembered` per
+memory call, plus a `memory` mark with the reason when a call fails.
 
 `arm.sh` names the arms for A/B runs: `hive-briefing` (`seat_session=fresh`),
 `hive-session`, `hive-session-mem`, `single` and `single-mem`. The older names

@@ -165,7 +165,7 @@ exercises them. Unit tests run under `cargo test`; `offline.sh` is
 | `--seat-session fresh` | | `seat/test/session.rs`, `hive/test.rs` (`fresh_sessions_reproduce_the_briefing_per_activation`), `offline.sh` `hive-fresh` |
 | `--hive-context mask|summarize` | `summarize` (mask, then summarize if still over budget); `mask` under `fresh` | `config/test.rs`, `context/test.rs` (`scaled_estimate`), `seat/test/session.rs` (compaction is what shrinks a session) |
 | `--memory none|cortex`, `--memory-url`, `--memory-budget`, `--run-id` | `none`, `$CORTEX_DB_URL`, 1200, generated | `config/test.rs`; `memory/test.rs` on the reference engine (a later recall surfaces an earlier failed attempt, rejoin shows a teammate's memory once, two run ids share nothing, namespace root pinned, timeout and unreachable server degrade to no memory); `seat/test/memory.rs` (recall at start, rejoin, compaction; ledger stored at the end; a failing memory is reported and ignored); `live_cortex_memory_round_trip` and `offline.sh` `*-mem` with `CORTEX_DB_URL` set |
-| `session` and `memory` marks | | `seat/test/session.rs`, `seat/test/memory.rs`, `offline.sh`, and their own timeline lanes in the viewer (`viewer/src/marks.js`) |
+| core memory port (`Recall`, `Remember`, `frame_recalled`, `desk_delta`) and typed `session_resumed` / `recalled` / `remembered` events | | `HiveMemory` is the reference host (`memory/test.rs`: typed errors, conversation scoping, indexed writes, the slow-index fallback); `board/test.rs` (delta through `desk_delta`); `seat/test/session.rs`, `seat/test/memory.rs`, `offline.sh`, and their own timeline lanes in the viewer (`viewer/src/marks.js`) |
 
 ### Gaps: what no example drives
 
