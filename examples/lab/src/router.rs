@@ -71,7 +71,8 @@ impl KeywordRouter {
     }
 
     fn score(&self, request: &RoutingRequest) -> RoutingEvaluation {
-        let eligible: Vec<&RouteCandidate> = request.candidates.iter().filter(|c| c.available).collect();
+        let eligible: Vec<&RouteCandidate> =
+            request.candidates.iter().filter(|c| c.available).collect();
         let mut weights: Vec<(String, u64)> = eligible
             .iter()
             .map(|c| (c.id.clone(), 100 + 400 * Self::hits(request, c) as u64))
@@ -80,7 +81,12 @@ impl KeywordRouter {
         let total: u64 = weights.iter().map(|(_, w)| w).sum();
         let mut parts: Vec<(String, u32)> = weights
             .iter()
-            .map(|(id, w)| (id.clone(), u32::try_from(w * u64::from(PROBABILITY_SCALE) / total).unwrap_or(0)))
+            .map(|(id, w)| {
+                (
+                    id.clone(),
+                    u32::try_from(w * u64::from(PROBABILITY_SCALE) / total).unwrap_or(0),
+                )
+            })
             .collect();
         let best = parts
             .iter()
@@ -95,7 +101,10 @@ impl KeywordRouter {
             primary_responder: primary.0,
             primary_probabilities: parts
                 .iter()
-                .map(|(id, parts)| CandidateProbability { candidate_id: id.clone(), probability: p(*parts) })
+                .map(|(id, parts)| CandidateProbability {
+                    candidate_id: id.clone(),
+                    probability: p(*parts),
+                })
                 .collect(),
             confidence: p(self.confidence.unwrap_or(primary.1)),
             needs_collaboration: p(0),
@@ -104,7 +113,11 @@ impl KeywordRouter {
                 .iter()
                 .map(|c| ContributionProbability {
                     candidate_id: c.id.clone(),
-                    probability: p(if Self::hits(request, c) > 0 { 600_000 } else { 20_000 }),
+                    probability: p(if Self::hits(request, c) > 0 {
+                        600_000
+                    } else {
+                        20_000
+                    }),
                 })
                 .collect(),
             high_impact: p(self.high_impact),
