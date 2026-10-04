@@ -70,19 +70,7 @@ async fn subscribers_wake_on_every_committed_change() {
 }
 #[tokio::test]
 async fn episode_snapshot_reports_open_waiting_settled_and_failed() {
-    let c = Coordinator::new(
-        "runtime".into(),
-        Arc::new(MemoryStorage::new()),
-        CoordinatorOptions {
-            conduct_policy: tinyhivemind_core::driver::ConductPolicy {
-                turn_wall: 1,
-                child_turn_wall: 1,
-            },
-            ..CoordinatorOptions::default()
-        },
-    )
-    .await
-    .unwrap();
+    let c = setup().await;
     let actions = c.clone();
     add(&c, "a", move |request| {
         let c = actions.clone();
@@ -122,5 +110,5 @@ async fn episode_snapshot_reports_open_waiting_settled_and_failed() {
     let phases: Vec<_> = c.episodes().unwrap().into_iter().map(|e| e.phase).collect();
     assert_eq!(phases[0], EpisodePhase::AwaitingRelease);
     assert_eq!(phases[1], EpisodePhase::Settled);
-    assert!(matches!(&phases[2], EpisodePhase::Failed(reason) if reason.contains("wall")));
+    assert!(matches!(&phases[2], EpisodePhase::Failed(reason) if reason.contains("stalled")));
 }
