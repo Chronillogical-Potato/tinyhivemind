@@ -6,7 +6,7 @@ use tinyhivemind_core::hive::{
 };
 use tinyhivemind_lab::{Res, TraceRig, section};
 
-use crate::room::{Room, run};
+use crate::room::{Room, episode};
 
 type Tweak = Box<dyn Fn(&mut EpisodePolicy, &mut Room)>;
 
@@ -238,7 +238,7 @@ pub fn run(rig: &TraceRig) -> Res {
         let tracer = rig.tracer(&format!("swarm:{}:{}", case.group, case.label));
         let shown = if case.group == group { "" } else { case.group };
         group = case.group;
-        match run(&room, &policy, &tracer) {
+        match episode(&room, &policy, &tracer) {
             Ok(o) => println!(
                 "{shown:<24} {:<54} {:>6} {:>5} {:>6}  {:<18} {}",
                 case.label,
@@ -254,7 +254,7 @@ pub fn run(rig: &TraceRig) -> Res {
     println!("\nrefused policies:");
     for (label, policy) in refused() {
         let tracer = rig.tracer(&format!("swarm:refused:{label}"));
-        match run(&Room::default(), &policy, &tracer) {
+        match episode(&Room::default(), &policy, &tracer) {
             Ok(o) => println!("  {label:<22} ran: {}", o.end),
             Err(error) => println!("  {label:<22} -> {error}"),
         }

@@ -158,7 +158,11 @@ fn says(
 }
 
 /// Drive one episode to its end, tracing every step.
-pub fn run(room: &Room, policy: &EpisodePolicy, tracer: &Tracer<'_>) -> Result<Outcome, String> {
+pub fn episode(
+    room: &Room,
+    policy: &EpisodePolicy,
+    tracer: &Tracer<'_>,
+) -> Result<Outcome, String> {
     let world = world();
     let roster = world.roster();
     let desks = world.desks();
