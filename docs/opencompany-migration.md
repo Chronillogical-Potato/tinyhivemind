@@ -162,6 +162,16 @@ called on its coordinator.
   `hivemind_ask` and `hivemind_broadcast` run. A refusal (conventionally
   `Error::SendDenied`) reaches the model as the tool's error text, and the turn
   continues.
+- **One writer per store.** Run exactly one `Coordinator` per store. Creating
+  one claims the store by advancing `writer_epoch`; an older coordinator on the
+  same store then fails every write with `Error::Fenced` and stops scheduling.
+  A rolling deploy needs no handover: the new process fences the old one, and
+  the old process should treat `Fenced` from `run()` as a signal to shut down.
+- **Bounded inbox.** `RetentionPolicy::pending_per_agent` caps the undelivered
+  direct messages one agent may hold. A send past it fails with
+  `Error::InboxFull` rather than growing the stored state, so a host whose
+  agent is offline sees backpressure. Retention also bounds interruption
+  records via `RetentionPolicy::interrupted`.
 
 The decision record is
 [ADR 0031](adr/0031-expose-host-seams-over-async-incremental-storage.md).
