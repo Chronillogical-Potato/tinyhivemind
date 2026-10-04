@@ -261,4 +261,9 @@ The final TinyAgents legacy-prefix correction adds first/repeated resume and
 persisted-boundary coverage; it passed independent review and was published
 before the OpenHuman and TinyHivemind dependency pins were updated.
 
-Delivery: [TinyHivemind #95](https://github.com/tinyhumansai/tinyhivemind/pull/95) is a draft until TinyAgents #298 and OpenHuman #6977 land. The dependency PRs must land before the final merge pins are selected.
+Delivery: TinyAgents #298 and OpenHuman #6977 are merged. The OpenHuman pin and
+vendor gitlink now select merge commit `964da96df7828e700918a25bf180fd4067b412d7`,
+whose TinyAgents gitlink selects merged `a08a8d504dace174d27b060cb2a9b59caf35b702`.
+[TinyHivemind #95](https://github.com/tinyhumansai/tinyhivemind/pull/95) no longer
+has an unmerged dependency; its final commit publication, readiness, and CI
+verification follow the dependency update.
