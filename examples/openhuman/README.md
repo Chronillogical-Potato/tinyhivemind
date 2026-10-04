@@ -1,115 +1,97 @@
-# Embedded OpenHuman routing proof
+# Supplied OpenHuman agents and dynamic hives
 
-This example builds one real OpenHuman `Runtime`, instantiates two independent
-OpenHuman `Agent`s on it, and hands those existing handles to the first-class
-`tinyhivemind_core::driver` binding. The same `BoundHive` binding now
-backs the routing proof, the PE1006/PE1008 completion experiment, and the
-DeepSWE binary; none of them maintains a second session registry.
+The host constructs one OpenHuman `Runtime` and configures each `Agent` before
+registration. TinyHivemind receives the existing handles through `OpenHumanHost`;
+the host keeps control of providers, MCP servers, skills, memory, and prompts.
+Each agent continues one conversation across all its joined hives.
 
-It is deterministic and offline:
-
-- a `SystemOneTransport` fixture returns typed Choice and Noul answers to the
-  exact questions built by `JevRouter`;
-- a loopback mock serves OpenHuman's incidental backend calls and its
-  OpenAI-compatible model call;
-- one ephemeral, read-only OpenHuman runtime owns the `engineering` and `legal`
-  agents, their transcripts, session continuation, and compaction;
-- `tinyhivemind_core::driver` validates one `HiveGraph`, binds canonical ids to
-  those instances, and resolves accepted routes without constructing agents or
-  storing session state;
-- the engineering agent handles a routed desk turn and a deterministic DM turn
-  on the same OpenHuman session, while the DM makes no System One call;
-- the second turn's provider request preserves every message from the first
-  turn as an exact prefix, maximizing the portion eligible for provider prompt
-  caching;
-- no credential, network provider, inherited workspace, or user data is used.
-
-Run the standalone example from the repository root:
+Run the deterministic example (Rust and `python3` are required):
 
 ```sh
-cargo run --manifest-path examples/openhuman/Cargo.toml
+cargo run --manifest-path examples/openhuman/Cargo.toml --bin tinyhivemind-openhuman-example
+cargo test --manifest-path examples/openhuman/Cargo.toml
 ```
 
-Expected output includes both instantiated agents, the `engineering` desk and
-direct routes, exactly one System One request, two turns on one OpenHuman
-session, a complete cacheable message prefix, and the mock reply
-`openhuman-seat-ok`.
+The loopback provider captures actual OpenAI-compatible requests for four
+configurations: one agent in one hive, three in one hive, three in two hives,
+and one in three hives. An ordinary host conversation starts before registration.
+The adapter binds that same session, adds its tools, and delivers hive messages
+through the coordinator. The model calls native completion tools to finish each
+assignment. The captured requests verify:
 
-This proves integration mechanics, not Jev routing quality or provider
-performance. Live TypeSafe quality remains the job of the labeled routing
-corpus and paid campaign described in
-[`docs/specs/jev-first-routing.md`](../../docs/specs/jev-first-routing.md).
+- each agent sees its original prompt and its own skill, memory, and connected
+  MCP catalogue, while other agents' private configuration stays absent;
+- the nine permanent Hivemind tools appear exactly once in both system prompt
+  and native schemas on every later request, without tool discovery;
+- earlier host input and assistant replies survive registration and later hive
+  turns in the same session;
+- ordinary host turns can discover hives and send work through the same tools.
+
+A final scenario enables management with an explicit authorizer and a host
+factory. Native model calls create a hive, create a configured agent on the same
+runtime, and join it to the hive. A denied template never reaches the factory;
+unknown templates and invalid agent IDs leave no registered agent.
+Agent IDs are validated before deriving filesystem paths. Both failures are returned to the
+model as tool receipts. The dynamically supplied agent then completes a hive
+assignment using its own configuration.
+
+## Host configuration and catalogues
+
+This host supplies a separate `workspace_dir` for each agent through
+`AgentSpec::config`. `MEMORY.md` and native skill bundles live under that private
+workspace, so OpenHuman's existing memory and skill readers see only that agent's
+resources. Skills are installed at `<workspace_dir>/skills/<name>/SKILL.md`.
+`AgentSpec::skills_dir` currently installs under the agent's home directory;
+this example uses the explicit workspace discovery root instead.
+
+OpenHuman treats a custom inline system prompt as host-authored text and does
+not automatically add its orchestrator's installed-skill and MCP catalogue.
+Before constructing each agent, this host builds its prompt from the installed
+skill file and the configured MCP metadata. The proof then calls `use_skill`
+to describe the actual installed skill, and invokes `mcp_list_tools` and
+`mcp_call_tool` against the agent's private server. Captured native tool results
+must contain the agent's own markers and exclude peers' markers. These
+capabilities run both before registration and afterward on every continuing
+agent session; post-registration assertions match newly issued phase-tagged
+call IDs to their native tool results, so carried earlier receipts cannot pass. Prompt text
+alone is insufficient to pass these assertions. Workflow tools stay packed;
+Hivemind registration does not advertise `describe_workflow` directly.
+
+## Host integration
+
+```rust,ignore
+let coordinator = Coordinator::new(
+    existing_agent.runtime_id().into(),
+    Arc::new(MemoryStorage::new()),
+    CoordinatorOptions::default(),
+)?;
+let host = OpenHumanHost::new(existing_agent.runtime_id().into(), coordinator)?;
+host.register_agent_in_session(existing_agent.clone(), "existing-conversation")?;
+host.coordinator().create_hive(hive)?;
+host.coordinator().join_hive("engineering", existing_agent.id())?;
+host.coordinator().run_until_idle().await?;
+```
+
+Keep the `OpenHumanHost` alive while the agent's attached tools are used.
+Configure optional management before registering any agents. Its factory owns
+runtime and credential configuration; model arguments contain only template
+references and ordinary settings. Applications can call coordinator creation,
+registration, and membership APIs directly without exposing management tools.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `Cargo.toml` | Standalone experiment manifest and lockfile, including the workspace's OpenHuman adapter crate. |
-| `src/main.rs` | OpenHuman runtime/agent construction, route binding, two-surface session proof, and assertions. |
-| `src/bin/pe1006_hive.rs` | OpenRouter GPT-OSS completion-driven hive with stable OpenHuman sessions and live TypeSafe routing. |
-| `src/bin/deepswe_hive.rs` | Hermetic four-seat software-engineering hive over a caller-prepared disposable Git checkout. |
-| `src/bin/conducted.rs` | A live completion-driven episode: the loop stepped through the `Conductor`, any of the adapter's runners, a hidden-profile desk of five seats over OpenRouter with live Jev routing, or offline against the adapter's scripted model. `CONDUCTED_DESK=login` (default) diagnoses a regression; `CONDUCTED_DESK=triage` hands off three tickets on a budget of two, to fire the budget, the broadcast that completes its author, and the in-thread `ask` refusal; `CONDUCTED_DESK=launch` is a desk of one, whose single assigned seat holds no facts at all and has to reach four teammates by asking -- two of whom hold conditions that contradict each other, so settling it means putting them in one conversation with `ask_teammates`. |
-| `src/bin/conducted/hosted.rs` | This example as a host: `DeskJournal`, its in-memory log with the prompt and the log lines, for every runner; and `DeskHost`, an `EpisodeHost` whose seats are library sessions with the episode's belt. The runners and the loop live in `tinyhivemind-openhuman`. |
-| `src/bin/conducted/jev.rs` | The live `SystemOneTransport` over `tinyjevclient`, bridged through the wire form. |
-| `deepswe-sandbox/` | Reproducible local Docker image used for agent shell and test execution. |
+| `src/main.rs` | Runs the offline acceptance example. |
+| `src/proof/fixture.rs` | Host construction, private MCP fixtures, loopback provider captures. |
+| `src/proof/topology.rs` | Four hive shapes, session continuity, permanent tool assertions. |
+| `src/proof/dynamic.rs` | Authorized host factory and native dynamic management calls. |
+| `src/bin/deepswe_hive.rs` | Docker-confined four-agent software-engineering experiment. |
+| `src/bin/pe1006_hive.rs` | Five-agent research experiment with live TypeSafe routing. |
 
-## `conducted`: one loop, two runners
-
-`src/bin/conducted.rs` runs one completion episode through
-`tinyhivemind_openhuman::run_episode`. It builds the desk, driver, door, and
-host-owned journal. The adapter runs the turn loop while the driver decides
-which seats run and what the host should append.
-
-`SeatRunner` supports two paths here:
-
-| `TINYHIVEMIND_RUNNER` | Seat | Tools | Context between turns |
-| --- | --- | --- | --- |
-| `embed` (default) | An `openhuman-embed` agent | Native tools on `AgentSpec::tools` | Seeded from the host journal each turn |
-| `hosted` | A host-created agent through `EpisodeHost` | Native tools through the host gate | Seeded from the host journal up to its watermark |
-
-Both record calls and refusals through `EpisodeTools`. The driver receives the
-same committed events from either runner. The host registers seat definitions
-before the runtime boots, then hands each runner the same desk and tool set.
-
-A live run needs an OpenRouter route and a TypeSafe key if semantic routing is
-wanted:
-
-```sh
-set -a; . ~/.config/tinyhivemind/live.env; set +a
-TINYHIVEMIND_LIVE_OPENROUTER=1 cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
-TINYHIVEMIND_LIVE_OPENROUTER=1 TINYHIVEMIND_RUNNER=hosted cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
-```
-
-Offline runs use the adapter's scripted model and need no credential. Each
-scripted seat calls `complete_episode`; the example checks that the call became
-a desk row.
-
-```sh
-cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
-TINYHIVEMIND_RUNNER=hosted cargo run --manifest-path examples/openhuman/Cargo.toml --bin conducted
-```
-
-### Benchmarking the runners
-
-`CONDUCTED_BENCH=N` runs `embed` and `hosted` offline for `N` episodes each.
-Every seat completes on its first turn, so this compares runner overhead rather
-than answer quality. Each arm has one warm-up episode that is not counted.
-`TINYHIVEMIND_RUNNER` chooses which arm runs first.
-
-| Column | What it measures |
-| --- | --- |
-| `turns/ep`, `waves/ep` | Seat turns and scheduling rounds per episode |
-| `requests/turn` | Model calls per seat turn |
-| `KiB/turn` | Request bytes sent to the model |
-| `tool rtt ms` | Time from a model tool call to its receipt |
-| `wall ms/ep` | End-to-end episode time |
-
-```sh
-CONDUCTED_BENCH=5 cargo run --release --manifest-path examples/openhuman/Cargo.toml --bin conducted
-```
-
-The driver's own benchmark, `cargo run --release -p tinyhivemind-core
---example driver_bench`, measures policy decisions without an agent runtime.
+The research binaries retain their explicit host loops and use `RegisteredAgent`
+to bind host-created handles to the pure driver. The obsolete runner comparison
+binary was removed; these examples do not construct agents inside the adapter.
 
 ## Hermetic DeepSWE adapter
 

@@ -6,6 +6,10 @@
 
 ## Context
 
+Historical design record: [dynamic hives](../specs/dynamic-hives.md) supersedes
+the MCP-only attachment constraint below. The current OpenHuman adapter adds
+native permanent tools to existing agents; MCP setup remains host-owned.
+
 The charter's first rule is that this repository never opens a database, a
 file, or a socket: the host owns storage, and everything here is a fold over
 what the host already holds. `crates/tinyhivemind-core` and

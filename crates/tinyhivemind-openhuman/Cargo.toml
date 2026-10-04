@@ -1,6 +1,6 @@
 [package]
 name = "tinyhivemind-openhuman"
-description = "The OpenHuman adapter: hosted or embedded agents running completion episodes with native tools."
+description = "Permanent hive tools and continuing turns for host-supplied OpenHuman agents."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,50 +8,35 @@ license.workspace = true
 repository.workspace = true
 readme = "README.md"
 publish = false
-# This is the one crate in the workspace that links a harness, and it links
-# all of it: `openhuman-embed` for the `AgentSpec` seat, `openhuman` (the
-# core) for a host that builds its own sessions, and `tinytools` because the
-# hosted session's belt is `Vec<Box<dyn tinytools::Tool>>`. Each is a
-# git dependency pinned by rev and patched onto `vendor/openhuman` in the
-# root manifest, so a host that vendors this repository links ONE OpenHuman
-# (ADR 0020). Nothing under `crates/*` other than this crate may depend on
-# it; the driver it serves, `tinyhivemind-core::driver`, names no harness.
+# The adapter names the host's exact OpenHuman Agent and native Tool types.
+# Git sources are patched by the consuming workspace to its single checkout.
 
 [features]
-# The scripted OpenAI-compatible model the runners are proven against, and
-# the metrics it keeps: what a turn sent, and how long a tool call took to
-# come back. For the example's offline proofs and its bench; off by default
-# because it pulls `wiremock`.
+# Loopback backend fixtures for standalone deterministic host examples.
 offline = ["dep:wiremock"]
 
 [dependencies]
-# The `AgentSpec` seat: an agent on a runtime with native episode tools.
+# Supplied handles and their continuing turn API.
 openhuman-embed.workspace = true
-# `LibraryHost` can build core sessions for a host without a core of its own.
+# Host usage and policy types remain OpenHuman's own.
 openhuman.workspace = true
-# The trait a native tool is: the hosted seat's belt is the served definitions
-# wrapped in it, so the `Tool` a session takes is the `Tool` this crate
-# implements, and both resolve to the same vendored copy.
+# Native tool trait and results used by permanent attachments.
 tinytools.workspace = true
-# The native tool dialect a library-host session speaks: function calls on the wire,
-# not XML in the reply.
-tinytools-agent.workspace = true
-# `tinytools::Tool`, `ToolPolicy` and `Memory` are `async_trait` traits.
+# Async native tool methods.
 async-trait.workspace = true
-# `tinytools::Tool::execute` returns `anyhow::Result`, and every OpenHuman
-# entry point this crate calls does too. The crate error wraps it once.
+# OpenHuman errors and the native tool result boundary.
 anyhow.workspace = true
-# Tool definitions and call arguments are JSON, whichever road they took.
+# Render schemas and attributed input.
 serde_json.workspace = true
+serde.workspace = true
 thiserror.workspace = true
-# A turn has a wall; `tokio::time::timeout` is it. Both harnesses run on
-# tokio already.
+# Turn timeout and progress channels.
 tokio = { workspace = true, features = ["rt", "sync", "time"] }
+# Core bound-handle trait and optional host log.
 tinyhivemind-core.workspace = true
-# The record every call lands in, and the served definitions.
-tinyhivemind-tools.workspace = true
-# `BoundAgent` and `AgentBinding`: what the driver wants of a seat.
-
+# Durable messaging and cross-hive scheduling.
+tinyhivemind-hives.workspace = true
+# Deterministic standalone host fixtures.
 wiremock = { workspace = true, optional = true }
 
 [dev-dependencies]

@@ -1840,12 +1840,14 @@ name = "openhuman-embed"
 version = "0.64.10"
 dependencies = [
  "anyhow",
+ "async-trait",
  "log",
  "openhuman",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
+ "tinymcp-bus",
  "tokio",
  "url",
  "uuid",
@@ -3106,6 +3108,7 @@ dependencies = [
  "tinytools-agent",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -3283,6 +3286,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyhivemind-hives"
+version = "0.2.1"
+dependencies = [
+ "futures",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tinyhivemind-core",
+ "tokio",
+]
+
+[[package]]
 name = "tinyhivemind-openhuman"
 version = "0.2.1"
 dependencies = [
@@ -3290,13 +3307,13 @@ dependencies = [
  "async-trait",
  "openhuman",
  "openhuman-embed",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror",
  "tinyhivemind-core",
- "tinyhivemind-tools",
+ "tinyhivemind-hives",
  "tinytools",
- "tinytools-agent",
  "tokio",
  "wiremock",
 ]

@@ -351,7 +351,7 @@ explains the decision protocol.
 
 ## Boundaries
 
-The host owns the journal, agent sessions, authorization, and scheduling.
+The host owns agent construction, sessions, credentials, and authorization.
 `tinyhivemind-core` holds the grammar, pure folds, host-supplied session ports,
 semantic routing, TypeSafe System One adapter, and completion driver in focused
 modules. It opens no storage or transport.
@@ -363,9 +363,30 @@ bounded round of concurrent turns: `round_width` limits blind rounds and
 commits the round's state after all authorized turns are appended.
 
 `tinyhivemind-tools` renders native `tinytools::ToolSpec` definitions and
-records episode calls. `tinyhivemind-openhuman` runs seats on OpenHuman. The
+records episode calls. `tinyhivemind-hives` coordinates durable messages and
+serialized turns across dynamic hives with memory, SQLite, or host storage.
+`tinyhivemind-openhuman` attaches tools to already configured OpenHuman agents. The
 [architecture guide](https://github.com/tinyhumansai/tinyhivemind/wiki/Architecture)
 and [crate dependency map](docs/crate-dependencies.md) show their boundaries.
+
+### Supplied OpenHuman agents
+
+Construct all agents on one OpenHuman `Runtime`, with their MCPs, skills,
+memory, providers, and prompts configured before registration. Pass the handles
+to `OpenHumanHost::new(runtime_id, coordinator)?`, then `register_agent(agent)?`
+or `register_agent_in_session(agent, session_id)?` for an existing conversation.
+Each agent retains one continuing session across all joined hives. A hive and a
+desk have one public `hive_id`.
+
+Nine permanent tools stay in the system catalogue and provider schemas under
+deferred discovery. Four additional management tools require an explicit host
+factory and authorizer. The host can also create hives, register agents, and
+change membership directly while scheduling runs. Direct replies can be read
+through `hivemind_read` without scheduling automatic return turns.
+
+Run the [standalone host example](examples/openhuman/README.md) for all four
+topologies and native MCP/skill proofs. The [OpenCompany migration guide](docs/opencompany-migration.md)
+describes registration, recovery, and the required single-runtime boundary.
 
 ## Frequently asked questions
 

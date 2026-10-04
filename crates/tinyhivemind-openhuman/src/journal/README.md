@@ -9,3 +9,7 @@ one on another desk of the same host, so a seat's other channels can be
 read the way a host's log holds them; `desk_since`,
 `thread` and `thread_since` render rows for a reader. Always compiled: the
 example, the tests and the crate's doc example are hosts over it.
+
+`test.rs` verifies sequence numbers, pagination, private conversations and
+rows from another host hive. This optional research log is separate from the
+coordinator's durable storage snapshot.

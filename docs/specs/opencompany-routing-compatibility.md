@@ -3,6 +3,11 @@
 **Status:** Accepted
 **Owner:** OpenCompany integration maintainers
 
+The supplied-agent/session integration described in
+[dynamic hives](dynamic-hives.md) and the
+[migration guide](../opencompany-migration.md) supersedes the adapter sketches
+below. `RegisteredAgent` is the current core bound-handle wrapper.
+
 ## Problem
 
 OpenCompany needs Jev-first routing without replacing its roster, event log,
@@ -17,7 +22,7 @@ OpenCompany or OpenHuman before the TinyHiveMind API and evidence land.
 
 The host builds one OpenHuman `Runtime` and instantiates one OpenHuman `Agent`
 per company agent. `tinyhivemind_core::driver` binds those existing handles, as
-`tinyhivemind-openhuman`'s `EmbedSeat`, to canonical ids in a validated
+`tinyhivemind-openhuman`'s `RegisteredAgent`, to canonical ids in a validated
 `BoundHive`. It resolves accepted
 plans to borrowed handles and drives completion state only from host-committed
 events; it never constructs an agent, serializes a provider session id, or

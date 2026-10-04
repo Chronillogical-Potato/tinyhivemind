@@ -6,6 +6,10 @@
 
 ## Context
 
+Historical design record: [dynamic hives](../specs/dynamic-hives.md) supersedes
+the construction runners below. The current adapter accepts supplied handles;
+the pure completion driver lives in `tinyhivemind-core`.
+
 `tinyhivemind-openhuman` began as "OpenHuman agent bindings" and grew the
 completion driver inside it: `CompletionDriver`, the ledger of queued
 handoffs, budgets and open asks, the brief a seat is shown, the scheduling
