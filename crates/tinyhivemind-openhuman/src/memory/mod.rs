@@ -14,6 +14,10 @@
 //! root per hive (or per run) keeps one hive's memory out of another's.
 //! The default root is refused, because a seat bound there would share memory
 //! with every unbound agent on the runtime.
+mod convert;
+mod store;
+pub use store::HiveMemoryStore;
+
 use crate::{Error, Result};
 use openhuman_embed::{Agent, AgentSpec, MemoryBinding, RuntimeConfig};
 use std::num::NonZeroU32;
