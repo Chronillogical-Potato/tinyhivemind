@@ -76,6 +76,8 @@ Find the coefficient of x^10 in the (10^7, 10^9+7)-functional inverse of x^2.
 Source: https://projecteuler.net/problem=1008"#;
 const TASK: &str = TASK_1006;
 
+/// The hive's shared working memory, inside the durable workspace so it outlives a run.
+const MEMORY_FILE: &str = "HIVE_MEMORY.md";
 const SEALED: &str = "Use only the statement, this desk transcript, and computations in the shared workspace. Do not search the web, inspect this repository, use inherited solution memory, or read outside the workspace. Never invent a residue. Keep the desk message below 1800 characters and name concrete files or checks.";
 const PRIOR_FAILURE: &str = "Prior hive runs were rejected. Candidate residues 58302041 and 14193671 came from invalid methods and must not be reused. A later run fabricated 123456789, which is not even a canonical residue modulo 101001001; its claimed verifier actually failed at k=1 and its solver printed a different value. One run fitted an order-60 Berlekamp-Massey recurrence from only 120 terms and tested it on no held-out suffix; that is interpolation, not proof. Another used a finite-state factor language that already overcounts at k=5, and its claimed code failed the supplied k=10 sample when actually executed. Do not use Berlekamp-Massey, guessed recurrences, fitted scaling factors, or a finite forbidden-pattern DFA. Derive an exact identity from Fibonacci/Sturmian/Ostrowski structure, and validate any implementation well beyond the cases used to derive it.";
 const RESEARCH_POLICY: &str = "You are the only seat allowed to access the public web. Use shell commands such as curl to search and fetch public sources. Return direct source URLs, distinguish a claimed answer from a derivation, and never treat one copied number as verification. Do not inspect this repository, inherited solution files, or any filesystem path outside the named workspace. Keep the desk message below 1800 characters.";
@@ -544,9 +546,17 @@ fn instantiated(
             id.to_string(),
             "--outbox".to_string(),
             outbox_dir.join(format!("{id}.jsonl")).display().to_string(),
+            "--memory".to_string(),
+            workspace.join(MEMORY_FILE).display().to_string(),
         ],
     )
-    .allow_tools(["broadcast", "complete_episode"])
+    .allow_tools([
+        "broadcast",
+        "complete_episode",
+        "hive_memory_recall",
+        "hive_memory_note",
+        "hive_memory_forget",
+    ])
     .description("Completion-driven TinyHiveMind episode tools");
     runtime
         .agent(

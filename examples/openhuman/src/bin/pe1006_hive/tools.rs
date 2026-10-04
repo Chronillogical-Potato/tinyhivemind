@@ -5,6 +5,8 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
+use tinyhivemind_tools::{MemoryTools, memory_tool_definitions};
+use super::memory_support::{Compaction, MarkdownMemory};
 use tinyhivemind_core::runtime::speech::{
     CallArguments, ParameterKind, ToolCall, Utterance, interpret, tool_specs,
 };
@@ -13,6 +15,8 @@ use tinyhivemind_core::runtime::speech::{
 pub(super) struct Server {
     pub agent_id: String,
     pub outbox: PathBuf,
+    /// The shared markdown memory, when the hive serves one.
+    pub memory: Option<PathBuf>,
 }
 
 pub(super) fn requested() -> anyhow::Result<Option<Server>> {
@@ -22,16 +26,19 @@ pub(super) fn requested() -> anyhow::Result<Option<Server>> {
     }
     let mut agent_id = None;
     let mut outbox = None;
+    let mut memory = None;
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--agent" => agent_id = args.next(),
             "--outbox" => outbox = args.next().map(PathBuf::from),
+            "--memory" => memory = args.next().map(PathBuf::from),
             _ => anyhow::bail!("unknown hive-tools argument {flag}"),
         }
     }
     Ok(Some(Server {
         agent_id: agent_id.ok_or_else(|| anyhow::anyhow!("missing --agent"))?,
         outbox: outbox.ok_or_else(|| anyhow::anyhow!("missing --outbox"))?,
+        memory,
     }))
 }
 
@@ -60,7 +67,7 @@ pub(super) fn serve(server: &Server) -> anyhow::Result<()> {
                 }),
             ),
             "ping" => ok(&id, &json!({})),
-            "tools/list" => ok(&id, &json!({"tools": descriptors()})),
+            "tools/list" => ok(&id, &json!({"tools": descriptors(server)})),
             "tools/call" => match call(&request, server) {
                 Ok(text) => ok(&id, &json!({"content": [{"type":"text", "text":text}]})),
                 Err(text) => ok(
@@ -100,6 +107,9 @@ fn call(request: &Value, server: &Server) -> Result<String, String> {
         .pointer("/params/name")
         .and_then(Value::as_str)
         .unwrap_or_default();
+    if MemoryTools::serves(name) {
+        return call_memory(request, server, name);
+    }
     if !matches!(name, "broadcast" | "complete_episode") {
         return Err(format!("unknown completion-hive tool {name}"));
     }
@@ -127,7 +137,26 @@ fn call(request: &Value, server: &Server) -> Result<String, String> {
     Ok(format!("accepted from @{}", server.agent_id))
 }
 
-fn descriptors() -> Vec<Value> {
+/// A hive memory tool, answered over the shared markdown file. Each seat's
+/// server is its own process, so the engine is rebuilt from the path per call.
+fn call_memory(request: &Value, server: &Server, name: &str) -> Result<String, String> {
+    let path = server
+        .memory
+        .as_ref()
+        .ok_or("this hive serves no memory")?;
+    let tools = MemoryTools::new(std::sync::Arc::new(MarkdownMemory::new(
+        path,
+        Compaction::DEFAULT,
+    )));
+    let arguments = request
+        .pointer("/params/arguments")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    futures::executor::block_on(tools.call(&server.agent_id, name, &arguments))
+}
+
+fn descriptors(server: &Server) -> Vec<Value> {
+    let memory = server.memory.is_some().then(memory_tool_definitions);
     tool_specs()
         .iter()
         .filter(|spec| matches!(spec.name, "broadcast" | "complete_episode"))
@@ -138,6 +167,13 @@ fn descriptors() -> Vec<Value> {
                 "inputSchema":schema(spec.parameters),
             })
         })
+        .chain(memory.into_iter().flatten().map(|tool| {
+            json!({
+                "name":tool.name,
+                "description":tool.description,
+                "inputSchema":tool.parameters,
+            })
+        }))
         .collect()
 }
 
