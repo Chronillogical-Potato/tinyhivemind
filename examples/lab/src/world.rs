@@ -11,6 +11,7 @@ use tinyhivemind_core::roster::{Roster, RosterMember};
 pub struct World {
     members: Vec<RosterMember>,
     desks: Vec<Desk>,
+    retired: Vec<String>,
 }
 
 impl World {
@@ -47,16 +48,23 @@ impl World {
         self
     }
 
+    /// Take an agent out of rotation without removing its record.
+    #[must_use]
+    pub fn retire(mut self, id: &str) -> Self {
+        self.retired.push(id.to_owned());
+        self
+    }
+
     /// The roster view.
     #[must_use]
     pub fn roster(&self) -> Roster<'_> {
-        Roster::new(&self.members, &[], &[])
+        Roster::new(&self.members, &[], &self.retired)
     }
 
     /// The desk-set view.
     #[must_use]
     pub fn desks(&self) -> DeskSet<'_> {
-        DeskSet::new(&self.desks, &[], &[], &[], &[])
+        DeskSet::new(&self.desks, &[], &[], &[], &self.retired)
     }
 
     /// The declared desks.
