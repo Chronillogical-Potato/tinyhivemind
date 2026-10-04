@@ -39,7 +39,9 @@ impl Coordinator {
         self.inner.notify.notify_one();
         Ok(value)
     }
-    /// Commit only when `operation` reports a change, retrying on conflicts.
+    /// Commit only when `operation` reports a change.
+    /// With single-writer fencing, transactions do not retry: any persistence
+    /// error is fatal (either fenced or storage corruption).
     pub(super) async fn transact<T>(
         &self,
         _gate: &WriterGate<'_>,
@@ -55,19 +57,17 @@ impl Coordinator {
             });
         }
 
-        let mut conflicts = 0;
-        loop {
-            let snapshot = self.snapshot()?;
-            let mut next = snapshot.base.clone();
-            let (changed, value) = operation(&mut next)?;
-            if !changed {
-                return Ok(value);
-            }
-            let attempt = self.persist(&snapshot, next).await;
-            if self.settle(attempt, &mut conflicts).await? {
-                return Ok(value);
-            }
+        let snapshot = self.snapshot()?;
+        let mut next = snapshot.base.clone();
+        let (changed, value) = operation(&mut next)?;
+        if !changed {
+            return Ok(value);
         }
+
+        let attempt = self.persist(&snapshot, next).await;
+        let mut conflicts = 0;
+        self.settle(attempt, &mut conflicts).await?;
+        Ok(value)
     }
     /// Copy live state under the live lock. Hold the writer gate.
     pub(super) fn snapshot(&self) -> Result<Snapshot> {
