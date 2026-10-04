@@ -6,7 +6,7 @@
 //! [`RememberRequest`] becomes one stored conversation turn at the seat's
 //! node, laid out exactly as `AgentMemory::post_turn` lays out its own (so
 //! every tinymemory recall section finds it), but written with
-//! [`WriteOptions::visible`] so a teammate's very next recall can rank it.
+//! `WriteOptions::visible` so a teammate's very next recall can rank it.
 
 use tinyhivemind_core::runtime::{BriefingNote, RememberRequest};
 use tinymemory_api::{
