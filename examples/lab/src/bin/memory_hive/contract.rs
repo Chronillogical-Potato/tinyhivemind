@@ -59,7 +59,7 @@ impl SessionLog for Misbehaving {
             (Breach::NotDescending, _) => page(&[5, 6], None),
             (Breach::CursorBeyondOldest, _) => page(&[10, 9], Some(11)),
             (Breach::RowAtOrAboveBound, 0) => page(&[10, 9], Some(9)),
-            (Breach::RowAtOrAboveBound, _) => page(&[9], None),
+            (Breach::RowAtOrAboveBound, _) => page(&[12], None),
             (Breach::CursorStuck, 0) => page(&[10, 9], Some(9)),
             (Breach::CursorStuck, _) => page(&[8], Some(9)),
             (Breach::ReadFails, _) => Err("the journal is unreachable".into()),
@@ -97,7 +97,12 @@ pub fn run() -> Res {
         let outcome = block_on(project_session(&log, &query));
         println!(
             "  {label:<36} {}",
-            outcome.err().map_or("accepted".into(), |e| e.to_string())
+            outcome.err().map_or("accepted".into(), |e| {
+                match std::error::Error::source(&e) {
+                    Some(cause) => format!("{e} (source: {cause})"),
+                    None => e.to_string(),
+                }
+            })
         );
     }
     Ok(())
