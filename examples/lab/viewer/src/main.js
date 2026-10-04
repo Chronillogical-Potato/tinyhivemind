@@ -1,5 +1,6 @@
+import { initPanel } from "./panel.js";
 "use strict";
-// Hive Lab run viewer. No dependencies, no network except an optional ?file= fetch.
+// Hive Lab run viewer. Runs load from the dev server (see server/runs.js), or from dropped files.
 // Input is flat JSONL stamped events; see crates/tinyhivemind-core/src/telemetry/types.rs.
 
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -72,14 +73,15 @@ function parseJsonl(text, fileName) {
   return { byRun, bad };
 }
 
-function addRuns(parsed, fileName) {
+function addRuns(parsed, fileName, label, source) {
   let added = 0;
   for (const [key, events] of parsed.byRun) {
-    let name = key;
-    if (runs.some((r) => r.name === name)) name = `${key} (${fileName})`;
-    for (let n = 2; runs.some((r) => r.name === name); n++) name = `${key} (${fileName} #${n})`;
+    let name = label && parsed.byRun.size === 1 ? label : key;
+    const key0 = name;
+    if (runs.some((r) => r.name === name)) name = `${key0} (${fileName})`;
+    for (let n = 2; runs.some((r) => r.name === name); n++) name = `${key0} (${fileName} #${n})`;
     events.sort((x, y) => x.seq - y.seq);
-    runs.push({ name, events, a: analyze(events) });
+    runs.push({ name, events, a: analyze(events), source });
     added++;
   }
   return added;
@@ -436,7 +438,7 @@ async function ingest(items) { // items: [{name, text}]
   let added = 0, bad = 0;
   for (const it of items) {
     const p = parseJsonl(it.text, it.name);
-    bad += p.bad; added += addRuns(p, it.name);
+    bad += p.bad; added += addRuns(p, it.name, it.label, it.source);
   }
   refresh();
   const note = bad ? ` ${bad} unreadable line${bad > 1 ? "s" : ""} skipped.` : "";
@@ -450,24 +452,8 @@ async function loadFiles(files) {
   await ingest(items);
 }
 
-async function loadUrls(urls) {
-  const items = [];
-  for (const u of urls) {
-    try {
-      const r = await fetch(u);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      items.push({ name: u.split("/").pop() || u, text: await r.text() });
-    } catch (err) {
-      status(`Could not fetch ${u}: ${err.message}. Fetching needs an http server, not file://.`, true);
-      return;
-    }
-  }
-  await ingest(items);
-}
-
 $("picker").addEventListener("change", (e) => { loadFiles(e.target.files); e.target.value = ""; });
-$("sample").addEventListener("click", () => loadUrls(["fixtures/sample.jsonl"]));
-$("clear").addEventListener("click", () => { runs.length = 0; refresh(); status("Cleared. Drop files to load runs.", false); });
+$("clear").addEventListener("click", () => { runs.length = 0; refresh(); status("Cleared.", false); panel.cleared(); });
 $("selA").addEventListener("change", renderSummary);
 $("selB").addEventListener("change", renderSummary);
 const drop = $("drop");
@@ -479,5 +465,29 @@ document.addEventListener("drop", (e) => { if (!drop.contains(e.target)) { e.pre
 let resizeTimer;
 window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => runs.forEach((r) => r.redraw && r.redraw()), 150); });
 
-const wanted = new URLSearchParams(location.search).getAll("file");
-if (wanted.length) loadUrls(wanted);
+const panel = initPanel({
+  runs,
+  ingest,
+  status,
+  // Drop every run that came from `source`, keeping the rest in order.
+  remove(source) {
+    for (let i = runs.length - 1; i >= 0; i--) if (runs[i].source === source) runs.splice(i, 1);
+    refresh();
+  },
+  // Swap the runs of `source` for freshly parsed ones, keeping their position.
+  replace(source, item) {
+    const at = runs.findIndex((r) => r.source === source);
+    const rest = runs.splice(at < 0 ? runs.length : at);
+    const keep = rest.filter((r) => r.source !== source);
+    const p = parseJsonl(item.text, item.name);
+    addRuns(p, item.name, item.label, item.source);
+    runs.push(...keep);
+    refresh();
+  },
+  select(a, b) { // pick the A and B columns of the summary by run name
+    const names = runs.map((r) => r.name);
+    if (a != null && names.includes(a)) $("selA").value = a;
+    if (b != null && names.includes(b)) $("selB").value = b;
+    renderSummary();
+  },
+});
