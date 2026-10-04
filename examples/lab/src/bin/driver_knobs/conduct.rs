@@ -361,7 +361,7 @@ async fn turn_loop(
             conductor.resume_seat(&seat);
         }
         for step in conductor.begin_wave() {
-            host.handle(&mut conductor, step, snapshots).await?;
+            host.handle(conductor, step, snapshots).await?;
         }
         let turns = conductor.turns()?;
         host.report.widest = host.report.widest.max(turns.len());
