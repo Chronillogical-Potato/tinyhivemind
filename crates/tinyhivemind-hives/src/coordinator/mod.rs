@@ -39,6 +39,12 @@ struct Inner {
     committed: watch::Sender<u64>,
     notify: Notify,
     shutdown: AtomicBool,
+    /// This coordinator's epoch, claimed at startup. Once a commit fails with
+    /// Error::Fenced (a newer coordinator has taken ownership), this flag is
+    /// set and all further writes return the error immediately.
+    writer_epoch: u64,
+    /// Set to true once fenced out by a newer coordinator.
+    fenced: AtomicBool,
 }
 /// Deferred interruption preserving the reservation it was intended to interrupt.
 #[derive(Clone, Debug)]
