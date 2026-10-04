@@ -75,19 +75,23 @@ fn only_the_delta_is_appended_on_resume() {
 }
 
 #[test]
-fn every_activation_is_marked_with_its_number_and_size() {
+fn a_resumed_session_is_a_typed_event_with_its_size() {
     let (rig, _) = recorded(script());
     two_activations(&rig);
-    let marks: Vec<String> = events(&rig)
+    let resumed: Vec<(String, u32, u32)> = events(&rig)
         .into_iter()
         .filter_map(|e| match e {
-            TraceEvent::Mark { label, detail } if label == "session" => Some(detail),
+            TraceEvent::SessionResumed {
+                seat,
+                messages,
+                delta_rows,
+            } => Some((seat, messages, delta_rows)),
             _ => None,
         })
         .collect();
-    assert_eq!(marks.len(), 2);
-    assert!(marks[0].starts_with("lead: activation 1 messages 2"));
-    assert!(marks[1].contains("activation 2") && marks[1].contains("mode persistent"));
+    // Only the second activation resumes; the first opened the session with
+    // system, opening, two calls and their results.
+    assert_eq!(resumed, [("lead".to_owned(), 6, 0)]);
 }
 
 #[test]
@@ -171,4 +175,10 @@ fn fresh_mode_starts_every_activation_from_its_opening_again() {
     assert_eq!(messages(last).len(), 2, "system and the new opening only");
     assert_eq!(users(last), ["DELTA: @tester: tests pass"]);
     assert_eq!(rig.sessions.len_of("lead"), 0);
+    assert!(
+        !events(&rig)
+            .iter()
+            .any(|e| matches!(e, TraceEvent::SessionResumed { .. })),
+        "a fresh session never resumes"
+    );
 }

@@ -4,58 +4,64 @@
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
+use tinyhivemind_core::runtime::{
+    BriefingNote, EntryKind, Error as CoreError, Recall, RecallFuture, RecallMoment,
+    RecallRequest, Remember, RememberFuture, RememberRequest,
+};
 use tinyhivemind_core::telemetry::TraceEvent;
 
 use super::support::*;
 use crate::swe::context::{MEMORY_HEADER, Policy, Settings};
-use crate::swe::memory::{Moment, Recalled, Remembered, Report, SeatMemory};
+use crate::swe::memory::SeatMemory;
 use crate::swe::sandbox::{Exec, ExecOutput};
 use crate::swe::tools::{HIVE_TOOLS, SINGLE_TOOLS};
 
 #[derive(Default)]
 struct Fake {
-    recalls: Arc<Mutex<Vec<Moment>>>,
-    stored: Arc<Mutex<Vec<Remembered>>>,
+    recalls: Arc<Mutex<Vec<RecallRequest>>>,
+    stored: Arc<Mutex<Vec<RememberRequest>>>,
     broken: bool,
 }
 
+impl Recall for Fake {
+    fn recall<'a>(&'a self, request: &'a RecallRequest) -> RecallFuture<'a> {
+        self.recalls.lock().expect("lock").push(request.clone());
+        let broken = self.broken;
+        let label = request.moment.label();
+        Box::pin(async move {
+            if broken {
+                return Err(CoreError::Recall {
+                    source: "timed out".into(),
+                });
+            }
+            Ok(vec![BriefingNote {
+                heading: "@tester".into(),
+                lines: vec![format!("PACK-{label}")],
+            }])
+        })
+    }
+}
+
+impl Remember for Fake {
+    fn remember<'a>(&'a self, request: &'a RememberRequest) -> RememberFuture<'a> {
+        self.stored.lock().expect("lock").push(request.clone());
+        Box::pin(async { Ok(()) })
+    }
+}
+
 impl SeatMemory for Fake {
-    fn recall(&self, _seat: &str, moment: &Moment) -> Recalled {
-        self.recalls.lock().expect("lock").push(moment.clone());
-        if self.broken {
-            return Recalled {
-                pack: None,
-                report: Report {
-                    op: "recall",
-                    moment: moment.name(),
-                    error: Some("timed out".into()),
-                    ..Report::default()
-                },
-            };
-        }
-        Recalled {
-            pack: Some(format!("{MEMORY_HEADER}\nPACK-{}", moment.name())),
-            report: Report {
-                op: "recall",
-                moment: moment.name(),
-                chars: 10,
-                ..Report::default()
-            },
-        }
+    fn conversation(&self) -> String {
+        "team:test".into()
     }
 
-    fn remember(&self, _seat: &str, what: &Remembered) -> Report {
-        self.stored.lock().expect("lock").push(what.clone());
-        Report {
-            op: "remember",
-            ..Report::default()
-        }
+    fn budget_chars(&self) -> usize {
+        2000
     }
 }
 
 type Log<T> = Arc<Mutex<Vec<T>>>;
 
-fn with_memory(rig: &mut Rig, broken: bool) -> (Log<Moment>, Log<Remembered>) {
+fn with_memory(rig: &mut Rig, broken: bool) -> (Log<RecallRequest>, Log<RememberRequest>) {
     let fake = Fake {
         broken,
         ..Fake::default()
@@ -80,6 +86,21 @@ fn memory_marks(rig: &Rig) -> Vec<String> {
         .into_iter()
         .filter_map(|e| match e {
             TraceEvent::Mark { label, detail } if label == "memory" => Some(detail),
+            _ => None,
+        })
+        .collect()
+}
+
+fn recalled(rig: &Rig) -> Vec<(String, u32, u64)> {
+    events(rig)
+        .into_iter()
+        .filter_map(|e| match e {
+            TraceEvent::Recalled {
+                moment,
+                notes,
+                chars,
+                ..
+            } => Some((moment, notes, chars)),
             _ => None,
         })
         .collect()
@@ -140,10 +161,15 @@ fn the_end_of_an_activation_stores_its_words_and_a_ledger_of_attempts() {
     assert_eq!(out.ledger.len(), 2);
     let stored = stored.lock().expect("lock");
     assert_eq!(stored.len(), 1);
-    let turn = stored[0].render();
-    assert!(turn.starts_with("pytest fails on foo"));
-    assert!(turn.contains("[FAILED attempt, exit 1] `pytest -x` -> ModuleNotFoundError"));
-    assert!(turn.contains("[FAILED attempt, did not run] `rm -rf /`"));
+    let kinds: Vec<EntryKind> = stored[0].entries.iter().map(|e| e.kind).collect();
+    assert_eq!(
+        kinds,
+        [EntryKind::FailedAttempt, EntryKind::FailedAttempt, EntryKind::Outcome]
+    );
+    assert!(stored[0].entries[0].text.contains("`pytest -x` (failed, exit 1) -> ModuleNotFoundError"));
+    assert!(stored[0].entries[1].text.contains("did not run"));
+    assert_eq!(stored[0].entries[2].text, "pytest fails on foo");
+    assert!(events(&rig).iter().any(|e| matches!(e, TraceEvent::Remembered { entries: 3, .. })));
 }
 
 #[test]
@@ -164,7 +190,8 @@ fn a_summary_carries_a_compaction_recall_and_flushes_the_ledger_first() {
     };
     go_with(&rig, SINGLE_TOOLS, false, 10, settings);
     let recalls = recalls.lock().expect("lock");
-    let Some(Moment::Compaction { dropped, .. }) = recalls.get(1) else {
+    let Some(RecallMoment::Compaction { dropped }) = recalls.get(1).map(|r| r.moment.clone())
+    else {
         panic!("second recall is a compaction: {recalls:?}");
     };
     assert!(!dropped.is_empty());
@@ -191,6 +218,7 @@ fn a_failing_memory_is_reported_and_the_activation_carries_on() {
     assert!(
         memory_marks(&rig)
             .iter()
-            .any(|m| m.contains("session_start") && m.contains("error=timed out"))
+            .any(|m| m.contains("session_start") && m.contains("error=memory recall failed: timed out"))
     );
+    assert_eq!(recalled(&rig), [("session_start".to_owned(), 0, 0)]);
 }
