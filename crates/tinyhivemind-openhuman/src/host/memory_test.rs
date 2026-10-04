@@ -47,8 +47,8 @@ where
     executor().block_on(async { tokio::spawn(test()).await.unwrap() });
 }
 
-#[tokio::test]
-async fn every_seat_registered_with_hive_memory_is_bound_under_the_hive_root() {
+#[test]
+fn every_seat_registered_with_hive_memory_is_bound_under_the_hive_root() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
@@ -68,8 +68,8 @@ async fn every_seat_registered_with_hive_memory_is_bound_under_the_hive_root() {
     });
 }
 
-#[tokio::test]
-async fn seats_carry_no_binding_when_hive_memory_is_off() {
+#[test]
+fn seats_carry_no_binding_when_hive_memory_is_off() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         assert!(host.hive_memory().is_none());
@@ -84,8 +84,8 @@ async fn seats_carry_no_binding_when_hive_memory_is_off() {
     });
 }
 
-#[tokio::test]
-async fn a_seat_bound_by_the_host_itself_registers() {
+#[test]
+fn a_seat_bound_by_the_host_itself_registers() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let memory = hive("hive-1");
@@ -98,8 +98,8 @@ async fn a_seat_bound_by_the_host_itself_registers() {
     });
 }
 
-#[tokio::test]
-async fn rejects_a_seat_built_without_the_hive_binding() {
+#[test]
+fn rejects_a_seat_built_without_the_hive_binding() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
@@ -126,8 +126,8 @@ async fn rejects_a_seat_built_without_the_hive_binding() {
     });
 }
 
-#[tokio::test]
-async fn an_unusable_seat_id_fails_before_the_runtime_sees_it() {
+#[test]
+fn an_unusable_seat_id_fails_before_the_runtime_sees_it() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
@@ -146,8 +146,8 @@ async fn an_unusable_seat_id_fails_before_the_runtime_sees_it() {
     });
 }
 
-#[tokio::test]
-async fn the_recall_budget_reaches_seats_through_the_runtime_config() {
+#[test]
+fn the_recall_budget_reaches_seats_through_the_runtime_config() {
     on_runtime(|| async {
         let memory = hive("hive-1").recall_budget_tokens(NonZeroU32::new(640).unwrap());
         let mut config = offline::config();
@@ -175,8 +175,8 @@ async fn the_recall_budget_reaches_seats_through_the_runtime_config() {
     });
 }
 
-#[tokio::test]
-async fn hive_memory_cannot_change_after_registration() {
+#[test]
+fn hive_memory_cannot_change_after_registration() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         host.register_spec(&runtime, AgentSpec::new("scout"))

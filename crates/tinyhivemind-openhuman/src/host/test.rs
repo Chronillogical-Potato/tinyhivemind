@@ -59,8 +59,8 @@ impl ManagementAuthorizer for Allow {
         Ok(())
     }
 }
-#[tokio::test]
-async fn supplied_clones_attach_once_and_drop_services_without_cycle() {
+#[test]
+fn supplied_clones_attach_once_and_drop_services_without_cycle() {
     let _guard = RUNTIME_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -133,8 +133,8 @@ async fn foreign_host() -> OpenHumanHost {
     )
     .unwrap()
 }
-#[tokio::test]
-async fn rejects_other_runtime_and_authorizes_before_factory() {
+#[test]
+fn rejects_other_runtime_and_authorizes_before_factory() {
     let _guard = RUNTIME_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -275,8 +275,8 @@ impl TurnHooks for Hooks {
         }
     }
 }
-#[tokio::test]
-async fn continuing_runner_preserves_history_and_finalizes_all_outcomes() {
+#[test]
+fn continuing_runner_preserves_history_and_finalizes_all_outcomes() {
     use std::sync::atomic::Ordering;
     use tinyhivemind_hives::{AgentRunner, TurnDisposition, TurnRequest};
     let _guard = RUNTIME_LOCK
@@ -345,8 +345,8 @@ impl tinyhivemind_hives::Storage for RegistrationStorage {
         }
     }
 }
-#[tokio::test]
-async fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
+#[test]
+fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
     let _guard = RUNTIME_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);

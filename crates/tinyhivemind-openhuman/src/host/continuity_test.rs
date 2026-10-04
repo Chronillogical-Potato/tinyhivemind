@@ -12,8 +12,8 @@ fn input(id: &str) -> SendMessage {
         only_for: vec![],
     }
 }
-#[tokio::test]
-async fn first_turn_finalization_failure_keeps_the_session_and_prior_provider_history() {
+#[test]
+fn first_turn_finalization_failure_keeps_the_session_and_prior_provider_history() {
     let _guard = RUNTIME_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);

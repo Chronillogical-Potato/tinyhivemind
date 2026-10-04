@@ -4,8 +4,8 @@
 use std::sync::Arc;
 use tinyhivemind_hives::{Coordinator, CoordinatorOptions, MemoryStorage};
 use tinyhivemind_openhuman::OpenHumanHost;
-#[tokio::test]
-async fn rejects_an_unrelated_coordinator_runtime() {
+#[test]
+fn rejects_an_unrelated_coordinator_runtime() {
     let coordinator = Coordinator::new(
         "runtime".into(),
         Arc::new(MemoryStorage::new()),
@@ -15,8 +15,8 @@ async fn rejects_an_unrelated_coordinator_runtime() {
     .unwrap();
     assert!(OpenHumanHost::new("other".into(), coordinator).is_err());
 }
-#[tokio::test]
-async fn hive_memory_is_configured_before_registration_through_public_apis() {
+#[test]
+fn hive_memory_is_configured_before_registration_through_public_apis() {
     use tinyhivemind_openhuman::{Error, HiveMemory};
     let coordinator = Coordinator::new(
         "runtime".into(),

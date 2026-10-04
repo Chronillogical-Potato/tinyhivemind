@@ -69,8 +69,8 @@ async fn read_tool_observes_direct_replies_as_its_bound_caller() {
         0
     );
 }
-#[tokio::test]
-async fn read_schema_and_validator_require_exactly_one_destination() {
+#[test]
+fn read_schema_and_validator_require_exactly_one_destination() {
     let schema = Kind::Read.schema();
     assert_eq!(schema["oneOf"].as_array().unwrap().len(), 2);
     for args in [
