@@ -114,9 +114,11 @@ impl Coordinator {
         Ok(())
     }
     /// `Ok(true)` once committed; `Ok(false)` after reloading for a retry.
+    /// Once fenced, returns the Fenced error immediately (not retryable).
     pub(super) async fn settle(&self, attempt: Result<()>, conflicts: &mut usize) -> Result<bool> {
         match attempt {
             Ok(()) => Ok(true),
+            Err(Error::Fenced { .. }) => Err(attempt.unwrap_err()),
             Err(Error::RevisionConflict { .. }) if *conflicts < CONFLICT_RETRIES => {
                 *conflicts += 1;
                 self.reload().await?;
