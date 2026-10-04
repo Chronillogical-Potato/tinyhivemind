@@ -10,6 +10,7 @@
 mod conduct;
 mod fixture;
 mod raw;
+mod replay;
 mod routing;
 
 use tinyhivemind_lab::{Res, TraceRig};
@@ -19,7 +20,7 @@ fn main() -> Res {
     raw::run()?;
     routing::run()?;
     conduct::run(&rig)?;
-    conduct::replay(&rig)?;
+    replay::run(&rig)?;
     if let Some(path) = rig.path() {
         println!("\ntrace written to {path}");
     }

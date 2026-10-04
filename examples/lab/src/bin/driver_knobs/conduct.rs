@@ -81,6 +81,7 @@ fn kind(event: &Event) -> &'static str {
         Event::Handoff { .. } => "handoff",
         Event::Refused { .. } => "refused",
         Event::Discharged { .. } => "discharged",
+        Event::Concluded { forced: true, .. } => "concluded_forced",
         Event::Concluded { .. } => "concluded",
     }
 }
@@ -137,7 +138,7 @@ fn script(scn: &Scenario, turn: &Turn, brief: &EpisodeBrief, log: &MemoryLog) ->
     }
 }
 
-struct Host<'t> {
+pub struct Host<'t> {
     log: MemoryLog,
     tracer: &'t Tracer<'t>,
     report: Report,
@@ -211,7 +212,9 @@ impl Host<'_> {
 
 /// The host's own record that the coder was already held once.
 fn asked_approval(log: &MemoryLog) -> bool {
-    log.rows().iter().any(|row| row.content == "coder is waiting on an approval")
+    log.rows()
+        .iter()
+        .any(|row| row.content == "coder is waiting on an approval")
 }
 
 fn rows_since(log: &MemoryLog, seat: &str, since: Option<Sequence>) -> Vec<String> {
@@ -306,8 +309,17 @@ async fn play_inner(
             let task = host
                 .log
                 .say("eng", SessionAuthor::Operator, "Build the parser.");
-            let request =
-                hive.desk_request("build the rust parser", Vec::new(), None, 1, policy.clone());
+            let request = hive.desk_request(
+                if scn.wide_task {
+                    "build the rust parser and its tests"
+                } else {
+                    "build the rust parser"
+                },
+                Vec::new(),
+                None,
+                1,
+                policy.clone(),
+            );
             let plan = hive
                 .route_desk(Some(&router), None, &request, None, "planner")
                 .await?;
@@ -408,18 +420,20 @@ async fn turn_loop(
                 latency_ms: 0,
             });
             if scn.park && turn.seat == "coder" && !asked_approval(&host.log) {
-                host.log.say("eng", SessionAuthor::System { kind: "approval".into(), label: "approval".into() }, "coder is waiting on an approval");
+                host.log.say(
+                    "eng",
+                    SessionAuthor::System {
+                        kind: "approval".into(),
+                        label: "approval".into(),
+                    },
+                    "coder is waiting on an approval",
+                );
                 conductor.record_parked(turn, calls);
             } else {
                 conductor.record(turn, calls);
             }
         }
     }
-    host.report.waves = conductor.waves();
-    host.report.turns = conductor.turns_run();
-    host.report.conversations = conductor.conversations();
-    host.report.discharged = conductor.discharged();
-    host.report.finished = conductor.finished();
     Ok(())
 }
 
