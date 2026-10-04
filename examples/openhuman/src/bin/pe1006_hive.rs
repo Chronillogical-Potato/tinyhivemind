@@ -29,6 +29,10 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 mod episode_support;
 #[path = "pe1006_hive/tools.rs"]
 mod hive_tools;
+#[path = "pe1006_hive/memory/mod.rs"]
+mod memory_support;
+#[path = "pe1006_hive/research.rs"]
+mod research_support;
 #[path = "pe1006_hive/round.rs"]
 mod round_support;
 #[path = "pe1006_hive/typesafe.rs"]
@@ -72,6 +76,10 @@ Find the coefficient of x^10 in the (10^7, 10^9+7)-functional inverse of x^2.
 Source: https://projecteuler.net/problem=1008"#;
 const TASK: &str = TASK_1006;
 
+/// The hive's shared working memory, inside the durable workspace so it outlives a run.
+const MEMORY_FILE: &str = "HIVE_MEMORY.md";
+/// Characters of recalled memory a seat's turn opens with.
+const MEMORY_BRIEF_CHARS: usize = 3_000;
 const SEALED: &str = "Use only the statement, this desk transcript, and computations in the shared workspace. Do not search the web, inspect this repository, use inherited solution memory, or read outside the workspace. Never invent a residue. Keep the desk message below 1800 characters and name concrete files or checks.";
 const PRIOR_FAILURE: &str = "Prior hive runs were rejected. Candidate residues 58302041 and 14193671 came from invalid methods and must not be reused. A later run fabricated 123456789, which is not even a canonical residue modulo 101001001; its claimed verifier actually failed at k=1 and its solver printed a different value. One run fitted an order-60 Berlekamp-Massey recurrence from only 120 terms and tested it on no held-out suffix; that is interpolation, not proof. Another used a finite-state factor language that already overcounts at k=5, and its claimed code failed the supplied k=10 sample when actually executed. Do not use Berlekamp-Massey, guessed recurrences, fitted scaling factors, or a finite forbidden-pattern DFA. Derive an exact identity from Fibonacci/Sturmian/Ostrowski structure, and validate any implementation well beyond the cases used to derive it.";
 const RESEARCH_POLICY: &str = "You are the only seat allowed to access the public web. Use shell commands such as curl to search and fetch public sources. Return direct source URLs, distinguish a claimed answer from a derivation, and never treat one copied number as verification. Do not inspect this repository, inherited solution files, or any filesystem path outside the named workspace. Keep the desk message below 1800 characters.";
@@ -160,7 +168,7 @@ async fn run() -> anyhow::Result<()> {
     }
     std::fs::create_dir_all(&run_dir)?;
     if problem == "1006" {
-        stage_research_sources(&workspace).await?;
+        research_support::stage_research_sources(&workspace).await?;
     }
 
     let config = inherited_config().await?;
@@ -272,6 +280,11 @@ async fn run() -> anyhow::Result<()> {
     println!("workspace: {}", workspace.display());
     println!("run_dir: {}", run_dir.display());
 
+    let hive_memory = memory_support::MarkdownMemory::new(
+        workspace.join(MEMORY_FILE),
+        memory_support::Compaction::DEFAULT,
+    );
+    println!("hive_memory: {}", hive_memory.path().display());
     let mut transcript = Vec::new();
     let mut visibility = Visibility::default();
     let mut snapshots = TurnSnapshots::new(&run_dir)?;
@@ -324,6 +337,11 @@ async fn run() -> anyhow::Result<()> {
             })
             .collect();
         let mut remaining: Vec<_> = round_agents.keys().cloned().collect();
+        let mut memory_briefs = BTreeMap::new();
+        for id in &remaining {
+            let brief = memory_support::briefing(&hive_memory, id, MEMORY_BRIEF_CHARS).await;
+            memory_briefs.insert(id.clone(), brief);
+        }
         let mut round_utterances = BTreeMap::new();
         while !remaining.is_empty() {
             ensure_round_fits(turns, remaining.len())?;
@@ -344,6 +362,7 @@ async fn run() -> anyhow::Result<()> {
                             task,
                             prior_failure,
                             problem: &problem,
+                            memory: memory_briefs.get(id).cloned().flatten(),
                         },
                         &mut snapshots,
                     )
@@ -540,9 +559,17 @@ fn instantiated(
             id.to_string(),
             "--outbox".to_string(),
             outbox_dir.join(format!("{id}.jsonl")).display().to_string(),
+            "--memory".to_string(),
+            workspace.join(MEMORY_FILE).display().to_string(),
         ],
     )
-    .allow_tools(["broadcast", "complete_episode"])
+    .allow_tools([
+        "broadcast",
+        "complete_episode",
+        "hive_memory_recall",
+        "hive_memory_note",
+        "hive_memory_forget",
+    ])
     .description("Completion-driven TinyHiveMind episode tools");
     runtime
         .agent(
@@ -576,117 +603,4 @@ fn memory_services() -> ServiceSet {
     services.memory_queue = true;
     services.harness_init = true;
     services
-}
-
-async fn stage_research_sources(scratch: &Path) -> anyhow::Result<()> {
-    let directory = scratch.join("research_sources");
-    std::fs::create_dir_all(&directory)?;
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .build()?;
-    let sources = [
-        (
-            "rauzy.md",
-            "https://raw.githubusercontent.com/senamakel/math-superagent/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/research/approaches/pe1006-rauzy-block-semidir-product.md",
-        ),
-        (
-            "approaches.md",
-            "https://raw.githubusercontent.com/senamakel/math-superagent/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/derived/APPROACHES.md",
-        ),
-        (
-            "verification.md",
-            "https://raw.githubusercontent.com/senamakel/math-superagent/f0b35053424007d21d71363ce4ed73e0c8baca9e/workspace/project-euler/1006/code/out/PE1006-verification.md",
-        ),
-        (
-            "external_approach.md",
-            "https://raw.githubusercontent.com/dawei7/code_n/012e178619373894a06afb8db07953df0202a071/dsa/euler/1006_fibonacci-subwords/variants/optimal/approach.md",
-        ),
-        (
-            "external_solution.py",
-            "https://raw.githubusercontent.com/dawei7/code_n/012e178619373894a06afb8db07953df0202a071/dsa/euler/1006_fibonacci-subwords/variants/optimal/solutions/solution.py",
-        ),
-        (
-            "external_cases.json",
-            "https://raw.githubusercontent.com/dawei7/code_n/012e178619373894a06afb8db07953df0202a071/dsa/euler/1006_fibonacci-subwords/cases.json",
-        ),
-        (
-            "eulersolve_solution.py",
-            "https://eulersolve.org/solutionsPython/Euler1006.py",
-        ),
-        (
-            "eulersolve_explanation.html",
-            "https://eulersolve.org/problem/1006/",
-        ),
-        (
-            "cirosantilli_1006.md",
-            "https://raw.githubusercontent.com/cirosantilli/project-euler-solutions/master/solvers/1006.md",
-        ),
-    ];
-    for (name, url) in sources {
-        let target = directory.join(name);
-        if target.is_file() {
-            println!("using cached public research source: {name}");
-            continue;
-        }
-        let body = match client
-            .get(url)
-            .send()
-            .await
-            .and_then(|reply| reply.error_for_status())
-        {
-            Ok(reply) => reply.text().await?,
-            Err(error) if name != "eulersolve_solution.py" => {
-                println!("optional research source unavailable: {name} ({error})");
-                continue;
-            }
-            Err(error) => return Err(error.into()),
-        };
-        let source = if name.ends_with(".py") {
-            format!("# Source: {url}\n\n{body}")
-        } else {
-            format!("Source: {url}\n\n{body}")
-        };
-        std::fs::write(target, source)?;
-    }
-    stage_authenticated_github_source(
-        &directory,
-        "candidate_euler1006.py",
-        "repos/senamakel/math-agent/contents/workspace/euler1006/code/lean/code/python/euler1006.py?ref=be919bc1bdc6b77a075413192654931b80cae602",
-        "https://github.com/senamakel/math-agent/blob/be919bc1bdc6b77a075413192654931b80cae602/workspace/euler1006/code/lean/code/python/euler1006.py",
-    )?;
-    stage_authenticated_github_source(
-        &directory,
-        "candidate_context.md",
-        "repos/senamakel/math-agent/contents/workspace/euler1006/refs/context.md?ref=be919bc1bdc6b77a075413192654931b80cae602",
-        "https://github.com/senamakel/math-agent/blob/be919bc1bdc6b77a075413192654931b80cae602/workspace/euler1006/refs/context.md",
-    )?;
-    Ok(())
-}
-
-fn stage_authenticated_github_source(
-    directory: &Path,
-    name: &str,
-    endpoint: &str,
-    source_url: &str,
-) -> anyhow::Result<()> {
-    let target = directory.join(name);
-    if target.is_file() {
-        println!("using cached authenticated research source: {name}");
-        return Ok(());
-    }
-    let output = std::process::Command::new("gh")
-        .args([
-            "api",
-            "-H",
-            "Accept: application/vnd.github.raw+json",
-            endpoint,
-        ])
-        .output()?;
-    if !output.status.success() {
-        anyhow::bail!("gh api could not stage {name}");
-    }
-    let mut body = format!("Source: {source_url}\n\n").into_bytes();
-    body.extend(output.stdout);
-    std::fs::write(target, body)?;
-    Ok(())
 }

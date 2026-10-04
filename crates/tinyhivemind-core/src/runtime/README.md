@@ -10,6 +10,7 @@ about a live session; see its own `README.md` for the how and why.
 | [`briefing`](briefing) | What ephemeral context (teammates, coordination rules, history, threads, pins) does one viewer's turn open with? |
 | [`elsewhere`](elsewhere) | What do this seat's *other* conversations hold, for the turn it is taking in this one? |
 | [`sharing`](sharing) | How does a host hand an already-briefed session only what changed since its last watermark, instead of re-briefing it? |
+| [`memory`](memory) | What does a hive ask of whatever remembers for it, with the engine left to the host? |
 | [`pins`](pins) | Which messages does every turn see whether or not it asked? |
 | [`threads`](threads) | What live threads exist in one desk, ranked by recency, for a viewer that has been away? |
 | [`speech`](speech) | What may a seat say, what makes a call valid, and what does exactly one accepted utterance become? |

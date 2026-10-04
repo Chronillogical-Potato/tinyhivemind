@@ -67,3 +67,4 @@ sequence. The measurements that pushed 0011 and 0012 are in
 [`../experiments/`](../experiments/README.md).
 
 - [ADR 0028: Consolidate the workspace into three crates](0028-three-crate-workspace.md)
+- [ADR 0029: Working memory is a host adapter behind a narrow port](0029-working-memory-is-a-host-adapter.md)

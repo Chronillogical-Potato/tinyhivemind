@@ -23,5 +23,9 @@ tinytools.workspace = true
 # whichever native harness supplied them.
 serde_json.workspace = true
 
+[dev-dependencies]
+# Drives the async memory tools in unit tests.
+tokio = { workspace = true }
+
 [lints]
 workspace = true
