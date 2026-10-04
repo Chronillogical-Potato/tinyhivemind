@@ -74,7 +74,7 @@ async fn reattached_pending_work_observes_bound_session_while_scheduler_is_live(
 }
 #[tokio::test]
 async fn session_registration_validates_before_publishing_and_storage_failure_is_atomic() {
-    let storage = Arc::new(MemoryStorage::new());
+    let storage = Arc::new(super::transactions::Recording::default());
     let writer = Coordinator::new(
         "runtime".into(),
         storage.clone(),
@@ -97,11 +97,12 @@ async fn session_registration_validates_before_publishing_and_storage_failure_is
         runtime_id: "runtime".into(),
         runner: runner.clone(),
     };
+    storage.fail_next_commits(1);
     assert!(matches!(
         stale
             .register_agent_in_session(registration.clone(), "existing")
             .await,
-        Err(Error::RevisionConflict { .. })
+        Err(Error::InvalidState(_))
     ));
     assert_eq!(stale.lock().unwrap().durable.agents["a"].session_id, None);
     assert!(!stale.lock().unwrap().runners.contains_key("a"));

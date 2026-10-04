@@ -7,11 +7,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// Memory storage that records each commit's appended rows and can be told
 /// to fail the next commits, with a conflict or a plain storage error.
 #[derive(Default)]
-struct Recording {
+pub(super) struct Recording {
     inner: MemoryStorage,
     appended: std::sync::Mutex<Vec<usize>>,
     conflicts: AtomicUsize,
     failures: AtomicUsize,
+}
+impl Recording {
+    pub(super) fn fail_next_commits(&self, count: usize) {
+        self.failures.store(count, Ordering::SeqCst);
+    }
 }
 impl Storage for Recording {
     fn load(&self) -> StorageFuture<'_, StoredState> {
@@ -110,7 +115,7 @@ async fn persistent_conflicts_and_storage_failures_publish_nothing() {
         Err(Error::RevisionConflict { .. })
     ));
     storage.conflicts.store(0, Ordering::SeqCst);
-    storage.failures.store(1, Ordering::SeqCst);
+    storage.fail_next_commits(1);
     assert!(matches!(
         c.send_as_host(message("offline", Destination::Agent("a".into())))
             .await,
