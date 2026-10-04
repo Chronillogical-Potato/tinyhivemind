@@ -155,10 +155,7 @@ impl RetentionPolicy {
                 !drop
             });
             // Prune oldest interrupted turn records as well.
-            excess = state
-                .interruptions
-                .len()
-                .saturating_sub(keep);
+            excess = state.interruptions.len().saturating_sub(keep);
             state.interruptions.retain(|_| {
                 let drop = excess > 0;
                 excess = excess.saturating_sub(1);
