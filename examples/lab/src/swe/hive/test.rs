@@ -9,6 +9,7 @@ use tinyhivemind_core::telemetry::{Clock, Stamped, TraceEvent, TraceSink, Tracer
 
 use super::*;
 use crate::swe::board::Board;
+use crate::swe::context::Settings;
 use crate::swe::llm::{Chat, Llm};
 use crate::swe::meter::Meter;
 use crate::swe::sandbox::{Exec, ExecOutput};

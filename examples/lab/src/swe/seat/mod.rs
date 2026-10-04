@@ -154,12 +154,7 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
 
 /// Shrink `messages` under the activation's policy after a call whose prompt
 /// of `prompt` tokens went over budget; every firing is a `mark` in the trace.
-fn apply_context(
-    env: &Env<'_>,
-    act: &Activation<'_>,
-    messages: &mut Vec<Value>,
-    prompt: u64,
-) {
+fn apply_context(env: &Env<'_>, act: &Activation<'_>, messages: &mut Vec<Value>, prompt: u64) {
     let settings = act.context;
     let mut detail = match settings.policy {
         Policy::None => return,

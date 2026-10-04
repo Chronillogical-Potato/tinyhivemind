@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use tinyhivemind_core::telemetry::{Clock, Stamped, TraceEvent, TraceSink, Tracer};
 
 use super::*;
+use crate::swe::context::{Policy, Settings};
 use crate::swe::llm::Chat;
 use crate::swe::meter::Meter;
 use crate::swe::sandbox::{Exec, ExecOutput};
@@ -275,9 +276,7 @@ impl Chat for Recorder {
     }
 }
 
-fn recorded(
-    script: Vec<Result<Value, String>>,
-) -> (Rig, std::sync::Arc<Mutex<Vec<Value>>>) {
+fn recorded(script: Vec<Result<Value, String>>) -> (Rig, std::sync::Arc<Mutex<Vec<Value>>>) {
     let bodies = std::sync::Arc::new(Mutex::new(Vec::new()));
     let rig = Rig {
         llm: Llm::new(
@@ -297,7 +296,10 @@ fn recorded(
 }
 
 fn long_bash() -> Result<Value, String> {
-    Ok(call("bash", json!({ "cmd": format!("echo {}", "a".repeat(200)) })))
+    Ok(call(
+        "bash",
+        json!({ "cmd": format!("echo {}", "a".repeat(200)) }),
+    ))
 }
 
 fn settings(policy: Policy) -> Settings {
@@ -338,7 +340,11 @@ fn mask_stubs_old_results_once_the_prompt_passes_the_budget() {
         .collect();
     assert_eq!(tools.len(), 3);
     assert!(tools[0].starts_with("[output elided:") && tools[1].starts_with("[output elided:"));
-    assert!(tools[2].starts_with("exit=0"), "newest stays whole: {}", tools[2]);
+    assert!(
+        tools[2].starts_with("exit=0"),
+        "newest stays whole: {}",
+        tools[2]
+    );
 }
 
 #[test]
@@ -371,8 +377,16 @@ fn summarize_spends_one_metered_call_and_replaces_the_oldest_messages() {
     let last = bodies.lock().expect("lock").pop().expect("a request");
     let messages = last["messages"].as_array().expect("messages");
     assert_eq!(messages[1]["content"], "go");
-    assert!(messages[2]["content"].as_str().expect("text").contains("NOTE: wrote the file"));
-    let calls = messages.iter().filter(|m| m["tool_calls"].is_array()).count();
+    assert!(
+        messages[2]["content"]
+            .as_str()
+            .expect("text")
+            .contains("NOTE: wrote the file")
+    );
+    let calls = messages
+        .iter()
+        .filter(|m| m["tool_calls"].is_array())
+        .count();
     let results = messages.iter().filter(|m| m["role"] == "tool").count();
     assert_eq!(calls, results);
 }

@@ -41,7 +41,10 @@ fn keeps_the_recent_results_and_stubs_the_older() {
     let bodies = tool_bodies(&m);
     for old in &bodies[..4] {
         assert_eq!(old.len() < 100, true, "{old}");
-        assert!(old.starts_with("[output elided: 500 bytes, cmd=echo "), "{old}");
+        assert!(
+            old.starts_with("[output elided: 500 bytes, cmd=echo "),
+            "{old}"
+        );
     }
     for recent in &bodies[4..] {
         assert_eq!(recent.len(), 500);
@@ -64,7 +67,11 @@ fn never_touches_the_first_messages_or_assistant_text() {
     mask_observations(&mut m, 0);
     assert_eq!(m[0], before[0]);
     assert_eq!(m[1], before[1]);
-    for (a, b) in m.iter().zip(&before).filter(|(a, _)| a["role"] == "assistant") {
+    for (a, b) in m
+        .iter()
+        .zip(&before)
+        .filter(|(a, _)| a["role"] == "assistant")
+    {
         assert_eq!(a, b);
     }
     assert_eq!(m.len(), before.len());
@@ -99,7 +106,10 @@ fn long_commands_are_trimmed_in_the_stub() {
     m.push(result("a", &"z".repeat(900)));
     mask_observations(&mut m, 0);
     let stub = m[3]["content"].as_str().unwrap();
-    assert!(stub.len() < 160 && !stub.contains('\n') && stub.ends_with("...]"), "{stub}");
+    assert!(
+        stub.len() < 160 && !stub.contains('\n') && stub.ends_with("...]"),
+        "{stub}"
+    );
 }
 
 #[test]

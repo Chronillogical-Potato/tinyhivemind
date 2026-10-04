@@ -47,4 +47,19 @@ fn abort_messages_are_readable() {
         "token cap reached (5/4)"
     );
     assert!(Abort::Llm("boom".into()).to_string().contains("boom"));
+    assert_eq!(
+        Abort::ContextOverflow("x".into()).to_string(),
+        "context_overflow"
+    );
+}
+
+#[test]
+fn the_largest_prompt_and_context_events_are_tracked() {
+    let meter = Meter::new(None, None);
+    meter.record("a", 40, 1);
+    meter.record("b", 90, 1);
+    meter.record("a", 60, 1);
+    meter.note_context_event();
+    let snap = meter.snapshot();
+    assert_eq!((snap.max_prompt, snap.context_events), (90, 1));
 }

@@ -88,8 +88,45 @@ fn hive_completes_when_the_lead_completes() {
         "wall_ms",
         "turns",
         "completed",
+        "max_prompt_tokens",
+        "context_policy",
+        "context_budget",
+        "context_events",
     ] {
         assert!(doc.get(key).is_some(), "result.json lacks {key}");
     }
     assert_eq!(doc["seats"]["lead"]["calls"], 1);
+    assert_eq!(
+        (
+            doc["max_prompt_tokens"].as_u64(),
+            doc["context_policy"].as_str()
+        ),
+        (Some(30), Some("mask"))
+    );
+}
+
+#[test]
+fn single_reports_its_policy_and_the_largest_prompt() {
+    let (s, _) = summary(Mode::Single);
+    let doc = s.to_json();
+    assert_eq!(doc["context_policy"], "mask");
+    assert_eq!(doc["max_prompt_tokens"], 30);
+    assert_eq!(doc["context_budget"], 60_000);
+}
+
+struct Overflow;
+impl Chat for Overflow {
+    fn send(&self, _body: &Value) -> Result<Value, String> {
+        Err("http 400: maximum context length exceeded".into())
+    }
+}
+
+#[test]
+fn an_overflow_is_recorded_as_the_abort_reason() {
+    let sink = Sink(Mutex::new(0));
+    let tracer = Tracer::new("r", &sink, &Zero);
+    let llm = Llm::new(Box::new(Overflow), "m", Meter::new(None, None));
+    let s = run(&config(Mode::Single), &llm, &Nop, &tracer);
+    assert_eq!(s.to_json()["aborted"], "context_overflow");
+    assert!(!s.completed);
 }

@@ -1,6 +1,7 @@
 //! Flag parsing.
 
 use super::*;
+use crate::swe::context::Policy;
 
 fn parse(line: &str) -> Result<Config, UsageError> {
     Config::parse(line.split_whitespace().map(str::to_owned))
