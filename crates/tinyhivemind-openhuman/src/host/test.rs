@@ -364,9 +364,10 @@ fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
         tokio::spawn(async {
             let (runtime, _backend, _) = Box::pin(fixture()).await;
             let storage = Arc::new(RegistrationStorage {
-                reject: std::sync::atomic::AtomicBool::new(true),
+                reject: std::sync::atomic::AtomicBool::new(false),
                 memory: MemoryStorage::new(),
             });
+            // Construction commits the writer claim, so reject only afterwards.
             let coordinator = Coordinator::new(
                 runtime.runtime_id().into(),
                 storage.clone(),
@@ -374,6 +375,9 @@ fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
             )
             .await
             .unwrap();
+            storage
+                .reject
+                .store(true, std::sync::atomic::Ordering::SeqCst);
             let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator).unwrap();
             let agent = runtime.agent(AgentSpec::new("pending")).unwrap();
             assert!(host.register_agent(agent.clone()).await.is_err());
