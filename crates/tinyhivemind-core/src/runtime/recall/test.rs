@@ -98,7 +98,9 @@ fn clips_to_the_budget_on_a_character_boundary() {
 #[test]
 fn frames_nothing_when_the_budget_cannot_hold_the_header() {
     let notes = [note("n", &["line"])];
-    let header = format!("{RECALL_HEADING}\n{RECALL_PREAMBLE}").chars().count();
+    let header = format!("{RECALL_HEADING}\n{RECALL_PREAMBLE}")
+        .chars()
+        .count();
     assert_eq!(frame_recalled(&notes, 0), None);
     assert_eq!(frame_recalled(&notes, header + 1), None);
     let smallest = frame_recalled(&notes, header + 2).unwrap();

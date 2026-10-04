@@ -43,8 +43,8 @@ mod test;
 mod types;
 
 pub use types::{
-    DeskDelta, DeskWatermark, EntryKind, MemoryEntry, RecallMoment, RecallRequest,
-    RecalledSession, RememberRequest,
+    DeskDelta, DeskWatermark, EntryKind, MemoryEntry, RecallMoment, RecallRequest, RecalledSession,
+    RememberRequest,
 };
 
 use crate::runtime::{
@@ -144,7 +144,11 @@ pub fn frame_recalled(notes: &[BriefingNote], budget_chars: usize) -> Option<Str
 pub fn desk_delta(watermark: DeskWatermark, rows: &[SessionMessage]) -> DeskDelta {
     let unseen: Vec<SessionMessage> = rows
         .iter()
-        .filter(|row| watermark.through.is_none_or(|through| row.sequence > through))
+        .filter(|row| {
+            watermark
+                .through
+                .is_none_or(|through| row.sequence > through)
+        })
         .cloned()
         .collect();
     let through = unseen
