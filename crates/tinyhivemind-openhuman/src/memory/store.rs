@@ -31,7 +31,7 @@ const CHARS_PER_TOKEN: usize = 4;
 /// | Moment | Call | Reads |
 /// | --- | --- | --- |
 /// | `SessionStart` | [`AgentMemory::start_session`] with the conversation as thread | the thread's turns, learnings, brain, the seat's history, the team's turns |
-/// | `Rejoin` | [`AgentMemory::start_session`] without the seat's own history | learnings, brain, the team's turns |
+/// | `Rejoin` | [`AgentMemory::start_session`] without the seat's own history | learnings, brain, the team's turns; anything the seat itself wrote is dropped |
 /// | `Compaction` | [`AgentMemory::recall_for_compaction`] with the dropped text as turns | a summary of the thread, then the standard sections |
 ///
 /// Remember stores each [`MemoryEntry`](tinyhivemind_core::runtime::MemoryEntry)
@@ -145,6 +145,7 @@ impl HiveMemoryStore {
     ) -> std::result::Result<Vec<BriefingNote>, SourceError> {
         let conversation = conversation(&request.conversation)?;
         let memory = self.seat(&request.seat, request.budget_chars)?;
+        let memory_seat = memory.agent_id().to_owned();
         let focus = request.focus.clone();
         let pack = match &request.moment {
             RecallMoment::SessionStart => {
@@ -155,10 +156,13 @@ impl HiveMemoryStore {
                 memory.start_session(start).await?
             }
             RecallMoment::Rejoin => {
-                // The seat's own turns are already in its session.
+                // What the seat wrote is already in its session: read the
+                // team's turns with room for its own, then drop its own.
+                let current = memory.policy().clone();
                 let policy = RecallPolicy {
                     history_limit: 0,
-                    ..memory.policy().clone()
+                    team_limit: current.team_limit.saturating_add(current.history_limit),
+                    ..current
                 };
                 let start = SessionStart {
                     thread_id: None,
@@ -178,7 +182,8 @@ impl HiveMemoryStore {
                 memory.recall_for_compaction(compaction).await?
             }
         };
-        Ok(notes(&pack, request.budget_chars))
+        let skip = (request.moment == RecallMoment::Rejoin).then_some(memory_seat.as_str());
+        Ok(notes(&pack, request.budget_chars, skip))
     }
 
     async fn write(&self, request: &RememberRequest) -> std::result::Result<(), SourceError> {

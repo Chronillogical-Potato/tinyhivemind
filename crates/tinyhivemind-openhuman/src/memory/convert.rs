@@ -79,15 +79,24 @@ pub(super) fn entry_item(context: &EntryContext<'_>, entry: &MemoryEntry) -> Opt
 }
 
 /// A pack as notes: one per section that found something, headed by the
-/// section, its answer and hits as single lines, best first. Lines stop once
-/// their total passes `budget_chars`; the pack's sections also carry what its
-/// own budget trimmed, so this is the cap that holds.
-pub(super) fn notes(pack: &ContextPack, budget_chars: usize) -> Vec<BriefingNote> {
+/// section, its answer and hits as single lines, best first. Hits written by
+/// `skip_agent` are left out. Lines stop once their total passes
+/// `budget_chars`; the pack's sections also carry what its own budget
+/// trimmed, so this is the cap that holds.
+pub(super) fn notes(
+    pack: &ContextPack,
+    budget_chars: usize,
+    skip_agent: Option<&str>,
+) -> Vec<BriefingNote> {
     let mut spent = 0;
     let mut notes = Vec::new();
     'sections: for section in &pack.sections {
         let answer = section.answer.iter().map(String::as_str);
-        let hits = section.hits.iter().map(|hit| hit.text.as_str());
+        let hits = section
+            .hits
+            .iter()
+            .filter(|hit| skip_agent.is_none() || hit.meta.agent_id.as_deref() != skip_agent)
+            .map(|hit| hit.text.as_str());
         let mut lines = Vec::new();
         for raw in answer.chain(hits) {
             let line = one_line(raw);
