@@ -2006,6 +2006,8 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tinymcp-bus",
+ "tinymemory-api",
+ "tinymemory-tools",
  "tokio",
  "url",
  "uuid",
