@@ -253,13 +253,19 @@ pub(super) async fn prepare(state: &mut StoredState, options: &CoordinatorOption
                 }
                 // An empty parked wave must wait for an explicit release.
                 episode.waiting = episode.pending.is_empty() && !conductor.parked().is_empty();
+                checkpoint(&conductor, &mut episode)?;
             }
             Err(error) => {
+                // The conductor still reports itself unfinished after a stall,
+                // so settle after checkpointing; otherwise the episode is
+                // re-prepared, and fails again, on every pass.
+                checkpoint(&conductor, &mut episode)?;
                 episode.finished = true;
                 episode.failure = Some(error.to_string());
+                episode.pending.clear();
+                episode.wave_open = false;
             }
         }
-        checkpoint(&conductor, &mut episode)?;
         state.episodes[index] = episode;
     }
     Ok(())
