@@ -142,7 +142,7 @@ pub fn run(env: &Env<'_>, act: &Activation<'_>) -> Outcome {
             return out;
         }
         if prompt > act.context.budget {
-            apply_context(env, act, &mut messages, prompt, &mut out);
+            apply_context(env, act, &mut messages, prompt);
         }
     }
     if act.implicit_post && out.spoke.is_none() {
@@ -159,7 +159,6 @@ fn apply_context(
     act: &Activation<'_>,
     messages: &mut Vec<Value>,
     prompt: u64,
-    out: &mut Outcome,
 ) {
     let settings = act.context;
     let mut detail = match settings.policy {
