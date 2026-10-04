@@ -10,7 +10,13 @@ waiting and already activated claims. `runner.rs` sends attributed JSON input th
 its stored session without clearing history. `test.rs` and `runner_test.rs`
 cover registration, ownership, management and real provider requests.
 
-Hooks and management must be configured before sharing or registering the host.
+`hooks_test.rs` covers the `TurnScope` every hook receives, `prepare`'s
+working directory reaching the turn builder, and the configurable turn
+timeout. `replace_test.rs` covers `replace_agent`: session and tools carried
+to the rebuilt handle, waiting on a running turn, failed builds and retries.
+
+Hooks, management, the send policy and the turn timeout must be configured
+before sharing or registering the host.
 Factories and attached tools carry weak host references to prevent a cycle.
 The host's progress sender must have a reader throughout each turn.
 

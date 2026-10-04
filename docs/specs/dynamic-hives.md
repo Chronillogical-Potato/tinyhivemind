@@ -100,6 +100,25 @@ If OpenHuman commits successfully but the host finalization hook fails, the
 usable unchanged session binding is persisted with interruption while delivery
 acknowledgements, staged actions, and replies are suppressed.
 
+Storage is an async, executor-neutral port. A commit writes a bounded state row
+and appends only new transcript rows, so no single stored record grows with
+the conversation. Settled episodes and acknowledged deliveries are bounded by
+an optional retention policy; the transcript is append-only and never pruned.
+Commits run outside the live lock. A conflicting writer in another process
+causes a reload and a bounded retry.
+
+## Host seams
+
+The host reads the whole transcript (including replies to its own sends),
+watches the committed revision, and observes each episode's phase. It may name
+the starters of a hive message without narrowing its readers, release a parked
+agent with a note delivered once on its next turn, and rebuild an agent's
+handle after its running turn. Through the adapter, the host can also set a
+turn's working directory and timeout, and gate outbound tools behind a send
+policy. Every hook receives the turn's scope: agent, episode, messages,
+senders, destination and thread. See
+[ADR 0031](../adr/0031-the-coordinator-exposes-host-seams-over-async-incremental-storage.md).
+
 ## Acceptance
 
 Deterministic tests cover one agent/one hive, many agents/one hive, many agents

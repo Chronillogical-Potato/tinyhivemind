@@ -81,11 +81,13 @@ let coordinator = Coordinator::new(
     existing_agent.runtime_id().into(),
     Arc::new(MemoryStorage::new()),
     CoordinatorOptions::default(),
-)?;
+)
+.await?;
 let host = OpenHumanHost::new(existing_agent.runtime_id().into(), coordinator)?;
-host.register_agent_in_session(existing_agent.clone(), "existing-conversation")?;
-host.coordinator().create_hive(hive)?;
-host.coordinator().join_hive("engineering", existing_agent.id())?;
+host.register_agent_in_session(existing_agent.clone(), "existing-conversation")
+    .await?;
+host.coordinator().create_hive(hive).await?;
+host.coordinator().join_hive("engineering", existing_agent.id()).await?;
 host.coordinator().run_until_idle().await?;
 ```
 

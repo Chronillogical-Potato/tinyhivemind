@@ -2,17 +2,29 @@
 
 | File | Responsibility |
 | --- | --- |
-| `mod.rs` | Shared handle, dynamic APIs, authorization snapshots, and transactions |
+| `mod.rs` | Shared handle, dynamic APIs, and authorization snapshots |
+| `transaction.rs` | Writer gate, incremental commits outside the live lock, conflict reload |
 | `types.rs` | Host runner port and public payloads |
-| `messaging.rs` | Atomic acceptance, retry IDs, attribution, and private reads |
+| `messaging.rs` | Atomic acceptance, retry IDs, starters, attribution, and private reads |
+| `observe.rs` | Host transcript, committed-revision watch, episode status |
 | `conduct.rs` | Actual `CompletionDriver`/`Conductor` checkpoint lifecycle |
 | `scheduler.rs` | FIFO reservations, concurrent futures, shutdown, cancellation |
 | `test/` | Deterministic contract fixtures and behavior tests |
 
 All clones of `Coordinator` share one scheduler and state. Transactions clone
-state and replace it only after the storage CAS succeeds. Runner futures execute
-outside the state lock. Conductor folding uses copied snapshots and retries if a
-concurrent synchronous API changed the revision; no external tool is repeated.
+state under the live lock, release it, and persist the copy under an async
+writer gate. The storage commit carries the state row plus only the transcript
+rows appended since the base, and the copy is published only after the CAS
+succeeds. Reads never wait on storage. A revision conflict, which means another
+process wrote the store, reloads and recomputes up to four times. Runner
+futures execute outside every lock. A dropped drain applies its interruptions
+to live state immediately, and the next commit persists them. No external tool
+is repeated.
+
+`release_with(agent, note)` stores a note on the agent record. The next claim
+moves it into `TurnRequest::resumption`, once. Host-chosen `starters` must be
+distinct readers of the hive message; they open the episode while every reader
+still sees the message.
 
 Work is ordered by accepted sequence, then agent ID within a round. Shared
 agents retain their queued positions and never run two turns concurrently.

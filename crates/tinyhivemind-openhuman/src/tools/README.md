@@ -18,3 +18,10 @@ that peer, including durable runner replies. `after` is an exclusive sequence
 cursor in both modes. Reading replies never schedules another turn, so agents
 can inspect results and explicitly send follow-ups without automatic reply loops.
 `direct_test.rs` exercises the native send/read path and its destination schema.
+
+With a host `SendAuthorizer` configured, `hivemind_send_agent`,
+`hivemind_send_hive`, `hivemind_ask` and `hivemind_broadcast` build a
+`SendRequest` from their validated arguments and ask the policy first. A
+refusal becomes the tool's error text, and nothing is enqueued or staged.
+`policy_test.rs` covers refusals, admitted sends, ungated tools and the
+request wire shape.
