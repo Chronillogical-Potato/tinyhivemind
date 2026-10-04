@@ -18,7 +18,7 @@ API stays under module names such as `desk` and `mention`.
 | [`referral`](referral/README.md) | does one turn cross to another desk, and how its one answer carries back |
 | [`responder`](responder/README.md) | which single agent answers one message, walking the deterministic ladder |
 | [`roster`](roster/README.md) | who is here — active, retired, or tombstoned agents and the people signed in with them |
-| [`runtime`](runtime/README.md) | attributed session projection, sharing, and ports for host-owned data |
+| [`runtime`](runtime/README.md) | attributed session projection, sharing, and ports for host-owned data, including seat memory |
 | [`hive`](hive/README.md) | bounded task division and group deliberation |
 | [`embed`](embed/README.md) | conversation surfaces and semantic routing |
 | [`typesafe`](typesafe/README.md) | exact System One wire types and Jev routing |
