@@ -22,6 +22,7 @@ async fn read_tool_observes_direct_replies_as_its_bound_caller() {
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap();
     for id in ["a", "b", "outsider"] {
         c.register_agent(AgentRegistration {
@@ -29,6 +30,7 @@ async fn read_tool_observes_direct_replies_as_its_bound_caller() {
             runtime_id: "r".into(),
             runner: Arc::new(Reply),
         })
+        .await
         .unwrap();
     }
     let host = OpenHumanHost::new("r".into(), c).unwrap();

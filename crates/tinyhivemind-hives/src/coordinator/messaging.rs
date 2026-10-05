@@ -9,25 +9,26 @@ impl Coordinator {
     /// # Errors
     /// Returns unknown sender/destination, missing membership, invalid thread,
     /// conflicting retry identity or persistence errors.
-    pub fn send(&self, request: SendMessage) -> Result<Receipt> {
+    pub async fn send(&self, request: SendMessage) -> Result<Receipt> {
         if request.sender == HOST_ID {
             return Err(Error::InvalidIdentifier("sender"));
         }
-        self.accept(request)
+        self.accept(request).await
     }
     /// Submit through the reserved host identity rather than impersonating an agent.
     /// The request's sender field is overwritten.
     /// # Errors
     /// Returns destination, visibility, retry or storage validation errors.
-    pub fn send_as_host(&self, mut request: SendMessage) -> Result<Receipt> {
+    pub async fn send_as_host(&self, mut request: SendMessage) -> Result<Receipt> {
         request.sender = HOST_ID.into();
-        self.accept(request)
+        self.accept(request).await
     }
-    fn accept(&self, request: SendMessage) -> Result<Receipt> {
+    async fn accept(&self, request: SendMessage) -> Result<Receipt> {
         identifier(&request.message_id, "message id")?;
         if request.message_id.starts_with("hivemind:") {
             return Err(Error::InvalidIdentifier("reserved message id"));
         }
+        let retention = self.inner.options.retention;
         self.update(|state| {
             if let Some(old) = state.accepted.get(&request.message_id) {
                 if old != &request {
@@ -67,6 +68,9 @@ impl Coordinator {
             };
             match &request.destination {
                 Destination::Agent(_) => {
+                    for agent_id in &recipients {
+                        retention.admit_pending(state, agent_id)?;
+                    }
                     for agent_id in recipients {
                         state.deliveries.push(Delivery {
                             sequence,
@@ -94,7 +98,11 @@ impl Coordinator {
                         hive,
                         opened_at: sequence,
                         thread: request.thread,
-                        starters: recipients,
+                        starters: if request.starters.is_empty() {
+                            recipients.clone()
+                        } else {
+                            request.starters.clone()
+                        },
                         conductor: None,
                         pending: Vec::new(),
                         wave_open: false,
@@ -109,10 +117,11 @@ impl Coordinator {
                 .accepted
                 .insert(request.message_id.clone(), request.clone());
             Ok(Receipt {
-                message_id: request.message_id,
+                message_id: request.message_id.clone(),
                 sequence,
             })
         })
+        .await
     }
     /// Read the caller's direct conversation with a registered peer in durable
     /// sequence order, including replies returned by the peer's runner.
@@ -220,7 +229,10 @@ fn recipients(state: &StoredState, request: &SendMessage) -> Result<Vec<String>>
     Ok(match &request.destination {
         Destination::Agent(id) => {
             known_agent(state, id)?;
-            if request.thread.is_some() || !request.only_for.is_empty() {
+            if request.thread.is_some()
+                || !request.only_for.is_empty()
+                || !request.starters.is_empty()
+            {
                 return Err(Error::InvalidIdentifier("direct message attribution"));
             }
             vec![id.clone()]
@@ -268,12 +280,30 @@ fn recipients(state: &StoredState, request: &SendMessage) -> Result<Vec<String>>
             {
                 return Err(Error::InvalidThread(request.thread.unwrap_or_default()));
             }
-            selected
+            let selected: Vec<_> = selected
                 .into_iter()
                 .filter(|recipient| scope.is_empty() || scope.contains(recipient))
-                .collect()
+                .collect();
+            starters_among(&request.starters, &selected, id)?;
+            selected
         }
     })
+}
+/// Host-chosen starters must be distinct readers of the message.
+fn starters_among(starters: &[String], readers: &[String], hive_id: &str) -> Result<()> {
+    let mut unique = BTreeSet::new();
+    for starter in starters {
+        if !readers.contains(starter) {
+            return Err(Error::NotMember {
+                agent_id: starter.clone(),
+                hive_id: hive_id.into(),
+            });
+        }
+        if !unique.insert(starter) {
+            return Err(Error::DuplicateMember(starter.clone()));
+        }
+    }
+    Ok(())
 }
 
 /// Root-private threads can only be read by their original participants.

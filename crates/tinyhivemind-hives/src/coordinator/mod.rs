@@ -1,23 +1,25 @@
 //! Agent registration, messaging, and conducted scheduling.
 mod conduct;
 mod messaging;
+mod observe;
 mod scheduler;
 #[cfg(test)]
 mod test;
+mod transaction;
 mod types;
-use crate::{AgentRecord, Error, Result, Storage, StoredState};
+use crate::{AgentRecord, Commit, Error, Result, Storage, StoredState};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{
         Arc, Mutex, MutexGuard,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
-use tokio::sync::{Mutex as AsyncMutex, Notify};
+use tokio::sync::{Mutex as AsyncMutex, Notify, watch};
 pub use types::{
     AgentRegistration, AgentRunner, CoordinatorOptions, Destination, EpisodeAction, EpisodeContext,
-    HOST_ID, HiveInfo, InterruptedTurn, Message, Receipt, RunReport, SendMessage, TurnDisposition,
-    TurnFuture, TurnOutcome, TurnRequest,
+    EpisodePhase, EpisodeStatus, HOST_ID, HiveInfo, InterruptedTurn, Message, Receipt, RunReport,
+    SendMessage, TurnDisposition, TurnFuture, TurnOutcome, TurnRequest,
 };
 
 /// Cloneable shared coordinator; all clones share runners, inboxes and locks.
@@ -31,12 +33,37 @@ struct Inner {
     storage: Arc<dyn Storage>,
     state: Mutex<LiveState>,
     scheduler: AsyncMutex<()>,
+    /// Serializes writers so a commit can await storage outside `state`.
+    writer: AsyncMutex<()>,
+    /// Latest committed revision, for host observers.
+    committed: watch::Sender<u64>,
     notify: Notify,
     shutdown: AtomicBool,
+    /// The writer epoch this coordinator claimed in [`Coordinator::new`].
+    writer_epoch: u64,
+    /// Highest writer epoch the store has reported above ours; nonzero once a
+    /// newer coordinator has fenced this one out.
+    fenced_by: AtomicU64,
+}
+/// An interruption recorded while a dropped drain could not await, kept with
+/// the reservation it interrupts until a commit persists it.
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+struct DeferredInterruption {
+    reason: String,
+    /// Delivery sequence the interrupted turn was claiming, if present.
+    delivery_sequence: Option<u64>,
+    /// Episode the interrupted turn was working on, if present.
+    episode_id: Option<String>,
 }
 struct LiveState {
     durable: StoredState,
     runners: BTreeMap<String, Arc<dyn AgentRunner>>,
+    /// Interruptions applied to `durable` that no commit has persisted yet,
+    /// keyed by agent with their reservation identity preserved so they are
+    /// only reapplied if the same reservation is still running after a
+    /// conflict reload.
+    unpersisted: BTreeMap<String, DeferredInterruption>,
 }
 impl std::fmt::Debug for Coordinator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -51,7 +78,7 @@ impl Coordinator {
     /// Host handles must be reattached before pending work can run.
     /// # Errors
     /// Returns invalid identifiers/bounds, storage failures or invalid snapshots.
-    pub fn new(
+    pub async fn new(
         runtime_id: String,
         storage: Arc<dyn Storage>,
         options: CoordinatorOptions,
@@ -63,16 +90,8 @@ impl Coordinator {
         {
             return Err(Error::InvalidOptions);
         }
-        let mut durable = storage.load()?;
-        if !durable.running.is_empty() {
-            let previous = durable.revision;
-            let agents: Vec<_> = durable.running.keys().cloned().collect();
-            for agent in agents {
-                interrupt(&mut durable, &agent, "process restarted during turn");
-            }
-            durable.revision = previous.checked_add(1).ok_or(Error::Exhausted)?;
-            storage.commit(previous, &durable)?;
-        }
+        let (durable, writer_epoch) = claim(storage.as_ref()).await?;
+        let (committed, _) = watch::channel(durable.revision);
         Ok(Self {
             inner: Arc::new(Inner {
                 runtime_id,
@@ -81,10 +100,15 @@ impl Coordinator {
                 state: Mutex::new(LiveState {
                     durable,
                     runners: BTreeMap::new(),
+                    unpersisted: BTreeMap::new(),
                 }),
                 scheduler: AsyncMutex::new(()),
+                writer: AsyncMutex::new(()),
+                committed,
                 notify: Notify::new(),
                 shutdown: AtomicBool::new(false),
+                writer_epoch,
+                fenced_by: AtomicU64::new(0),
             }),
         })
     }
@@ -97,8 +121,8 @@ impl Coordinator {
     /// Repeated registration is idempotent only for the same `Arc` handle.
     /// # Errors
     /// Returns invalid ID, runtime mismatch, handle conflict or storage errors.
-    pub fn register_agent(&self, registration: AgentRegistration) -> Result<()> {
-        self.register(registration, None)
+    pub async fn register_agent(&self, registration: AgentRegistration) -> Result<()> {
+        self.register(registration, None).await
     }
     /// Atomically bind a host conversation before publishing its runner.
     /// Pending recovered work and concurrent schedulers can only claim the
@@ -107,43 +131,55 @@ impl Coordinator {
     /// # Errors
     /// Returns invalid IDs, runtime/handle/session conflicts or storage errors.
     /// Failure publishes neither a runner nor a changed session binding.
-    pub fn register_agent_in_session(
+    pub async fn register_agent_in_session(
         &self,
         registration: AgentRegistration,
         session_id: &str,
     ) -> Result<()> {
         identifier(session_id, "session id")?;
-        self.register(registration, Some(session_id))
+        self.register(registration, Some(session_id)).await
     }
-    fn register(&self, registration: AgentRegistration, session_id: Option<&str>) -> Result<()> {
+    async fn register(
+        &self,
+        registration: AgentRegistration,
+        session_id: Option<&str>,
+    ) -> Result<()> {
         identifier(&registration.agent_id, "agent id")?;
         if registration.runtime_id != self.inner.runtime_id {
             return Err(Error::RuntimeMismatch);
         }
-        let mut live = self.lock()?;
-        if let Some(existing) = live.runners.get(&registration.agent_id) {
-            if !Arc::ptr_eq(existing, &registration.runner) {
-                return Err(Error::AgentConflict(registration.agent_id));
-            }
-            if session_id.is_none()
-                || live
-                    .durable
-                    .agents
-                    .get(&registration.agent_id)
-                    .is_some_and(|agent| agent.session_id.as_deref() == session_id)
-            {
-                return Ok(());
+        // The gate keeps the handle check, the commit and the publication one step.
+        let gate = self.inner.writer.lock().await;
+        {
+            let live = self.lock()?;
+            if let Some(existing) = live.runners.get(&registration.agent_id) {
+                if !Arc::ptr_eq(existing, &registration.runner) {
+                    return Err(Error::AgentConflict(registration.agent_id));
+                }
+                if session_id.is_none()
+                    || live
+                        .durable
+                        .agents
+                        .get(&registration.agent_id)
+                        .is_some_and(|agent| agent.session_id.as_deref() == session_id)
+                {
+                    return Ok(());
+                }
             }
         }
-        let mut next = live.durable.clone();
-        next.agents
-            .entry(registration.agent_id.clone())
-            .or_insert_with(AgentRecord::default);
-        if let Some(session_id) = session_id {
-            bind_session_state(&mut next, &registration.agent_id, session_id)?;
-        }
-        self.commit(&mut live, next)?;
-        live.runners
+        self.update_locked(&gate, |next| {
+            next.agents
+                .entry(registration.agent_id.clone())
+                .or_insert_with(AgentRecord::default);
+            if let Some(session_id) = session_id {
+                bind_session_state(next, &registration.agent_id, session_id)?;
+            }
+            Ok(())
+        })
+        .await?;
+        // Published only after its session binding is committed and visible.
+        self.lock()?
+            .runners
             .insert(registration.agent_id, registration.runner);
         self.inner.notify.notify_one();
         Ok(())
@@ -152,15 +188,16 @@ impl Coordinator {
     /// Identical bindings are idempotent; a continuing session cannot be switched.
     /// # Errors
     /// Returns unknown agent, invalid session identity, conflicting binding or storage errors.
-    pub fn bind_session(&self, agent_id: &str, session_id: &str) -> Result<()> {
+    pub async fn bind_session(&self, agent_id: &str, session_id: &str) -> Result<()> {
         identifier(session_id, "session id")?;
         self.update(|state| bind_session_state(state, agent_id, session_id))
+            .await
     }
 
     /// Create an optionally empty hive; identical definitions are idempotent.
     /// # Errors
     /// Returns malformed membership, unknown agents, conflicting IDs or storage errors.
-    pub fn create_hive(&self, hive: HiveInfo) -> Result<()> {
+    pub async fn create_hive(&self, hive: HiveInfo) -> Result<()> {
         identifier(&hive.hive_id, "hive id")?;
         identifier(&hive.name, "hive name")?;
         self.update(|state| {
@@ -180,9 +217,10 @@ impl Coordinator {
                     Err(Error::HiveConflict(hive.hive_id.clone()))
                 };
             }
-            state.hives.insert(hive.hive_id.clone(), hive);
+            state.hives.insert(hive.hive_id.clone(), hive.clone());
             Ok(())
         })
+        .await
     }
     /// List current dynamic hive definitions in ID order.
     /// # Errors
@@ -199,7 +237,7 @@ impl Coordinator {
     /// Join an existing hive; repeated joins are idempotent.
     /// # Errors
     /// Returns unknown hive/agent or storage errors.
-    pub fn join_hive(&self, hive_id: &str, agent_id: &str) -> Result<()> {
+    pub async fn join_hive(&self, hive_id: &str, agent_id: &str) -> Result<()> {
         self.update(|state| {
             known_agent(state, agent_id)?;
             let hive = state
@@ -211,11 +249,12 @@ impl Coordinator {
             }
             Ok(())
         })
+        .await
     }
     /// Leave a hive; active turns keep their captured authorization and history.
     /// # Errors
     /// Returns unknown hive/agent or storage errors.
-    pub fn leave_hive(&self, hive_id: &str, agent_id: &str) -> Result<()> {
+    pub async fn leave_hive(&self, hive_id: &str, agent_id: &str) -> Result<()> {
         self.update(|state| {
             known_agent(state, agent_id)?;
             let hive = state
@@ -225,11 +264,12 @@ impl Coordinator {
             hive.members.retain(|id| id != agent_id);
             Ok(())
         })
+        .await
     }
     /// Record an action for the caller's currently running episode.
     /// # Errors
     /// Returns stale episode, unauthorized peers or storage errors.
-    pub fn submit_action(
+    pub async fn submit_action(
         &self,
         agent_id: &str,
         episode_id: &str,
@@ -276,21 +316,36 @@ impl Coordinator {
                     }
                 }
             }
-            running.actions.push(action);
+            running.actions.push(action.clone());
             Ok(())
         })
+        .await
     }
     /// Release a parked agent after the host settles its approval.
+    /// Equivalent to [`Self::release_with`] without a note.
     /// # Errors
     /// Returns unknown agent, invalid conductor snapshots or storage errors.
-    pub fn release(&self, agent_id: &str) -> Result<()> {
+    pub async fn release(&self, agent_id: &str) -> Result<()> {
+        self.release_with(agent_id, None).await
+    }
+    /// Release a parked agent, attaching a host note — an approval decision,
+    /// say — to the next turn it is claimed for, as
+    /// [`TurnRequest::resumption`]. A later note replaces an undelivered one;
+    /// `None` leaves an undelivered note in place.
+    /// # Errors
+    /// Returns unknown agent, invalid conductor snapshots or storage errors.
+    pub async fn release_with(&self, agent_id: &str, note: Option<String>) -> Result<()> {
         self.update(|state| {
             known_agent(state, agent_id)?;
             if let Some(agent) = state.agents.get_mut(agent_id) {
                 agent.parked = false;
+                if let Some(note) = &note {
+                    agent.resumption = Some(note.clone());
+                }
             }
             conduct::release(state, agent_id, &self.inner.options)
         })
+        .await
     }
     /// Inspect uncertain turn records without replaying them.
     /// # Errors
@@ -305,21 +360,6 @@ impl Coordinator {
     }
     fn lock(&self) -> Result<MutexGuard<'_, LiveState>> {
         self.inner.state.lock().map_err(|_| Error::Poisoned)
-    }
-    fn commit(&self, live: &mut LiveState, mut next: StoredState) -> Result<()> {
-        let revision = live.durable.revision;
-        next.revision = revision.checked_add(1).ok_or(Error::Exhausted)?;
-        self.inner.storage.commit(revision, &next)?;
-        live.durable = next;
-        Ok(())
-    }
-    fn update<T>(&self, operation: impl FnOnce(&mut StoredState) -> Result<T>) -> Result<T> {
-        let mut live = self.lock()?;
-        let mut next = live.durable.clone();
-        let result = operation(&mut next)?;
-        self.commit(&mut live, next)?;
-        self.inner.notify.notify_one();
-        Ok(result)
     }
 }
 fn identifier(value: &str, field: &'static str) -> Result<()> {
@@ -394,4 +434,41 @@ fn bind_session_state(state: &mut StoredState, agent_id: &str, session_id: &str)
         agent.session_id = Some(session_id.into());
     }
     Ok(())
+}
+/// Attempts [`claim`] makes before giving up on a store that keeps changing.
+const CLAIM_ATTEMPTS: usize = 4;
+/// Take ownership of `storage`: load it, advance `writer_epoch`, recover the
+/// previous owner's running turns as interruptions, and commit that as one
+/// revision. A conflict means another process wrote between the load and the
+/// commit, so the claim is retried on a fresh load; the newest claimant wins.
+async fn claim(storage: &dyn Storage) -> Result<(StoredState, u64)> {
+    let mut attempts = 0;
+    loop {
+        let mut durable = storage.load().await?;
+        let previous = durable.revision;
+        let writer_epoch = durable
+            .writer_epoch
+            .checked_add(1)
+            .ok_or(Error::Exhausted)?;
+        durable.writer_epoch = writer_epoch;
+        let agents: Vec<_> = durable.running.keys().cloned().collect();
+        for agent in agents {
+            interrupt(&mut durable, &agent, "process restarted during turn");
+        }
+        durable.revision = previous.checked_add(1).ok_or(Error::Exhausted)?;
+        let committed = storage
+            .commit(Commit {
+                expected_revision: previous,
+                state: &durable,
+                appended: &[],
+            })
+            .await;
+        match committed {
+            Ok(()) => return Ok((durable, writer_epoch)),
+            Err(Error::RevisionConflict { .. }) if attempts + 1 < CLAIM_ATTEMPTS => {
+                attempts += 1;
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }

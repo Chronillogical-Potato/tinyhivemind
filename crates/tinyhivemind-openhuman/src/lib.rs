@@ -6,9 +6,9 @@
 //! With [`OpenHumanHost::with_hive_memory`], every seat registered afterwards
 //! shares one [`HiveMemory`]: its own memory agent id under the hive's root.
 //! ```no_run
-//! # fn example(agent: openhuman_embed::Agent, coordinator: tinyhivemind_hives::Coordinator) -> tinyhivemind_openhuman::Result<()> {
+//! # async fn example(agent: openhuman_embed::Agent, coordinator: tinyhivemind_hives::Coordinator) -> tinyhivemind_openhuman::Result<()> {
 //! let host = tinyhivemind_openhuman::OpenHumanHost::new(agent.runtime_id().into(), coordinator)?;
-//! host.register_agent(agent)?;
+//! host.register_agent(agent).await?;
 //! # Ok(()) }
 //! ```
 mod error;
@@ -21,7 +21,8 @@ mod tools;
 pub use error::{Error, Result};
 pub use host::{
     AgentFactory, AgentFuture, HostedTurn, ManagementAuthorizer, ManagementRequest, OpenHumanHost,
-    RegisteredAgent, TURN_TIMEOUT, TurnHooks, TurnProgressSink,
+    RegisteredAgent, SendAuthorizer, SendRequest, TURN_TIMEOUT, TurnHooks, TurnOptions,
+    TurnProgressSink, TurnScope,
 };
 pub use journal::MemoryLog;
 pub use memory::{HiveMemory, HiveMemoryStore};

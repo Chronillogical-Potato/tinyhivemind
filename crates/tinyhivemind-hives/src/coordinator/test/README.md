@@ -8,6 +8,10 @@
 | `privacy.rs` | Private child reads, SQLite reopen, addressed-thread attribution |
 | `failures.rs` | Boundary errors and failed-runner isolation |
 | `review_regressions.rs` | Leave-before-claim admission, private initial outputs, direct replies |
+| `transactions.rs` | Incremental appends, conflict reload/retry, storage failure, cancelled-turn flush, retention |
+| `observation.rs` | Host transcript reads, the revision watch, episode phases |
+| `starters.rs` | Host-chosen starters, their validation, and the unchanged wire form |
+| `release.rs` | Release notes delivered once, across restart, and the unchanged wire form |
 
 Tests use scripted runner futures, barriers, and notifications. They require no
 network, clock-based sleeps, or OpenHuman model calls.

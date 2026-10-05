@@ -1,0 +1,377 @@
+//! Incremental commits outside the live lock, writer fencing, retention, and the inbox bound.
+#![allow(clippy::unwrap_used)]
+use super::*;
+use crate::{Commit, DeliveryStatus, RetentionPolicy, Storage, StorageFuture, StoredState};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Memory storage that records each commit's appended rows and can be told
+/// to fail the next commits, with a conflict or a plain storage error.
+#[derive(Default)]
+pub(super) struct Recording {
+    inner: MemoryStorage,
+    appended: std::sync::Mutex<Vec<usize>>,
+    conflicts: AtomicUsize,
+    failures: AtomicUsize,
+}
+impl Recording {
+    pub(super) fn fail_next_commits(&self, count: usize) {
+        self.failures.store(count, Ordering::SeqCst);
+    }
+}
+impl Storage for Recording {
+    fn load(&self) -> StorageFuture<'_, StoredState> {
+        self.inner.load()
+    }
+    fn commit<'a>(&'a self, commit: Commit<'a>) -> StorageFuture<'a, ()> {
+        if self.failures.load(Ordering::SeqCst) > 0 {
+            self.failures.fetch_sub(1, Ordering::SeqCst);
+            return Box::pin(async { Err(Error::InvalidState("store offline".into())) });
+        }
+        if self.conflicts.load(Ordering::SeqCst) > 0 {
+            self.conflicts.fetch_sub(1, Ordering::SeqCst);
+            return Box::pin(async {
+                Err(Error::RevisionConflict {
+                    expected: 0,
+                    actual: 1,
+                })
+            });
+        }
+        self.appended.lock().unwrap().push(commit.appended.len());
+        self.inner.commit(commit)
+    }
+}
+async fn over(storage: Arc<Recording>, options: CoordinatorOptions) -> Coordinator {
+    Coordinator::new("runtime".into(), storage, options)
+        .await
+        .unwrap()
+}
+#[tokio::test]
+async fn commits_append_only_new_transcript_rows() {
+    let storage = Arc::new(Recording::default());
+    let c = over(storage.clone(), CoordinatorOptions::default()).await;
+    add(&c, "a", |request| {
+        Box::pin(async move {
+            let mut outcome = done(&request);
+            outcome.reply = Some("reply".into());
+            Ok(outcome)
+        })
+    })
+    .await;
+    storage.appended.lock().unwrap().clear();
+    c.send_as_host(message("one", Destination::Agent("a".into())))
+        .await
+        .unwrap();
+    c.run_until_idle().await.unwrap();
+    // Acceptance appends one row, the claim none, the reply one.
+    assert_eq!(*storage.appended.lock().unwrap(), [1, 0, 1]);
+    let stored = storage.load().await.unwrap();
+    assert_eq!(stored.messages.len(), 2);
+    assert!(stored.accepted.contains_key("one"));
+}
+#[tokio::test]
+async fn conflicts_and_storage_failures_are_fatal() {
+    let storage = Arc::new(Recording::default());
+    let c = over(storage.clone(), CoordinatorOptions::default()).await;
+    add(&c, "a", |request| {
+        Box::pin(async move { Ok(done(&request)) })
+    })
+    .await;
+
+    // With single-writer fencing, any conflict is fatal (not retried).
+    storage.conflicts.store(1, Ordering::SeqCst);
+    assert!(matches!(
+        c.send_as_host(message("conflict", Destination::Agent("a".into())))
+            .await,
+        Err(Error::RevisionConflict { .. })
+    ));
+    assert_eq!(c.lock().unwrap().durable.messages.len(), 0);
+    assert_eq!(storage.load().await.unwrap().messages.len(), 0);
+
+    // Storage failures are also fatal.
+    storage.fail_next_commits(1);
+    assert!(matches!(
+        c.send_as_host(message("offline", Destination::Agent("a".into())))
+            .await,
+        Err(Error::InvalidState(_))
+    ));
+    assert_eq!(storage.load().await.unwrap().messages.len(), 0);
+}
+#[tokio::test]
+async fn a_cancelled_turn_is_persisted_by_the_next_drain() {
+    let storage = Arc::new(Recording::default());
+    let c = over(storage.clone(), CoordinatorOptions::default()).await;
+    let started = Arc::new(tokio::sync::Notify::new());
+    let signal = started.clone();
+    add(&c, "a", move |_| {
+        let signal = signal.clone();
+        Box::pin(async move {
+            signal.notify_one();
+            std::future::pending().await
+        })
+    })
+    .await;
+    c.send_as_host(message("cancelled", Destination::Agent("a".into())))
+        .await
+        .unwrap();
+    let mut drain = Box::pin(c.run_until_idle());
+    tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
+    drop(drain);
+    assert_eq!(c.interruptions().unwrap().len(), 1);
+    assert_eq!(storage.load().await.unwrap().interruptions.len(), 0);
+    // A commit computed from a base without the interruption keeps it live.
+    hive(&c, "work", &["a"]).await;
+    assert_eq!(c.interruptions().unwrap().len(), 1);
+    c.run_until_idle().await.unwrap();
+    let stored = storage.load().await.unwrap();
+    assert_eq!(stored.interruptions.len(), 1);
+    assert!(stored.running.is_empty());
+    assert_eq!(c.interruptions().unwrap().len(), 1);
+}
+#[tokio::test]
+async fn retention_bounds_settled_episodes_and_acknowledged_deliveries() {
+    let storage = Arc::new(Recording::default());
+    let c = over(
+        storage.clone(),
+        CoordinatorOptions {
+            retention: RetentionPolicy {
+                settled_episodes: Some(1),
+                delivered: Some(1),
+                interrupted: None,
+                pending_per_agent: None,
+            },
+            ..CoordinatorOptions::default()
+        },
+    )
+    .await;
+    let actions = c.clone();
+    add(&c, "a", move |request| {
+        let c = actions.clone();
+        Box::pin(async move {
+            if let Some(episode) = &request.episode {
+                c.submit_action(
+                    "a",
+                    &episode.episode_id,
+                    EpisodeAction::Complete {
+                        body: "done".into(),
+                    },
+                )
+                .await?;
+            }
+            Ok(done(&request))
+        })
+    })
+    .await;
+    hive(&c, "work", &["a"]).await;
+    for id in ["one", "two", "three"] {
+        c.send_as_host(message(id, Destination::Hive("work".into())))
+            .await
+            .unwrap();
+        c.send_as_host(message(
+            &format!("direct-{id}"),
+            Destination::Agent("a".into()),
+        ))
+        .await
+        .unwrap();
+    }
+    c.run_until_idle().await.unwrap();
+    let stored = storage.load().await.unwrap();
+    assert_eq!(stored.episodes.len(), 1);
+    assert_eq!(stored.episodes[0].episode_id, "episode:4");
+    assert_eq!(stored.deliveries.len(), 1);
+    // The transcript itself is never pruned.
+    assert!(stored.messages.len() >= 6);
+}
+#[tokio::test]
+async fn deferred_interruptions_persist_correctly_after_recovery() {
+    // Regression test for P1: deferred interruptions must persist correctly
+    // when a coordinator recovers from a crash.
+    let storage = Arc::new(Recording::default());
+    let c = over(storage.clone(), CoordinatorOptions::default()).await;
+    let started = Arc::new(tokio::sync::Notify::new());
+    let signal = started.clone();
+    add(&c, "a", move |_request| {
+        let signal = signal.clone();
+        Box::pin(async move {
+            signal.notify_one();
+            std::future::pending().await
+        })
+    })
+    .await;
+    // Send a message and cancel the turn mid-execution, leaving a deferred interruption.
+    c.send_as_host(message("msg", Destination::Agent("a".into())))
+        .await
+        .unwrap();
+    let mut drain = Box::pin(c.run_until_idle());
+    tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
+    drop(drain);
+    assert_eq!(c.interruptions().unwrap().len(), 1);
+    // The deferred interruption is in live state but not yet persisted.
+    // Create a new hive to trigger a commit.
+    hive(&c, "work", &["a"]).await;
+    // Now the coordinator persists the deferred interruption.
+    c.run_until_idle().await.unwrap();
+    // The interruption should now be persisted.
+    let stored = storage.load().await.unwrap();
+    assert_eq!(stored.interruptions.len(), 1);
+    assert_eq!(stored.interruptions[0].message_ids[0], "msg");
+}
+#[tokio::test]
+async fn retention_bounds_interrupted_records() {
+    // Regression test for P2: retention policy must also prune interrupted
+    // deliveries and interruption records, not just delivered ones.
+    let storage = Arc::new(Recording::default());
+    let c = over(
+        storage.clone(),
+        CoordinatorOptions {
+            retention: RetentionPolicy {
+                settled_episodes: Some(1),
+                delivered: Some(1),
+                interrupted: Some(1),
+                pending_per_agent: None,
+            },
+            ..CoordinatorOptions::default()
+        },
+    )
+    .await;
+    // One runner that never returns: every claimed turn is cancelled by
+    // dropping the drain, which records an interruption.
+    let started = Arc::new(tokio::sync::Notify::new());
+    let signal = started.clone();
+    add(&c, "a", move |_| {
+        let signal = signal.clone();
+        Box::pin(async move {
+            signal.notify_one();
+            std::future::pending().await
+        })
+    })
+    .await;
+    for i in 1..=3 {
+        c.send_as_host(message(&format!("msg-{i}"), Destination::Agent("a".into())))
+            .await
+            .unwrap();
+        let mut drain = Box::pin(c.run_until_idle());
+        tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
+        drop(drain);
+    }
+    // Retention already prunes on every commit, so the live list is bounded too.
+    assert!(c.interruptions().unwrap().len() <= 2);
+    // Trigger a commit to apply retention.
+    hive(&c, "work", &["a"]).await;
+    c.run_until_idle().await.unwrap();
+    let stored = storage.load().await.unwrap();
+    // With interrupted=Some(1), only the most recent interruption should be kept.
+    assert_eq!(stored.interruptions.len(), 1);
+    assert_eq!(stored.interruptions[0].message_ids[0], "msg-3");
+    // Also check that interrupted deliveries were pruned.
+    let interrupted_deliveries = stored
+        .deliveries
+        .iter()
+        .filter(|d| d.status == DeliveryStatus::Interrupted)
+        .count();
+    assert_eq!(interrupted_deliveries, 1);
+}
+#[tokio::test]
+async fn a_full_inbox_refuses_the_send_and_stores_nothing() {
+    let c = Coordinator::new(
+        "runtime".into(),
+        Arc::new(MemoryStorage::new()),
+        CoordinatorOptions {
+            retention: RetentionPolicy {
+                pending_per_agent: Some(2),
+                ..RetentionPolicy::default()
+            },
+            ..CoordinatorOptions::default()
+        },
+    )
+    .await
+    .unwrap();
+    for id in ["offline", "other"] {
+        add(&c, id, |request| {
+            Box::pin(async move { Ok(done(&request)) })
+        })
+        .await;
+    }
+    // Nothing runs, so every delivery to `offline` stays pending.
+    for id in ["m1", "m2"] {
+        c.send_as_host(message(id, Destination::Agent("offline".into())))
+            .await
+            .unwrap();
+    }
+    let refused = c
+        .send_as_host(message("m3", Destination::Agent("offline".into())))
+        .await;
+    assert!(
+        matches!(&refused, Err(Error::InboxFull { agent_id, limit: 2 }) if agent_id == "offline"),
+        "{refused:?}"
+    );
+    assert!(
+        refused
+            .unwrap_err()
+            .to_string()
+            .contains("inbox of offline is full")
+    );
+    assert_eq!(c.read_transcript(None).unwrap().len(), 2);
+    // The bound is per recipient.
+    c.send_as_host(message("m4", Destination::Agent("other".into())))
+        .await
+        .unwrap();
+    // Draining the inbox makes room again.
+    c.run_until_idle().await.unwrap();
+    c.send_as_host(message("m5", Destination::Agent("offline".into())))
+        .await
+        .unwrap();
+}
+#[tokio::test]
+async fn a_newer_coordinator_fences_the_older_one_out_of_the_store() {
+    let storage = Arc::new(MemoryStorage::new());
+    let old = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+    // A clean start still persists its claim.
+    assert_eq!(storage.load().await.unwrap().writer_epoch, 1);
+    hive(&old, "before", &[]).await;
+    let new = Coordinator::new(
+        "runtime".into(),
+        storage.clone(),
+        CoordinatorOptions::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(storage.load().await.unwrap().writer_epoch, 2);
+    let info = |id: &str| HiveInfo {
+        hive_id: id.into(),
+        name: id.into(),
+        description: None,
+        members: Vec::new(),
+    };
+    for attempt in ["first", "second"] {
+        let refused = old.create_hive(info(attempt)).await;
+        assert!(
+            matches!(
+                refused,
+                Err(Error::Fenced {
+                    coordinator: 1,
+                    stored: 2
+                })
+            ),
+            "{attempt}: {refused:?}"
+        );
+    }
+    assert!(matches!(
+        old.run_until_idle().await,
+        Ok(_) | Err(Error::Fenced { .. })
+    ));
+    // The new owner sees the old owner's committed work and keeps writing.
+    new.create_hive(info("after")).await.unwrap();
+    let hives: Vec<_> = new
+        .list_hives()
+        .unwrap()
+        .into_iter()
+        .map(|hive| hive.hive_id)
+        .collect();
+    assert_eq!(hives, ["after", "before"]);
+}

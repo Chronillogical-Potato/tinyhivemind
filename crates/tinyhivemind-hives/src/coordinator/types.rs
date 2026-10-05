@@ -1,5 +1,5 @@
 //! Coordinator payloads and the host runner boundary.
-use crate::Result;
+use crate::{Result, RetentionPolicy};
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin, sync::Arc};
 use tinyhivemind_core::driver::ConductPolicy;
@@ -40,6 +40,8 @@ pub struct CoordinatorOptions {
     pub conduct_policy: ConductPolicy,
     /// Broadcasts per assignment; `None` preserves the driver's default.
     pub broadcast_budget: Option<u32>,
+    /// Bounds on settled records kept in the state row; keeps all by default.
+    pub retention: RetentionPolicy,
 }
 impl Default for CoordinatorOptions {
     fn default() -> Self {
@@ -47,6 +49,7 @@ impl Default for CoordinatorOptions {
             round_width: 1,
             conduct_policy: ConductPolicy::default(),
             broadcast_budget: None,
+            retention: RetentionPolicy::default(),
         }
     }
 }
@@ -63,6 +66,10 @@ pub struct TurnRequest {
     pub memberships: Vec<HiveInfo>,
     /// Active conductor assignment, absent for direct messages.
     pub episode: Option<EpisodeContext>,
+    /// Host note from [`crate::Coordinator::release_with`], delivered once
+    /// on the first turn claimed after the release.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resumption: Option<String>,
 }
 /// Successfully returned runner state.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -153,6 +160,11 @@ pub struct SendMessage {
     pub thread: Option<u64>,
     /// Optional private recipients within the target hive.
     pub only_for: Vec<String>,
+    /// Hive members who start the episode; empty starts every recipient.
+    /// Unlike `only_for` this narrows who acts first, not who can read:
+    /// the message stays visible to all its readers. Hive messages only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub starters: Vec<String>,
 }
 /// Receipt returned without waiting for the destination agent.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -197,6 +209,34 @@ pub struct RunReport {
     pub failed: usize,
     /// Turns awaiting explicit release.
     pub parked: usize,
+}
+/// Host-facing status of one conducted hive episode.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EpisodeStatus {
+    /// Durable episode identity.
+    pub episode_id: String,
+    /// Hive the episode runs in.
+    pub hive_id: String,
+    /// Sequence of the message that opened it.
+    pub opened_at: u64,
+    /// Addressed outer conversation, absent on the open hive.
+    pub thread: Option<u64>,
+    /// Members the opening message started.
+    pub starters: Vec<String>,
+    /// Where the episode stands.
+    pub phase: EpisodePhase,
+}
+/// Lifecycle of an episode as a host observes it.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum EpisodePhase {
+    /// Running or queued behind its hive's earlier episode.
+    Open,
+    /// Every remaining seat is parked; waiting for `release`.
+    AwaitingRelease,
+    /// Finished normally.
+    Settled,
+    /// Stopped by a wall, a conductor error, or an interrupted turn.
+    Failed(String),
 }
 /// Uncertain turn effects which must not be replayed automatically.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -25,6 +25,9 @@ pub enum Error {
     /// Host explicitly denied management.
     #[error("management denied: {0}")]
     Unauthorized(String),
+    /// The host send policy refused an outbound tool call.
+    #[error("send denied: {0}")]
+    SendDenied(String),
     /// Shared adapter state was poisoned.
     #[error("adapter lock poisoned")]
     Poisoned,
@@ -57,6 +60,12 @@ pub enum Error {
     /// or the engine's credential is missing).
     #[error(transparent)]
     Memory(#[from] openhuman_core::memory::MemoryError),
+    /// A turn timeout of zero would fail every turn before it starts.
+    #[error("turn timeout must be nonzero")]
+    InvalidTurnTimeout,
+    /// A failed `replace_agent` left the agent without a live handle.
+    #[error("agent {0} has no live handle; retry replace_agent")]
+    NoHandle(String),
     /// Agent turn exceeded the wall.
     #[error("agent turn timed out")]
     TimedOut,

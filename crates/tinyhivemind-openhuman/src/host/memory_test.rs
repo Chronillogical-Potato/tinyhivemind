@@ -25,12 +25,13 @@ async fn runtime_with(config: openhuman_embed::RuntimeConfig) -> (Runtime, wirem
     (runtime, backend)
 }
 
-fn host_on(runtime: &Runtime) -> OpenHumanHost {
+async fn host_on(runtime: &Runtime) -> OpenHumanHost {
     let coordinator = Coordinator::new(
         runtime.runtime_id().into(),
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap();
     OpenHumanHost::new(runtime.runtime_id().into(), coordinator).unwrap()
 }
@@ -56,7 +57,10 @@ fn every_seat_registered_with_hive_memory_is_bound_under_the_hive_root() {
             Some("team:hive-1")
         );
         for seat in ["scout", "critic", "writer"] {
-            let agent = host.register_spec(&runtime, AgentSpec::new(seat)).unwrap();
+            let agent = host
+                .register_spec(&runtime, AgentSpec::new(seat))
+                .await
+                .unwrap();
             assert_eq!(bound(&agent), (Some(seat), Some("team:hive-1")));
         }
         let registered: Vec<_> = host.inner.agents.lock().unwrap().keys().cloned().collect();
@@ -71,11 +75,12 @@ fn seats_carry_no_binding_when_hive_memory_is_off() {
         assert!(host.hive_memory().is_none());
         let agent = host
             .register_spec(&runtime, AgentSpec::new("scout"))
+            .await
             .unwrap();
         assert_eq!(bound(&agent), (None, None));
         // An unbound agent built elsewhere registers as before.
         let other = runtime.agent(AgentSpec::new("critic")).unwrap();
-        host.register_agent(other).unwrap();
+        host.register_agent(other).await.unwrap();
     });
 }
 
@@ -87,7 +92,9 @@ fn a_seat_bound_by_the_host_itself_registers() {
         let host = host.with_hive_memory(memory.clone()).unwrap();
         let spec = memory.bind(AgentSpec::new("scout")).unwrap();
         let agent = runtime.agent(spec).unwrap();
-        host.register_agent_in_session(agent, "session-1").unwrap();
+        host.register_agent_in_session(agent, "session-1")
+            .await
+            .unwrap();
     });
 }
 
@@ -97,7 +104,7 @@ fn rejects_a_seat_built_without_the_hive_binding() {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
         let unbound = runtime.agent(AgentSpec::new("scout")).unwrap();
-        let error = host.register_agent(unbound).unwrap_err();
+        let error = host.register_agent(unbound).await.unwrap_err();
         assert!(
             matches!(&error, Error::UnboundSeat { seat, .. } if seat == "scout"),
             "{error}"
@@ -105,12 +112,14 @@ fn rejects_a_seat_built_without_the_hive_binding() {
         let elsewhere = hive("hive-2").bind(AgentSpec::new("critic")).unwrap();
         let error = host
             .register_agent(runtime.agent(elsewhere).unwrap())
+            .await
             .unwrap_err();
         assert!(error.to_string().contains("team:hive-2"), "{error}");
         let renamed = AgentSpec::new("writer")
             .memory(openhuman_embed::MemoryBinding::new("someone-else").root("team:hive-1"));
         let error = host
             .register_agent(runtime.agent(renamed).unwrap())
+            .await
             .unwrap_err();
         assert!(error.to_string().contains("someone-else"), "{error}");
         assert!(host.inner.agents.lock().unwrap().is_empty());
@@ -123,12 +132,15 @@ fn an_unusable_seat_id_fails_before_the_runtime_sees_it() {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         let host = host.with_hive_memory(hive("hive-1")).unwrap();
         assert!(matches!(
-            host.register_spec(&runtime, AgentSpec::new("Bad Seat")),
+            host.register_spec(&runtime, AgentSpec::new("Bad Seat"))
+                .await,
             Err(Error::InvalidMemoryAgentId { .. })
         ));
-        let plain = host_on(&runtime);
+        let plain = host_on(&runtime).await;
         assert!(matches!(
-            plain.register_spec(&runtime, AgentSpec::new("Bad Seat")),
+            plain
+                .register_spec(&runtime, AgentSpec::new("Bad Seat"))
+                .await,
             Err(Error::Agent(_))
         ));
     });
@@ -141,18 +153,26 @@ fn the_recall_budget_reaches_seats_through_the_runtime_config() {
         let mut config = offline::config();
         memory.configure(&mut config);
         let (runtime, _backend) = Box::pin(runtime_with(config)).await;
-        let host = host_on(&runtime).with_hive_memory(memory.clone()).unwrap();
+        let host = host_on(&runtime)
+            .await
+            .with_hive_memory(memory.clone())
+            .unwrap();
         let agent = host
             .register_spec(&runtime, AgentSpec::new("scout"))
+            .await
             .unwrap();
         assert_eq!(agent.config().memory.recall.budget_tokens, 640);
         // One runtime per process: release this one before the next.
         drop((agent, host, runtime));
 
         let (unconfigured, _backend) = Box::pin(runtime_with(offline::config())).await;
-        let host = host_on(&unconfigured).with_hive_memory(memory).unwrap();
+        let host = host_on(&unconfigured)
+            .await
+            .with_hive_memory(memory)
+            .unwrap();
         let error = host
             .register_spec(&unconfigured, AgentSpec::new("scout"))
+            .await
             .unwrap_err();
         assert!(
             matches!(&error, Error::UnboundSeat { reason, .. } if reason.contains("640")),
@@ -166,6 +186,7 @@ fn hive_memory_cannot_change_after_registration() {
     on_runtime(|| async {
         let (runtime, _backend, host) = Box::pin(fixture()).await;
         host.register_spec(&runtime, AgentSpec::new("scout"))
+            .await
             .unwrap();
         assert!(matches!(
             host.with_hive_memory(hive("hive-1")),

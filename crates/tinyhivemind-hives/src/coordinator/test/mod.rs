@@ -4,13 +4,14 @@
 use super::*;
 use crate::MemoryStorage;
 use std::sync::Arc;
-#[test]
-fn creates_empty_hives_but_rejects_delivery_without_members() {
+#[tokio::test]
+async fn creates_empty_hives_but_rejects_delivery_without_members() {
     let c = Coordinator::new(
         "runtime".into(),
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap();
     let hive = HiveInfo {
         hive_id: "work".into(),
@@ -18,8 +19,8 @@ fn creates_empty_hives_but_rejects_delivery_without_members() {
         description: None,
         members: vec![],
     };
-    c.create_hive(hive.clone()).unwrap();
-    c.create_hive(hive).unwrap();
+    c.create_hive(hive.clone()).await.unwrap();
+    c.create_hive(hive).await.unwrap();
     assert_eq!(c.list_hives().unwrap().len(), 1);
     assert!(
         c.send_as_host(SendMessage {
@@ -28,8 +29,10 @@ fn creates_empty_hives_but_rejects_delivery_without_members() {
             destination: Destination::Hive("work".into()),
             body: "task".into(),
             thread: None,
-            only_for: vec![]
+            only_for: vec![],
+            starters: Vec::new(),
         })
+        .await
         .is_err()
     );
 }
@@ -40,15 +43,16 @@ impl AgentRunner for Script {
         (self.0)(request)
     }
 }
-fn setup() -> Coordinator {
+async fn setup() -> Coordinator {
     Coordinator::new(
         "runtime".into(),
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap()
 }
-fn add(
+async fn add(
     c: &Coordinator,
     id: &str,
     run: impl Fn(TurnRequest) -> TurnFuture + Send + Sync + 'static,
@@ -59,16 +63,18 @@ fn add(
         runtime_id: "runtime".into(),
         runner: runner.clone(),
     })
+    .await
     .unwrap();
     runner
 }
-fn hive(c: &Coordinator, id: &str, ids: &[&str]) {
+async fn hive(c: &Coordinator, id: &str, ids: &[&str]) {
     c.create_hive(HiveInfo {
         hive_id: id.into(),
         name: id.into(),
         description: None,
         members: ids.iter().map(|id| (*id).into()).collect(),
     })
+    .await
     .unwrap();
 }
 fn message(id: &str, target: Destination) -> SendMessage {
@@ -79,6 +85,7 @@ fn message(id: &str, target: Destination) -> SendMessage {
         body: id.into(),
         thread: None,
         only_for: Vec::new(),
+        starters: Vec::new(),
     }
 }
 fn done(request: &TurnRequest) -> TurnOutcome {
@@ -92,24 +99,27 @@ fn done(request: &TurnRequest) -> TurnOutcome {
     }
 }
 
-#[test]
-fn registration_checks_runtime_handle_identity_and_ids() {
-    let c = setup();
+#[tokio::test]
+async fn registration_checks_runtime_handle_identity_and_ids() {
+    let c = setup().await;
     let runner = add(&c, "a", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    });
+    })
+    .await;
     c.register_agent(AgentRegistration {
         agent_id: "a".into(),
         runtime_id: "runtime".into(),
         runner: runner.clone(),
     })
+    .await
     .unwrap();
     assert!(matches!(
         c.register_agent(AgentRegistration {
             agent_id: "a".into(),
             runtime_id: "other".into(),
             runner: runner.clone()
-        }),
+        })
+        .await,
         Err(Error::RuntimeMismatch)
     ));
     let other = Arc::new(Script(Arc::new(|request| {
@@ -120,7 +130,8 @@ fn registration_checks_runtime_handle_identity_and_ids() {
             agent_id: "a".into(),
             runtime_id: "runtime".into(),
             runner: other
-        }),
+        })
+        .await,
         Err(Error::AgentConflict(_))
     ));
     assert!(
@@ -129,44 +140,49 @@ fn registration_checks_runtime_handle_identity_and_ids() {
             runtime_id: "runtime".into(),
             runner
         })
+        .await
         .is_err()
     );
 }
-#[test]
-fn acceptance_deduplicates_exact_payload_and_enforces_private_visibility() {
-    let c = setup();
+#[tokio::test]
+async fn acceptance_deduplicates_exact_payload_and_enforces_private_visibility() {
+    let c = setup().await;
     for id in ["a", "b", "c"] {
         add(&c, id, |request| {
             Box::pin(async move { Ok(done(&request)) })
-        });
+        })
+        .await;
     }
-    hive(&c, "work", &["a", "b"]);
+    hive(&c, "work", &["a", "b"]).await;
     let mut input = message("secret", Destination::Hive("work".into()));
     input.only_for = vec!["b".into()];
-    let receipt = c.send(input.clone()).unwrap();
-    assert_eq!(c.send(input.clone()).unwrap(), receipt);
+    let receipt = c.send(input.clone()).await.unwrap();
+    assert_eq!(c.send(input.clone()).await.unwrap(), receipt);
     input.body = "different".into();
-    assert!(matches!(c.send(input), Err(Error::MessageConflict(_))));
+    assert!(matches!(
+        c.send(input).await,
+        Err(Error::MessageConflict(_))
+    ));
     assert_eq!(c.read_hive("b", "work", None, None).unwrap().len(), 1);
     assert!(c.read_hive("c", "work", None, None).is_err());
-    c.join_hive("work", "c").unwrap();
+    c.join_hive("work", "c").await.unwrap();
     assert_eq!(
         c.read_hive("c", "work", None, None).unwrap(),
         Vec::<Message>::new()
     );
     let mut unauthorized = message("bad", Destination::Hive("work".into()));
     unauthorized.sender = "unknown".into();
-    assert!(c.send(unauthorized).is_err());
+    assert!(c.send(unauthorized).await.is_err());
     let mut bad_thread = message("thread", Destination::Hive("work".into()));
     bad_thread.thread = Some(999);
-    assert!(c.send(bad_thread).is_err());
-    c.leave_hive("work", "c").unwrap();
-    c.leave_hive("work", "c").unwrap();
+    assert!(c.send(bad_thread).await.is_err());
+    c.leave_hive("work", "c").await.unwrap();
+    c.leave_hive("work", "c").await.unwrap();
     assert!(c.read_hive("c", "work", None, None).is_err());
 }
 #[tokio::test]
 async fn one_agent_continues_one_session_across_three_hives() {
-    let c = setup();
+    let c = setup().await;
     let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
     let recorded = seen.clone();
     let actions = c.clone();
@@ -182,13 +198,16 @@ async fn one_agent_continues_one_session_across_three_hives() {
                 EpisodeAction::Complete {
                     body: "done".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(done(&request))
         })
-    });
+    })
+    .await;
     for id in ["one", "two", "three"] {
-        hive(&c, id, &["a"]);
+        hive(&c, id, &["a"]).await;
         c.send_as_host(message(id, Destination::Hive(id.into())))
+            .await
             .unwrap();
     }
     assert_eq!(c.run_until_idle().await.unwrap().completed, 3);
@@ -206,7 +225,7 @@ async fn one_agent_continues_one_session_across_three_hives() {
 }
 #[tokio::test]
 async fn conductor_opens_child_ask_and_delivers_its_conclusion() {
-    let c = setup();
+    let c = setup().await;
     let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
     for id in ["a", "b"] {
         let c2 = c.clone();
@@ -225,7 +244,8 @@ async fn conductor_opens_child_ask_and_delivers_its_conclusion() {
                             agents: vec!["b".into()],
                             body: "question".into(),
                         },
-                    )?;
+                    )
+                    .await?;
                 } else {
                     c.submit_action(
                         &request.agent_id,
@@ -237,16 +257,18 @@ async fn conductor_opens_child_ask_and_delivers_its_conclusion() {
                                 "done".into()
                             },
                         },
-                    )?;
+                    )
+                    .await?;
                 }
                 Ok(done(&request))
             })
-        });
+        })
+        .await;
     }
-    hive(&c, "work", &["a", "b"]);
+    hive(&c, "work", &["a", "b"]).await;
     let mut input = message("task", Destination::Hive("work".into()));
     input.only_for = vec!["a".into()];
-    c.send_as_host(input).unwrap();
+    c.send_as_host(input).await.unwrap();
     c.run_until_idle().await.unwrap();
     let seen = seen.lock().unwrap();
     assert!(
@@ -259,21 +281,27 @@ async fn conductor_opens_child_ask_and_delivers_its_conclusion() {
 }
 #[tokio::test]
 async fn membership_removed_before_claim_prevents_later_delivery() {
-    let c = setup();
+    let c = setup().await;
     add(&c, "a", |_| {
         Box::pin(async { panic!("removed agent must not run") })
-    });
-    hive(&c, "work", &["a"]);
+    })
+    .await;
+    hive(&c, "work", &["a"]).await;
     c.send_as_host(message("task", Destination::Hive("work".into())))
+        .await
         .unwrap();
     c.advance().await.unwrap();
-    c.leave_hive("work", "a").unwrap();
+    c.leave_hive("work", "a").await.unwrap();
     assert_eq!(c.run_until_idle().await.unwrap().completed, 0);
 }
 mod failures;
 mod finalization;
 mod lifecycle;
+mod observation;
 mod privacy;
 mod registration;
+mod release;
 mod review_regressions;
 mod scheduling;
+mod starters;
+mod transactions;

@@ -29,6 +29,7 @@ async fn fixture() -> (Runtime, wiremock::MockServer, OpenHumanHost) {
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap();
     let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator).unwrap();
     (runtime, backend, host)
@@ -73,14 +74,23 @@ fn supplied_clones_attach_once_and_drop_services_without_cycle() {
                 "agent"
             );
             assert!(format!("{bound:?}").contains("agent"));
-            assert!(DefaultHooks.progress("agent").is_none());
+            let scope = TurnScope::from_request(&tinyhivemind_hives::TurnRequest {
+                agent_id: "agent".into(),
+                session_id: None,
+                messages: vec![],
+                memberships: vec![],
+                episode: None,
+                resumption: None,
+            });
+            assert!(DefaultHooks.progress(&scope).is_none());
+            assert_eq!(DefaultHooks.prepare(&scope), TurnOptions::default());
             assert_eq!(
-                DefaultHooks.after_turn("agent", None).unwrap(),
+                DefaultHooks.after_turn(&scope, None).unwrap(),
                 tinyhivemind_hives::TurnDisposition::Completed
             );
             let pass = DefaultHooks
                 .wrap_turn(
-                    "agent",
+                    &scope,
                     Box::pin(async {
                         Ok(openhuman_embed::TurnOutcome {
                             reply: "passthrough".into(),
@@ -94,11 +104,13 @@ fn supplied_clones_attach_once_and_drop_services_without_cycle() {
             assert_eq!(pass.reply, "passthrough");
             let weak = Arc::downgrade(&host.inner);
             host.register_agent_in_session(agent.clone(), "existing")
+                .await
                 .unwrap();
-            host.register_agent(agent.clone()).unwrap();
+            host.register_agent(agent.clone()).await.unwrap();
             assert_eq!(host.coordinator().list_agents().unwrap(), vec!["agent"]);
             assert!(
                 host.register_agent_in_session(agent.clone(), "other")
+                    .await
                     .is_err()
             );
             let clone = host.clone();
@@ -117,7 +129,7 @@ fn supplied_clones_attach_once_and_drop_services_without_cycle() {
         .unwrap();
     });
 }
-fn foreign_host() -> OpenHumanHost {
+async fn foreign_host() -> OpenHumanHost {
     OpenHumanHost::new(
         "foreign".into(),
         Coordinator::new(
@@ -125,6 +137,7 @@ fn foreign_host() -> OpenHumanHost {
             Arc::new(MemoryStorage::new()),
             CoordinatorOptions::default(),
         )
+        .await
         .unwrap(),
     )
     .unwrap()
@@ -137,9 +150,11 @@ fn rejects_other_runtime_and_authorizes_before_factory() {
     executor().block_on(async {
         tokio::spawn(async {
             let (runtime, _backend, host) = Box::pin(fixture()).await;
-            let foreign = foreign_host();
+            let foreign = foreign_host().await;
             assert!(matches!(
-                foreign.register_agent(runtime.agent(AgentSpec::new("foreign")).unwrap()),
+                foreign
+                    .register_agent(runtime.agent(AgentSpec::new("foreign")).unwrap())
+                    .await,
                 Err(Error::RuntimeMismatch)
             ));
             assert!(matches!(
@@ -176,6 +191,7 @@ fn rejects_other_runtime_and_authorizes_before_factory() {
             );
             assert_eq!(host.coordinator().list_agents().unwrap().len(), 0);
             host.register_agent(runtime.agent(AgentSpec::new("a")).unwrap())
+                .await
                 .unwrap();
             let generated = host
                 .manage(
@@ -233,12 +249,12 @@ struct Hooks {
     wrapped: std::sync::atomic::AtomicUsize,
 }
 impl TurnHooks for Hooks {
-    fn progress(&self, _: &str) -> Option<TurnProgressSink> {
+    fn progress(&self, _: &TurnScope) -> Option<TurnProgressSink> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(8);
         tokio::spawn(async move { while rx.recv().await.is_some() {} });
         Some(tx)
     }
-    fn wrap_turn<'a>(&'a self, _: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
+    fn wrap_turn<'a>(&'a self, _: &'a TurnScope, turn: HostedTurn<'a>) -> HostedTurn<'a> {
         self.wrapped
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if self.mode.load(std::sync::atomic::Ordering::SeqCst) == 3 {
@@ -249,7 +265,7 @@ impl TurnHooks for Hooks {
     }
     fn after_turn(
         &self,
-        _: &str,
+        _: &TurnScope,
         usage: Option<&openhuman_core::agent::tinyagents::host::LastTurnUsage>,
     ) -> Result<tinyhivemind_hives::TurnDisposition> {
         use std::sync::atomic::Ordering;
@@ -290,9 +306,9 @@ fn continuing_runner_preserves_history_and_finalizes_all_outcomes() {
         let agent = runtime.agent(AgentSpec::new("metered")
             .provider(openhuman_embed::Provider::openai_compatible(format!("{}/v1",provider.uri()),"fixture").model("fixture"))
             .system_prompt("HOST_CONFIGURED_PROMPT")).unwrap();
-        host.register_agent(agent).unwrap();
+        host.register_agent(agent).await.unwrap();
         let runner = host.inner.agents.lock().unwrap()["metered"].runner.clone();
-        let mut request = TurnRequest { agent_id:"metered".into(),session_id:None,messages:vec![],memberships:vec![],episode:None };
+        let mut request = TurnRequest { agent_id:"metered".into(),session_id:None,messages:vec![],memberships:vec![],episode:None,resumption:None };
         let first = runner.run(request.clone()).await.unwrap();
         assert_eq!(first.reply.as_deref(),Some("HOST_REPLY"));
         request.session_id = Some(first.session_id.clone());
@@ -321,20 +337,21 @@ struct RegistrationStorage {
     memory: MemoryStorage,
 }
 impl tinyhivemind_hives::Storage for RegistrationStorage {
-    fn load(&self) -> tinyhivemind_hives::Result<tinyhivemind_hives::StoredState> {
+    fn load(&self) -> tinyhivemind_hives::StorageFuture<'_, tinyhivemind_hives::StoredState> {
         tinyhivemind_hives::Storage::load(&self.memory)
     }
-    fn commit(
-        &self,
-        revision: u64,
-        state: &tinyhivemind_hives::StoredState,
-    ) -> tinyhivemind_hives::Result<()> {
+    fn commit<'a>(
+        &'a self,
+        commit: tinyhivemind_hives::Commit<'a>,
+    ) -> tinyhivemind_hives::StorageFuture<'a, ()> {
         if self.reject.load(std::sync::atomic::Ordering::SeqCst) {
-            Err(tinyhivemind_hives::Error::InvalidState(
-                "registration storage unavailable".into(),
-            ))
+            Box::pin(async {
+                Err(tinyhivemind_hives::Error::InvalidState(
+                    "registration storage unavailable".into(),
+                ))
+            })
         } else {
-            tinyhivemind_hives::Storage::commit(&self.memory, revision, state)
+            tinyhivemind_hives::Storage::commit(&self.memory, commit)
         }
     }
 }
@@ -347,18 +364,23 @@ fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
         tokio::spawn(async {
             let (runtime, _backend, _) = Box::pin(fixture()).await;
             let storage = Arc::new(RegistrationStorage {
-                reject: std::sync::atomic::AtomicBool::new(true),
+                reject: std::sync::atomic::AtomicBool::new(false),
                 memory: MemoryStorage::new(),
             });
+            // Construction commits the writer claim, so reject only afterwards.
             let coordinator = Coordinator::new(
                 runtime.runtime_id().into(),
                 storage.clone(),
                 CoordinatorOptions::default(),
             )
+            .await
             .unwrap();
+            storage
+                .reject
+                .store(true, std::sync::atomic::Ordering::SeqCst);
             let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator).unwrap();
             let agent = runtime.agent(AgentSpec::new("pending")).unwrap();
-            assert!(host.register_agent(agent.clone()).is_err());
+            assert!(host.register_agent(agent.clone()).await.is_err());
             assert_eq!(host.coordinator().list_agents().unwrap().len(), 0);
             let source = host.inner.agents.lock().unwrap()["pending"].source.clone();
             let tools = source(openhuman_embed::TurnContext::new("pending", None));
@@ -375,7 +397,7 @@ fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
             storage
                 .reject
                 .store(false, std::sync::atomic::Ordering::SeqCst);
-            host.register_agent(agent).unwrap();
+            host.register_agent(agent).await.unwrap();
             assert!(Arc::ptr_eq(
                 &source,
                 &host.inner.agents.lock().unwrap()["pending"].source
@@ -389,5 +411,9 @@ fn failed_registration_cannot_use_tools_and_retries_the_identical_attachment() {
 
 #[path = "continuity_test.rs"]
 mod continuity;
+#[path = "hooks_test.rs"]
+mod hooks;
 #[path = "memory_test.rs"]
 mod memory;
+#[path = "replace_test.rs"]
+mod replace;

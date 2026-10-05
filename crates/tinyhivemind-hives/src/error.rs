@@ -59,6 +59,27 @@ pub enum Error {
         /// Current stored revision.
         actual: u64,
     },
+    /// This coordinator's epoch is lower than the store's; a new process has
+    /// taken ownership. No further writes are possible.
+    #[error("coordinator fenced: writer epoch {coordinator} < stored {stored}")]
+    Fenced {
+        /// This coordinator's epoch.
+        coordinator: u64,
+        /// The epoch currently owning the store.
+        stored: u64,
+    },
+    /// The recipient already holds the most pending direct messages
+    /// [`crate::RetentionPolicy::pending_per_agent`] allows.
+    #[error("inbox of {agent_id} is full ({limit} pending)")]
+    InboxFull {
+        /// The recipient whose inbox is full.
+        agent_id: String,
+        /// The configured bound.
+        limit: usize,
+    },
+    /// An appended transcript row does not follow the stored transcript.
+    #[error("transcript row {0} does not extend the stored transcript")]
+    TranscriptOutOfOrder(u64),
     /// Next snapshot does not advance exactly one revision.
     #[error("invalid next storage revision")]
     InvalidRevision,

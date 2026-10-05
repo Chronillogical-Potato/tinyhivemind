@@ -5,7 +5,11 @@ a desk have one identity. Each registered agent has one continuing session and
 one globally serialized turn stream, even when it belongs to several hives.
 
 Use `Coordinator` with `MemoryStorage`, default-feature `SqliteStorage`, or a
-host implementation of `Storage`. The host supplies `AgentRunner` handles from
+host implementation of the async `Storage` port. A commit writes one bounded
+state row and appends only the new transcript rows; `RetentionPolicy` bounds
+settled episodes and acknowledged deliveries. Mutating APIs are `async` and
+executor-neutral; commits run outside the live lock and reload on a conflict
+with another process. The host supplies `AgentRunner` handles from
 one runtime; this crate never constructs agents or serializes live handles.
 The OpenHuman-specific boundary lives in `tinyhivemind-openhuman`.
 
@@ -14,6 +18,12 @@ Register an existing conversation atomically with
 claims it. Hosts can create empty hives and join/leave registered agents while
 the scheduler runs; unstarted removed seats are retired before claiming.
 An active turn retains its captured membership.
+
+The host reads everything with `read_transcript`, including replies to
+`send_as_host`, and watches `subscribe()` (the committed revision) and
+`episodes()` for settlement. `SendMessage::starters` chooses who starts an
+episode without hiding the message, and `release_with` hands a parked agent
+a note on its next turn.
 
 Direct sends return durable receipts without awaiting peers. `read_direct`
 exposes only the caller/peer pair, including returned replies, and starts no

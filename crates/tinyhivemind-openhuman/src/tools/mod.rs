@@ -1,7 +1,7 @@
 //! Stable native tools with bound attribution and weak service references.
 mod types;
 use crate::host::{Activation, Inner};
-use crate::{Error, ManagementRequest, OpenHumanHost, Result};
+use crate::{Error, ManagementRequest, OpenHumanHost, Result, SendRequest};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Weak;
@@ -72,6 +72,10 @@ impl HiveTool {
         let coordinator = host.coordinator();
         let text = |name: &str| args[name].as_str().unwrap_or_default().to_owned();
         let actor = &self.actor;
+        if let (Some(policy), Some(request)) = (&host.inner.send_policy, outbound(self.kind, &args))
+        {
+            policy.authorize(actor, &request)?;
+        }
         match self.kind {
             Kind::ListHives => Ok(serde_json::to_value(
                 coordinator
@@ -99,14 +103,19 @@ impl HiveTool {
                     Kind::SendHive => Destination::Hive(text("hive_id")),
                     _ => Destination::Agent(text("agent_id")),
                 };
-                Ok(serde_json::to_value(coordinator.send(SendMessage {
-                    message_id: text("message_id"),
-                    sender: actor.clone(),
-                    destination,
-                    body: text("body"),
-                    thread: args["thread"].as_u64(),
-                    only_for: strings(&args, "only_for"),
-                })?)?)
+                Ok(serde_json::to_value(
+                    coordinator
+                        .send(SendMessage {
+                            message_id: text("message_id"),
+                            sender: actor.clone(),
+                            destination,
+                            body: text("body"),
+                            thread: args["thread"].as_u64(),
+                            only_for: strings(&args, "only_for"),
+                            starters: Vec::new(),
+                        })
+                        .await?,
+                )?)
             }
             Kind::Post | Kind::Ask | Kind::Broadcast | Kind::Complete => {
                 let body = text("body");
@@ -119,65 +128,79 @@ impl HiveTool {
                     Kind::Broadcast => EpisodeAction::Broadcast { body },
                     _ => EpisodeAction::Complete { body },
                 };
-                submit(coordinator, actor, &text("episode_id"), action)
+                submit(coordinator, actor, &text("episode_id"), action).await
             }
-            Kind::CreateHive => {
-                host.manage(
-                    actor,
-                    ManagementRequest::CreateHive(HiveInfo {
-                        hive_id: text("hive_id"),
-                        name: text("name"),
-                        description: args["description"].as_str().map(str::to_owned),
-                        members: strings(&args, "members"),
-                    }),
-                )
-                .await
-            }
-            Kind::CreateAgent => {
-                host.manage(
-                    actor,
-                    ManagementRequest::CreateAgent {
-                        template: text("template"),
-                        config: args["config"].clone(),
-                    },
-                )
-                .await
-            }
-            Kind::JoinHive => {
-                host.manage(
-                    actor,
-                    ManagementRequest::JoinHive {
-                        hive_id: text("hive_id"),
-                        agent_id: text("agent_id"),
-                    },
-                )
-                .await
-            }
-            Kind::LeaveHive => {
-                host.manage(
-                    actor,
-                    ManagementRequest::LeaveHive {
-                        hive_id: text("hive_id"),
-                        agent_id: text("agent_id"),
-                    },
-                )
-                .await
+            Kind::CreateHive | Kind::CreateAgent | Kind::JoinHive | Kind::LeaveHive => {
+                host.manage(actor, management(self.kind, &args)).await
             }
         }
+    }
+}
+/// The send a gated tool's validated arguments describe; `None` for tools the
+/// send policy does not gate.
+fn outbound(kind: Kind, args: &Value) -> Option<SendRequest> {
+    let text = |name: &str| args[name].as_str().unwrap_or_default().to_owned();
+    Some(match kind {
+        Kind::SendAgent => SendRequest::Agent {
+            agent_id: text("agent_id"),
+            body: text("body"),
+        },
+        Kind::SendHive => SendRequest::Hive {
+            hive_id: text("hive_id"),
+            body: text("body"),
+            thread: args["thread"].as_u64(),
+            only_for: strings(args, "only_for"),
+        },
+        Kind::Ask => SendRequest::Ask {
+            episode_id: text("episode_id"),
+            agents: strings(args, "agents"),
+            body: text("body"),
+        },
+        Kind::Broadcast => SendRequest::Broadcast {
+            episode_id: text("episode_id"),
+            body: text("body"),
+        },
+        _ => return None,
+    })
+}
+/// The management request a management tool's validated arguments describe.
+fn management(kind: Kind, args: &Value) -> ManagementRequest {
+    let text = |name: &str| args[name].as_str().unwrap_or_default().to_owned();
+    match kind {
+        Kind::CreateHive => ManagementRequest::CreateHive(HiveInfo {
+            hive_id: text("hive_id"),
+            name: text("name"),
+            description: args["description"].as_str().map(str::to_owned),
+            members: strings(args, "members"),
+        }),
+        Kind::CreateAgent => ManagementRequest::CreateAgent {
+            template: text("template"),
+            config: args["config"].clone(),
+        },
+        Kind::JoinHive => ManagementRequest::JoinHive {
+            hive_id: text("hive_id"),
+            agent_id: text("agent_id"),
+        },
+        _ => ManagementRequest::LeaveHive {
+            hive_id: text("hive_id"),
+            agent_id: text("agent_id"),
+        },
     }
 }
 #[cfg(test)]
 mod direct_test;
 #[cfg(test)]
+mod policy_test;
+#[cfg(test)]
 mod test;
 
-fn submit(
+async fn submit(
     coordinator: &tinyhivemind_hives::Coordinator,
     actor: &str,
     episode: &str,
     action: EpisodeAction,
 ) -> Result<Value> {
-    coordinator.submit_action(actor, episode, action)?;
+    coordinator.submit_action(actor, episode, action).await?;
     Ok(serde_json::json!({"accepted":true}))
 }
 

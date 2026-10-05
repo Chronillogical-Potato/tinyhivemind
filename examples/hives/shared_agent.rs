@@ -30,13 +30,15 @@ impl AgentRunner for SharedAgent {
                     hive_id: episode.hive_id.clone(),
                     session_id: request.session_id.clone(),
                 });
-                coordinator.submit_action(
-                    &request.agent_id,
-                    &episode.episode_id,
-                    EpisodeAction::Complete {
-                        body: format!("Finished work in {}", episode.hive_id),
-                    },
-                )?;
+                coordinator
+                    .submit_action(
+                        &request.agent_id,
+                        &episode.episode_id,
+                        EpisodeAction::Complete {
+                            body: format!("Finished work in {}", episode.hive_id),
+                        },
+                    )
+                    .await?;
             }
             Ok(TurnOutcome {
                 session_id: request
@@ -55,32 +57,40 @@ async fn main() -> Result<()> {
         "example-runtime".into(),
         Arc::new(MemoryStorage::new()),
         CoordinatorOptions::default(),
-    )?;
+    )
+    .await?;
     let seen = Arc::new(Mutex::new(Vec::new()));
-    coordinator.register_agent(AgentRegistration {
-        agent_id: "specialist".into(),
-        runtime_id: "example-runtime".into(),
-        runner: Arc::new(SharedAgent {
-            coordinator: coordinator.clone(),
-            seen: seen.clone(),
-        }),
-    })?;
+    coordinator
+        .register_agent(AgentRegistration {
+            agent_id: "specialist".into(),
+            runtime_id: "example-runtime".into(),
+            runner: Arc::new(SharedAgent {
+                coordinator: coordinator.clone(),
+                seen: seen.clone(),
+            }),
+        })
+        .await?;
 
     for hive_id in ["research", "engineering", "release"] {
-        coordinator.create_hive(HiveInfo {
-            hive_id: hive_id.into(),
-            name: hive_id.into(),
-            description: None,
-            members: vec!["specialist".into()],
-        })?;
-        coordinator.send_as_host(SendMessage {
-            message_id: format!("task:{hive_id}"),
-            sender: String::new(),
-            destination: Destination::Hive(hive_id.into()),
-            body: format!("Handle the {hive_id} task."),
-            thread: None,
-            only_for: Vec::new(),
-        })?;
+        coordinator
+            .create_hive(HiveInfo {
+                hive_id: hive_id.into(),
+                name: hive_id.into(),
+                description: None,
+                members: vec!["specialist".into()],
+            })
+            .await?;
+        coordinator
+            .send_as_host(SendMessage {
+                message_id: format!("task:{hive_id}"),
+                sender: String::new(),
+                destination: Destination::Hive(hive_id.into()),
+                body: format!("Handle the {hive_id} task."),
+                thread: None,
+                only_for: Vec::new(),
+                starters: Vec::new(),
+            })
+            .await?;
     }
 
     let report = coordinator.run_until_idle().await?;

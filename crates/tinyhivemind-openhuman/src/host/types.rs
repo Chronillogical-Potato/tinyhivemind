@@ -1,8 +1,8 @@
 //! Host extension points and supplied handle types.
 use crate::Result;
 use openhuman_embed::Agent;
-use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
-use tinyhivemind_hives::{HiveInfo, TurnDisposition};
+use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
+use tinyhivemind_hives::{Destination, EpisodeContext, HiveInfo, TurnDisposition, TurnRequest};
 /// Default maximum duration of a supplied agent turn.
 pub const TURN_TIMEOUT: Duration = Duration::from_secs(300);
 /// Host factory result future.
@@ -21,6 +21,56 @@ pub trait ManagementAuthorizer: Send + Sync {
     /// # Errors
     /// Return a denial when the actor cannot perform this request.
     fn authorize(&self, actor: &str, request: &ManagementRequest) -> Result<()>;
+}
+/// Host policy over what an agent may send, mirroring [`ManagementAuthorizer`].
+///
+/// Consulted by `hivemind_send_agent`, `hivemind_send_hive`, `hivemind_ask` and
+/// `hivemind_broadcast` before they execute. A refusal is returned to the model
+/// as the tool's error text; the turn continues.
+pub trait SendAuthorizer: Send + Sync {
+    /// Admit or refuse one outbound request from `actor`.
+    /// # Errors
+    /// Return a refusal, conventionally [`crate::Error::SendDenied`], whose
+    /// message the model reads.
+    fn authorize(&self, actor: &str, request: &SendRequest) -> Result<()>;
+}
+/// Outbound operation offered to the host [`SendAuthorizer`].
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum SendRequest {
+    /// Direct message to a registered agent.
+    Agent {
+        /// Recipient agent identity.
+        agent_id: String,
+        /// Message text.
+        body: String,
+    },
+    /// Message to a hive the actor belongs to.
+    Hive {
+        /// Hive identity.
+        hive_id: String,
+        /// Message text.
+        body: String,
+        /// Existing conversation root, when replying in a thread.
+        thread: Option<u64>,
+        /// Private readers; empty means every member.
+        only_for: Vec<String>,
+    },
+    /// Question to peers in the actor's active episode.
+    Ask {
+        /// Episode the question is asked in.
+        episode_id: String,
+        /// Asked peers.
+        agents: Vec<String>,
+        /// Question text.
+        body: String,
+    },
+    /// Work routed across the actor's active episode.
+    Broadcast {
+        /// Episode the work is broadcast in.
+        episode_id: String,
+        /// Work text.
+        body: String,
+    },
 }
 /// Management operation offered to the host authorizer.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -55,14 +105,80 @@ pub type HostedTurn<'a> =
 /// Drained progress channel owned by the host.
 pub type TurnProgressSink =
     tokio::sync::mpsc::Sender<openhuman_embed::agent_progress::AgentProgress>;
-/// Optional per-turn progress, usage, approval and scope hooks.
+/// What one turn is about, derived from its [`TurnRequest`].
+///
+/// Every hook receives it, so a host can route live progress, attribute an
+/// approval, or file a card per hive, episode and thread rather than per agent.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TurnScope {
+    /// The agent taking the turn.
+    pub agent_id: String,
+    /// Active conductor assignment, absent for a direct message.
+    pub episode: Option<EpisodeContext>,
+    /// Identities of the messages delivered in this turn, in order.
+    pub message_ids: Vec<String>,
+    /// Distinct senders of those messages, in first-seen order.
+    pub senders: Vec<String>,
+    /// The hive for an episode turn; otherwise the delivered message's
+    /// destination, which is the agent itself.
+    pub destination: Destination,
+    /// Conversation root the turn answers, when it answers one.
+    pub thread: Option<u64>,
+}
+impl TurnScope {
+    /// Derive the scope of `request`.
+    #[must_use]
+    pub fn from_request(request: &TurnRequest) -> Self {
+        let first = request.messages.first();
+        let mut senders: Vec<String> = Vec::new();
+        for message in &request.messages {
+            if !senders.contains(&message.sender) {
+                senders.push(message.sender.clone());
+            }
+        }
+        let destination = match (&request.episode, first) {
+            (Some(episode), _) => Destination::Hive(episode.hive_id.clone()),
+            (None, Some(message)) => message.destination.clone(),
+            (None, None) => Destination::Agent(request.agent_id.clone()),
+        };
+        Self {
+            agent_id: request.agent_id.clone(),
+            episode: request.episode.clone(),
+            message_ids: request
+                .messages
+                .iter()
+                .map(|message| message.message_id.clone())
+                .collect(),
+            senders,
+            destination,
+            thread: request
+                .episode
+                .as_ref()
+                .map_or_else(|| first.and_then(|message| message.thread), |e| e.thread),
+        }
+    }
+}
+/// Per-turn settings a host chooses in [`TurnHooks::prepare`].
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TurnOptions {
+    /// Working directory for the agent's filesystem and shell tools this
+    /// turn; `None` keeps the agent's own.
+    pub cwd: Option<PathBuf>,
+}
+/// Optional per-turn options, progress, usage, approval and scope hooks.
+///
+/// Called in order: `prepare`, `progress`, `wrap_turn`, `after_turn`.
 pub trait TurnHooks: Send + Sync {
+    /// Choose this turn's options before it is built.
+    fn prepare(&self, _scope: &TurnScope) -> TurnOptions {
+        TurnOptions::default()
+    }
     /// Host owes this sink a receiver throughout the turn.
-    fn progress(&self, _agent: &str) -> Option<TurnProgressSink> {
+    fn progress(&self, _scope: &TurnScope) -> Option<TurnProgressSink> {
         None
     }
     /// Install host context around the complete turn.
-    fn wrap_turn<'a>(&'a self, _agent: &'a str, turn: HostedTurn<'a>) -> HostedTurn<'a> {
+    fn wrap_turn<'a>(&'a self, _scope: &'a TurnScope, turn: HostedTurn<'a>) -> HostedTurn<'a> {
         turn
     }
     /// Called after successful or failed turns with fresh usage, never stale usage.
@@ -72,7 +188,7 @@ pub trait TurnHooks: Send + Sync {
     /// coordinator interrupts delivery and discards staged actions and replies.
     fn after_turn(
         &self,
-        _agent: &str,
+        _scope: &TurnScope,
         _usage: Option<&openhuman_core::agent::tinyagents::host::LastTurnUsage>,
     ) -> Result<TurnDisposition> {
         Ok(TurnDisposition::Completed)

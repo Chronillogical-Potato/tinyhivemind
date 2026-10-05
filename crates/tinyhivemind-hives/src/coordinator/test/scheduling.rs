@@ -11,6 +11,7 @@ async fn different_agents_run_concurrently_but_shared_agents_are_globally_serial
             ..CoordinatorOptions::default()
         },
     )
+    .await
     .unwrap();
     let started = Arc::new(tokio::sync::Barrier::new(3));
     let finish = Arc::new(tokio::sync::Semaphore::new(0));
@@ -35,10 +36,12 @@ async fn different_agents_run_concurrently_but_shared_agents_are_globally_serial
                 }
                 Ok(done(&request))
             })
-        });
+        })
+        .await;
     }
     for (id, agent) in [("first-a", "a"), ("second-a", "a"), ("first-b", "b")] {
         c.send_as_host(message(id, Destination::Agent(agent.into())))
+            .await
             .unwrap();
     }
     let mut drain = Box::pin(c.run_until_idle());
@@ -55,7 +58,7 @@ async fn different_agents_run_concurrently_but_shared_agents_are_globally_serial
 }
 #[tokio::test]
 async fn active_turn_keeps_membership_snapshot_after_leave_and_new_turn_is_blocked() {
-    let c = setup();
+    let c = setup().await;
     let started = Arc::new(tokio::sync::Notify::new());
     let finish = Arc::new(tokio::sync::Notify::new());
     let c2 = c.clone();
@@ -76,16 +79,19 @@ async fn active_turn_keeps_membership_snapshot_after_leave_and_new_turn_is_block
                 EpisodeAction::Complete {
                     body: "done".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(done(&request))
         })
-    });
-    hive(&c, "work", &["a"]);
+    })
+    .await;
+    hive(&c, "work", &["a"]).await;
     c.send_as_host(message("task", Destination::Hive("work".into())))
+        .await
         .unwrap();
     let mut drain = Box::pin(c.run_until_idle());
     tokio::select! { () = started.notified() => {}, result = &mut drain => { assert!(result.is_err()); } }
-    c.leave_hive("work", "a").unwrap();
+    c.leave_hive("work", "a").await.unwrap();
     finish.notify_one();
     assert_eq!(drain.await.unwrap().completed, 1);
     assert!(c.read_hive("a", "work", None, None).is_err());
@@ -103,12 +109,15 @@ async fn conductor_bounds_rounds_and_stops_silent_agents_at_existing_walls() {
             ..CoordinatorOptions::default()
         },
     )
+    .await
     .unwrap();
     add(&c, "a", |request| {
         Box::pin(async move { Ok(done(&request)) })
-    });
-    hive(&c, "work", &["a"]);
+    })
+    .await;
+    hive(&c, "work", &["a"]).await;
     c.send_as_host(message("silent", Destination::Hive("work".into())))
+        .await
         .unwrap();
     let report = c.run_until_idle().await.unwrap();
     assert_eq!(report.completed, 2);
@@ -133,6 +142,7 @@ async fn zero_broadcast_budget_discharges_the_assignment() {
             ..CoordinatorOptions::default()
         },
     )
+    .await
     .unwrap();
     let c2 = c.clone();
     add(&c, "a", move |request| {
@@ -144,12 +154,15 @@ async fn zero_broadcast_budget_discharges_the_assignment() {
                 EpisodeAction::Broadcast {
                     body: "delegate".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(done(&request))
         })
-    });
-    hive(&c, "work", &["a"]);
+    })
+    .await;
+    hive(&c, "work", &["a"]).await;
     c.send_as_host(message("task", Destination::Hive("work".into())))
+        .await
         .unwrap();
     assert_eq!(c.run_until_idle().await.unwrap().completed, 1);
     assert!(
@@ -161,55 +174,61 @@ async fn zero_broadcast_budget_discharges_the_assignment() {
 }
 #[tokio::test]
 async fn replies_are_attributed_and_hive_threads_filter_visible_rows() {
-    let c = setup();
+    let c = setup().await;
     add(&c, "a", |request| {
         Box::pin(async move {
             let mut outcome = done(&request);
             outcome.reply = Some("reply".into());
             Ok(outcome)
         })
-    });
+    })
+    .await;
     c.send_as_host(message("direct", Destination::Agent("a".into())))
+        .await
         .unwrap();
     c.run_until_idle().await.unwrap();
     assert_eq!(c.lock().unwrap().durable.messages[1].sender, "a");
     assert_eq!(c.lock().unwrap().durable.messages[1].body, "reply");
-    hive(&c, "work", &["a"]);
+    hive(&c, "work", &["a"]).await;
     let root = c
         .send(message("root", Destination::Hive("work".into())))
+        .await
         .unwrap();
     let mut follow = message("follow", Destination::Hive("work".into()));
     follow.thread = Some(root.sequence);
-    c.send(follow).unwrap();
+    c.send(follow).await.unwrap();
     let rows = c.read_hive("a", "work", None, Some(root.sequence)).unwrap();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[1].thread, Some(root.sequence));
 }
-#[test]
-fn destinations_require_membership_and_reserved_message_ids_cannot_collide() {
-    let c = setup();
+#[tokio::test]
+async fn destinations_require_membership_and_reserved_message_ids_cannot_collide() {
+    let c = setup().await;
     for id in ["a", "b"] {
         add(&c, id, |request| {
             Box::pin(async move { Ok(done(&request)) })
-        });
+        })
+        .await;
     }
-    hive(&c, "work", &["b"]);
+    hive(&c, "work", &["b"]).await;
     assert!(
         c.send(message("forbidden", Destination::Hive("work".into())))
+            .await
             .is_err()
     );
     let mut private = message("private", Destination::Hive("work".into()));
     private.sender = "b".into();
     private.only_for = vec!["a".into()];
-    assert!(c.send(private).is_err());
+    assert!(c.send(private).await.is_err());
     let mut direct = message("threaded", Destination::Agent("b".into()));
     direct.thread = Some(0);
-    assert!(c.send(direct).is_err());
+    assert!(c.send(direct).await.is_err());
     assert!(
         c.send_as_host(message("hivemind:event:0", Destination::Agent("b".into())))
+            .await
             .is_err()
     );
-    c.join_hive("work", "a").unwrap();
-    c.join_hive("work", "a").unwrap();
+    c.join_hive("work", "a").await.unwrap();
+    c.join_hive("work", "a").await.unwrap();
     assert_eq!(c.list_agents().unwrap(), ["a", "b"]);
 }

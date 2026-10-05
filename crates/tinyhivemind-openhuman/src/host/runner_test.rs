@@ -10,6 +10,7 @@ fn renders_attribution_and_explicit_episode_without_reseeding() {
         messages: vec![],
         memberships: vec![],
         episode: None,
+        resumption: None,
     };
     let prompt = render(&request).unwrap();
     assert!(prompt.contains("\"agent_id\":\"a\""));
@@ -19,4 +20,21 @@ fn renders_attribution_and_explicit_episode_without_reseeding() {
             .to_string()
             .contains("timed out")
     );
+    assert!(!prompt.contains("Host resumption note"));
+}
+#[test]
+fn renders_a_release_note_ahead_of_the_attributed_context() {
+    let request = TurnRequest {
+        agent_id: "a".into(),
+        session_id: None,
+        messages: vec![],
+        memberships: vec![],
+        episode: None,
+        resumption: Some("approved: staging only".into()),
+    };
+    let prompt = render(&request).unwrap();
+    let note = prompt
+        .find("Host resumption note: approved: staging only")
+        .unwrap();
+    assert!(note < prompt.find("Incoming attributed Hivemind context").unwrap());
 }

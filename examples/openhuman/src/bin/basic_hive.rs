@@ -154,18 +154,23 @@ async fn run(mode: Mode) -> Result<()> {
         runtime.runtime_id().into(),
         storage.clone(),
         CoordinatorOptions::default(),
-    )?;
+    )
+    .await?;
     let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator.clone())?;
-    host.register_agent_in_session(alice.clone(), &alice_session)?;
-    host.register_agent_in_session(bob.clone(), &bob_session)?;
-    coordinator.create_hive(HiveInfo {
-        hive_id: "release".into(),
-        name: "Release".into(),
-        description: Some("Plan and review a release".into()),
-        members: Vec::new(),
-    })?;
+    host.register_agent_in_session(alice.clone(), &alice_session)
+        .await?;
+    host.register_agent_in_session(bob.clone(), &bob_session)
+        .await?;
+    coordinator
+        .create_hive(HiveInfo {
+            hive_id: "release".into(),
+            name: "Release".into(),
+            description: Some("Plan and review a release".into()),
+            members: Vec::new(),
+        })
+        .await?;
     for agent in [&alice, &bob] {
-        coordinator.join_hive("release", agent.id())?;
+        coordinator.join_hive("release", agent.id()).await?;
     }
     println!("In the hive: {:?}", coordinator.list_hives()?[0].members);
 
@@ -174,21 +179,24 @@ async fn run(mode: Mode) -> Result<()> {
         ("alice", "Plan the rollout"),
         ("bob", "Review the rollback"),
     ] {
-        let receipt = coordinator.send_as_host(SendMessage {
-            message_id: format!("task-{agent_id}"),
-            sender: String::new(),
-            destination: Destination::Hive("release".into()),
-            body: task.into(),
-            thread: None,
-            only_for: vec![agent_id.into()],
-        })?;
+        let receipt = coordinator
+            .send_as_host(SendMessage {
+                message_id: format!("task-{agent_id}"),
+                sender: String::new(),
+                destination: Destination::Hive("release".into()),
+                body: task.into(),
+                thread: None,
+                only_for: vec![agent_id.into()],
+                starters: Vec::new(),
+            })
+            .await?;
         let report = coordinator.run_until_idle().await?;
         ensure!(
             report.completed > 0 && report.failed == 0,
             "hive turn failed: {report:?}"
         );
         ensure!(
-            storage.load()?.episodes.iter().any(|episode| {
+            storage.load().await?.episodes.iter().any(|episode| {
                 episode.opened_at == receipt.sequence
                     && episode.finished
                     && episode.failure.is_none()
@@ -212,7 +220,7 @@ async fn run(mode: Mode) -> Result<()> {
         "Alice's private task leaked to Bob"
     );
 
-    coordinator.leave_hive("release", "bob")?;
+    coordinator.leave_hive("release", "bob").await?;
     ensure!(
         coordinator.read_hive("bob", "release", None, None).is_err(),
         "Bob retained hive access after leaving"

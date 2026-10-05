@@ -8,9 +8,9 @@ continuing turns to the durable `tinyhivemind-hives` coordinator.
 let coordinator = Coordinator::new(
     runtime.runtime_id().into(), Arc::new(MemoryStorage::new()),
     CoordinatorOptions::default(),
-)?;
+).await?;
 let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator)?;
-host.register_agent(agent)?;
+host.register_agent(agent).await?;
 ```
 
 Register an existing conversation with `register_agent_in_session(agent, session_id)`.
@@ -34,11 +34,22 @@ the host to enable the four management tools. The host factory creates fully
 configured agents from nonsecret template references. Authorization runs before
 factory or coordinator mutations.
 
-`TurnHooks` provides progress, a scoped turn wrapper, and usage/approval
-finalization on both successful and failed turns. The default wall is 300 seconds.
-Return `TurnDisposition::Parked` to hold the agent until coordinator `release`.
+`TurnHooks` provides per-turn options (`prepare` → `TurnOptions { cwd }`),
+progress, a scoped turn wrapper, and usage/approval finalization on both
+successful and failed turns. Every hook receives the turn's `TurnScope` (agent,
+episode, message ids, senders, destination, thread). The default wall is 300
+seconds; `with_turn_timeout` changes it. Return `TurnDisposition::Parked` to
+hold the agent until coordinator `release`, or `release_with(agent, note)`,
+whose note the runner renders at the top of the next turn's prompt.
 After a successful provider turn, finalization failure preserves its committed
 session while interrupting delivery and suppressing staged actions and replies.
+
+`with_send_policy(Arc<dyn SendAuthorizer>)` gates `hivemind_send_agent`,
+`hivemind_send_hive`, `hivemind_ask` and `hivemind_broadcast`; a refusal is
+the tool's error text, not a turn failure. `replace_agent(agent_id, build)`
+rebuilds a registered agent's handle after any running turn, keeping its
+session and reattaching its tools. OpenHuman ids stay unique while a clone
+lives, so the adapter drops its handle before calling `build`.
 
 ## Hive memory
 
@@ -48,7 +59,7 @@ Seats can share one OpenHuman memory per hive. Configure it before registering:
 let memory = HiveMemory::for_hive("run-42")?;            // root `team:run-42`
 let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator)?
     .with_hive_memory(memory)?;
-let scout = host.register_spec(&runtime, AgentSpec::new("scout"))?;
+let scout = host.register_spec(&runtime, AgentSpec::new("scout")).await?;
 ```
 
 `register_spec` binds the seat's spec with

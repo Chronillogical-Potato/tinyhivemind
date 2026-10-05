@@ -9,6 +9,7 @@ async fn failed_actions_and_session_contract(
         storage.clone(),
         CoordinatorOptions::default(),
     )
+    .await
     .unwrap();
     let actions = Arc::downgrade(&c.inner);
     add(&c, "a", move |request| {
@@ -23,26 +24,30 @@ async fn failed_actions_and_session_contract(
                 EpisodeAction::Post {
                     body: "SUPPRESSED_POST".into(),
                 },
-            )?;
+            )
+            .await?;
             c.submit_action(
                 "a",
                 &episode.episode_id,
                 EpisodeAction::Complete {
                     body: "SUPPRESSED_COMPLETION".into(),
                 },
-            )?;
+            )
+            .await?;
             Ok(TurnOutcome {
                 session_id: "committed-host-session".into(),
                 reply: Some("SUPPRESSED_REPLY".into()),
                 disposition: TurnDisposition::Failed("host finalization failed".into()),
             })
         })
-    });
-    hive(&c, "work", &["a"]);
+    })
+    .await;
+    hive(&c, "work", &["a"]).await;
     c.send_as_host(message("first", Destination::Hive("work".into())))
+        .await
         .unwrap();
     assert_eq!(c.run_until_idle().await.unwrap().failed, 1);
-    let failed = storage.load().unwrap();
+    let failed = storage.load().await.unwrap();
     assert_eq!(
         failed.agents["a"].session_id.as_deref(),
         Some("committed-host-session")
@@ -58,8 +63,9 @@ async fn failed_actions_and_session_contract(
     assert!(failed.episodes[0].finished);
     drop(c);
     drop(storage);
-    let resumed =
-        Coordinator::new("runtime".into(), reopen(), CoordinatorOptions::default()).unwrap();
+    let resumed = Coordinator::new("runtime".into(), reopen(), CoordinatorOptions::default())
+        .await
+        .unwrap();
     add(&resumed, "a", |request| {
         Box::pin(async move {
             assert_eq!(
@@ -68,9 +74,11 @@ async fn failed_actions_and_session_contract(
             );
             Ok(done(&request))
         })
-    });
+    })
+    .await;
     resumed
         .send_as_host(message("next", Destination::Agent("a".into())))
+        .await
         .unwrap();
     assert_eq!(resumed.run_until_idle().await.unwrap().completed, 1);
     assert_eq!(resumed.interruptions().unwrap().len(), 1);
@@ -94,15 +102,17 @@ async fn failed_finalization_session_and_suppression_survive_sqlite_reopen() {
     .await;
     let reopened = crate::SqliteStorage::open(&path).unwrap();
     assert_eq!(
-        reopened.load().unwrap().agents["a"].session_id.as_deref(),
+        reopened.load().await.unwrap().agents["a"]
+            .session_id
+            .as_deref(),
         Some("committed-host-session")
     );
-    assert_eq!(reopened.load().unwrap().interruptions.len(), 1);
+    assert_eq!(reopened.load().await.unwrap().interruptions.len(), 1);
 }
 #[tokio::test]
 async fn failed_outcomes_with_empty_or_changed_sessions_do_not_replace_a_binding() {
     for (original, returned) in [(None, ""), (Some("existing"), "changed")] {
-        let c = setup();
+        let c = setup().await;
         add(&c, "a", move |_| {
             Box::pin(async move {
                 Ok(TurnOutcome {
@@ -111,11 +121,13 @@ async fn failed_outcomes_with_empty_or_changed_sessions_do_not_replace_a_binding
                     disposition: TurnDisposition::Failed("host finalization failed".into()),
                 })
             })
-        });
+        })
+        .await;
         if let Some(session) = original {
-            c.bind_session("a", session).unwrap();
+            c.bind_session("a", session).await.unwrap();
         }
         c.send_as_host(message("first", Destination::Agent("a".into())))
+            .await
             .unwrap();
         assert_eq!(c.run_until_idle().await.unwrap().failed, 1);
         assert_eq!(

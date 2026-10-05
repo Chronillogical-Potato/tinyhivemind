@@ -10,6 +10,7 @@ fn input(id: &str) -> SendMessage {
         body: id.into(),
         thread: None,
         only_for: vec![],
+        starters: Vec::new(),
     }
 }
 #[test]
@@ -20,7 +21,7 @@ fn first_turn_finalization_failure_keeps_the_session_and_prior_provider_history(
     executor().block_on(async {tokio::spawn(async {
         let (runtime,_backend,_) = Box::pin(fixture()).await;
         let storage=Arc::new(MemoryStorage::new());
-        let coordinator=Coordinator::new(runtime.runtime_id().into(),storage.clone(),CoordinatorOptions::default()).unwrap();
+        let coordinator=Coordinator::new(runtime.runtime_id().into(),storage.clone(),CoordinatorOptions::default()).await.unwrap();
         let hooks=Arc::new(Hooks::default());
         hooks.mode.store(2,Ordering::SeqCst);
         let host=OpenHumanHost::new(runtime.runtime_id().into(),coordinator).unwrap().with_hooks(hooks.clone()).unwrap();
@@ -34,19 +35,19 @@ fn first_turn_finalization_failure_keeps_the_session_and_prior_provider_history(
             }))).mount(&provider).await;
         let agent=runtime.agent(AgentSpec::new("continuing")
             .provider(openhuman_embed::Provider::openai_compatible(format!("{}/v1",provider.uri()),"fixture").model("fixture"))).unwrap();
-        host.register_agent(agent).unwrap();
-        host.coordinator().send_as_host(input("FIRST_COMMITTED_INPUT")).unwrap();
+        host.register_agent(agent).await.unwrap();
+        host.coordinator().send_as_host(input("FIRST_COMMITTED_INPUT")).await.unwrap();
         assert_eq!(host.coordinator().run_until_idle().await.unwrap().failed,1);
-        let failed=storage.load().unwrap();
+        let failed=storage.load().await.unwrap();
         let session=failed.agents["continuing"].session_id.clone();
         assert!(session.is_some(), "a completed provider turn must retain its continuing session even when finalization fails");
         let session=session.unwrap();
         assert_eq!(failed.deliveries[0].status,tinyhivemind_hives::DeliveryStatus::Interrupted);
         assert!(!failed.messages.iter().any(|message|message.body=="COMMITTED_REPLY"));
         hooks.mode.store(0,Ordering::SeqCst);
-        host.coordinator().send_as_host(input("SECOND_INPUT")).unwrap();
+        host.coordinator().send_as_host(input("SECOND_INPUT")).await.unwrap();
         assert_eq!(host.coordinator().run_until_idle().await.unwrap().completed,1);
-        assert_eq!(storage.load().unwrap().agents["continuing"].session_id.as_deref(),Some(session.as_str()));
+        assert_eq!(storage.load().await.unwrap().agents["continuing"].session_id.as_deref(),Some(session.as_str()));
         let requests:Vec<_>=provider.received_requests().await.unwrap().into_iter().filter(|request|request.method==wiremock::http::Method::POST&&request.url.path()=="/v1/chat/completions").collect();
         assert_eq!(requests.len(),2);
         let second:serde_json::Value=serde_json::from_slice(&requests[1].body).unwrap();
