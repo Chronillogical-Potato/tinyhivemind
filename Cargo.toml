@@ -51,8 +51,8 @@ tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
 # host writes the same four lines against its own. `tinytools` is pinned at
 # the commit OpenHuman's own tree vendors, which is what makes the unification
 # exact; `.github/scripts/assert-openhuman-pin.sh` checks all three revs.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "cbde5069dec828c117131ee75f9d2bbeb5bda02b", default-features = false }
-openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "cbde5069dec828c117131ee75f9d2bbeb5bda02b", default-features = false }
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "9aebda6e5746d6a0030b5239b1e022b4a9ab45ec", default-features = false }
+openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "9aebda6e5746d6a0030b5239b1e022b4a9ab45ec", default-features = false }
 tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "8e5008c375f9e717e6cbb81fa9532599b98ff0a8" }
 tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "8e5008c375f9e717e6cbb81fa9532599b98ff0a8" }
 # The memory engine contract and the per-agent lifecycle OpenHuman runs its
@@ -60,8 +60,8 @@ tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "8e
 # engine and layout. Git sources pinned at the commit OpenHuman's tree vendors
 # and patched onto that copy below, for the same one-copy reason as the tool
 # crates; `.github/scripts/assert-openhuman-pin.sh` checks the rev.
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "4b1832311fce41152ce143e7ce209e62f82c6add" }
-tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", rev = "4b1832311fce41152ce143e7ce209e62f82c6add" }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "581a2bc853467d77f4b76debb3066524a4a46142" }
+tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", rev = "581a2bc853467d77f4b76debb3066524a4a46142" }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.
