@@ -2,7 +2,9 @@
 //! facts each package exists to demonstrate.
 //!
 //! Every document is read with `include_str!`, exactly as the fixtures are, so
-//! the gallery cannot drift from the schema without failing this suite.
+//! the gallery cannot drift from the schema without failing this suite. The
+//! web-access check alone reads `examples/hives/` from disk, so a package
+//! added later is held to it without being listed here.
 use std::collections::BTreeMap;
 use tinyhivemind_core::{approval::RuleVerdict, desk::ResponderMode};
 use tinyhivemind_lang::{
@@ -269,25 +271,105 @@ fn math_swarm_is_five_linked_desks_of_ten_with_wide_blind_rounds() -> Result<()>
 /// Tool names that reach the web; no gallery seat may be allowed one.
 const WEB_TOOLS: [&str; 4] = ["web_search", "web_fetch", "browser", "http"];
 
+/// The one gallery package that opts in to web research: `euler-hive`'s
+/// research desk searches the public literature (through the host's search
+/// tool) for the theory behind a problem. Every other package, and every
+/// other euler-hive seat, stays off the web.
+const WEB_RESEARCH_PACKAGE: &str = "euler-hive";
+/// The euler-hive desk whose seats may hold `web_search`.
+const WEB_RESEARCH_DESK: &str = "research";
+
+/// Every package directory under `examples/hives/`, read from disk the way a
+/// host loads it, so a package added later is checked without being listed.
+fn gallery_from_disk() -> Result<Vec<(String, LoweredHive)>> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hives");
+    let mut dirs: Vec<_> = std::fs::read_dir(&root)?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<std::io::Result<_>>()?;
+    dirs.retain(|path| path.join("hive.json").is_file());
+    dirs.sort();
+    let mut packages = Vec::new();
+    for dir in dirs {
+        let mut documents = BTreeMap::new();
+        read_package(&dir, &dir, &mut documents)?;
+        let name = dir
+            .file_name()
+            .ok_or("package directory has a name")?
+            .to_string_lossy()
+            .into_owned();
+        let (_, hive) = lowered(&documents).map_err(|error| format!("{name}: {error}"))?;
+        packages.push((name, hive));
+    }
+    Ok(packages)
+}
+
+fn read_package(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    into: &mut BTreeMap<String, String>,
+) -> Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            read_package(root, &path, into)?;
+            continue;
+        }
+        let key: Vec<String> = path
+            .strip_prefix(root)?
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        into.insert(key.join("/"), std::fs::read_to_string(&path)?);
+    }
+    Ok(())
+}
+
 #[test]
-fn no_gallery_seat_may_reach_the_web() -> Result<()> {
-    for (name, (_, hive)) in [
-        ("incident-response", incident_response()?),
-        ("math-panel", math_panel()?),
-        ("math-swarm", math_swarm()?),
-        ("memory-guild", memory_guild()?),
-        ("research-debate", research_debate()?),
-        ("review-board", review_board()?),
-        ("self-improving", self_improving()?),
+fn no_gallery_seat_may_reach_the_web_outside_euler_hives_research_desk() -> Result<()> {
+    let packages = gallery_from_disk()?;
+    for listed in [
+        "incident-response",
+        "math-panel",
+        "math-swarm",
+        "memory-guild",
+        "research-debate",
+        "review-board",
+        "self-improving",
     ] {
+        assert!(
+            packages.iter().any(|(name, _)| name == listed),
+            "{listed} is read"
+        );
+    }
+    for (name, hive) in &packages {
         assert!(!hive.seats.is_empty(), "{name}");
+        let researchers: Vec<&str> = if name == WEB_RESEARCH_PACKAGE {
+            hive.desks
+                .iter()
+                .filter(|desk| desk.id == WEB_RESEARCH_DESK)
+                .flat_map(|desk| desk.members.iter().map(String::as_str))
+                .collect()
+        } else {
+            Vec::new()
+        };
         for seat in &hive.seats {
-            for tool in WEB_TOOLS {
+            let allowed: Vec<&str> = WEB_TOOLS
+                .into_iter()
+                .filter(|tool| seat.tools.allow.iter().any(|allowed| allowed == tool))
+                .collect();
+            if researchers.contains(&seat.id.as_str()) {
                 assert!(
-                    !seat.tools.allow.iter().any(|allowed| allowed == tool),
-                    "{name}/{} allows {tool}",
+                    allowed.iter().all(|tool| *tool == "web_search"),
+                    "{name}/{} may search but allows {allowed:?}",
                     seat.id
                 );
+            } else {
+                assert!(allowed.is_empty(), "{name}/{} allows {allowed:?}", seat.id);
+            }
+            for tool in WEB_TOOLS {
+                if allowed.contains(&tool) {
+                    continue;
+                }
                 assert!(
                     seat.tools.deny.iter().any(|denied| denied == tool),
                     "{name}/{} does not deny {tool}",
