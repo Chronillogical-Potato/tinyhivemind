@@ -24,10 +24,10 @@ fn widen(width: usize) -> u64 {
     u64::try_from(width).unwrap_or(u64::MAX)
 }
 
+/// Every bound, in fail-fast order.
 pub(super) fn bounds(package: &Package, found: &mut Findings) {
     let p = &package.manifest.policies;
     let c = &package.constitution;
-    let settings = &package.manifest.coordinator;
     let cap = if c.max_turns == 0 {
         "/max_turns"
     } else {
