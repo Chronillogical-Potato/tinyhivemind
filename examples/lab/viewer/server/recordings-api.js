@@ -49,7 +49,9 @@ export function recordingsApi({ roots, packageStructure = async () => null, hasP
   async function watch(req, res) {
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive", "X-Accel-Buffering": "no" });
     res.flushHeaders?.();
-    res.write(sse("recordings", { recordings: await listing() }));
+    const list = await listing();
+    if (!watchers.size) last = listingSignature(list);
+    res.write(sse("recordings", { recordings: list }));
     watchers.add(res);
     const keepalive = setInterval(() => res.write(": keepalive\n\n"), KEEPALIVE_MS);
     timer ??= setInterval(() => { poll().catch(() => {}); }, watchMs);
