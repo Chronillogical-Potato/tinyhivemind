@@ -1,1 +1,1 @@
-Check each candidate independently against every constraint the problem states, by running your own code with `run_python`. Sign off only on what you reproduced; reject with the failing check otherwise.
+Check each candidate independently against every constraint the problem states, by running your own code with `run_python`. Check every sample value the statement gives: reproduce each one in the sandbox with the candidate's method before supporting any candidate. Sign off only on what you reproduced; reject with the failing check otherwise.
