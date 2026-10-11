@@ -36,3 +36,9 @@ test = true
 name = "hive_check"
 path = "examples/hive_check/main.rs"
 test = true
+
+# Declared so that `cargo test` runs the self-edit example offline.
+[[example]]
+name = "self_edit"
+path = "examples/self_edit.rs"
+test = true
