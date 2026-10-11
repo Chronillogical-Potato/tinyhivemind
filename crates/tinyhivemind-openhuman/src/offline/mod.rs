@@ -18,7 +18,6 @@ pub fn config() -> RuntimeConfig {
     // Offline providers use native structured calls, not prose dispatch.
     config.agent.tool_dispatcher = "auto".into();
     config.local_ai.runtime_enabled = false;
-    config.runtime_python.enabled = false;
     // The memory lifecycle recalls a pack before every turn and logs every
     // turn after it; offline there is no engine to answer either.
     config.memory.recall.enabled = false;
