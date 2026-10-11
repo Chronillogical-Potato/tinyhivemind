@@ -114,3 +114,16 @@ test("reports a failing run with its stderr", async () => {
   assert.match(stderr, /no fixture/);
   await assert.rejects(runner.structure(path.join(root, "unknown-pkg")), /no fixture/);
 });
+
+test("killing a stream stops the child before it finishes", async () => {
+  const root = gallery("math-swarm");
+  const runner = hiveRunner({ repo: here, env: { HIVE_VIEW_BIN: FAKE } });
+  const lines = [];
+  const run = runner.stream(runArgs(path.join(root, "math-swarm")), (l) => {
+    lines.push(l);
+    run.kill();
+  });
+  const { code } = await run.done;
+  assert.notEqual(code, 0);
+  assert.ok(lines.length < 9, `got ${lines.length} of 9 frames`);
+});
