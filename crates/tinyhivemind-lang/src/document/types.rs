@@ -286,7 +286,7 @@ impl Default for Policies {
 /// Host-neutral settings for a coordinator that schedules the hive's turns.
 ///
 /// This crate only validates and carries them; a host maps them onto its own
-/// coordinator (the OpenHuman adapter's `coordinator_options` copies them
+/// coordinator (the `OpenHuman` adapter's `coordinator_options` copies them
 /// field for field).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

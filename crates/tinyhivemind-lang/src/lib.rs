@@ -37,7 +37,7 @@
 //! inputs a host needs to create seats, and the host decides when to activate
 //! them. It owns no evaluation, archive storage, or memory store: those are
 //! host-owned, and [`lineage`] only folds records the host supplies. It does
-//! not convert to OpenHuman types either; that adapter lives in the
+//! not convert to `OpenHuman` types either; that adapter lives in the
 //! `tinyhivemind-openhuman` crate's `language` module, so this crate stays
 //! host-neutral.
 //!
