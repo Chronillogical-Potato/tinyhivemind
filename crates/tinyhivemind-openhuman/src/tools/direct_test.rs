@@ -73,7 +73,7 @@ async fn read_tool_observes_direct_replies_as_its_bound_caller() {
 #[test]
 fn read_schema_and_validator_require_exactly_one_destination() {
     let schema = Kind::Read.schema();
-    assert!(schema["required"].as_array().unwrap().is_empty());
+    assert_eq!(schema["required"], serde_json::json!([]));
     for field in ["hive_id", "agent_id", "thread"] {
         let description = schema["properties"][field]["description"].as_str().unwrap();
         assert!(description.contains("hive_id") || description.contains("agent_id"));
