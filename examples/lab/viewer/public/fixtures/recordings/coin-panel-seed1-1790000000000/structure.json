@@ -1,0 +1,26 @@
+{
+  "id": "coin-panel",
+  "name": "Coin panel",
+  "summary": "A hand-made fixture: a research desk looks the problem up and reports to a solve desk, which computes and commits. Every turn carries tool calls and memory activity.",
+  "roles": [
+    { "id": "researcher", "charter": "Find what is already known about the problem." },
+    { "id": "solver", "charter": "Compute the answer and check it." }
+  ],
+  "seats": [
+    { "id": "research-01", "label": "research-01", "role": "researcher", "desks": ["research"] },
+    { "id": "research-02", "label": "research-02", "role": "researcher", "desks": ["research"] },
+    { "id": "solve-01", "label": "solve-01", "role": "solver", "desks": ["solve"] },
+    { "id": "solve-02", "label": "solve-02", "role": "solver", "desks": ["solve"] }
+  ],
+  "desks": [
+    { "id": "research", "name": "Research", "description": "Looks the problem up.", "members": ["research-01", "research-02"], "responder_mode": "auto",
+      "episode": { "turn_budget": 8, "round_width": 2, "revealed_width": 2, "quorum_threshold": 2 } },
+    { "id": "solve", "name": "Solve", "description": "Computes and commits.", "members": ["solve-01", "solve-02"], "responder_mode": "auto",
+      "episode": { "turn_budget": 8, "round_width": 2, "revealed_width": 2, "quorum_threshold": 2 } }
+  ],
+  "topology": [{ "from": "research", "to": "solve" }],
+  "referrals": [],
+  "goals": [{ "id": "answer", "description": "Answer the problem.", "subgoals": [] }],
+  "episode": { "turn_budget": 16, "round_width": 2, "revealed_width": 2, "blind_round": true, "quorum_threshold": 2 },
+  "sim": { "kind": "script" }
+}
