@@ -126,7 +126,7 @@ fn only_research_seats_reach_the_web_and_only_compute_and_verify_run_code() -> R
                 expected.insert("run_python");
             }
             "theory" | "synthesis" => {}
-            other => panic!("{} sits on unexpected desk {other:?}", seat.id),
+            other => return Err(format!("{} sits on unexpected desk {other:?}", seat.id).into()),
         }
         assert_eq!(allowed, expected, "{} allows the wrong tools", seat.id);
         for tool in HOST_TOOLS {
