@@ -1,5 +1,9 @@
 # Implement off-floor exchange
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted a separate
+> `tinyhivemind-hive` crate, since folded into core's `hive` module.
+
 Linked specification: [`../specs/off-floor-exchange.md`](../specs/off-floor-exchange.md)
 
 ## Goal
@@ -17,13 +21,13 @@ No new port, no waiting, no second journal, and no change to `step`.
 1. Add failing invariants for the property the whole design rests on, *before*
    the mechanism exists: `step` returns the same `HiveStep`, including the state
    it commits, for a transcript with and without private rows interleaved
-   anywhere. One readable case in `crates/tinyhivemind-hive/src/episode/test.rs`
+   anywhere. One readable case in `crates/tinyhivemind-core/src/hive/episode/test/`
    and one *addition* invariant over arbitrary transcripts in
-   `crates/tinyhivemind-hive/tests/fuzz_invariants.rs`, whose corpus carries the
+   `crates/tinyhivemind-core/tests/migrated_hive/fuzz_invariants.rs`, whose corpus carries the
    same fuzzed grammar in its private rows as in its desk rows. Confirm both go
    red when the audience filter is removed from `live_traces`.
 2. Add failing unit tests for the fold's decisions, then implement
-   `crates/tinyhivemind-hive/src/exchange/`: `ExchangePolicy` off by default,
+   `crates/tinyhivemind-core/src/hive/exchange/`: `ExchangePolicy` off by default,
    `ExchangeRound`, `NoExchangeReason`, and `exchange`. Cover the default
    opening no round, a zero cap closing rather than erroring, spend read back
    out of the transcript, a spent member dropping out, each ceiling binding
@@ -38,7 +42,7 @@ No new port, no waiting, no second journal, and no change to `step`.
    `round_cap × max_active_members`, closes with the reason the
    binding cap implies, and leaves `step` unchanged.
 5. Export `ExchangePolicy`, `ExchangeRound`, `NoExchangeReason` and `exchange`
-   from `crates/tinyhivemind-hive/src/lib.rs`, and add the module `README.md`.
+   from `crates/tinyhivemind-core/src/hive/mod.rs`, and add the module `README.md`.
 6. Wire the harness: `AsideMode::OffFloor`, `Participant::exchange`, one round
    between turns, and `--exchange-cap` as a knob separate from `--aside-cap`
    because it bounds model calls rather than the room's turns.
@@ -64,14 +68,14 @@ cargo build --all-targets --all-features
 cargo test --all-features
 .github/scripts/assert-pure.sh
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
-cargo run --release -p tinyhivemind-hive --example bench -- --stats-check
+cargo run --release -p tinyhivemind-core --example bench -- --stats-check
 ```
 
 Plus the identity check, which is what makes every comparison a difference in
 one thing rather than in two:
 
 ```sh
-cargo run --release -p tinyhivemind-hive --example bench -- \
+cargo run --release -p tinyhivemind-core --example bench -- \
   --hidden-profile --blind-evidence --budget 40 --episodes 500 \
   --aside-cap 0 --exchange-cap 0
 ```

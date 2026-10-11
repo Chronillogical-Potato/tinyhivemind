@@ -1,5 +1,11 @@
 # Back the desk example with tinyinference and tinytools
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted the former
+> `crates/tinyhivemind` runtime crate and its since-retired `desk` example ([ADR
+> 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md)); paths
+> into that example are kept as written.
+
 **Status:** Landed. `anyhow` came with `tinytools` — implementing its `Tool`
 means naming the error type it returns — and `--tool-surface` was added so the
 `tinytools` rendering has a caller in this host rather than only in its tests.
@@ -31,7 +37,7 @@ library crate gains a dependency and `assert-pure.sh` is unchanged.
 1. Add the two git dev-dependencies to the root `[workspace.dependencies]`,
    pinned by `rev`, each with the comment the repository's dependency guidance
    asks for: what it is, and which example uses it. Take them in
-   `crates/tinyhivemind/Cargo.toml` under `[dev-dependencies]`. Then run
+   the former runtime crate's `Cargo.toml` under `[dev-dependencies]`. Then run
    `.github/scripts/assert-pure.sh` and confirm it still reports clean — that
    run is the test for this task, and it is what proves the boundary held.
 
@@ -68,7 +74,7 @@ library crate gains a dependency and `assert-pure.sh` is unchanged.
    `commit_utterance`. This is the `tinytools` path's half of criterion 3 of
    [`../specs/the-utterance-surface.md`](../specs/the-utterance-surface.md).
 
-7. Update `examples/desk/README.md` and `crates/tinyhivemind/examples/README.md`
+7. Update `examples/desk/README.md` and the former runtime crate's `examples/README.md`
    to say what each crate is for and that neither is a library dependency, and
    link ADR 0013.
 
@@ -80,7 +86,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo build --all-targets --all-features
 cargo test --all-features
 .github/scripts/assert-pure.sh
-tree="$(cargo tree -p tinyhivemind -e normal,build)" || exit 1
+tree="$(cargo tree -p tinyhivemind-core -e normal,build)" || exit 1
 if printf '%s\n' "$tree" | grep -Eiq 'reqwest|anyhow|tokio'; then
   echo "unexpected library dependency" >&2
   exit 1

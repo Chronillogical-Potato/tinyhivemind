@@ -1,5 +1,9 @@
 # Promote the utterance surface into the library
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted the former
+> `crates/tinyhivemind` runtime crate and its since-retired `desk` example.
+
 **Status:** Landed.
 
 Linked specification: [`../specs/the-utterance-surface.md`](../specs/the-utterance-surface.md)
@@ -7,7 +11,7 @@ Linked specification: [`../specs/the-utterance-surface.md`](../specs/the-utteran
 ## Goal
 
 Move the algebra of *what a seat says and what that becomes* out of
-`crates/tinyhivemind/examples/desk` and into `crates/tinyhivemind::speech`, so a
+the `desk` example (since retired) and into `tinyhivemind_core::runtime::speech`, so a
 host takes it as a dependency rather than reimplementing it — and close the two
 defects the move exposes: a policy refusal that never reaches its author, and a
 recipient list that is turned back into prose to be re-parsed.
@@ -18,8 +22,8 @@ one-message-one-turn.
 ## Test-first tasks
 
 1. Add failing tests for the utterance wire form and its rejections in
-   `crates/tinyhivemind/src/speech/test/parse.rs`, then implement
-   `crates/tinyhivemind/src/speech/`: `Utterance`, `UtteranceRejection`, and
+   `crates/tinyhivemind-core/src/runtime/speech/test/parse.rs`, then implement
+   `crates/tinyhivemind-core/src/runtime/speech/`: `Utterance`, `UtteranceRejection`, and
    `parse_utterance`. Port the cases the example already covers in
    `examples/desk/mcp/test.rs` — a blank message, a `dm` with an empty `to`, a
    `to` entry written `@lead`, an unknown kind, a garbled line — and add the
@@ -34,7 +38,7 @@ one-message-one-turn.
    the test in the example assert equality rather than restating them.
 
 3. Add failing tests for `commit_utterance` in
-   `crates/tinyhivemind/src/speech/test/commit.rs` covering: a `Post` becoming
+   `crates/tinyhivemind-core/src/runtime/speech/test/commit.rs` covering: a `Post` becoming
    one desk row with its mentions resolved; a `Dm` becoming an aside whose
    audience came from the `to` field and not from the message body; a `Dm` the
    aside policy declines becoming a desk row **with** a populated
@@ -68,7 +72,7 @@ one-message-one-turn.
 
 8. Export `Utterance`, `UtteranceRejection`, `ToolSpec`, `tool_specs`,
    `CommitRequest`, `CommittedUtterance` and `commit_utterance` from
-   `crates/tinyhivemind/src/lib.rs`, and give `speech/` a `README.md` covering
+   `crates/tinyhivemind-core/src/runtime/mod.rs`, and give `speech/` a `README.md` covering
    the split between what the library decides and what the host serves.
 
 9. Add an offline end-to-end regression: run the desk example's fold over a

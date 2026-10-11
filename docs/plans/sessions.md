@@ -1,5 +1,9 @@
 # Implement attributed session projection and initialization
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted the former
+> `crates/tinyhivemind` runtime crate.
+
 Implements [`../specs/sessions.md`](../specs/sessions.md).
 
 ## Goal and boundaries
@@ -10,7 +14,7 @@ watermarks, response selection, mention dispatch, storage, or a runtime choice.
 
 ## Test-first tasks
 
-1. Create `crates/tinyhivemind/src/session/types.rs` and pin the serde forms of
+1. Create `crates/tinyhivemind-core/src/runtime/session/types.rs` and pin the serde forms of
    sequence, conversation, authors, raw rows, pages, projected messages, and
    queries in `session/test.rs` before implementing the records.
 2. Add the object-safe `SessionLog` port and compile a trait-object test before

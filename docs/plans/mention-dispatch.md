@@ -1,5 +1,9 @@
 # Implement mention dispatch
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted the former
+> `crates/tinyhivemind` runtime crate.
+
 Linked specification: [`../specs/mention-dispatch.md`](../specs/mention-dispatch.md)
 
 ## Goal
@@ -15,7 +19,7 @@ port without adding persistence, retries, fan-out, or host types.
 2. Add failing runtime port tests for no-call, one-call, refusal, failure,
    bound scope, and concurrent idempotency; implement
    `MentionTurnQueue` and `dispatch_mention` in
-   `crates/tinyhivemind/src/dispatch/`.
+   `crates/tinyhivemind-core/src/dispatch/` (the queue wrapper was later retired).
 3. Add typed runtime enqueue failure, public exports and crate documentation.
 4. Link the specification and plan, then mark P7 complete with host integration
    and live verification as the next work.

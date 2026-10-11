@@ -41,7 +41,7 @@ See [`example-retry-policy.md`](example-retry-policy.md) for a test-first sample
 - [`responders.md`](responders.md) — P6 responder ladder and selector port.
 - [`mention-dispatch.md`](mention-dispatch.md) — P7 bounded dispatch decision
   and atomic enqueue port.
-- [`hive-mind.md`](hive-mind.md) — P8 the `tinyhivemind-hive` crate and its
+- [`hive-mind.md`](hive-mind.md) — P8 the deliberation crate (now core's `hive` module) and its
   deliberation episode.
 - [`off-floor-exchange.md`](off-floor-exchange.md) — private exchange that takes
   no floor, bounded by a host-set budget in model calls.
