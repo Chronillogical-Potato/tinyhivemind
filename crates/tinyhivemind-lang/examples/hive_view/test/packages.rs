@@ -157,3 +157,23 @@ fn the_problem_bank_still_computes_large_but_fitting_answers() -> Result<()> {
     assert_eq!(bank[1].answer()?, 89);
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn the_loader_refuses_a_symlinked_package_file() -> Result<()> {
+    let dir = std::env::temp_dir().join(format!("hive_view-symlink-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir)?;
+    let outside = dir.join("outside.txt");
+    std::fs::write(&outside, "secret")?;
+    let package = dir.join("package");
+    std::fs::create_dir_all(&package)?;
+    std::fs::write(package.join("hive.json"), "{}")?;
+    std::os::unix::fs::symlink(&outside, package.join("README.md"))?;
+    let error = crate::load::documents(&package)
+        .err()
+        .map(|error| error.to_string());
+    std::fs::remove_dir_all(&dir)?;
+    assert!(error.is_some_and(|error| error.contains("symbolic link")));
+    Ok(())
+}

@@ -30,8 +30,8 @@ pub(crate) struct Loaded {
 ///
 /// # Errors
 ///
-/// Fails when `dir` is not a directory, a file is not UTF-8, or `hive.json` is
-/// missing.
+/// Fails when `dir` is not a directory, a file is not UTF-8, an entry is a
+/// symbolic link, or `hive.json` is missing.
 pub(crate) fn documents(dir: &Path) -> Result<BTreeMap<String, String>> {
     if !dir.is_dir() {
         return Err(format!("{} is not a package directory", dir.display()).into());
@@ -50,6 +50,15 @@ fn walk(root: &Path, dir: &Path, into: &mut BTreeMap<String, String>) -> Result<
         .collect::<std::io::Result<_>>()?;
     entries.sort();
     for path in entries {
+        // A link could point anywhere on disk, and a `--live` run sends the
+        // package's files to a model provider: refuse rather than follow it.
+        if std::fs::symlink_metadata(&path)?.file_type().is_symlink() {
+            return Err(format!(
+                "{} is a symbolic link; package files must be regular files",
+                path.display()
+            )
+            .into());
+        }
         if path.is_dir() {
             walk(root, &path, into)?;
             continue;
