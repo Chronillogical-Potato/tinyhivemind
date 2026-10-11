@@ -13,7 +13,7 @@ export function renderGallery(host, packages, onRun, onCompare) {
     h("article", { class: "hv-card", "data-name": p.name },
       h("h3", {}, p.title),
       h("p", { class: "muted hv-meta" }, `${p.name} · ${p.seats} seats · ${p.desks} desks${p.kind === "math" ? " · math" : ""}`),
-      h("p", { class: "hv-summary" }, p.error ? h("span", { class: "up" }, p.error) : p.summary || "No summary."),
+      h("p", { class: "hv-summary", title: p.summary || null }, p.error ? h("span", { class: "up" }, p.error) : p.summary || "No summary."),
       h("button", { type: "button", class: "primary", onclick: () => onRun(p.name), disabled: p.error ? true : null }, "Run")));
   host.replaceChildren(
     h("div", { class: "bar hv-gallery-head" },

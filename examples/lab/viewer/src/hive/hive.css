@@ -18,7 +18,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .hv-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-top: 10px; }
 .hv-card { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 4px; background: var(--bg); }
 .hv-card h3 { margin: 0; }
-.hv-card .hv-summary { flex: 1; font-size: 13px; }
+.hv-card .hv-summary { flex: 1; font-size: 13px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; overflow: hidden; align-self: stretch; }
 .hv-card button { align-self: flex-start; margin-top: 6px; }
 .hv-meta { font-size: 12px; }
 
