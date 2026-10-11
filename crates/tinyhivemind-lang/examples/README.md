@@ -2,7 +2,7 @@
 
 | File | Purpose |
 | --- | --- |
-| `hive_view/` | Render a package (text, mermaid, JSON) and run it offline through core's `hive::step`; NDJSON frames for the viewer; the math `--compare` |
+| `hive_view/` | Render a package (text, mermaid, JSON) and run it through core's `hive::step`, one floor per desk linked by referral, offline or `--live` on OpenRouter; NDJSON frames for the viewer; the math `--compare` |
 | `hives/` | The example package gallery: seven complete packages, from a three-seat review board to a fifty-seat math swarm |
 | `live_self_edit/` | Provider-failure regression tests and their directory guide |
 | `live_self_edit.rs` | Opt-in OpenRouter proposal, exact-match held-out evaluation, negative control and telemetry/contamination guard checks |
