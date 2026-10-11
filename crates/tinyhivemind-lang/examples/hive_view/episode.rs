@@ -1,10 +1,12 @@
-//! Run one model-free episode of a lowered package through core's `hive::step`.
+//! Run one episode of one desk through core's `hive::step`.
 //!
 //! The loop is `crates/tinyhivemind-core/examples/hive.rs`'s: fold, authorize a
 //! round, let each authorized seat speak against its own projection, append,
 //! repeat. What a seat says comes from a [`Speaker`]: a script, the seeded
-//! default script, or the math simulation. The ending always comes from core —
-//! this file never decides who won.
+//! default script, the math simulation, or (`--live`) a model. The ending
+//! always comes from core — this file never decides who won. A package of
+//! several desks runs one of these floors per desk; `desks.rs` schedules them
+//! and routes referrals between them.
 
 use std::collections::BTreeMap;
 
@@ -12,7 +14,7 @@ use tinyhivemind_core::hive::aside::Audience;
 use tinyhivemind_core::hive::{
     Conversation, EpisodePolicy, EpisodeState, HiveStep, HiveTurn, Phase, Sequence, SessionAuthor,
     SessionMessage, TopicStanding, TraceKind, Visibility,
-    desk::{Desk, DeskSet, ResponderMode},
+    desk::{Desk, DeskSet},
     project_for,
     quorum::standings,
     roster::{Roster, RosterMember},
@@ -24,17 +26,14 @@ use tinyhivemind_lang::LoweredHive;
 
 use crate::Result;
 
-/// The desk id an episode runs on when a package declares more than one desk.
-pub(crate) const FLOOR: &str = "floor";
-
-/// Everything one episode runs over.
+/// Everything one desk's episode runs over.
 #[derive(Clone, Debug)]
 pub(crate) struct Room {
     /// Package id, for reports.
     pub(crate) package: String,
-    /// Every seat, as roster members.
+    /// The desk's seats, as roster members.
     pub(crate) members: Vec<RosterMember>,
-    /// The one desk the episode runs on.
+    /// The desk the episode runs on.
     pub(crate) desk: Desk,
     /// Each seat's home desk (its first declared desk).
     pub(crate) home: BTreeMap<String, String>,
@@ -45,33 +44,13 @@ pub(crate) struct Room {
 }
 
 impl Room {
-    /// The room for a lowered package.
-    ///
-    /// A one-desk package runs on that desk. A package with several desks runs
-    /// one episode on the *hive floor*: every seat of every desk, in declared
-    /// desk order, so quorum is hive-wide. Topology and referrals are reported
-    /// by the renderers but not routed by this offline loop.
-    pub(crate) fn of(lowered: &LoweredHive, opening: String) -> Self {
-        let desk = match lowered.desks.as_slice() {
-            [only] => only.clone(),
-            desks => {
-                let mut members: Vec<String> = Vec::new();
-                for desk in desks {
-                    for member in &desk.members {
-                        if !members.contains(member) {
-                            members.push(member.clone());
-                        }
-                    }
-                }
-                Desk {
-                    id: FLOOR.into(),
-                    name: "Hive floor".into(),
-                    description: Some(format!("Every seat of {}", lowered.name)),
-                    members,
-                    responder_mode: ResponderMode::Auto,
-                }
-            }
-        };
+    /// The room for one declared desk of a lowered package, under `policy`.
+    pub(crate) fn of(
+        lowered: &LoweredHive,
+        desk: &Desk,
+        policy: EpisodePolicy,
+        opening: String,
+    ) -> Self {
         let mut home = BTreeMap::new();
         for declared in &lowered.desks {
             for member in &declared.members {
@@ -89,11 +68,19 @@ impl Room {
                     name: Some(id.clone()),
                 })
                 .collect(),
-            desk,
+            desk: desk.clone(),
             home,
-            policy: lowered.policies.episode,
+            policy,
             opening,
         }
+    }
+
+    /// The desk a seat's turn is reported under: its home desk, or this one.
+    pub(crate) fn home_of(&self, seat: &str) -> String {
+        self.home
+            .get(seat)
+            .cloned()
+            .unwrap_or_else(|| self.desk.id.clone())
     }
 }
 
@@ -106,6 +93,48 @@ pub(crate) trait Speaker {
         visible: &[SessionMessage],
         policy: &EpisodePolicy,
     ) -> String;
+
+    /// Every turn of one authorized round, each against its own projection.
+    ///
+    /// Sequential by default; a live speaker runs the round's model calls
+    /// concurrently, which core allows because the projections already
+    /// withhold every row written beside a turn.
+    ///
+    /// # Errors
+    ///
+    /// A live speaker fails when a call it cannot do without fails.
+    fn speak_round(
+        &mut self,
+        round: &[(HiveTurn, Vec<SessionMessage>)],
+        policy: &EpisodePolicy,
+    ) -> Result<Vec<String>> {
+        Ok(round
+            .iter()
+            .map(|(turn, visible)| self.speak(turn, visible, policy))
+            .collect())
+    }
+
+    /// What `seat` writes on its desk when a referral from another desk
+    /// arrives for it. The simulation never asks, so by default it says
+    /// nothing further.
+    ///
+    /// # Errors
+    ///
+    /// As [`Speaker::speak_round`].
+    fn answer(
+        &mut self,
+        seat: &str,
+        incoming: &str,
+        visible: &[SessionMessage],
+    ) -> Result<String> {
+        let _ = (seat, incoming, visible);
+        Ok(crate::script::QUIET.to_owned())
+    }
+
+    /// Turns this speaker may still fill; `None` when it is not metered.
+    fn remaining(&self) -> Option<u32> {
+        None
+    }
 }
 
 /// One turn as it happened.
@@ -130,10 +159,14 @@ pub(crate) struct TurnRecord {
 /// One round as it happened, plus the standings once it was appended.
 #[derive(Clone, Debug)]
 pub(crate) struct RoundRecord {
-    /// One-based round number.
+    /// One-based round number, counted across every desk of the run.
     pub(crate) round: u32,
-    /// The round's phase.
-    pub(crate) phase: Phase,
+    /// The desk the round ran on.
+    pub(crate) desk: String,
+    /// One-based round number on that desk.
+    pub(crate) desk_round: u32,
+    /// The round's phase; `None` for a seat answering a referral.
+    pub(crate) phase: Option<Phase>,
     /// The round's visibility.
     pub(crate) visibility: Visibility,
     /// Its turns, in desk order.
@@ -155,6 +188,8 @@ pub(crate) enum Ending {
     Exhausted,
     /// Nobody bid for the floor.
     Idle,
+    /// The desk never opened: the run stopped before its upstream desks ended.
+    Unopened,
 }
 
 impl Ending {
@@ -165,6 +200,7 @@ impl Ending {
             Self::Deadlocked(_) => "deadlocked",
             Self::Exhausted => "exhausted",
             Self::Idle => "idle",
+            Self::Unopened => "unopened",
         }
     }
 
@@ -180,26 +216,100 @@ impl Ending {
 /// A finished episode.
 #[derive(Clone, Debug)]
 pub(crate) struct Outcome {
-    /// How it ended.
+    /// How it ended (for several desks: how the answering desk ended).
     pub(crate) ending: Ending,
-    /// Speaking rounds taken.
+    /// Speaking rounds taken, across every desk.
     pub(crate) rounds: u32,
-    /// Turns taken.
+    /// Turns taken, across every desk, including referral answers.
     pub(crate) turns: u32,
 }
 
-/// Drive one episode to termination.
+/// Something a run reports as it happens.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Event<'a> {
+    /// A round was appended.
+    Round(&'a RoundRecord),
+    /// A referral was routed, or refused.
+    Referral(&'a crate::desks::ReferralRecord),
+    /// One desk's episode ended.
+    DeskEnd(&'a crate::desks::DeskEnd),
+}
+
+/// Speak one authorized round against `journal` and append it.
 ///
-/// `observe` is called once per round, after the round is appended.
+/// Every turn speaks against the journal as it stood when the round was
+/// authorized: `project_for` withholds each row a peer writes beside it, so
+/// computing every projection first is the same as computing each one as
+/// its turn comes up. `of` and `sequence` are what they would be appended one
+/// at a time.
 ///
 /// # Errors
 ///
-/// Fails when core rejects the roster, desks or policy.
+/// As [`Speaker::speak_round`], or when it returns the wrong number of lines.
+pub(crate) fn play(
+    room: &Room,
+    turns: &[HiveTurn],
+    journal: &mut Vec<SessionMessage>,
+    speaker: &mut dyn Speaker,
+) -> Result<Vec<TurnRecord>> {
+    let base = journal.len();
+    let views: Vec<(HiveTurn, Vec<SessionMessage>)> = turns
+        .iter()
+        .map(|turn| (turn.clone(), project_for(turn, journal)))
+        .collect();
+    let said = speaker.speak_round(&views, &room.policy)?;
+    if said.len() != views.len() {
+        return Err("a speaker answered a round with the wrong number of lines".into());
+    }
+    let mut records = Vec::with_capacity(views.len());
+    for (index, ((turn, visible), content)) in views.iter().zip(said).enumerate() {
+        let sequence = u64::try_from(base + index + 1).unwrap_or(u64::MAX);
+        records.push(TurnRecord {
+            seat: turn.agent_id.clone(),
+            desk: room.home_of(&turn.agent_id),
+            reason: format!("{:?}", turn.reason).to_lowercase(),
+            saw: visible.len(),
+            of: base + index,
+            content: content.clone(),
+            sequence,
+        });
+        journal.push(speech(sequence, &turn.agent_id, &content));
+    }
+    Ok(records)
+}
+
+/// The ending a terminal step reports; `None` for a round to speak.
+pub(crate) fn ending_of(decision: &HiveStep) -> Option<Ending> {
+    match decision {
+        HiveStep::Speak { .. } => None,
+        HiveStep::Converged { topic, .. } => Some(Ending::Converged(topic.0.clone())),
+        HiveStep::Deadlocked { topics } => Some(Ending::Deadlocked(
+            topics.iter().map(|topic| topic.0.clone()).collect(),
+        )),
+        HiveStep::Exhausted { .. } => Some(Ending::Exhausted),
+        HiveStep::Idle => Some(Ending::Idle),
+    }
+}
+
+/// The member ids of a room, for folds that count only members.
+pub(crate) fn member_ids(room: &Room) -> Vec<&str> {
+    room.members.iter().map(|member| member.id.as_str()).collect()
+}
+
+/// Drive one desk's episode to termination.
+///
+/// `observe` is called once per round, after the round is appended. A
+/// metered speaker that cannot fill the next round ends the episode
+/// exhausted.
+///
+/// # Errors
+///
+/// Fails when core rejects the roster, desks or policy, or a speaker fails.
 pub(crate) fn run(
     room: &Room,
     speaker: &mut dyn Speaker,
     tracer: Option<&Tracer<'_>>,
-    observe: &mut dyn FnMut(&RoundRecord),
+    observe: &mut dyn FnMut(Event<'_>),
 ) -> Result<Outcome> {
     let mut journal = vec![message(1, SessionAuthor::Operator, &room.opening)];
     let conversation = Conversation {
@@ -217,57 +327,34 @@ pub(crate) fn run(
         if let Some(tracer) = tracer {
             tracer.step(&decision);
         }
-        let (turns, next_state) = match decision {
-            HiveStep::Speak { turns, next_state } => (turns, next_state),
-            HiveStep::Converged { topic, .. } => {
-                return Ok(outcome(Ending::Converged(topic.0), rounds, turns_taken));
-            }
-            HiveStep::Deadlocked { topics } => {
-                let topics = topics.into_iter().map(|topic| topic.0).collect();
-                return Ok(outcome(Ending::Deadlocked(topics), rounds, turns_taken));
-            }
-            HiveStep::Exhausted { .. } => {
-                return Ok(outcome(Ending::Exhausted, rounds, turns_taken));
-            }
-            HiveStep::Idle => return Ok(outcome(Ending::Idle, rounds, turns_taken)),
-        };
-        rounds += 1;
-        let mut records = Vec::with_capacity(turns.len());
-        // Every turn in a round speaks against the journal as it stood when
-        // the round was authorized; `project_for` withholds concurrent rows.
-        for turn in &turns {
-            let visible = project_for(turn, &journal);
-            let content = speaker.speak(turn, &visible, &room.policy);
-            let sequence = u64::try_from(journal.len())
-                .unwrap_or(u64::MAX)
-                .saturating_add(1);
-            records.push(TurnRecord {
-                seat: turn.agent_id.clone(),
-                desk: room
-                    .home
-                    .get(&turn.agent_id)
-                    .cloned()
-                    .unwrap_or_else(|| room.desk.id.clone()),
-                reason: format!("{:?}", turn.reason).to_lowercase(),
-                saw: visible.len(),
-                of: journal.len(),
-                content: content.clone(),
-                sequence,
-            });
-            journal.push(speech(sequence, &turn.agent_id, &content));
+        if let Some(ending) = ending_of(&decision) {
+            return Ok(outcome(ending, rounds, turns_taken));
         }
+        let HiveStep::Speak { turns, next_state } = decision else {
+            return Ok(outcome(Ending::Idle, rounds, turns_taken));
+        };
+        if speaker
+            .remaining()
+            .is_some_and(|left| (left as usize) < turns.len())
+        {
+            return Ok(outcome(Ending::Exhausted, rounds, turns_taken));
+        }
+        rounds += 1;
+        let records = play(room, &turns, &mut journal, speaker)?;
         turns_taken += u32::try_from(turns.len()).unwrap_or(u32::MAX);
-        let (standings, committed) = fold(&journal, &room.policy)?;
-        observe(&RoundRecord {
+        let (standings, committed) = fold(&journal, &room.policy, &member_ids(room))?;
+        observe(Event::Round(&RoundRecord {
             round: rounds,
-            phase: turns.first().map_or(Phase::Deliberate, |turn| turn.phase),
+            desk: room.desk.id.clone(),
+            desk_round: rounds,
+            phase: turns.first().map(|turn| turn.phase),
             visibility: turns
                 .first()
                 .map_or(Visibility::Blind, |turn| turn.visibility),
             turns: records,
             standings,
             committed,
-        });
+        }));
         state = *next_state;
     }
 }
@@ -280,10 +367,11 @@ fn outcome(ending: Ending, rounds: u32, turns: u32) -> Outcome {
     }
 }
 
-/// Standings and committed topics over everything agents wrote.
+/// Standings and committed topics over what the desk's members wrote.
 ///
 /// The same fold `step` makes: core's `trace::read` and `quorum::standings`
-/// over the transcript, at its last sequence.
+/// over the transcript, at its last sequence, counting only traces by
+/// `members` — a referral row from another desk informs, it never votes.
 ///
 /// # Errors
 ///
@@ -291,8 +379,15 @@ fn outcome(ending: Ending, rounds: u32, turns: u32) -> Outcome {
 pub(crate) fn fold(
     journal: &[SessionMessage],
     policy: &EpisodePolicy,
+    members: &[&str],
 ) -> Result<(Vec<TopicStanding>, Vec<String>)> {
-    let traces = read(journal);
+    let traces: Vec<_> = read(journal)
+        .into_iter()
+        .filter(|trace| match &trace.author {
+            SessionAuthor::Agent { id, .. } => members.contains(&id.as_str()),
+            _ => true,
+        })
+        .collect();
     let at = journal
         .last()
         .map_or(Sequence(0), |message| message.sequence);
