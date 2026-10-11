@@ -12,11 +12,6 @@ pub(crate) fn validate_context(source: &str) -> Result<()> {
     items::items(source).map(|_| ())
 }
 
-/// The byte offset of a document's body, after any frontmatter.
-pub(crate) fn body_offset(document: &str) -> usize {
-    items::body_offset(document)
-}
-
 fn boundary(class: PatchClass, op: &Operation) -> bool {
     match op {
         Operation::Document {

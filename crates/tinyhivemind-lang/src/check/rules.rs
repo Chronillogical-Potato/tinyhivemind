@@ -2,7 +2,7 @@
 //! a located diagnostic for every violation it finds.
 
 use crate::{
-    Diagnostic, Package, Rule,
+    Diagnostic, Package, Rule, SeatMemory,
     diagnostic::{CONSTITUTION, HIVE, MEMORY, escape},
     patch::{self, Operation, PatchClass},
 };
@@ -209,6 +209,17 @@ pub(super) fn package_files(package: &Package) -> Vec<(&str, Content<'_>)> {
     files
 }
 
+/// The bindings of memory `id`, with their indices.
+fn bindings<'a>(package: &'a Package, id: &str) -> Vec<(usize, &'a SeatMemory)> {
+    package
+        .memory
+        .bindings
+        .iter()
+        .enumerate()
+        .filter(|(_, binding)| binding.identity == id)
+        .collect()
+}
+
 /// Report a changed identity, or changed bindings, of a pinned memory.
 pub(super) fn read_only(base: &Package, edit: &Package, out: &mut Vec<Diagnostic>) {
     for id in &base.constitution.read_only_memories {
@@ -225,18 +236,8 @@ pub(super) fn read_only(base: &Package, edit: &Package, out: &mut Vec<Diagnostic
             let pointer = new.or(old).map(|i| format!("/identities/{i}"));
             out.push(diagnostic(MEMORY, pointer, Rule::ReadOnly, message()));
         }
-        let bindings = |package: &Package| -> Vec<(usize, _)> {
-            package
-                .memory
-                .bindings
-                .iter()
-                .enumerate()
-                .filter(|(_, binding)| &binding.identity == id)
-                .collect()
-        };
-        let (old, new) = (bindings(base), bindings(edit));
-        let values = |list: &[(usize, _)]| list.iter().map(|(_, b)| *b).collect::<Vec<_>>();
-        if values(&old) != values(&new) {
+        let (old, new) = (bindings(base, id), bindings(edit, id));
+        if !old.iter().map(|(_, b)| b).eq(new.iter().map(|(_, b)| b)) {
             let index = new.first().or(old.first()).map(|(i, _)| *i);
             let pointer = index.map(|i| format!("/bindings/{i}"));
             out.push(diagnostic(MEMORY, pointer, Rule::ReadOnly, message()));
