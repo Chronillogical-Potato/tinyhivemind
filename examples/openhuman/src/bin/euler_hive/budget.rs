@@ -43,7 +43,7 @@ impl Limits {
     pub(super) const FULL: Self = Self {
         max_turns: 60,
         max_model_calls: 400,
-        max_wall_seconds: 3_600,
+        max_wall_seconds: 5_400,
         max_sandbox_runs: 40,
         max_searches: 12,
         max_spend_usd: 8.0,
