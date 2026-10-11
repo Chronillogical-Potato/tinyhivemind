@@ -266,6 +266,72 @@ fn math_swarm_is_five_linked_desks_of_ten_with_wide_blind_rounds() -> Result<()>
     Ok(())
 }
 
+/// Tool names that reach the web; no gallery seat may be allowed one.
+const WEB_TOOLS: [&str; 4] = ["web_search", "web_fetch", "browser", "http"];
+
+#[test]
+fn no_gallery_seat_may_reach_the_web() -> Result<()> {
+    for (name, (_, hive)) in [
+        ("incident-response", incident_response()?),
+        ("math-panel", math_panel()?),
+        ("math-swarm", math_swarm()?),
+        ("memory-guild", memory_guild()?),
+        ("research-debate", research_debate()?),
+        ("review-board", review_board()?),
+        ("self-improving", self_improving()?),
+    ] {
+        assert!(!hive.seats.is_empty(), "{name}");
+        for seat in &hive.seats {
+            for tool in WEB_TOOLS {
+                assert!(
+                    !seat.tools.allow.iter().any(|allowed| allowed == tool),
+                    "{name}/{} allows {tool}",
+                    seat.id
+                );
+                assert!(
+                    seat.tools.deny.iter().any(|denied| denied == tool),
+                    "{name}/{} does not deny {tool}",
+                    seat.id
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The persona a seat prompt opens with: `You are a "<persona>".`
+fn persona(prompt: &str) -> Option<&str> {
+    prompt
+        .lines()
+        .next()?
+        .strip_prefix("You are a \"")?
+        .strip_suffix("\".")
+        .filter(|persona| !persona.trim().is_empty())
+}
+
+#[test]
+fn every_math_seat_opens_with_a_distinct_persona() -> Result<()> {
+    let (_, swarm) = math_swarm()?;
+    let mut seen = std::collections::BTreeSet::new();
+    for seat in &swarm.seats {
+        let persona = persona(&seat.prompt).ok_or(format!("{} has no persona line", seat.id))?;
+        assert!(
+            seen.insert(persona.to_lowercase()),
+            "{} repeats the persona {persona:?}",
+            seat.id
+        );
+        assert!(seat.prompt.lines().count() >= 3, "{} explains how it thinks", seat.id);
+    }
+    assert_eq!(seen.len(), 50);
+    let (_, panel) = math_panel()?;
+    for seat in &panel.seats {
+        let persona = persona(&seat.prompt).ok_or(format!("{} has no persona line", seat.id))?;
+        assert!(seen.insert(persona.to_lowercase()), "{} repeats a swarm persona", seat.id);
+    }
+    assert_eq!(seen.len(), 55);
+    Ok(())
+}
+
 fn incident_response() -> Result<(Package, LoweredHive)> {
     lowered(&package!(
         "incident-response",
