@@ -297,7 +297,7 @@ async fn one_turn(
             HostTurnTools::advertised(belt(&tools, &scope, &turn_ledger, &shared, &memory))
         })
         .on_progress(sender)
-        .timeout(TURN_TIMEOUT)
+        .timeout(services.budget.turn_timeout())
         .send()
         .await;
     let calls = counter.await.unwrap_or(0);

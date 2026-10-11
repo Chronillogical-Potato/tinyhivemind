@@ -158,6 +158,13 @@ impl Budget {
         }
     }
 
+    /// The longest one turn may run: [`TURN_TIMEOUT`], cut to what is left of
+    /// the wall-clock budget so an in-flight turn cannot outlive it.
+    pub(super) fn turn_timeout(&self) -> Duration {
+        let left = Duration::from_secs(self.limits.max_wall_seconds).saturating_sub(self.elapsed());
+        super::turn::TURN_TIMEOUT.min(left.max(Duration::from_secs(1)))
+    }
+
     /// Whether a round of `seats` turns may start.
     pub(super) fn admit_round(&self, seats: u64) -> Result<(), Exhausted> {
         let limits = self.limits;

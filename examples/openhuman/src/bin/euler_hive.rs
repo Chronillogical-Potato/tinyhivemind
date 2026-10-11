@@ -187,7 +187,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let statement = package::problem_markdown(&std::fs::read_to_string(&args.problem)?);
     let documents = package::read_package(&args.package)?;
     let (package_doc, lowered) = package::load(documents, &statement)?;
-    let run_id = artifacts::timestamp();
+    let run_id = format!("{}-{}", artifacts::timestamp(), artifacts::unique_suffix());
     let run = Arc::new(artifacts::RunDir::create(
         args.runs.join(&args.problem_id).join(&run_id),
     )?);
