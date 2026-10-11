@@ -208,7 +208,6 @@ async fn run(args: Args) -> anyhow::Result<()> {
                 .config(config)
                 .workspace_dir(run.path().join("openhuman"))
                 .backend_url(backend.clone())
-                .api_key(tinyhumans_key.clone())
                 .provider(Provider::openai_compatible(OPENROUTER, openrouter_key.clone()).model(&args.model))
                 .memory_engine(engine.clone())
                 .build(),

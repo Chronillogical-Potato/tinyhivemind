@@ -3,7 +3,11 @@
 // ending banner (or the compare's "Done"), and saves a full-page screenshot.
 // For math-swarm it also checks desk routing (a badge and an ending row per
 // desk, accepted and refused referral rows), shoots the end of the run and
-// one desk's transcript tab.
+// one desk's transcript tab. The fixture recording (public/fixtures/recordings)
+// opens through ?recording=<id> and must show its tool-call and memory badges,
+// seat counters and a folded long turn. With FOLLOW_LIVE=1 it also waits for a
+// live run started elsewhere (e.g. `hive_view ... --run --live`) to appear in
+// the Live now strip, follows it, and shoots it mid-run and at its ending.
 // Exits non-zero if a scenario times out or the page throws.
 // Usage:
 //   chrome --headless=new --remote-debugging-port=9333 --user-data-dir=<dir> &
@@ -90,6 +94,9 @@ await open("?view=hive");
 const cards = await waitFor("document.querySelectorAll('.hv-card').length > 0", 60000);
 console.log(cards ? "ok" : "FAIL", "gallery", await evaluate("document.querySelectorAll('.hv-card').length"), "cards");
 if (!cards) failures++;
+const recs = await waitFor("document.querySelectorAll('#hv-recordings .hv-rec').length > 0", 15000);
+console.log(recs ? "ok" : "FAIL", "recorded runs", await evaluate("document.querySelectorAll('#hv-recordings .hv-rec').length"), "listed");
+if (!recs) failures++;
 await shot("gallery.png");
 
 await hive("review-board");
@@ -120,6 +127,58 @@ await hive("math-swarm", async () => {
   await evaluate("document.querySelectorAll('.hv-seat')[23]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))");
   await sleep(300);
 });
+
+// A recording: the fixture, found by package in the pushed listing.
+async function recording() {
+  const id = await evaluate("fetch('/api/recordings').then((r) => r.json()).then((d) => d.recordings.find((r) => r.package === 'coin-panel')?.id ?? null)");
+  if (!id) {
+    failures++;
+    return console.log("FAIL recording: the coin-panel fixture is not listed");
+  }
+  await open(`?recording=${encodeURIComponent(id)}`);
+  await waitFor("!document.getElementById('hv-player').hidden", 15000);
+  await evaluate("(() => { const s = document.querySelector('[aria-label=Speed]'); s.value = '8'; s.dispatchEvent(new Event('change')); })()");
+  const ok = await waitFor("!!document.getElementById('hv-ending')", 30000);
+  const facts = JSON.parse(await evaluate(`JSON.stringify({ url: location.search, tools: document.querySelectorAll('.hv-tool').length,
+    failed: document.querySelectorAll('.hv-tool.fail').length, memory: document.querySelectorAll('.hv-mem').length,
+    folds: document.querySelectorAll('.hv-fold').length, counters: document.querySelectorAll('.hv-act').length,
+    picker: !document.querySelector('.hv-rec-bar').hidden, ending: document.getElementById('hv-ending')?.textContent })`));
+  const good = ok && facts.url.includes("recording=") && facts.tools >= 5 && facts.failed >= 1 && facts.memory >= 5 && facts.folds >= 1 && facts.counters >= 4 && facts.picker;
+  console.log(good ? "ok" : "FAIL", "recording", JSON.stringify(facts));
+  if (!good) failures++;
+  await evaluate("document.querySelector('.hv-fold')?.click()");
+  await sleep(150);
+  const open_ = await evaluate("document.querySelector('.hv-fold')?.getAttribute('aria-expanded')");
+  console.log(open_ === "true" ? "ok" : "FAIL", "recording fold expands");
+  if (open_ !== "true") failures++;
+  await shot("recording.png");
+}
+await recording();
+
+// Follow a live run started outside this page.
+if (process.env.FOLLOW_LIVE) {
+  await open("?view=hive");
+  const seen = await waitFor("!!document.querySelector('#hv-live-strip .hv-live-go')", Number(process.env.FOLLOW_WAIT_MS ?? 120000));
+  console.log(seen ? "ok" : "FAIL", "live run in the strip", await evaluate("document.getElementById('hv-live-strip').textContent"));
+  if (!seen) failures++;
+  else {
+    await shot("live-strip.png");
+    // Nothing was open, so the page may already follow it; click to be sure.
+    await evaluate("document.querySelector('#hv-live-strip .hv-live-go').click()");
+    await waitFor("!document.getElementById('hv-player').hidden", 15000);
+    const first = await waitFor("document.querySelectorAll('.hv-line').length > 0", 600000);
+    const r1 = await evaluate("document.querySelector('.hv-where').textContent");
+    await waitFor(`document.querySelector('.hv-where').textContent !== ${JSON.stringify(r1)}`, 600000);
+    const r2 = JSON.parse(await evaluate("JSON.stringify({ where: document.querySelector('.hv-where').textContent, live: !document.getElementById('hv-live-badge').hidden, status: document.querySelector('#hv-player [role=status]').textContent })"));
+    console.log(first && r2.where !== r1 ? "ok" : "FAIL", "live follow advances", r1, "->", JSON.stringify(r2));
+    if (!first || r2.where === r1) failures++;
+    await shot("live-mid.png");
+    const ended = await waitFor("!!document.getElementById('hv-ending')", Number(process.env.FOLLOW_END_MS ?? 1800000));
+    console.log(ended ? "ok" : "FAIL", "live run ended", await evaluate("document.getElementById('hv-ending')?.textContent ?? ''"));
+    if (!ended) failures++;
+    await shot("live-end.png");
+  }
+}
 
 await open("?compare=math-panel,math-swarm&seeds=10");
 const done = await waitFor("/^Done/.test(document.getElementById('hv-compare-status')?.textContent ?? '')");
