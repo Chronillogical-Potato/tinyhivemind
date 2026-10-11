@@ -155,8 +155,7 @@ option — never straight at the option:
 Every member computes an urge from the salience field and its own affinity, and
 whoever bids highest takes the floor. A member whose urge never clears its
 threshold does not bid at all. This is the response-threshold model of division
-of labour, and it is also
-[Pandemonium](https://en.wikipedia.org/wiki/Pandemonium_architecture)'s
+of labour, and it is also [Pandemonium](https://en.wikipedia.org/wiki/Pandemonium_architecture)'s
 decision demon, which is the same idea arrived at from the AI side.
 
 ```text
@@ -168,8 +167,7 @@ auditor  --                        <- threshold never cleared, does not bid
 floor = planner
 ```
 
-Every one of those is
-[fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) integer
+Every one of those is [fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) integer
 arithmetic. Every payload derives `Eq`, and every episode replays byte for byte
 from the same transcript.
 
@@ -452,11 +450,10 @@ the library asks the host to reinitialize instead of silently skipping history.
 No. The host owns the agent lifecycle, model calls, queueing, storage, and
 authorization. The core mention fold resolves a direct addressee; the host can
 use that decision to schedule one turn. The optional embedding layer can
-recommend a primary and bounded specialist set; the `hive` module can
-select a round inside a
-bounded deliberation. The host decides whether to run those turns, what models
-to use, what long-term memory or search to provide, and how to persist the
-result. A workspace such as Buzz could host these mechanics, but it is a
+recommend a primary and bounded specialist set; the `hive` module can select a
+round inside a bounded deliberation. The host decides whether to run those
+turns, what models to use, what long-term memory or search to provide, and how
+to persist the result. A workspace such as Buzz could host these mechanics, but it is a
 separate system with its own routing and context policy.
 
 ## Use it
@@ -467,7 +464,7 @@ git submodule add https://github.com/tinyhumansai/tinyhivemind.git vendor/tinyhi
 
 ```toml
 [dependencies]
-tinyhivemind = { path = "vendor/tinyhivemind/crates/tinyhivemind" }
+tinyhivemind-core = { path = "vendor/tinyhivemind/crates/tinyhivemind-core" }
 ```
 
 ```sh
@@ -475,6 +472,12 @@ cargo run --release -p tinyhivemind-core --example bench -- --trace
 ```
 
 That prints one deliberation episode turn by turn—the fastest way to see the mechanics.
+
+A hive can also be written down rather than coded: roles, seats and desks in a
+`hive.json`, prompts in Markdown beside it, and a constitution no editor may
+rewrite. `tinyhivemind-lang` validates it, lowers it onto these mechanics, and
+guards every self-edit. Ready-made packages live in the
+[gallery](crates/tinyhivemind-lang/examples/hives).
 
 ## Read more
 
