@@ -30,6 +30,10 @@ impl Problem {
     pub(crate) fn answer(&self) -> Result<u64> {
         match (self.kind.as_str(), self.args.as_slice()) {
             ("lattice", [right, up]) => Ok(binomial(right + up, *right)),
+            ("modsum", [_, _, 0]) => Err(format!("problem {} has a zero modulus", self.id).into()),
+            ("multiples", [_, 0, _] | [_, _, 0]) => {
+                Err(format!("problem {} has a zero divisor", self.id).into())
+            }
             ("modsum", [n, power, modulus]) => Ok(power_sum(*n, *power, *modulus)),
             ("digitsum", [base, exponent]) => Ok(digit_sum(base.pow(u32::try_from(*exponent)?))),
             ("multiples", [limit, a, b]) => {

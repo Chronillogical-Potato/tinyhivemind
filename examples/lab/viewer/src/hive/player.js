@@ -63,6 +63,10 @@ export function createPlayer(onChange) {
     finish() {
       streaming = false;
       following = false;
+      if (!tl.end) {
+        playing = false;
+        clearTimeout(timer);
+      }
       emit();
     },
     /** Jump to the newest round and follow the stream again. */

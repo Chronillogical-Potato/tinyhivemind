@@ -70,11 +70,13 @@ pub(crate) fn modification(path: &str, before: &str, after: &str) -> Result<Vec<
     if path.starts_with("context/") {
         let old_items = items::items(before)?;
         let new_items = items::items(after)?;
-        let keys: std::collections::BTreeSet<_> = old_items
-            .iter()
-            .chain(&new_items)
-            .map(|(id, _, _, _)| id)
-            .collect();
+        // Document order: existing items first, then appended ones as written.
+        let mut keys: Vec<&String> = Vec::new();
+        for (id, _, _, _) in old_items.iter().chain(&new_items) {
+            if !keys.contains(&id) {
+                keys.push(id);
+            }
+        }
         let body = |list: &[(String, usize, usize, String)], id: &String| {
             list.iter()
                 .find(|(key, _, _, _)| key == id)
