@@ -2,12 +2,56 @@
 // seat highlights its latest turn and the lines that turn saw (`saw` of `of`,
 // see `sawBy` in simulation.js), so you can read what one seat was handed.
 // A multi-desk package gets a tab per desk (All first); referral rows and
-// desk endings sit between the turns, in the order they streamed.
+// desk endings sit between the turns, in the order they streamed. A turn a
+// recording host annotated shows its tool calls and memory activity as
+// badges, and a long turn is folded to a few lines until expanded, so a
+// recording of thousands of long turns stays quick to redraw.
+import { turnActivity } from "./activity.js";
 import { h } from "./dom.js";
 import { deskCounts, deskTabs, describeReferral, entryOnDesk } from "./referrals.js";
 import { sawBy } from "./simulation.js";
 
 const MAX_LINES = 400;
+/** Content longer than this, or with more lines, is folded until expanded. */
+const FOLD_CHARS = 280;
+const FOLD_LINES = 4;
+const expanded = new Set(); // line keys the reader unfolded; survives redraws
+
+const lineKey = (l) => `${l.index}:${l.seat}:${l.round}`;
+
+function badges(l) {
+  const a = turnActivity(l);
+  const out = a.tools.map((t) => h("span", {
+    class: `hv-tool${t.ok === false ? " fail" : t.ok ? " ok" : ""}`,
+    title: `${t.tool}${t.ok == null ? "" : t.ok ? " (ok)" : " (failed)"}${t.summary ? `: ${t.summary}` : ""}`,
+  }, `${t.icon} ${t.tool}${t.ok === false ? " ✗" : t.ok ? " ✓" : ""}`));
+  if (a.recalled || a.remembered) {
+    out.push(h("span", { class: "hv-mem", title: `memory: recalled ${a.recalled}, remembered ${a.remembered}` },
+      `🧠 ${a.recalled ? `↑${a.recalled}` : ""}${a.recalled && a.remembered ? " " : ""}${a.remembered ? `↓${a.remembered}` : ""}`));
+  }
+  return out.length ? h("div", { class: "hv-badges" }, ...out) : null;
+}
+
+/** The content of a turn, folded when long; the toggle re-renders only this node. */
+function content(l) {
+  const text = l.content ?? "";
+  const long = text.length > FOLD_CHARS || text.split("\n").length > FOLD_LINES;
+  if (!long) return h("span", { class: "hv-content" }, text);
+  const key = lineKey(l);
+  const node = h("span", { class: "hv-content" });
+  const paint = () => {
+    const open = expanded.has(key);
+    const shown = open ? text : `${text.split("\n").slice(0, FOLD_LINES).join("\n").slice(0, FOLD_CHARS)}…`;
+    node.replaceChildren(shown, " ", h("button", { type: "button", class: "hv-fold", "aria-expanded": String(open), onclick: (e) => {
+      e.stopPropagation();
+      if (open) expanded.delete(key);
+      else expanded.add(key);
+      paint();
+    } }, open ? "less" : `more (${text.length.toLocaleString("en-US")} chars)`));
+  };
+  paint();
+  return node;
+}
 
 function tabs(structure, state, desk, onDesk) {
   const desks = deskTabs(structure, state);
@@ -75,7 +119,7 @@ export function renderTranscript(host, state, selected, onSelect, opts = {}) {
     list.append(h("li", { class: cls },
       h("button", { type: "button", class: "hv-who", onclick: () => onSelect(l.seat), title: `${l.desk} · ${l.reason} · saw ${l.saw}/${l.of}` }, l.seat),
       h("span", { class: "muted" }, ` ${l.reason} · ${l.saw}/${l.of} `),
-      h("span", { class: "hv-content" }, l.content ?? ""), verdict));
+      content(l), verdict, badges(l)));
   }
   if (!entries.length) list.append(h("li", { class: "muted" }, desk ? `Nothing on ${desk} yet.` : "Nobody has spoken yet."));
   host.replaceChildren(...[tabs(opts.structure ?? {}, state, desk, opts.onDesk ?? (() => {})), note, list].filter(Boolean));
