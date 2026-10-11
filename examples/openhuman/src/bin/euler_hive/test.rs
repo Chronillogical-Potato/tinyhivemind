@@ -557,3 +557,19 @@ async fn nobody_publishes_to_a_read_only_pool() {
     let refused = pinned.publish(&entry, "c").await.expect_err("a read-only pool refuses");
     assert!(refused.to_string().contains("read-only"));
 }
+
+#[test]
+fn a_spend_cap_must_be_finite_and_non_negative() {
+    assert_eq!(super::spend_cap("2.5").expect("a real cap"), 2.5);
+    for bad in ["NaN", "inf", "-inf", "-1"] {
+        assert!(super::spend_cap(bad).is_err(), "{bad} accepted");
+    }
+}
+
+#[test]
+fn a_problem_id_is_one_safe_path_component() {
+    assert_eq!(super::path_component("pe1014").expect("plain id"), "pe1014");
+    for bad in ["", "..", "../x", "/tmp/x", "a/b", "a b"] {
+        assert!(super::path_component(bad).is_err(), "{bad:?} accepted");
+    }
+}

@@ -114,7 +114,7 @@ fn parse_args() -> anyhow::Result<Args> {
             "--max-wall-seconds" => limits.max_wall_seconds = value()?.parse()?,
             "--max-sandbox-runs" => limits.max_sandbox_runs = value()?.parse()?,
             "--max-searches" => limits.max_searches = value()?.parse()?,
-            "--max-spend-usd" => limits.max_spend_usd = value()?.parse()?,
+            "--max-spend-usd" => limits.max_spend_usd = spend_cap(&value()?)?,
             other => anyhow::bail!("unknown argument {other}"),
         }
     }
@@ -125,12 +125,12 @@ fn parse_args() -> anyhow::Result<Args> {
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../crates/tinyhivemind-lang/examples/hives/euler-hive")
         }),
-        problem_id: problem_id.unwrap_or_else(|| {
+        problem_id: path_component(&problem_id.unwrap_or_else(|| {
             problem.parent().and_then(Path::file_name).map_or_else(
                 || "problem".into(),
                 |name| name.to_string_lossy().into_owned(),
             )
-        }),
+        }))?,
         runs: runs
             .ok_or_else(|| anyhow::anyhow!("--runs <dir outside the repository> is required"))?,
         problem,
@@ -138,6 +138,29 @@ fn parse_args() -> anyhow::Result<Args> {
         model,
         probe,
     })
+}
+
+/// A spend cap: a finite, non-negative number of dollars. `NaN` or infinity
+/// would make every `spend >= cap` comparison false and disable the guard.
+fn spend_cap(value: &str) -> anyhow::Result<f64> {
+    let cap: f64 = value.parse()?;
+    if !cap.is_finite() || cap < 0.0 {
+        anyhow::bail!("--max-spend-usd must be a finite, non-negative number of dollars");
+    }
+    Ok(cap)
+}
+
+/// A problem id as one path component of `[A-Za-z0-9_-]`, so the run
+/// directory cannot leave `--runs`.
+fn path_component(id: &str) -> anyhow::Result<String> {
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        anyhow::bail!("--problem-id must be letters, digits, '-' or '_' (got {id:?})");
+    }
+    Ok(id.to_owned())
 }
 
 fn secret(name: &str) -> anyhow::Result<String> {
