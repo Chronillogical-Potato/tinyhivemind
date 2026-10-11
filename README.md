@@ -362,7 +362,9 @@ commits the round's state after all authorized turns are appended.
 
 `tinyhivemind-lang` makes a hive’s definition editable data: roles, goals,
 seats, memory bindings and policies, with guarded patches and an evaluated
-lineage. Read the [language specification](docs/specs/hive-language.md).
+lineage. A package is a `hive.json`, Markdown prompts, and a constitution no
+self-edit may touch. Read the [language specification](docs/specs/hive-language.md),
+or start from a ready package in the [gallery](crates/tinyhivemind-lang/examples/hives).
 
 `tinyhivemind-tools` renders native `tinytools::ToolSpec` definitions and
 records episode calls. `tinyhivemind-hives` coordinates durable messages and
@@ -472,12 +474,6 @@ cargo run --release -p tinyhivemind-core --example bench -- --trace
 ```
 
 That prints one deliberation episode turn by turn—the fastest way to see the mechanics.
-
-A hive can also be written down rather than coded: roles, seats and desks in a
-`hive.json`, prompts in Markdown beside it, and a constitution no editor may
-rewrite. `tinyhivemind-lang` validates it, lowers it onto these mechanics, and
-guards every self-edit. Ready-made packages live in the
-[gallery](crates/tinyhivemind-lang/examples/hives).
 
 ## Read more
 
