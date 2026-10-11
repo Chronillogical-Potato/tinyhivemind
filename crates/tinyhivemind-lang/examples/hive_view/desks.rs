@@ -226,11 +226,21 @@ struct Floor {
     pending: VecDeque<Referral>,
 }
 
-struct Federation<'h, 'o, 't> {
+/// One line a referral may be read out of.
+struct Line<'a> {
+    author: &'a str,
+    content: &'a str,
+    sequence: u64,
+    hop: u32,
+    origin: Option<ReferralOrigin>,
+    sent: Sent,
+}
+
+struct Federation<'h, 'o, 't, 's> {
     hive: &'h Hive,
     floors: Vec<Floor>,
     round: u32,
-    tracer: Option<&'t Tracer<'t>>,
+    tracer: Option<&'t Tracer<'s>>,
     observe: &'o mut dyn FnMut(Event<'_>),
 }
 
@@ -266,11 +276,7 @@ pub(crate) fn run_hive(
         hive,
         floors,
         round: 0,
-        tracer: tracer.map(|tracer| {
-            // SAFETY-free narrowing: the tracer outlives this call.
-            let narrowed: &Tracer<'_> = tracer;
-            narrowed
-        }),
+        tracer,
         observe,
     };
     federation.drive(speaker)?;
@@ -286,7 +292,7 @@ pub(crate) fn run_hive(
     })
 }
 
-impl Federation<'_, '_, '_> {
+impl Federation<'_, '_, '_, '_> {
     fn drive(&mut self, speaker: &mut dyn Speaker) -> Result<()> {
         let count = self.floors.len();
         let mut spent = false;
@@ -418,12 +424,14 @@ impl Federation<'_, '_, '_> {
         for turn in &record.turns {
             self.route(
                 desk,
-                &turn.seat,
-                &turn.content,
-                turn.sequence,
-                0,
-                None,
-                Sent::Line,
+                Line {
+                    author: &turn.seat,
+                    content: &turn.content,
+                    sequence: turn.sequence,
+                    hop: 0,
+                    origin: None,
+                    sent: Sent::Line,
+                },
             )?;
         }
         Ok(true)
@@ -470,12 +478,14 @@ impl Federation<'_, '_, '_> {
         (self.observe)(Event::Round(&record));
         self.route(
             desk,
-            &incoming.target_id,
-            &content,
-            sequence,
-            incoming.child_hop,
-            incoming.origin.clone(),
-            Sent::Line,
+            Line {
+                author: &incoming.target_id,
+                content: &content,
+                sequence,
+                hop: incoming.child_hop,
+                origin: incoming.origin.clone(),
+                sent: Sent::Line,
+            },
         )
     }
 
@@ -517,24 +527,32 @@ impl Federation<'_, '_, '_> {
                 room.desk.name
             );
             let sequence = next_sequence(&self.floors[desk].journal).saturating_sub(1);
-            self.route(desk, &author, &content, sequence, hop, None, Sent::Report)?;
+            self.route(
+                desk,
+                Line {
+                    author: &author,
+                    content: &content,
+                    sequence,
+                    hop,
+                    origin: None,
+                    sent: Sent::Report,
+                },
+            )?;
         }
         Ok(())
     }
 
     /// Ask core whether a line owes one referral, check it against the
     /// package's links, and land it.
-    #[allow(clippy::too_many_arguments)]
-    fn route(
-        &mut self,
-        desk: usize,
-        author: &str,
-        content: &str,
-        sequence: u64,
-        hop: u32,
-        origin: Option<ReferralOrigin>,
-        sent: Sent,
-    ) -> Result<()> {
+    fn route(&mut self, desk: usize, line: Line<'_>) -> Result<()> {
+        let Line {
+            author,
+            content,
+            sequence,
+            hop,
+            origin,
+            sent,
+        } = line;
         let hive = self.hive;
         let from = hive.rooms[desk].desk.id.clone();
         let (decision, intended) = {
