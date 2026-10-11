@@ -110,8 +110,9 @@ every round and ending; `desks.rs` still routes every referral.
   after curl's retries) is recorded as a `note:` line. A run the cap stopped
   says so on stderr and in `usage.exhausted_calls`.
 - **Artifacts.** `hive-runs/hive-view/<package>-seed<N>-<ms>/` at the root of
-  the workspace the example was built in (git-ignored, and outside `target/`
-  so `cargo clean` keeps it), or `$HIVE_RUNS_DIR/<package>-seed<N>-<ms>/` when
+  the main checkout (git-ignored; outside `target/`, so `cargo clean` keeps
+  it; and, built in a linked worktree, under the checkout that worktree's
+  `.git` file points back to, so removing the worktree keeps it), or `$HIVE_RUNS_DIR/<package>-seed<N>-<ms>/` when
   `HIVE_RUNS_DIR` is set: every request body and response, `calls.ndjson`
   (seat, desk, raw reply, recorded line), `frames.ndjson` and `usage.json`.
   Never the key.

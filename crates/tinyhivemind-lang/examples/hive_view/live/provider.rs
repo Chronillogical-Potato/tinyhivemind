@@ -5,7 +5,7 @@
 //! and handed to curl as a `--config -` header on **stdin**, so it never
 //! appears in argv (and so in `ps`), in a request file, or in a log. Every
 //! request body and response is kept under `hive-runs/hive-view/<run>/` at the
-//! workspace root (or `$HIVE_RUNS_DIR/<run>/`).
+//! main checkout's root (or `$HIVE_RUNS_DIR/<run>/`).
 //!
 //! Web access is denied by construction: [`request_body`] builds the only
 //! body this module sends, and it carries no `tools`, `tool_choice`,
@@ -138,21 +138,40 @@ pub(crate) struct Provider {
 pub(crate) const RUNS_DIR_ENV: &str = "HIVE_RUNS_DIR";
 
 /// Where live run directories go: `$HIVE_RUNS_DIR` when it is set and not
-/// empty, else `hive-runs/hive-view/` under the workspace this example was
-/// built in. Not under `target/`, which `cargo clean` wipes; the root
-/// `.gitignore` keeps `/hive-runs/` out of git.
+/// empty, else `hive-runs/hive-view/` under the main checkout of the
+/// workspace this example was built in. Not under `target/`, which `cargo
+/// clean` wipes, and not inside a linked worktree, which is removed once its
+/// branch lands; the root `.gitignore` keeps `/hive-runs/` out of git.
 pub(crate) fn artifacts_root() -> PathBuf {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let workspace = std::fs::canonicalize(&workspace).unwrap_or(workspace);
-    artifacts_root_in(&workspace, std::env::var_os(RUNS_DIR_ENV))
+    artifacts_root_in(&main_checkout(&workspace), std::env::var_os(RUNS_DIR_ENV))
 }
 
-/// [`artifacts_root`] for a given workspace and `HIVE_RUNS_DIR` value.
-pub(crate) fn artifacts_root_in(workspace: &Path, runs_dir: Option<std::ffi::OsString>) -> PathBuf {
+/// [`artifacts_root`] for a given checkout root and `HIVE_RUNS_DIR` value.
+pub(crate) fn artifacts_root_in(checkout: &Path, runs_dir: Option<std::ffi::OsString>) -> PathBuf {
     match runs_dir {
         Some(dir) if !dir.is_empty() => PathBuf::from(dir),
-        _ => workspace.join("hive-runs/hive-view"),
+        _ => checkout.join("hive-runs/hive-view"),
     }
+}
+
+/// The main checkout a workspace belongs to: the workspace itself, unless its
+/// `.git` is a file pointing at a linked worktree's git dir (one carrying a
+/// `commondir` file), in which case the parent of the shared `.git` dir —
+/// what `git rev-parse --git-common-dir` names. A submodule's `.git` file has
+/// no `commondir`, so a submodule stays its own checkout.
+pub(crate) fn main_checkout(workspace: &Path) -> PathBuf {
+    let linked = || -> Option<PathBuf> {
+        let pointer = std::fs::read_to_string(workspace.join(".git")).ok()?;
+        let gitdir = pointer.lines().next()?.strip_prefix("gitdir:")?.trim();
+        let gitdir = workspace.join(gitdir);
+        let common = std::fs::read_to_string(gitdir.join("commondir")).ok()?;
+        let common = gitdir.join(common.trim());
+        let common = std::fs::canonicalize(&common).unwrap_or(common);
+        common.parent().map(Path::to_path_buf)
+    };
+    linked().unwrap_or_else(|| workspace.to_path_buf())
 }
 
 impl Provider {
