@@ -17,8 +17,9 @@ function num(id, label, min, max, placeholder) {
 
 /**
  * Build the controls. `on` = { pick(name), run(knobs), toggle(), step(by),
- * seek(n), speed(x), latest() }. Returns { el, knobs(), liveKnobs(),
- * setLive({available, model}), setPackages(list, current),
+ * seek(n), speed(x), latest(), pickRecording(id), rewind() }. Returns { el, knobs(), liveKnobs(),
+ * setLive({available, model}), setPackages(list, current), setMode(mode),
+ * setRecordings(list, current), setRecordingLive(on),
  * setStructure(structure), setKnobs(knobs), update(state), status(msg, err) }.
  */
 export function createControls(on) {
@@ -116,7 +117,7 @@ export function createControls(on) {
         `${r.ended ? "" : r.live ? "● " : "○ "}${recordingLabel(r)}${r.ended ? ` · ${r.ending ?? "ended"}` : ""}`)));
     },
     /** The LIVE badge: on while a recording's tail is open and being followed or buffered. */
-    setLive(on) {
+    setRecordingLive(on) {
       liveBadge.hidden = !on;
     },
     update(state) {
