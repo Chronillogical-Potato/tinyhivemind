@@ -15,11 +15,11 @@ consumer builds.
 | P1 | Chat identity: `MAIN_THREAD_ID`, `GENERAL_DESK`, `is_general_chat`, `same_conversation` | **done** |
 | P2 | Desk types, then the membership algebra behind `DeskSet<'a>` | **done** |
 | P3 | The `@` grammar, `Mention`/`MentionTarget`, and resolution over `Roster`/`Person` | **done** |
-| P4 | `crates/tinyhivemind`: the `SessionLog` port, the paging walk, and the **attributed** transcript projection | **done** |
+| P4 | The `SessionLog` port (originally `crates/tinyhivemind`, now core's `runtime` module), the paging walk, and the **attributed** transcript projection | **done** |
 | P5 | Continuous sharing — re-seed on a watermark rather than only on a rebind | **done** |
 | P6 | The responder ladder and a model-backed `Selector` port | **core plan retained**; unused waiting port retired |
 | P7 | A bounded mention-dispatch edge | **core decision retained**; unused queue wrapper retired |
-| P8 | `crates/tinyhivemind-hive`: bounded group deliberation — the trace grammar, salience, quorum with cross-inhibition, the attention market, and the episode state machine | **done** |
+| P8 | Bounded group deliberation (originally `crates/tinyhivemind-hive`, now core's `hive` module) — the trace grammar, salience, quorum with cross-inhibition, the attention market, and the episode state machine | **done** |
 | P9 | `!refute`, evidential grounding, grounded objections, and the benchmark arm that scored them | Historical experiment; refutation trace retained, losing quorum knobs retired |
 | P10 | A transactive-memory directory folded from traces, `BidReason::Knows`, and `!defer` | Directory retained for division; losing delegation and deferral paths retired |
 | P11 | `SessionMessage.parent` and the structured trace sidecar | planned |
@@ -106,9 +106,9 @@ advocate rather than debiting an option, and an attention market that ranks
 eligible speakers. A later step may authorize a bounded round of them.
 
 It adds **no port**. An episode is a pure fold, and the host does its waiting
-through the session log and turn scheduler it already implements.
-`crates/tinyhivemind-hive` is in the `pure_crates` list in
-`.github/scripts/assert-pure.sh`.
+through the session log and turn scheduler it already implements. It now
+lives in `crates/tinyhivemind-core/src/hive/`, and `tinyhivemind-core` is in
+the `pure_crates` list in `.github/scripts/assert-pure.sh`.
 
 It is also not a claim that group deliberation produces better answers. Almost
 every positive multi-agent result in the literature is confounded by compute,
@@ -158,8 +158,8 @@ epoch-scoped consent, under which a grant issued later cannot cover a request
 minted earlier. `Ask` names exactly one person, resolved through the existing
 roster and desk algebra, and never an agent.
 
-The original phase also added an `ApprovalGate` waiting port in
-`crates/tinyhivemind`. That unused wrapper has since been retired; a host
+The original phase also added an `ApprovalGate` waiting port in the former
+`crates/tinyhivemind` runtime crate. That unused wrapper has since been retired; a host
 handles the wait after the pure decision. The ADR's lasting choice is that the
 fold is total: a gate that can fail can be bypassed by failing, so `approve`
 returns no `Result` and adds no `Error` variant. See
