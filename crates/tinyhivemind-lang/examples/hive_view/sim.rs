@@ -82,7 +82,8 @@ impl SimConfig {
     ///
     /// # Errors
     ///
-    /// Fails on a malformed document or an empty slice list.
+    /// Fails on a malformed document, an empty slice list, an unordered accuracy
+    /// range, or error weights that are not parts per million or are all zero.
     pub(crate) fn from(sim: &Value) -> Result<Self> {
         let config: Self = serde_json::from_value(sim.clone())?;
         if config.slices.iter().any(|modulus| *modulus < 2) || config.slices.is_empty() {
@@ -97,6 +98,20 @@ impl SimConfig {
             if low > high || high > PPM {
                 return Err("sim.json accuracy ranges must be ordered parts per million".into());
             }
+        }
+        let Errors {
+            classic,
+            plus_one,
+            minus_one,
+        } = config.errors;
+        let weights = [classic, plus_one, minus_one];
+        if weights.iter().any(|weight| *weight > PPM)
+            || weights.iter().sum::<u64>() == 0
+        {
+            return Err(
+                "sim.json errors must be parts per million, at most one million each, not all zero"
+                    .into(),
+            );
         }
         Ok(config)
     }
@@ -201,7 +216,7 @@ impl MathSim {
 }
 
 fn wrong_answer(rng: &mut Rng, errors: &Errors, answer: u64, classic: u64) -> u64 {
-    let total = (errors.classic + errors.plus_one + errors.minus_one).max(1);
+    let total = errors.classic + errors.plus_one + errors.minus_one;
     let roll = rng.below(total);
     if roll < errors.classic {
         classic
