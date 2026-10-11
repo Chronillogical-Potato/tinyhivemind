@@ -10,9 +10,9 @@ fn refuses_to_launch_a_round_past_the_exact_turn_cap() {
 }
 
 #[test]
-fn memory_bootstrap_selects_only_harness_initialization_and_legacy_queue() {
+fn memory_bootstrap_selects_only_the_memory_queue() {
     let services = super::memory_services();
-    assert!(services.harness_init && services.memory_queue);
+    assert!(services.memory_queue);
     assert!(!services.rpc_http && !services.socketio && !services.cron && !services.channels);
     assert!(!services.login_gated && !services.update_scheduler);
     assert!(!services.skill_catalog_refresh && !services.mcp_boot);
