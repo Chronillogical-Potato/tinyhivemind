@@ -93,3 +93,20 @@ fn the_problem_bank_answers_are_computed_exactly() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn the_structure_reports_the_policy_each_desk_runs_under() -> Result<()> {
+    let swarm = crate::structure::structure(&load(&gallery("math-swarm"))?)?;
+    let desks = swarm["desks"].as_array().ok_or("desks")?;
+    assert_eq!(desks.len(), 5);
+    for desk in desks {
+        assert_eq!(
+            desk["episode"],
+            serde_json::json!({"turn_budget":30,"round_width":10,"revealed_width":10,"quorum_threshold":6})
+        );
+    }
+    let panel = crate::structure::structure(&load(&gallery("math-panel"))?)?;
+    assert_eq!(panel["desks"][0]["episode"]["quorum_threshold"], 3);
+    assert_eq!(panel["desks"][0]["episode"]["turn_budget"], 15);
+    Ok(())
+}
