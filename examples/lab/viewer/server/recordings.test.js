@@ -130,13 +130,14 @@ test("tail splits a multi-byte character across reads without mangling it", asyn
   const root = tmp();
   const file = run(root, "r", "");
   const lines = [];
-  tailFrames(file, { intervalMs: 10, onLine: (l) => lines.push(l) });
+  const t = tailFrames(file, { intervalMs: 10, onLine: (l) => lines.push(l) });
   const bytes = Buffer.from(line({ type: "round", content: "naïve ≥ 10" }));
   const cut = bytes.indexOf(0xc3) + 1; // inside the two-byte "ï"
   fs.appendFileSync(file, bytes.subarray(0, cut));
   await new Promise((r) => setTimeout(r, 40));
   fs.appendFileSync(file, bytes.subarray(cut));
   await waitUntil(() => lines.length === 1);
+  t.stop();
   assert.equal(JSON.parse(lines[0]).content, "naïve ≥ 10");
 });
 
