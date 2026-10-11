@@ -124,7 +124,11 @@ pub(crate) fn print(
         }
     }
     if let Some(dir) = &artifacts {
-        let what = if live.is_some() { "live artifacts" } else { "recording" };
+        let what = if live.is_some() {
+            "live artifacts"
+        } else {
+            "recording"
+        };
         eprintln!("hive_view: {what} in {}", dir.display());
     }
     if let Some(sink) = &sink

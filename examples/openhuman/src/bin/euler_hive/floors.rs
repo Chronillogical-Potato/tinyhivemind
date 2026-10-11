@@ -311,7 +311,11 @@ impl Federation {
     pub(super) fn delta(&self, desk: usize, seat: &str) -> (Vec<Row>, usize, usize) {
         let floor = &self.floors[desk];
         let from = floor.seen.get(seat).copied().unwrap_or(0);
-        let rows = floor.journal[from.min(floor.journal.len())..].to_vec();
+        let rows = floor.journal[from.min(floor.journal.len())..]
+            .iter()
+            .filter(|row| row.author != seat)
+            .cloned()
+            .collect();
         (rows, floor.journal.len(), floor.journal.len())
     }
 
@@ -400,10 +404,6 @@ impl Federation {
                     }
                 };
                 let row = floor.row(seat, kind, &body);
-                floor.seen.insert(
-                    seat.clone(),
-                    journal_at_start.max(floor.seen[seat]),
-                );
                 sequences.push(row.sequence);
                 events.push(CommittedUtterance {
                     author_id: seat.clone(),
@@ -510,12 +510,12 @@ impl Federation {
         let sequence = self.floors[desk].journal.last().map_or(0, |row| row.sequence);
         let mut frame = self.frame("forward", &from, to, seat, &content, 0);
         if self.floors[desk].asks >= ASK_CAP {
-            return self.refuse(desk, frame, "width_cap");
+            return self.bounce(desk, frame, "width_cap");
         }
         let decision = self.decide(&from, seat, &content, sequence, 0, None)?;
         let one = match decision {
             ReferralDecision::None { reason } => {
-                return self.refuse(desk, frame, &snake(&format!("{reason:?}")));
+                return self.bounce(desk, frame, &snake(&format!("{reason:?}")));
             }
             ReferralDecision::One { referral } => *referral,
         };
@@ -523,10 +523,10 @@ impl Federation {
         frame.target = Some(one.target_id.clone());
         frame.hops = one.child_hop;
         if !one.crosses() || one.kind != ReferralKind::Forward {
-            return self.refuse(desk, frame, "not_a_desk_referral");
+            return self.bounce(desk, frame, "not_a_desk_referral");
         }
         if !self.linked(&from, &one.to.desk_id) {
-            return self.refuse(desk, frame, "unlinked");
+            return self.bounce(desk, frame, "unlinked");
         }
         let target = self
             .index(&one.to.desk_id)
@@ -756,20 +756,30 @@ impl Federation {
             frame.to_desk
         );
         self.floors[desk].row("host", "notice", &notice);
-        if frame.kind == "forward" {
-            let floor = &mut self.floors[desk];
-            floor.queue.push_back(Incoming {
-                mode: floor.mode.clone().unwrap_or(Mode::Pipeline { hop: 0 }),
-                assign: vec![frame.seat.clone()],
-                reason: "refused",
-                row: floor.journal.last().cloned().unwrap_or(Row {
-                    sequence: 0,
-                    author: "host".into(),
-                    kind: "notice",
-                    body: notice,
-                }),
-            });
+        self.referrals.push(frame);
+        Ok(())
+    }
+
+    /// A refused ask: tell the desk, and give the asking seat its turn back
+    /// before the desk may report, as if the refusal were the answer.
+    fn bounce(&mut self, desk: usize, mut frame: ReferralFrame, reason: &str) -> anyhow::Result<()> {
+        frame.reason = Some(reason.into());
+        let notice = format!(
+            "host: your referral to #{} was refused ({reason}); carry on with what your desk has",
+            frame.to_desk
+        );
+        let floor = &mut self.floors[desk];
+        let row = floor.row("host", "notice", &notice);
+        floor.pending_returns += 1;
+        if floor.resume.is_none() {
+            floor.resume = floor.mode.clone();
         }
+        floor.queue.push_back(Incoming {
+            mode: floor.resume.clone().unwrap_or(Mode::Pipeline { hop: 0 }),
+            assign: vec![frame.seat.clone()],
+            reason: "refused",
+            row,
+        });
         self.referrals.push(frame);
         Ok(())
     }
@@ -819,6 +829,12 @@ impl Floor {
                     note: incoming.row.body.clone(),
                 },
             );
+        }
+        if incoming.reason == "refused" {
+            self.pending_returns = self.pending_returns.saturating_sub(1);
+            if self.pending_returns == 0 {
+                self.resume = None;
+            }
         }
         self.mode = Some(incoming.mode);
         self.episode_rounds = 0;

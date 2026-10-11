@@ -69,7 +69,15 @@ fn a_human_run_still_records_frames_but_prints_none() -> Result<()> {
     let mut out = Vec::new();
     writer.emit(&mut out, &end())?;
     assert!(out.is_empty());
-    assert_eq!(probe.written.borrow().iter().filter(|b| **b == b'\n').count(), 1);
+    assert_eq!(
+        probe
+            .written
+            .borrow()
+            .iter()
+            .filter(|b| **b == b'\n')
+            .count(),
+        1
+    );
     Ok(())
 }
 

@@ -73,7 +73,11 @@ fn euler_hive_is_five_linked_desks_with_referral_enabled() -> Result<()> {
         desks,
         ["research", "theory", "compute", "verify", "synthesis"]
     );
-    assert!((12..=20).contains(&hive.seats.len()), "{}", hive.seats.len());
+    assert!(
+        (12..=20).contains(&hive.seats.len()),
+        "{}",
+        hive.seats.len()
+    );
     let chain: Vec<_> = hive
         .topology
         .iter()
@@ -209,10 +213,19 @@ fn every_seat_binds_its_own_agent_memory_and_reads_the_verified_pool() -> Result
                 RecallMoment::Compaction
             ]
         );
-        for kind in [EntryKind::Observation, EntryKind::FailedAttempt, EntryKind::Outcome] {
+        for kind in [
+            EntryKind::Observation,
+            EntryKind::FailedAttempt,
+            EntryKind::Outcome,
+        ] {
             assert!(binding.settings.remember.contains(&kind), "{}", seat.id);
         }
-        let reads: Vec<_> = binding.settings.reads.iter().map(|r| r.at.as_str()).collect();
+        let reads: Vec<_> = binding
+            .settings
+            .reads
+            .iter()
+            .map(|r| r.at.as_str())
+            .collect();
         assert!(reads.contains(&binding.namespace.as_str()));
         assert!(reads.contains(&pool.as_str()));
     }
