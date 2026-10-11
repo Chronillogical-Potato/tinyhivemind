@@ -3,7 +3,8 @@
 > **Current integration note.** The `desk` example and TinyHiveMind MCP adapter mentioned below were retired by [ADR 0027](../adr/0027-retire-unused-adapters-and-optional-mechanisms.md). Native `EpisodeTools` remains the integration path.
 
 
-**Status:** Implemented in `tinyhivemind::speech`. The `desk` transport
+**Status:** Implemented in `tinyhivemind_core::runtime::speech`
+(`crates/tinyhivemind-core/src/runtime/speech/`). The `desk` transport
 example and MCP adapter described below were later retired.
 **Owner:** tinyhivemind maintainers
 **Reading:** [`thoughts-and-channels.md`](thoughts-and-channels.md),
@@ -20,7 +21,7 @@ right. Where it lives is not.
 
 **Every load-bearing decision is in an example.** The tool schemas and their
 descriptions, the outbox wire form, the drain, and the fold from *what a seat
-called* to *what the room holds* are `crates/tinyhivemind/examples/desk/mcp.rs`
+called* to *what the room holds* were `crates/tinyhivemind/examples/desk/mcp.rs`
 (431 lines), the house-rules block in `examples/desk/prompt.rs`, and roughly
 eighty lines of `examples/desk/run.rs`. A second host cannot depend on any of
 it. It will reimplement it, and the places it differs are exactly the ones that
@@ -157,7 +158,8 @@ does so. It does not require any other host to.
 
 ## Acceptance criteria
 
-1. `crates/tinyhivemind/examples/desk/mcp.rs` holds transport only — the
+1. `crates/tinyhivemind/examples/desk/mcp.rs` (since retired with the `desk`
+   example) holds transport only — the
    JSON-RPC loop, the outbox file, and the CLI config block — and names no tool
    description, no schema and no validation rule of its own. **Met.**
 2. Every tool description a seat reads comes from `speech::tool_specs`, asserted
