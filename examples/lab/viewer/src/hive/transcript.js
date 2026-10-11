@@ -22,7 +22,7 @@ function tabs(structure, state, desk, onDesk) {
 function referralRow(ref, desk) {
   const dir = desk == null ? "" : ref.to_desk === desk ? "in" : "out";
   return h("li", { class: `hv-ref ${ref.accepted ? "accepted" : "refused"}`, title: ref.content ?? "" },
-    h("span", { class: "hv-ref-tag" }, ref.accepted ? `${ref.kind ?? "referral"}${dir ? ` ${dir}` : ""}` : "refused"),
+    h("span", { class: "hv-ref-tag" }, !ref.accepted ? "blocked" : dir === "in" ? "incoming" : dir === "out" ? "outgoing" : "referral"),
     ` ${describeReferral(ref)}${ref.seat ? ` · from ${ref.seat}` : ""}`,
     ref.content ? h("div", { class: "hv-content muted" }, ref.content) : null);
 }
