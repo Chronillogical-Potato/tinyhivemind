@@ -152,7 +152,7 @@ function draw(state) {
 // ---------- compare ----------
 function showCompareForm() {
   const host = $("hv-compare-pick");
-  const math = packages.filter((p) => p.kind === "math");
+  const math = packages.filter((p) => p.kind === "math" || compareState.requested.includes(p.name));
   const list = math.length ? math : packages;
   host.replaceChildren(...list.map((p) =>
     h("label", { class: "hv-check" }, h("input", { type: "checkbox", value: p.name, checked: compareState.requested.includes(p.name) || null }), ` ${p.title}`)));
@@ -190,7 +190,7 @@ function compareStatus(text, err) {
 }
 
 // ---------- boot ----------
-$("hv-player").prepend(controls.el);
+$("hv-summary").after(controls.el);
 $("hv-back").addEventListener("click", () => {
   runAbort?.abort();
   player.pause();

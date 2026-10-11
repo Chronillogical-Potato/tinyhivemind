@@ -26,7 +26,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 if (flag("--json")) {
   process.stdout.write(JSON.stringify(JSON.parse(read(`${name}.json`))) + "\n");
 } else if (flag("--compare")) {
-  for (const line of read("compare.ndjson").split("\n").filter(Boolean)) {
+  const seeds = Number(value("--seeds") ?? 20);
+  for (const line of read("compare.ndjson").split("\n").filter(Boolean).filter((l) => JSON.parse(l).seed == null || JSON.parse(l).seed <= seeds)) {
     process.stdout.write(line + "\n");
     await sleep(15);
   }

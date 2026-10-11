@@ -48,6 +48,7 @@ async function shot(file) {
   const img = await send("Page.captureScreenshot", {
     format: "png",
     clip: { x: 0, y: 0, width: cssContentSize.width, height: Math.min(cssContentSize.height, 6000), scale: 1 },
+    captureBeyondViewport: true,
   });
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(path.join(out, file), Buffer.from(img.data, "base64"));

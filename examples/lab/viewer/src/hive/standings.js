@@ -27,15 +27,15 @@ export function renderStandings(host, standings, threshold, answer) {
     svg.append(s("rect", { x: LABEL_W, y, width: Math.max(0, x(r.support) - LABEL_W), height: 12, rx: 2, class: "hv-support" }));
     svg.append(s("rect", { x: LABEL_W, y: y + 14, width: Math.max(0, x(r.object) - LABEL_W), height: 6, rx: 2, class: "hv-object" }));
     const note = `${r.support} for · ${r.object} against${r.committed ? " · committed" : ""}`;
-    svg.append(s("text", { x: x(Math.max(r.support, r.object)) + 6, y: y + 11, class: r.committed ? "hv-committed" : "dim" }, r.committed ? "committed" : `${r.support}/${r.object}`));
+    svg.append(s("text", { x: x(Math.max(r.support, r.object, r.support >= threshold ? 0 : threshold)) + 6, y: y + 11, class: r.committed ? "hv-committed" : "dim" }, r.committed ? "committed" : `${r.support}/${r.object}`));
     svg.append(s("title", {}, `${r.topic}: ${note}`));
   });
   if (threshold) {
     svg.append(s("line", { x1: x(threshold), x2: x(threshold), y1: 0, y2: height - 14, class: "hv-threshold" }));
     svg.append(s("text", { x: x(threshold), y: height - 2, "text-anchor": "middle", class: "dim" }, `quorum ${threshold}`));
   }
-  const more = standings.length > rows.length ? h("p", { class: "muted" }, `${standings.length - rows.length} more topics`) : null;
+  const more = standings.length > rows.length ? [h("p", { class: "muted" }, `${standings.length - rows.length} more topics`)] : [];
   host.replaceChildren(svg, h("div", { class: "legend" },
     h("span", {}, h("i", { class: "sw", style: "background:var(--good)" }), "support"),
-    h("span", {}, h("i", { class: "sw", style: "background:var(--bad)" }), "object")), more);
+    h("span", {}, h("i", { class: "sw", style: "background:var(--bad)" }), "object")), ...more);
 }
