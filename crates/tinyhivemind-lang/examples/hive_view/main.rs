@@ -32,16 +32,25 @@ use crate::run::Knobs;
 /// The example's error type: anything, with its message.
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+/// Which view the command line asked for. The last mode flag wins, except
+/// that `--compare` wins over `--run` (`--run --compare` is a comparison).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum Mode {
+    #[default]
+    Tree,
+    Mermaid,
+    Json,
+    Run,
+    Compare,
+}
+
 /// What the command line asked for.
 #[derive(Debug, Default)]
 struct Args {
     dir: Option<PathBuf>,
-    mermaid: bool,
-    json: bool,
-    run: bool,
+    mode: Mode,
     frames: bool,
     trace: Option<PathBuf>,
-    compare: bool,
     table: bool,
     seeds: u32,
     packages: Vec<String>,
@@ -59,7 +68,7 @@ fn bounded(flag: &str, value: Option<String>, low: u64, high: u64) -> Result<u64
     Ok(parsed)
 }
 
-fn parse_args(argv: impl IntoIterator<Item = String>) -> Result<Args> {
+fn parse_args(words: impl IntoIterator<Item = String>) -> Result<Args> {
     let mut args = Args {
         seeds: 50,
         knobs: Knobs {
@@ -68,23 +77,24 @@ fn parse_args(argv: impl IntoIterator<Item = String>) -> Result<Args> {
         },
         ..Args::default()
     };
-    let mut argv = argv.into_iter();
+    let mut argv = words.into_iter();
     while let Some(arg) = argv.next() {
         match arg.as_str() {
-            "--mermaid" => args.mermaid = true,
-            "--json" => args.json = true,
-            "--run" => args.run = true,
+            "--mermaid" => args.mode = Mode::Mermaid,
+            "--json" => args.mode = Mode::Json,
+            "--run" if args.mode != Mode::Compare => args.mode = Mode::Run,
+            "--run" => {}
             "--frames" => args.frames = true,
             "--table" => args.table = true,
-            "--compare" => args.compare = true,
+            "--compare" => args.mode = Mode::Compare,
             "--trace" => args.trace = Some(argv.next().ok_or("--trace needs a path")?.into()),
             "--seeds" => args.seeds = u32::try_from(bounded(&arg, argv.next(), 1, 10_000)?)?,
             "--seed" => args.knobs.seed = bounded(&arg, argv.next(), 0, u64::MAX)?,
             "--round-width" => {
-                args.knobs.round_width = Some(u32::try_from(bounded(&arg, argv.next(), 1, 64)?)?)
+                args.knobs.round_width = Some(u32::try_from(bounded(&arg, argv.next(), 1, 64)?)?);
             }
             "--turn-budget" => {
-                args.knobs.turn_budget = Some(u32::try_from(bounded(&arg, argv.next(), 1, 2000)?)?)
+                args.knobs.turn_budget = Some(u32::try_from(bounded(&arg, argv.next(), 1, 2000)?)?);
             }
             "--problem" => args.knobs.problem = Some(argv.next().ok_or("--problem needs an id")?),
             "--packages" => {
@@ -117,7 +127,7 @@ fn run_main() -> Result<()> {
     let dir = args.dir.clone().ok_or(
         "usage: hive_view <package-dir> [--mermaid | --json | --run [--frames] | --compare]",
     )?;
-    if args.compare {
+    if args.mode == Mode::Compare {
         let names = if args.packages.is_empty() {
             compare::DEFAULT_PACKAGES
                 .iter()
@@ -138,18 +148,14 @@ fn run_main() -> Result<()> {
         return Ok(());
     }
     let loaded = load::load(&dir)?;
-    if args.run {
-        return run::print(&loaded, &args.knobs, args.frames, args.trace.as_deref());
-    }
-    if args.json {
-        println!(
+    match args.mode {
+        Mode::Run => run::print(&loaded, &args.knobs, args.frames, args.trace.as_deref())?,
+        Mode::Json => println!(
             "{}",
             serde_json::to_string(&structure::structure(&loaded)?)?
-        );
-    } else if args.mermaid {
-        print!("{}", render::mermaid(&loaded.lowered));
-    } else {
-        print!("{}", render::tree(&loaded));
+        ),
+        Mode::Mermaid => print!("{}", render::mermaid(&loaded.lowered)),
+        Mode::Tree | Mode::Compare => print!("{}", render::tree(&loaded)),
     }
     Ok(())
 }

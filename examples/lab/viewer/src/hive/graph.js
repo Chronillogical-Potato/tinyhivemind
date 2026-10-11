@@ -104,7 +104,7 @@ function drawSeats(g, structure, lay, state, ui, onHover) {
       if (ans) {
         const w = Math.max(22, String(ans.answer).length * 7 + 10);
         node.append(s("rect", { x: r - 4, y: -r - 8, width: w, height: 15, rx: 7, class: `hv-chip ${ans.correct === false ? "wrong" : ans.correct ? "right" : ""}` }));
-        node.append(s("text", { x: r - 4 + w / 2, y: -r + 3, "text-anchor": "middle", class: "hv-chip-text" }, clip(String(ans.answer), 8)));
+        node.append(s("text", { x: r - 4 + w / 2, y: -r + 3, "text-anchor": "middle", class: `hv-chip-text${ans.correct == null ? " neutral" : ""}` }, clip(String(ans.answer), 8)));
       }
     }
     node.append(s("title", {}, seatTitle(seat, state)));

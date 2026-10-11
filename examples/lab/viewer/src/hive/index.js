@@ -101,6 +101,7 @@ async function openHive(name, knobs, autorun) {
   controls.setKnobs({ seed: "", round_width: "", turn_budget: "", ...knobs });
   $("hv-title").textContent = st.name ?? name;
   $("hv-summary").textContent = st.summary ?? "";
+  $("hv-summary").title = st.summary ?? "";
   player.reset(false);
   controls.status("Press Run to start an episode.");
   if (document.body.dataset.view !== "hive") setView("hive", false);

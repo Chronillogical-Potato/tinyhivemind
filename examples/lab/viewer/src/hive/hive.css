@@ -12,6 +12,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .hv-scrub { flex: 1 1 160px; min-width: 120px; accent-color: var(--accent); }
 .hv-where { font-variant-numeric: tabular-nums; }
 #hv-title { margin: 0; }
+#hv-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; cursor: help; }
 
 /* gallery */
 .hv-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-top: 10px; }
@@ -64,6 +65,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .hv-chip.right { fill: var(--good); stroke: none; }
 .hv-chip.wrong { fill: var(--bad); stroke: none; }
 svg .hv-chip-text { fill: var(--bg); font-size: 10px; font-weight: 700; }
+svg .hv-chip-text.neutral { fill: var(--ink); font-weight: 600; }
 .hv-bubble rect { fill: var(--panel); stroke: var(--accent); stroke-width: 1.2; filter: drop-shadow(0 1px 3px rgba(0,0,0,.25)); }
 .hv-bubble.old rect { stroke: var(--line); }
 .hv-bubble text { font-size: 11px; }

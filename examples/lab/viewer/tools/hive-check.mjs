@@ -80,6 +80,8 @@ async function hive(name, extra) {
 await send("Runtime.enable");
 await send("Page.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+// SCHEME=light|dark forces the colour scheme; unset follows the browser.
+if (process.env.SCHEME) await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: process.env.SCHEME }] });
 
 await open("?view=hive");
 const cards = await waitFor("document.querySelectorAll('.hv-card').length > 0", 60000);
@@ -101,6 +103,12 @@ const done = await waitFor("/^Done/.test(document.getElementById('hv-compare-sta
 console.log(done ? "ok" : "FAIL", "compare", await evaluate("JSON.stringify({ status: document.getElementById('hv-compare-status').textContent, cells: document.querySelectorAll('.hv-cell').length })"));
 if (!done) failures++;
 await shot("compare.png");
+
+// A per-seed cell opens that seed in the player and runs it.
+await evaluate("document.querySelector('.hv-cell.open:last-of-type')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))");
+const replay = await waitFor("!!document.getElementById('hv-ending') && !document.getElementById('view-hive').hidden");
+console.log(replay ? "ok" : "FAIL", "replay from compare", await evaluate("location.search"));
+if (!replay) failures++;
 
 ws.close();
 process.exit(failures ? 1 : 0);
