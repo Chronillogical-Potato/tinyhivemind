@@ -182,7 +182,10 @@ pub(crate) fn parse(reply: &str) -> Parsed {
         .map(clean)
         .filter(|line| !line.is_empty() && !line.starts_with("```"))
         .collect();
-    let trace = lines.iter().map(|line| repair(line)).find(|line| valid(line));
+    let trace = lines
+        .iter()
+        .map(|line| repair(line))
+        .find(|line| valid(line));
     let mention = lines
         .iter()
         .find(|line| !line.starts_with('!') && line.contains("@#"))

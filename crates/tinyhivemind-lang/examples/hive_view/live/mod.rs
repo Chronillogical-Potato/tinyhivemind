@@ -193,12 +193,7 @@ impl Speaker for LiveSpeaker {
             .collect()
     }
 
-    fn answer(
-        &mut self,
-        seat: &str,
-        incoming: &str,
-        visible: &[SessionMessage],
-    ) -> Result<String> {
+    fn answer(&mut self, seat: &str, incoming: &str, visible: &[SessionMessage]) -> Result<String> {
         let brief = self.brief(seat);
         let user = prompt::answer(&brief, incoming, visible, &self.home);
         let line = self.call(seat, "answer", &prompt::system(&brief), &user)?;
@@ -274,7 +269,11 @@ fn briefs(loaded: &Loaded) -> BTreeMap<String, Brief> {
                 desk_description: declared
                     .and_then(|desk| desk.description.clone())
                     .unwrap_or_default(),
-                links: if hive.desks.len() > 1 { links } else { Vec::new() },
+                links: if hive.desks.len() > 1 {
+                    links
+                } else {
+                    Vec::new()
+                },
             };
             (seat.id.clone(), brief)
         })

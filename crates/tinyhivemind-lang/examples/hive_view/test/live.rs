@@ -53,20 +53,27 @@ fn a_web_capable_or_malformed_model_is_refused_before_any_call() {
         "-vendor/model",
         "vendor/model;rm",
     ] {
-        assert!(check_model(refused).is_err(), "{refused:?} should be refused");
+        assert!(
+            check_model(refused).is_err(),
+            "{refused:?} should be refused"
+        );
     }
     for accepted in [
         DEFAULT_MODEL,
         "google/gemini-2.0-flash-001",
         "meta-llama/llama-3.3-70b-instruct:free",
     ] {
-        assert!(check_model(accepted).is_ok(), "{accepted:?} should be accepted");
+        assert!(
+            check_model(accepted).is_ok(),
+            "{accepted:?} should be accepted"
+        );
     }
 }
 
 #[test]
 fn a_reply_reduces_to_its_first_valid_trace_line() {
-    let parsed = parse("Let me think.\n\n- **!propose #1,287. ^1 Choose 5 of 13.**\n!support #9 ^2");
+    let parsed =
+        parse("Let me think.\n\n- **!propose #1,287. ^1 Choose 5 of 13.**\n!support #9 ^2");
     assert_eq!(
         parsed,
         Parsed {
@@ -79,7 +86,10 @@ fn a_reply_reduces_to_its_first_valid_trace_line() {
     assert_eq!(parsed.content, "!object >4 ^3 4 is wrong");
     // A referral line rides along.
     let parsed = parse("```\n!evidence ^1 residue 2 mod 3\n```\n@#verify please check");
-    assert_eq!(parsed.content, "!evidence ^1 residue 2 mod 3\n@#verify please check");
+    assert_eq!(
+        parsed.content,
+        "!evidence ^1 residue 2 mod 3\n@#verify please check"
+    );
     assert!(parsed.valid);
 }
 
@@ -152,7 +162,10 @@ fn a_blind_turn_prompt_shows_only_what_core_projects() {
     let text = prompt::turn(&brief(), &turn, &visible, &home, None);
     assert!(text.contains("^1 problem: Problem p: 2+2?"));
     assert!(text.contains("^2 compute-01 (referral from desk compute): !propose #4"));
-    assert!(!text.contains("a peer this episode"), "blind rounds stay blind:\n{text}");
+    assert!(
+        !text.contains("a peer this episode"),
+        "blind rounds stay blind:\n{text}"
+    );
     assert!(text.contains("blind opening round"));
     let commit = HiveTurn {
         phase: Phase::Commit,

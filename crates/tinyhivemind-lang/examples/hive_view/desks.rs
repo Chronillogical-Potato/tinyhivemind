@@ -50,8 +50,8 @@ use tinyhivemind_lang::LoweredHive;
 
 use crate::Result;
 use crate::episode::{
-    Ending, Event, Outcome, Room, RoundRecord, Speaker, ending_of, fold, member_ids, message,
-    play, speech,
+    Ending, Event, Outcome, Room, RoundRecord, Speaker, ending_of, fold, member_ids, message, play,
+    speech,
 };
 
 /// Asks one desk may refer to other desks across its episode.

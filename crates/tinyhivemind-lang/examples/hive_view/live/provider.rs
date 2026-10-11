@@ -152,7 +152,10 @@ impl Provider {
         check_model(model)?;
         let key = std::env::var("OPENROUTER_API_KEY")
             .map_err(|_| "--live needs OPENROUTER_API_KEY in the environment")?;
-        if key.is_empty() || key.bytes().any(|b| b < 0x21 || b > 0x7e || b == b'\\' || b == b'"')
+        if key.is_empty()
+            || key
+                .bytes()
+                .any(|b| b < 0x21 || b > 0x7e || b == b'\\' || b == b'"')
         {
             return Err("OPENROUTER_API_KEY is not a printable token".into());
         }

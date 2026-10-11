@@ -121,12 +121,7 @@ pub(crate) trait Speaker {
     /// # Errors
     ///
     /// As [`Speaker::speak_round`].
-    fn answer(
-        &mut self,
-        seat: &str,
-        incoming: &str,
-        visible: &[SessionMessage],
-    ) -> Result<String> {
+    fn answer(&mut self, seat: &str, incoming: &str, visible: &[SessionMessage]) -> Result<String> {
         let _ = (seat, incoming, visible);
         Ok(crate::script::QUIET.to_owned())
     }
@@ -298,7 +293,10 @@ pub(crate) fn ending_of(decision: &HiveStep) -> Option<Ending> {
 
 /// The member ids of a room, for folds that count only members.
 pub(crate) fn member_ids(room: &Room) -> Vec<&str> {
-    room.members.iter().map(|member| member.id.as_str()).collect()
+    room.members
+        .iter()
+        .map(|member| member.id.as_str())
+        .collect()
 }
 
 /// Drive one desk's episode to termination.

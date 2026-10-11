@@ -165,8 +165,11 @@ fn a_disabled_policy_refuses_every_report_and_desks_decide_alone() -> Result<()>
     loaded.lowered.policies.referral.enabled = false;
     let (seen, _) = watch(&loaded, 2)?;
     assert!(!seen.referrals.is_empty());
-    assert!(seen.referrals.iter().all(|referral| !referral.accepted
-        && referral.reason.as_deref() == Some("disabled")));
+    assert!(
+        seen.referrals
+            .iter()
+            .all(|referral| !referral.accepted && referral.reason.as_deref() == Some("disabled"))
+    );
     assert_eq!(seen.ends.len(), 5);
     Ok(())
 }
@@ -241,7 +244,10 @@ fn a_linked_ask_is_answered_on_the_far_desk_and_returns_home() -> Result<()> {
     let loaded = load(&gallery("math-swarm"))?;
     let (seen, speaker) = asking(
         &loaded,
-        &[("conjecture-01", "!propose #7 ^1 Seven?\n@#verify can you check seven?")],
+        &[(
+            "conjecture-01",
+            "!propose #7 ^1 Seven?\n@#verify can you check seven?",
+        )],
     )?;
     let forward = seen
         .referrals
@@ -249,7 +255,10 @@ fn a_linked_ask_is_answered_on_the_far_desk_and_returns_home() -> Result<()> {
         .find(|referral| referral.kind == "forward")
         .ok_or("the ask was routed")?;
     assert!(forward.accepted, "{forward:?}");
-    assert_eq!((forward.from_desk.as_str(), forward.to_desk.as_str()), ("conjecture", "verify"));
+    assert_eq!(
+        (forward.from_desk.as_str(), forward.to_desk.as_str()),
+        ("conjecture", "verify")
+    );
     assert_eq!(forward.hops, 1);
     let target = forward.target.clone().ok_or("core chose a seat")?;
     assert!(target.starts_with("verify-"));
@@ -267,9 +276,15 @@ fn a_linked_ask_is_answered_on_the_far_desk_and_returns_home() -> Result<()> {
         .iter()
         .find(|referral| referral.kind == "return")
         .ok_or("the answer was routed back")?;
-    assert_eq!((back.from_desk.as_str(), back.to_desk.as_str()), ("verify", "conjecture"));
+    assert_eq!(
+        (back.from_desk.as_str(), back.to_desk.as_str()),
+        ("verify", "conjecture")
+    );
     assert_eq!(back.hops, 2);
-    assert!(back.accepted || back.reason.as_deref() == Some("desk_closed"), "{back:?}");
+    assert!(
+        back.accepted || back.reason.as_deref() == Some("desk_closed"),
+        "{back:?}"
+    );
     Ok(())
 }
 
@@ -278,7 +293,10 @@ fn an_ask_to_an_unlinked_desk_is_refused() -> Result<()> {
     let loaded = load(&gallery("math-swarm"))?;
     let (seen, speaker) = asking(
         &loaded,
-        &[("conjecture-01", "!propose #7 ^1 Seven.\n@#synthesis is it seven?")],
+        &[(
+            "conjecture-01",
+            "!propose #7 ^1 Seven.\n@#synthesis is it seven?",
+        )],
     )?;
     let refused = seen
         .referrals

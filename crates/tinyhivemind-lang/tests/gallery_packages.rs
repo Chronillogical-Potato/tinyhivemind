@@ -320,13 +320,21 @@ fn every_math_seat_opens_with_a_distinct_persona() -> Result<()> {
             "{} repeats the persona {persona:?}",
             seat.id
         );
-        assert!(seat.prompt.lines().count() >= 3, "{} explains how it thinks", seat.id);
+        assert!(
+            seat.prompt.lines().count() >= 3,
+            "{} explains how it thinks",
+            seat.id
+        );
     }
     assert_eq!(seen.len(), 50);
     let (_, panel) = math_panel()?;
     for seat in &panel.seats {
         let persona = persona(&seat.prompt).ok_or(format!("{} has no persona line", seat.id))?;
-        assert!(seen.insert(persona.to_lowercase()), "{} repeats a swarm persona", seat.id);
+        assert!(
+            seen.insert(persona.to_lowercase()),
+            "{} repeats a swarm persona",
+            seat.id
+        );
     }
     assert_eq!(seen.len(), 55);
     Ok(())

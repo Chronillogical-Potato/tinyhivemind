@@ -134,7 +134,12 @@ pub(crate) fn print(
         };
         emit(&mut out, &end)?;
     } else {
-        ending(&mut out, &outcome, correct, prepared.answer_desk().as_deref())?;
+        ending(
+            &mut out,
+            &outcome,
+            correct,
+            prepared.answer_desk().as_deref(),
+        )?;
         if let Some(usage) = &usage {
             writeln!(
                 out,
@@ -310,7 +315,9 @@ fn ending(
         Some(false) => " (not correct)",
         None => "",
     };
-    let by = desk.map(|desk| format!(" by desk {desk}")).unwrap_or_default();
+    let by = desk
+        .map(|desk| format!(" by desk {desk}"))
+        .unwrap_or_default();
     match &outcome.ending {
         Ending::Converged(topic) => writeln!(out, "\n  converged{by} on #{topic}{verdict}")?,
         Ending::Deadlocked(topics) => writeln!(

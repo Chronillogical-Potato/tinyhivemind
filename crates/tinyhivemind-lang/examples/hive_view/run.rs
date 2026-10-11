@@ -188,7 +188,9 @@ pub(crate) fn prepare_with(
     let Some(sim) = &loaded.sim else {
         let plan = plan(loaded, knobs, opening_for(loaded))?;
         let speaker: Box<dyn Speaker> = match (live, &loaded.script) {
-            (Some((config, run)), _) => Box::new(LiveSpeaker::new(loaded, config, knobs.seed, run)?),
+            (Some((config, run)), _) => {
+                Box::new(LiveSpeaker::new(loaded, config, knobs.seed, run)?)
+            }
             (None, Some(script)) => Box::new(Scripted::new(script)),
             (None, None) => Box::new(Seeded::new(knobs.seed, seat_roles(loaded, &plan).len())),
         };
@@ -295,4 +297,3 @@ pub(crate) fn execute(
 pub(crate) fn correct(outcome: &Outcome, problem: Option<&(Problem, u64)>) -> Option<bool> {
     problem.map(|(_, answer)| outcome.ending.topic() == Some(answer.to_string().as_str()))
 }
-
