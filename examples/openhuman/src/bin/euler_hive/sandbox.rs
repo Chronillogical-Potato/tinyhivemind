@@ -167,7 +167,6 @@ pub(super) fn docker_args(image: &str, name: &str) -> Vec<String> {
         "PYTHONDONTWRITEBYTECODE=1",
         image,
         "timeout",
-        "--signal=KILL",
         &seconds,
         "python3",
         "-I",
