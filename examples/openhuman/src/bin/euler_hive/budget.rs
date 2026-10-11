@@ -12,6 +12,9 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
+/// The desk whose sandbox runs are held back for it.
+pub(super) const VERIFY_DESK: &str = "verify";
+
 /// The run's limits.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub(super) struct Limits {
@@ -44,7 +47,7 @@ impl Limits {
         max_turns: 60,
         max_model_calls: 400,
         max_wall_seconds: 5_400,
-        max_sandbox_runs: 40,
+        max_sandbox_runs: 60,
         max_searches: 12,
         max_spend_usd: 8.0,
     };
@@ -58,6 +61,8 @@ pub(super) struct Budget {
     pub(super) turns: AtomicU64,
     pub(super) model_calls: AtomicU64,
     pub(super) sandbox_runs: AtomicU64,
+    /// Sandbox runs claimed by seats off the verify desk.
+    others_sandbox_runs: AtomicU64,
     pub(super) searches: AtomicU64,
     pub(super) input_tokens: AtomicU64,
     pub(super) output_tokens: AtomicU64,
@@ -88,6 +93,7 @@ impl Budget {
             turns: AtomicU64::new(0),
             model_calls: AtomicU64::new(0),
             sandbox_runs: AtomicU64::new(0),
+            others_sandbox_runs: AtomicU64::new(0),
             searches: AtomicU64::new(0),
             input_tokens: AtomicU64::new(0),
             output_tokens: AtomicU64::new(0),
@@ -183,13 +189,26 @@ impl Budget {
         Ok(())
     }
 
-    /// Claim one sandbox run, or say why not.
-    pub(super) fn claim_sandbox(&self) -> anyhow::Result<u64> {
-        claim(
-            &self.sandbox_runs,
-            self.limits.max_sandbox_runs,
-            "sandbox runs",
-        )
+    /// Claim one sandbox run for a seat on `desk`, or say why not.
+    ///
+    /// A third of the runs (rounded up) is held back for the verify desk, so
+    /// the desks that compute a candidate cannot spend the runs that must
+    /// check it.
+    pub(super) fn claim_sandbox(&self, desk: &str) -> anyhow::Result<u64> {
+        let total = self.limits.max_sandbox_runs;
+        if desk != VERIFY_DESK {
+            let share = total - total.div_ceil(3);
+            if self.others_sandbox_runs.load(Ordering::Relaxed) >= share {
+                anyhow::bail!(
+                    "the remaining sandbox runs are held for the verify desk; refer your program's idea to #verify or report"
+                );
+            }
+        }
+        let claimed = claim(&self.sandbox_runs, total, "sandbox runs")?;
+        if desk != VERIFY_DESK {
+            self.others_sandbox_runs.fetch_add(1, Ordering::Relaxed);
+        }
+        Ok(claimed)
     }
 
     /// Claim one web search, or say why not.

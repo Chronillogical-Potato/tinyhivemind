@@ -226,6 +226,29 @@ pub(super) fn schema(kind: SeatTool, scope: &SeatScope, pool_writer: bool) -> Va
     }
 }
 
+/// A verify seat's `support` must rest on a check it ran this turn: at least
+/// one `run_python` that executed. Objections and other desks are not gated.
+///
+/// # Errors
+///
+/// Refuses an ungrounded support, with the reason the seat reads.
+pub(super) fn grounded(
+    desk: &str,
+    verdict: Option<Verdict>,
+    calls: &[CallRecord],
+) -> Result<(), String> {
+    if desk != super::budget::VERIFY_DESK || verdict != Some(Verdict::Support) {
+        return Ok(());
+    }
+    if calls
+        .iter()
+        .any(|call| call.tool == "run_python" && call.ok)
+    {
+        return Ok(());
+    }
+    Err("a verify seat may support a candidate only after running its own check with run_python this turn; run one, or object".into())
+}
+
 fn description(kind: SeatTool) -> &'static str {
     match kind {
         SeatTool::WebSearch => {
@@ -304,6 +327,7 @@ impl HiveTool {
                     Some("object") => Some(Verdict::Object),
                     Some(other) => return Err(format!("unknown verdict {other}")),
                 };
+                grounded(&self.scope.desk, verdict, &self.turn.calls())?;
                 let candidate = args
                     .get("candidate")
                     .and_then(Value::as_str)
@@ -380,7 +404,7 @@ impl HiveTool {
         let index = self
             .services
             .budget
-            .claim_sandbox()
+            .claim_sandbox(&self.scope.desk)
             .map_err(|e| e.to_string())?;
         let number = self.services.run.next_program();
         let stem = format!("sandbox/{number:03}-{}", self.scope.seat);
