@@ -196,19 +196,26 @@ impl Budget {
     /// check it.
     pub(super) fn claim_sandbox(&self, desk: &str) -> anyhow::Result<u64> {
         let total = self.limits.max_sandbox_runs;
-        if desk != VERIFY_DESK {
+        let off_verify = desk != VERIFY_DESK;
+        if off_verify {
+            // Reserve the off-verify share atomically first, so concurrent
+            // seats cannot all see room for the last slot.
             let share = total - total.div_ceil(3);
-            if self.others_sandbox_runs.load(Ordering::Relaxed) >= share {
-                anyhow::bail!(
-                    "the remaining sandbox runs are held for the verify desk; refer your program's idea to #verify or report"
-                );
+            self.others_sandbox_runs
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+                    (used < share).then_some(used + 1)
+                })
+                .map_err(|_| {
+                    anyhow::anyhow!(
+                        "the remaining sandbox runs are held for the verify desk; refer your program's idea to #verify or report"
+                    )
+                })?;
+        }
+        claim(&self.sandbox_runs, total, "sandbox runs").inspect_err(|_| {
+            if off_verify {
+                self.others_sandbox_runs.fetch_sub(1, Ordering::AcqRel);
             }
-        }
-        let claimed = claim(&self.sandbox_runs, total, "sandbox runs")?;
-        if desk != VERIFY_DESK {
-            self.others_sandbox_runs.fetch_add(1, Ordering::Relaxed);
-        }
-        Ok(claimed)
+        })
     }
 
     /// Claim one web search, or say why not.
@@ -235,12 +242,12 @@ impl Budget {
 }
 
 fn claim(counter: &AtomicU64, limit: u64, what: &str) -> anyhow::Result<u64> {
-    let previous = counter.fetch_add(1, Ordering::Relaxed);
-    if previous >= limit {
-        counter.fetch_sub(1, Ordering::Relaxed);
-        anyhow::bail!("the run's {what} budget ({limit}) is spent; work with what you have");
-    }
-    Ok(previous + 1)
+    counter
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+            (used < limit).then_some(used + 1)
+        })
+        .map(|used| used + 1)
+        .map_err(|_| anyhow::anyhow!("the run's {what} budget ({limit}) is spent; work with what you have"))
 }
 
 /// OpenRouter's usage for the calling key, in dollars.

@@ -621,3 +621,29 @@ fn a_failed_frame_append_or_flush_is_reported() {
     run.note("frames.ndjson", Err(error));
     assert!(run.check().is_err());
 }
+
+#[test]
+fn concurrent_claims_never_take_the_verify_reserve() {
+    let mut limits = super::budget::Limits::SMOKE;
+    limits.max_sandbox_runs = 30;
+    let budget = std::sync::Arc::new(super::budget::Budget::new(limits));
+    let threads: Vec<_> = (0..16)
+        .map(|_| {
+            let budget = budget.clone();
+            std::thread::spawn(move || {
+                (0..10)
+                    .filter(|_| budget.claim_sandbox("compute").is_ok())
+                    .count()
+            })
+        })
+        .collect();
+    let granted: usize = threads
+        .into_iter()
+        .map(|thread| thread.join().expect("claimant"))
+        .sum();
+    assert_eq!(granted, 20, "compute gets exactly its two-thirds share");
+    for _ in 0..10 {
+        budget.claim_sandbox("verify").expect("the reserve is intact");
+    }
+    assert!(budget.claim_sandbox("verify").is_err());
+}
