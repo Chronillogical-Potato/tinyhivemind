@@ -169,13 +169,19 @@ pub(super) async fn run(seat: Arc<Seat>, input: TurnInput, services: Arc<Service
         moment,
         budget_chars: budget,
     };
-    let (framed, recalled) = match seat.memory.recall(&request).await {
-        Ok(notes) => {
+    // Recall counts against the run's wall clock like the model turn does.
+    let recall = within(services.budget.turn_timeout(), seat.memory.recall(&request)).await;
+    let (framed, recalled) = match recall {
+        Some(Ok(notes)) => {
             let count = notes.iter().map(|note| note.lines.len()).sum();
             (frame_recalled(&notes, budget), count)
         }
-        Err(error) => {
+        Some(Err(error)) => {
             services.run.event(&serde_json::json!({"event": "recall_failed", "seat": seat.scope.seat, "error": error.to_string()}));
+            (None, 0)
+        }
+        None => {
+            services.run.event(&serde_json::json!({"event": "recall_failed", "seat": seat.scope.seat, "error": "timed out at the wall-clock limit"}));
             (None, 0)
         }
     };
@@ -250,7 +256,12 @@ pub(super) async fn run(seat: Arc<Seat>, input: TurnInput, services: Arc<Service
     }
     output.calls = ledger.calls();
     let (_, remembered) = ledger.memory();
-    output.remembered = remembered + remember_action(&seat, &output.action, &services).await;
+    output.remembered = remembered + within(
+            services.budget.turn_timeout(),
+            remember_action(&seat, &output.action, &services),
+        )
+        .await
+        .unwrap_or(0);
     if let Ok(mut s) = seat.session.lock() {
         s.turns += 1;
         if s.context_tokens > COMPACT_AT_TOKENS {
@@ -308,6 +319,12 @@ async fn one_turn(
     let outcome = outcome?;
     services.budget.record_turn(outcome.usage.as_ref());
     Ok((outcome.reply, outcome.usage, calls))
+}
+
+/// `future`, or `None` once `deadline` passes: the whole seat activation,
+/// memory included, stays inside the run's wall-clock limit.
+pub(super) async fn within<T>(deadline: Duration, future: impl std::future::Future<Output = T>) -> Option<T> {
+    tokio::time::timeout(deadline, future).await.ok()
 }
 
 /// Core's `Remember` after each activation: the seat's committed action as

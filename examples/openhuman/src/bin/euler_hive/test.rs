@@ -647,3 +647,11 @@ fn concurrent_claims_never_take_the_verify_reserve() {
     }
     assert!(budget.claim_sandbox("verify").is_err());
 }
+
+#[tokio::test]
+async fn a_memory_call_past_the_wall_clock_is_abandoned() {
+    use std::time::Duration;
+    let pending = std::future::pending::<()>();
+    assert!(super::turn::within(Duration::from_millis(20), pending).await.is_none());
+    assert_eq!(super::turn::within(Duration::from_secs(5), async { 7 }).await, Some(7));
+}
