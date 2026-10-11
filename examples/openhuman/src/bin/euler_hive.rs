@@ -386,7 +386,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         }
         for round in &pending {
             let Some(outputs) = by_desk.remove(&round.desk) else { continue };
-            let journal_at_start = federation.floors[round.desk].journal.len();
+            let journal_at_start = outputs.first().map_or(0, |(_, _, of, _)| *of);
             let results: Vec<(String, Action)> = outputs
                 .iter()
                 .map(|(output, ..)| (output.seat.clone(), output.action.clone()))
