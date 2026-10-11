@@ -32,7 +32,9 @@ impl Problem {
             ("lattice", [right, up]) => Ok(binomial(right + up, *right)),
             ("modsum", [n, power, modulus]) => Ok(power_sum(*n, *power, *modulus)),
             ("digitsum", [base, exponent]) => Ok(digit_sum(base.pow(u32::try_from(*exponent)?))),
-            ("multiples", [limit, a, b]) => Ok((1..*limit).filter(|k| k % a == 0 || k % b == 0).sum()),
+            ("multiples", [limit, a, b]) => {
+                Ok((1..*limit).filter(|k| k % a == 0 || k % b == 0).sum())
+            }
             ("sqdiff", [n]) => Ok(square_difference(*n)),
             ("primes", [limit]) => Ok(primes_below(*limit)),
             _ => Err(format!("problem {} has an unknown kind or arity", self.id).into()),
@@ -68,7 +70,11 @@ impl Problem {
             _ => answer + 2,
         };
         // A mistake that happens to be right is not a mistake.
-        Ok(if mistake == answer { answer + 2 } else { mistake })
+        Ok(if mistake == answer {
+            answer + 2
+        } else {
+            mistake
+        })
     }
 }
 
@@ -123,7 +129,11 @@ fn square_difference(n: u64) -> u64 {
 
 fn primes_below(limit: u64) -> u64 {
     (2..limit)
-        .filter(|candidate| (2..*candidate).take_while(|d| d * d <= *candidate).all(|d| candidate % d != 0))
+        .filter(|candidate| {
+            (2..*candidate)
+                .take_while(|d| d * d <= *candidate)
+                .all(|d| candidate % d != 0)
+        })
         .map(|_| 1)
         .sum()
 }

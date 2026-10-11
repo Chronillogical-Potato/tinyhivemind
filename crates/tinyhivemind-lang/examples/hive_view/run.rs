@@ -5,7 +5,9 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::Mutex;
 
-use tinyhivemind_core::hive::{EpisodePolicy, QuorumPolicy, desk::Desk, desk::ResponderMode, roster::RosterMember};
+use tinyhivemind_core::hive::{
+    EpisodePolicy, QuorumPolicy, desk::Desk, desk::ResponderMode, roster::RosterMember,
+};
 use tinyhivemind_core::telemetry::{Clock, Stamped, TraceSink, Tracer};
 
 use crate::Result;
@@ -35,7 +37,10 @@ pub(crate) struct Prepared {
 
 impl std::fmt::Debug for Prepared {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.debug_struct("Prepared").field("room", &self.room).finish_non_exhaustive()
+        formatter
+            .debug_struct("Prepared")
+            .field("room", &self.room)
+            .finish_non_exhaustive()
     }
 }
 
@@ -53,7 +58,9 @@ pub(crate) fn pick(bank: &[Problem], seed: u64, chosen: Option<&str>) -> Result<
             .ok_or_else(|| format!("no problem {id} in the bank").into());
     }
     let index = usize::try_from(Rng::stream(seed, "problem").below(bank.len() as u64))?;
-    bank.get(index).cloned().ok_or_else(|| "empty problem bank".into())
+    bank.get(index)
+        .cloned()
+        .ok_or_else(|| "empty problem bank".into())
 }
 
 fn apply(policy: &mut EpisodePolicy, knobs: &Knobs) {
@@ -97,7 +104,11 @@ pub(crate) fn prepare(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
             Some(script) => Box::new(Scripted::new(script)),
             None => Box::new(Seeded::new(knobs.seed, room.members.len())),
         };
-        return Ok(Prepared { room, speaker, problem: None });
+        return Ok(Prepared {
+            room,
+            speaker,
+            problem: None,
+        });
     };
     let config = SimConfig::from(sim)?;
     let problem = pick(&problems(sim)?, knobs.seed, knobs.problem.as_deref())?;
@@ -107,11 +118,24 @@ pub(crate) fn prepare(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
     let seats: Vec<(String, String)> = room
         .members
         .iter()
-        .map(|member| (member.id.clone(), role_of.get(member.id.as_str()).copied().unwrap_or("").to_owned()))
+        .map(|member| {
+            (
+                member.id.clone(),
+                role_of
+                    .get(member.id.as_str())
+                    .copied()
+                    .unwrap_or("")
+                    .to_owned(),
+            )
+        })
         .collect();
     let simulation = MathSim::new(&config, &problem, knobs.seed, &seats)?;
     let answer = simulation.answer();
-    Ok(Prepared { room, speaker: Box::new(simulation), problem: Some((problem, answer)) })
+    Ok(Prepared {
+        room,
+        speaker: Box::new(simulation),
+        problem: Some((problem, answer)),
+    })
 }
 
 /// The single-seat baseline: one seat of the baseline role answering alone.
@@ -123,7 +147,10 @@ pub(crate) fn prepare(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
 ///
 /// As [`prepare`].
 pub(crate) fn baseline(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
-    let sim = loaded.sim.as_ref().ok_or("the baseline needs a math package")?;
+    let sim = loaded
+        .sim
+        .as_ref()
+        .ok_or("the baseline needs a math package")?;
     let config = SimConfig::from(sim)?;
     let problem = pick(&problems(sim)?, knobs.seed, knobs.problem.as_deref())?;
     let seat = "solo".to_owned();
@@ -138,22 +165,38 @@ pub(crate) fn baseline(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
         turn_budget: 3,
         round_width: 1,
         revealed_width: 1,
-        quorum: QuorumPolicy { threshold: 1, window: 3, require_grounded: true },
+        quorum: QuorumPolicy {
+            threshold: 1,
+            window: 3,
+            require_grounded: true,
+        },
         ..loaded.lowered.policies.episode
     };
     let mut lone = config.clone();
     lone.roles.clear();
-    let simulation = MathSim::new(&lone, &problem, knobs.seed, &[(seat.clone(), config.baseline.role.clone())])?;
+    let simulation = MathSim::new(
+        &lone,
+        &problem,
+        knobs.seed,
+        &[(seat.clone(), config.baseline.role.clone())],
+    )?;
     let answer = simulation.answer();
     let room = Room {
         package: "single-seat".into(),
-        members: vec![RosterMember { id: seat.clone(), name: Some(seat.clone()) }],
+        members: vec![RosterMember {
+            id: seat.clone(),
+            name: Some(seat.clone()),
+        }],
         home: [(seat.clone(), desk.id.clone())].into(),
         desk,
         policy,
         opening: math_opening(&problem),
     };
-    Ok(Prepared { room, speaker: Box::new(simulation), problem: Some((problem, answer)) })
+    Ok(Prepared {
+        room,
+        speaker: Box::new(simulation),
+        problem: Some((problem, answer)),
+    })
 }
 
 /// Run a prepared room, calling `observe` per round.
@@ -179,12 +222,24 @@ pub(crate) fn correct(outcome: &Outcome, problem: Option<&(Problem, u64)>) -> Op
 /// # Errors
 ///
 /// Fails on a run error or a trace file that cannot be created.
-pub(crate) fn print(loaded: &Loaded, knobs: &Knobs, as_frames: bool, trace: Option<&Path>) -> Result<()> {
+pub(crate) fn print(
+    loaded: &Loaded,
+    knobs: &Knobs,
+    as_frames: bool,
+    trace: Option<&Path>,
+) -> Result<()> {
     let mut prepared = prepare(loaded, knobs)?;
-    let truth = prepared.problem.as_ref().map(|(_, answer)| answer.to_string());
-    let sink = trace.map(|path| File::create(path).map(|file| JsonlSink(Mutex::new(BufWriter::new(file))))).transpose()?;
+    let truth = prepared
+        .problem
+        .as_ref()
+        .map(|(_, answer)| answer.to_string());
+    let sink = trace
+        .map(|path| File::create(path).map(|file| JsonlSink(Mutex::new(BufWriter::new(file)))))
+        .transpose()?;
     let clock = TickClock::default();
-    let tracer = sink.as_ref().map(|sink| Tracer::new(prepared.room.package.clone(), sink, &clock));
+    let tracer = sink
+        .as_ref()
+        .map(|sink| Tracer::new(prepared.room.package.clone(), sink, &clock));
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     if as_frames {
@@ -192,11 +247,14 @@ pub(crate) fn print(loaded: &Loaded, knobs: &Knobs, as_frames: bool, trace: Opti
             package: prepared.room.package.clone(),
             seed: knobs.seed,
             seats: prepared.room.members.len(),
-            problem: prepared.problem.as_ref().map(|(problem, answer)| ProblemFrame {
-                id: problem.id.clone(),
-                statement: problem.statement.clone(),
-                answer: answer.to_string(),
-            }),
+            problem: prepared
+                .problem
+                .as_ref()
+                .map(|(problem, answer)| ProblemFrame {
+                    id: problem.id.clone(),
+                    statement: problem.statement.clone(),
+                    answer: answer.to_string(),
+                }),
         };
         writeln!(out, "{}", serde_json::to_string(&start)?)?;
     } else {
@@ -251,13 +309,21 @@ fn header(out: &mut dyn Write, prepared: &Prepared) -> std::io::Result<()> {
         room.policy.round_width
     )?;
     if let Some((problem, answer)) = &prepared.problem {
-        writeln!(out, "problem {}: {} (answer {answer})", problem.id, problem.statement)?;
+        writeln!(
+            out,
+            "problem {}: {} (answer {answer})",
+            problem.id, problem.statement
+        )?;
     }
     writeln!(out)
 }
 
 fn human(out: &mut dyn Write, record: &RoundRecord) -> std::io::Result<()> {
-    writeln!(out, "round {} ({:?}, {:?})", record.round, record.phase, record.visibility)?;
+    writeln!(
+        out,
+        "round {} ({:?}, {:?})",
+        record.round, record.phase, record.visibility
+    )?;
     for turn in &record.turns {
         writeln!(
             out,
@@ -281,7 +347,11 @@ fn ending(out: &mut dyn Write, outcome: &Outcome, correct: Option<bool>) -> std:
     };
     match &outcome.ending {
         Ending::Converged(topic) => writeln!(out, "\n  converged on #{topic}{verdict}")?,
-        Ending::Deadlocked(topics) => writeln!(out, "\n  deadlocked between #{}{verdict}", topics.join(" and #"))?,
+        Ending::Deadlocked(topics) => writeln!(
+            out,
+            "\n  deadlocked between #{}{verdict}",
+            topics.join(" and #")
+        )?,
         Ending::Exhausted => writeln!(out, "\n  budget exhausted, no decision{verdict}")?,
         Ending::Idle => writeln!(out, "\n  nobody had anything to say{verdict}")?,
     }

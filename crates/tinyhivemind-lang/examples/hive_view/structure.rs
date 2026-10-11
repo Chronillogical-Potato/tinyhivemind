@@ -106,7 +106,11 @@ pub(crate) fn structure(loaded: &Loaded) -> Result<Value> {
             .map(|seat| SeatJson {
                 id: seat.id.clone(),
                 label: seat.label.clone(),
-                role: role_of.get(seat.id.as_str()).copied().unwrap_or("").to_owned(),
+                role: role_of
+                    .get(seat.id.as_str())
+                    .copied()
+                    .unwrap_or("")
+                    .to_owned(),
                 desks: desks_of
                     .get(seat.id.as_str())
                     .map(|desks| desks.iter().map(|desk| (*desk).to_owned()).collect())

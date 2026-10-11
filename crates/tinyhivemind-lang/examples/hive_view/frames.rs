@@ -124,7 +124,11 @@ pub(crate) fn round(record: &RoundRecord, truth: Option<&str>) -> Frame {
         round: record.round,
         phase: snake(&format!("{:?}", record.phase)),
         visibility: snake(&format!("{:?}", record.visibility)),
-        turns: record.turns.iter().map(|turn| turn_frame(turn, truth)).collect(),
+        turns: record
+            .turns
+            .iter()
+            .map(|turn| turn_frame(turn, truth))
+            .collect(),
         standings: record
             .standings
             .iter()
@@ -148,7 +152,9 @@ fn turn_frame(turn: &TurnRecord, truth: Option<&str>) -> TurnFrame {
         saw: turn.saw,
         of: turn.of,
         content: turn.content.clone(),
-        correct: truth.zip(answer.as_deref()).map(|(truth, answer)| truth == answer),
+        correct: truth
+            .zip(answer.as_deref())
+            .map(|(truth, answer)| truth == answer),
         answer,
         sequence: turn.sequence,
     }
@@ -161,8 +167,10 @@ pub(crate) fn advocated(seat: &str, content: &str) -> Option<String> {
     read(std::slice::from_ref(&message))
         .into_iter()
         .find(|trace| {
-            matches!(trace.kind, TraceKind::Propose | TraceKind::Support | TraceKind::Commit)
-                && matches!(trace.author, SessionAuthor::Agent { .. })
+            matches!(
+                trace.kind,
+                TraceKind::Propose | TraceKind::Support | TraceKind::Commit
+            ) && matches!(trace.author, SessionAuthor::Agent { .. })
         })
         .and_then(|trace| trace.topic.map(|topic| topic.0))
 }

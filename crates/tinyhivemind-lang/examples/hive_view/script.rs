@@ -28,7 +28,9 @@ const OPTIONS: [&str; 3] = ["option-a", "option-b", "option-c"];
 pub(crate) fn commit_line(visible: &[SessionMessage], policy: &EpisodePolicy) -> Option<String> {
     let standing = view(visible, policy);
     match consensus(&standing, &policy.quorum) {
-        ConsensusState::Quorum { topic } => Some(format!("!commit #{topic} Recording the decision.")),
+        ConsensusState::Quorum { topic } => {
+            Some(format!("!commit #{topic} Recording the decision."))
+        }
         _ => None,
     }
 }
@@ -36,7 +38,11 @@ pub(crate) fn commit_line(visible: &[SessionMessage], policy: &EpisodePolicy) ->
 /// Standings over one projection, empty when the policy is malformed.
 pub(crate) fn view(visible: &[SessionMessage], policy: &EpisodePolicy) -> Vec<TopicStanding> {
     let traces = read(visible);
-    let at = visible.last().map_or(tinyhivemind_core::hive::Sequence(0), |message| message.sequence);
+    let at = visible
+        .last()
+        .map_or(tinyhivemind_core::hive::Sequence(0), |message| {
+            message.sequence
+        });
     standings(&traces, at, &policy.quorum).unwrap_or_default()
 }
 
@@ -72,7 +78,12 @@ impl Scripted {
 }
 
 impl Speaker for Scripted {
-    fn speak(&mut self, turn: &HiveTurn, visible: &[SessionMessage], policy: &EpisodePolicy) -> String {
+    fn speak(
+        &mut self,
+        turn: &HiveTurn,
+        visible: &[SessionMessage],
+        policy: &EpisodePolicy,
+    ) -> String {
         if turn.phase == Phase::Commit
             && let Some(line) = commit_line(visible, policy)
         {
@@ -111,7 +122,12 @@ impl Seeded {
 }
 
 impl Speaker for Seeded {
-    fn speak(&mut self, turn: &HiveTurn, visible: &[SessionMessage], policy: &EpisodePolicy) -> String {
+    fn speak(
+        &mut self,
+        turn: &HiveTurn,
+        visible: &[SessionMessage],
+        policy: &EpisodePolicy,
+    ) -> String {
         if turn.phase == Phase::Commit {
             return commit_line(visible, policy).unwrap_or_else(|| QUIET.to_owned());
         }
@@ -143,7 +159,10 @@ impl Speaker for Seeded {
                 .find(|standing| standing.topic.0 != own && !standing.supporters.is_empty())
             && let Some(target) = advocacy_of(visible, &rival.topic.0, &turn.agent_id)
         {
-            return format!("!object >{target} ^1 That case for {} skips the brief.", rival.topic);
+            return format!(
+                "!object >{target} ^1 That case for {} skips the brief.",
+                rival.topic
+            );
         }
         format!("!evidence ^1 Noting a consideration for {own}.")
     }

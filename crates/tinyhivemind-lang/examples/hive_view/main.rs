@@ -50,7 +50,9 @@ struct Args {
 
 fn bounded(flag: &str, value: Option<String>, low: u64, high: u64) -> Result<u64> {
     let value = value.ok_or_else(|| format!("{flag} needs a value"))?;
-    let parsed: u64 = value.parse().map_err(|_| format!("{flag} takes a number, not {value}"))?;
+    let parsed: u64 = value
+        .parse()
+        .map_err(|_| format!("{flag} takes a number, not {value}"))?;
     if parsed < low || parsed > high {
         return Err(format!("{flag} must be in {low}..={high}").into());
     }
@@ -58,7 +60,14 @@ fn bounded(flag: &str, value: Option<String>, low: u64, high: u64) -> Result<u64
 }
 
 fn parse_args(argv: impl IntoIterator<Item = String>) -> Result<Args> {
-    let mut args = Args { seeds: 50, knobs: Knobs { seed: 1, ..Knobs::default() }, ..Args::default() };
+    let mut args = Args {
+        seeds: 50,
+        knobs: Knobs {
+            seed: 1,
+            ..Knobs::default()
+        },
+        ..Args::default()
+    };
     let mut argv = argv.into_iter();
     while let Some(arg) = argv.next() {
         match arg.as_str() {
@@ -71,12 +80,22 @@ fn parse_args(argv: impl IntoIterator<Item = String>) -> Result<Args> {
             "--trace" => args.trace = Some(argv.next().ok_or("--trace needs a path")?.into()),
             "--seeds" => args.seeds = u32::try_from(bounded(&arg, argv.next(), 1, 10_000)?)?,
             "--seed" => args.knobs.seed = bounded(&arg, argv.next(), 0, u64::MAX)?,
-            "--round-width" => args.knobs.round_width = Some(u32::try_from(bounded(&arg, argv.next(), 1, 64)?)?),
-            "--turn-budget" => args.knobs.turn_budget = Some(u32::try_from(bounded(&arg, argv.next(), 1, 2000)?)?),
+            "--round-width" => {
+                args.knobs.round_width = Some(u32::try_from(bounded(&arg, argv.next(), 1, 64)?)?)
+            }
+            "--turn-budget" => {
+                args.knobs.turn_budget = Some(u32::try_from(bounded(&arg, argv.next(), 1, 2000)?)?)
+            }
             "--problem" => args.knobs.problem = Some(argv.next().ok_or("--problem needs an id")?),
             "--packages" => {
-                let list = argv.next().ok_or("--packages needs a comma-separated list")?;
-                args.packages = list.split(',').filter(|name| !name.is_empty()).map(str::to_owned).collect();
+                let list = argv
+                    .next()
+                    .ok_or("--packages needs a comma-separated list")?;
+                args.packages = list
+                    .split(',')
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned)
+                    .collect();
             }
             flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}").into()),
             _ if args.dir.is_none() => args.dir = Some(arg.into()),
@@ -95,16 +114,27 @@ fn main() {
 
 fn run_main() -> Result<()> {
     let args = parse_args(std::env::args().skip(1))?;
-    let dir = args.dir.clone().ok_or("usage: hive_view <package-dir> [--mermaid | --json | --run [--frames] | --compare]")?;
+    let dir = args.dir.clone().ok_or(
+        "usage: hive_view <package-dir> [--mermaid | --json | --run [--frames] | --compare]",
+    )?;
     if args.compare {
         let names = if args.packages.is_empty() {
-            compare::DEFAULT_PACKAGES.iter().map(|name| (*name).to_owned()).collect()
+            compare::DEFAULT_PACKAGES
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect()
         } else {
             args.packages.clone()
         };
         let loaded = compare::packages(&dir, &names)?;
         let stdout = std::io::stdout();
-        compare::compare(&loaded, args.seeds, &args.knobs, args.table, &mut stdout.lock())?;
+        compare::compare(
+            &loaded,
+            args.seeds,
+            &args.knobs,
+            args.table,
+            &mut stdout.lock(),
+        )?;
         return Ok(());
     }
     let loaded = load::load(&dir)?;
@@ -112,7 +142,10 @@ fn run_main() -> Result<()> {
         return run::print(&loaded, &args.knobs, args.frames, args.trace.as_deref());
     }
     if args.json {
-        println!("{}", serde_json::to_string(&structure::structure(&loaded)?)?);
+        println!(
+            "{}",
+            serde_json::to_string(&structure::structure(&loaded)?)?
+        );
     } else if args.mermaid {
         print!("{}", render::mermaid(&loaded.lowered));
     } else {

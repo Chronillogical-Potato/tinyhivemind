@@ -8,18 +8,25 @@ use serde_json::{Value, json};
 use crate::Result;
 use crate::compare::{BASELINE, compare, packages};
 use crate::episode::Ending;
-use crate::frames::{CompareFrame, Frame, ProblemFrame, SeedResult, StandingFrame, SummaryRow, TurnFrame};
+use crate::frames::{
+    CompareFrame, Frame, ProblemFrame, SeedResult, StandingFrame, SummaryRow, TurnFrame,
+};
 use crate::load::{documents, load, summary};
 use crate::math::problems;
 use crate::render::{mermaid, node};
 use crate::run::{Knobs, execute, prepare};
 
 fn gallery(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/hives").join(name)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("examples/hives")
+        .join(name)
 }
 
 fn knobs(seed: u64) -> Knobs {
-    Knobs { seed, ..Knobs::default() }
+    Knobs {
+        seed,
+        ..Knobs::default()
+    }
 }
 
 fn ending(name: &str, seed: u64) -> Result<Ending> {
@@ -30,13 +37,17 @@ fn ending(name: &str, seed: u64) -> Result<Ending> {
 
 #[test]
 fn the_loader_rejects_a_directory_without_hive_json() {
-    let error = documents(&gallery("review-board").join("roles")).err().map(|error| error.to_string());
+    let error = documents(&gallery("review-board").join("roles"))
+        .err()
+        .map(|error| error.to_string());
     assert!(error.is_some_and(|error| error.contains("has no hive.json")));
 }
 
 #[test]
 fn the_loader_rejects_a_path_that_is_not_a_directory() {
-    let error = documents(&gallery("review-board").join("hive.json")).err().map(|error| error.to_string());
+    let error = documents(&gallery("review-board").join("hive.json"))
+        .err()
+        .map(|error| error.to_string());
     assert!(error.is_some_and(|error| error.contains("is not a package directory")));
 }
 
@@ -62,7 +73,10 @@ fn every_gallery_package_loads_and_keeps_its_sidecars_out_of_the_package() -> Re
 
 #[test]
 fn a_summary_is_the_first_paragraph_after_the_heading() {
-    assert_eq!(summary("# title\n\nOne line\nand two.\n\nNot this."), "One line and two.");
+    assert_eq!(
+        summary("# title\n\nOne line\nand two.\n\nNot this."),
+        "One line and two."
+    );
     assert_eq!(summary(""), "");
 }
 
@@ -89,15 +103,23 @@ fn the_mermaid_view_has_an_edge_for_every_topology_link() -> Result<()> {
 #[test]
 fn review_board_converges_on_merge_under_its_script() -> Result<()> {
     for seed in 1..=3 {
-        assert_eq!(ending("review-board", seed)?, Ending::Converged("merge".into()));
+        assert_eq!(
+            ending("review-board", seed)?,
+            Ending::Converged("merge".into())
+        );
     }
     Ok(())
 }
 
 #[test]
 fn the_seeded_default_script_ends_differently_on_different_seeds() -> Result<()> {
-    let endings: Vec<Ending> = (1..=3).map(|seed| ending("incident-response", seed)).collect::<Result<_>>()?;
-    assert!(endings.windows(2).any(|pair| pair[0] != pair[1]), "{endings:?}");
+    let endings: Vec<Ending> = (1..=3)
+        .map(|seed| ending("incident-response", seed))
+        .collect::<Result<_>>()?;
+    assert!(
+        endings.windows(2).any(|pair| pair[0] != pair[1]),
+        "{endings:?}"
+    );
     // And the same seed always ends the same way.
     assert_eq!(ending("incident-response", 2)?, endings[1]);
     Ok(())
@@ -133,8 +155,14 @@ fn a_math_swarm_episode_ends_within_its_turn_budget() -> Result<()> {
         assert_eq!(prepared.room.members.len(), 50);
         let budget = prepared.room.policy.turn_budget;
         let mut widest = 0;
-        let outcome = execute(&mut prepared, None, &mut |round| widest = widest.max(round.turns.len()))?;
-        assert!(outcome.turns <= budget, "seed {seed}: {} turns over {budget}", outcome.turns);
+        let outcome = execute(&mut prepared, None, &mut |round| {
+            widest = widest.max(round.turns.len())
+        })?;
+        assert!(
+            outcome.turns <= budget,
+            "seed {seed}: {} turns over {budget}",
+            outcome.turns
+        );
         assert!(widest <= 10, "a round wider than round_width");
         assert_ne!(outcome.ending, Ending::Idle);
     }
@@ -147,7 +175,11 @@ fn frames_pin_their_wire_form() -> Result<()> {
         package: "math-panel".into(),
         seed: 3,
         seats: 5,
-        problem: Some(ProblemFrame { id: "lattice-6x6".into(), statement: "s".into(), answer: "924".into() }),
+        problem: Some(ProblemFrame {
+            id: "lattice-6x6".into(),
+            statement: "s".into(),
+            answer: "924".into(),
+        }),
     };
     assert_eq!(
         serde_json::to_value(&start)?,
@@ -185,7 +217,13 @@ fn frames_pin_their_wire_form() -> Result<()> {
                "standings":[{"topic":"924","support":2,"object":1,"committed":false,
                              "supporters":["checker","lead"]}]})
     );
-    let end = Frame::End { ending: "exhausted".into(), topic: None, correct: None, rounds: 7, turns: 58 };
+    let end = Frame::End {
+        ending: "exhausted".into(),
+        topic: None,
+        correct: None,
+        rounds: 7,
+        turns: 58,
+    };
     assert_eq!(
         serde_json::to_value(&end)?,
         json!({"type":"end","ending":"exhausted","topic":null,"correct":null,"rounds":7,"turns":58})
@@ -262,7 +300,13 @@ fn compare_streams_one_line_per_seed_then_a_summary_with_the_baseline_first() ->
     let seats: Vec<usize> = rows.iter().map(|row| row.seats).collect();
     assert_eq!(seats, [1, 5, 50]);
     for row in &rows {
-        for rate in [row.accuracy, row.converged, row.deadlocked, row.exhausted, row.idle] {
+        for rate in [
+            row.accuracy,
+            row.converged,
+            row.deadlocked,
+            row.exhausted,
+            row.idle,
+        ] {
             assert!((0.0..=1.0).contains(&rate));
         }
         let endings = row.converged + row.deadlocked + row.exhausted + row.idle;
@@ -273,7 +317,9 @@ fn compare_streams_one_line_per_seed_then_a_summary_with_the_baseline_first() ->
 
 #[test]
 fn compare_refuses_a_package_without_a_simulation() {
-    let error = packages(&gallery("math-swarm"), &["review-board".into()]).err().map(|error| error.to_string());
+    let error = packages(&gallery("math-swarm"), &["review-board".into()])
+        .err()
+        .map(|error| error.to_string());
     assert!(error.is_some_and(|error| error.contains("has no sim.json")));
 }
 
@@ -284,7 +330,10 @@ fn knobs_outside_their_bounds_are_rejected() {
     assert!(parse(&["dir", "--turn-budget", "2001"]).is_err());
     assert!(parse(&["dir", "--seed", "x"]).is_err());
     assert!(parse(&["dir", "--bogus"]).is_err());
-    assert!(parse(&["dir", "--round-width", "8", "--seed", "4"]).is_ok_and(|args| args.knobs.seed == 4 && args.knobs.round_width == Some(8)));
+    assert!(
+        parse(&["dir", "--round-width", "8", "--seed", "4"])
+            .is_ok_and(|args| args.knobs.seed == 4 && args.knobs.round_width == Some(8))
+    );
 }
 
 #[test]

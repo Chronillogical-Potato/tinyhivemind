@@ -120,16 +120,36 @@ pub(crate) fn packages(dir: &Path, names: &[String]) -> Result<Vec<Loaded>> {
 /// # Errors
 ///
 /// Fails on any load or run error.
-pub(crate) fn compare(loaded: &[Loaded], seeds: u32, knobs: &Knobs, table: bool, out: &mut dyn Write) -> Result<Vec<SummaryRow>> {
-    let first = loaded.first().ok_or("--compare needs at least one package")?;
-    let bank = problems(first.sim.as_ref().ok_or("the first package has no sim.json")?)?;
+pub(crate) fn compare(
+    loaded: &[Loaded],
+    seeds: u32,
+    knobs: &Knobs,
+    table: bool,
+    out: &mut dyn Write,
+) -> Result<Vec<SummaryRow>> {
+    let first = loaded
+        .first()
+        .ok_or("--compare needs at least one package")?;
+    let bank = problems(
+        first
+            .sim
+            .as_ref()
+            .ok_or("the first package has no sim.json")?,
+    )?;
     let mut tallies: Vec<Tally> = std::iter::once(BASELINE.to_owned())
         .chain(loaded.iter().map(|package| package.lowered.id.clone()))
-        .map(|package| Tally { package, ..Tally::default() })
+        .map(|package| Tally {
+            package,
+            ..Tally::default()
+        })
         .collect();
     for seed in 1..=u64::from(seeds) {
         let problem = pick(&bank, seed, knobs.problem.as_deref())?;
-        let knobs = Knobs { seed, problem: Some(problem.id.clone()), ..knobs.clone() };
+        let knobs = Knobs {
+            seed,
+            problem: Some(problem.id.clone()),
+            ..knobs.clone()
+        };
         let mut results = vec![result(BASELINE, baseline(first, &knobs)?)?];
         for package in loaded {
             results.push(result(&package.lowered.id, prepare(package, &knobs)?)?);
@@ -151,25 +171,54 @@ pub(crate) fn compare(loaded: &[Loaded], seeds: u32, knobs: &Knobs, table: bool,
     if table {
         print_table(out, &tallies, &rows, seeds)?;
     } else {
-        let summary = CompareFrame::Summary { seeds: u64::from(seeds), rows: rows.clone() };
+        let summary = CompareFrame::Summary {
+            seeds: u64::from(seeds),
+            rows: rows.clone(),
+        };
         writeln!(out, "{}", serde_json::to_string(&summary)?)?;
     }
     Ok(rows)
 }
 
-fn print_table(out: &mut dyn Write, tallies: &[Tally], rows: &[SummaryRow], seeds: u32) -> Result<()> {
-    writeln!(out, "{seeds} seeds, same problem per seed for every package; correct = exact answer\n")?;
+fn print_table(
+    out: &mut dyn Write,
+    tallies: &[Tally],
+    rows: &[SummaryRow],
+    seeds: u32,
+) -> Result<()> {
+    writeln!(
+        out,
+        "{seeds} seeds, same problem per seed for every package; correct = exact answer\n"
+    )?;
     writeln!(
         out,
         "{:<12} {:>5} {:>8} {:>9} {:>10} {:>9} {:>6} {:>7} {:>7} {:>11}",
-        "package", "seats", "accuracy", "converged", "deadlocked", "exhausted", "idle", "rounds", "turns", "ms/episode"
+        "package",
+        "seats",
+        "accuracy",
+        "converged",
+        "deadlocked",
+        "exhausted",
+        "idle",
+        "rounds",
+        "turns",
+        "ms/episode"
     )?;
     for (tally, row) in tallies.iter().zip(rows) {
         let millis = tally.elapsed.as_secs_f64() * 1000.0 / f64::from(seeds.max(1));
         writeln!(
             out,
             "{:<12} {:>5} {:>8.3} {:>9.3} {:>10.3} {:>9.3} {:>6.3} {:>7.2} {:>7.2} {:>11.3}",
-            row.package, row.seats, row.accuracy, row.converged, row.deadlocked, row.exhausted, row.idle, row.mean_rounds, row.mean_turns, millis
+            row.package,
+            row.seats,
+            row.accuracy,
+            row.converged,
+            row.deadlocked,
+            row.exhausted,
+            row.idle,
+            row.mean_rounds,
+            row.mean_turns,
+            millis
         )?;
     }
     Ok(())

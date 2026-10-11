@@ -142,7 +142,12 @@ impl MathSim {
     ///
     /// Fails when a seat's role has no behaviour in `sim.json`, or the problem
     /// has no computable answer.
-    pub(crate) fn new(config: &SimConfig, problem: &Problem, seed: u64, seats: &[(String, String)]) -> Result<Self> {
+    pub(crate) fn new(
+        config: &SimConfig,
+        problem: &Problem,
+        seed: u64,
+        seats: &[(String, String)],
+    ) -> Result<Self> {
         let answer = problem.answer()?;
         let classic = problem.classic_mistake()?;
         let mut states = BTreeMap::new();
@@ -151,19 +156,26 @@ impl MathSim {
             let sim = if role == &config.baseline.role && !config.roles.contains_key(role) {
                 &config.baseline.sim
             } else {
-                config.roles.get(role).ok_or_else(|| format!("sim.json has no behaviour for role {role}"))?
+                config
+                    .roles
+                    .get(role)
+                    .ok_or_else(|| format!("sim.json has no behaviour for role {role}"))?
             };
             let index = index_in_role.entry(role.as_str()).or_default();
             let modulus = config.slices[*index % config.slices.len()];
             *index += 1;
-            let accuracy = Rng::stream(seed, &format!("accuracy/{seat}")).between(sim.accuracy[0], sim.accuracy[1]);
+            let accuracy = Rng::stream(seed, &format!("accuracy/{seat}"))
+                .between(sim.accuracy[0], sim.accuracy[1]);
             let mut draw = Rng::stream(seed, &format!("answer/{}/{seat}", problem.id));
             let (own, residue) = if draw.chance(accuracy) {
                 (Some(answer), None)
             } else if sim.behaviour == "slice" {
                 (None, Some((modulus, answer % modulus)))
             } else {
-                (Some(wrong_answer(&mut draw, &config.errors, answer, classic)), None)
+                (
+                    Some(wrong_answer(&mut draw, &config.errors, answer, classic)),
+                    None,
+                )
             };
             states.insert(
                 seat.clone(),
@@ -176,7 +188,10 @@ impl MathSim {
                 },
             );
         }
-        Ok(Self { answer, seats: states })
+        Ok(Self {
+            answer,
+            seats: states,
+        })
     }
 
     /// The ground-truth answer.
@@ -198,7 +213,12 @@ fn wrong_answer(rng: &mut Rng, errors: &Errors, answer: u64, classic: u64) -> u6
 }
 
 impl Speaker for MathSim {
-    fn speak(&mut self, turn: &HiveTurn, visible: &[SessionMessage], policy: &EpisodePolicy) -> String {
+    fn speak(
+        &mut self,
+        turn: &HiveTurn,
+        visible: &[SessionMessage],
+        policy: &EpisodePolicy,
+    ) -> String {
         if turn.phase == Phase::Commit {
             return commit_line(visible, policy).unwrap_or_else(|| QUIET.to_owned());
         }
@@ -209,7 +229,11 @@ impl Speaker for MathSim {
             return opening(seat);
         }
         let lines = revealed(seat, &turn.agent_id, visible, policy);
-        if lines.is_empty() { QUIET.to_owned() } else { lines.join("\n") }
+        if lines.is_empty() {
+            QUIET.to_owned()
+        } else {
+            lines.join("\n")
+        }
     }
 }
 
@@ -223,7 +247,12 @@ fn opening(seat: &SeatState) -> String {
     }
 }
 
-fn revealed(seat: &mut SeatState, id: &str, visible: &[SessionMessage], policy: &EpisodePolicy) -> Vec<String> {
+fn revealed(
+    seat: &mut SeatState,
+    id: &str,
+    visible: &[SessionMessage],
+    policy: &EpisodePolicy,
+) -> Vec<String> {
     let standing = view(visible, policy);
     let mut ranked: Vec<(&str, usize)> = standing
         .iter()
@@ -243,7 +272,9 @@ fn revealed(seat: &mut SeatState, id: &str, visible: &[SessionMessage], policy: 
                 break;
             }
             if seat.objected.insert(sequence) {
-                lines.push(format!("!object >{sequence} ^{grounds} {topic} at {sequence} fails my check."));
+                lines.push(format!(
+                    "!object >{sequence} ^{grounds} {topic} at {sequence} fails my check."
+                ));
             }
         }
     }
@@ -310,5 +341,8 @@ fn targets(
         found.push((standing.supporters.len(), trace.sequence.0, topic.0.clone()));
     }
     found.sort_by_key(|(support, sequence, _)| (std::cmp::Reverse(*support), *sequence));
-    found.into_iter().map(|(_, sequence, topic)| (sequence, topic)).collect()
+    found
+        .into_iter()
+        .map(|(_, sequence, topic)| (sequence, topic))
+        .collect()
 }

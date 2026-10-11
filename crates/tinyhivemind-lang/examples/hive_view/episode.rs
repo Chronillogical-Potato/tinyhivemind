@@ -100,8 +100,12 @@ impl Room {
 /// What a seat says when it is authorized to speak.
 pub(crate) trait Speaker {
     /// The content of one authorized turn, given what that turn may see.
-    fn speak(&mut self, turn: &HiveTurn, visible: &[SessionMessage], policy: &EpisodePolicy)
-    -> String;
+    fn speak(
+        &mut self,
+        turn: &HiveTurn,
+        visible: &[SessionMessage],
+        policy: &EpisodePolicy,
+    ) -> String;
 }
 
 /// One turn as it happened.
@@ -215,12 +219,16 @@ pub(crate) fn run(
         }
         let (turns, next_state) = match decision {
             HiveStep::Speak { turns, next_state } => (turns, next_state),
-            HiveStep::Converged { topic, .. } => return Ok(outcome(Ending::Converged(topic.0), rounds, turns_taken)),
+            HiveStep::Converged { topic, .. } => {
+                return Ok(outcome(Ending::Converged(topic.0), rounds, turns_taken));
+            }
             HiveStep::Deadlocked { topics } => {
                 let topics = topics.into_iter().map(|topic| topic.0).collect();
                 return Ok(outcome(Ending::Deadlocked(topics), rounds, turns_taken));
             }
-            HiveStep::Exhausted { .. } => return Ok(outcome(Ending::Exhausted, rounds, turns_taken)),
+            HiveStep::Exhausted { .. } => {
+                return Ok(outcome(Ending::Exhausted, rounds, turns_taken));
+            }
             HiveStep::Idle => return Ok(outcome(Ending::Idle, rounds, turns_taken)),
         };
         rounds += 1;
@@ -230,10 +238,16 @@ pub(crate) fn run(
         for turn in &turns {
             let visible = project_for(turn, &journal);
             let content = speaker.speak(turn, &visible, &room.policy);
-            let sequence = u64::try_from(journal.len()).unwrap_or(u64::MAX).saturating_add(1);
+            let sequence = u64::try_from(journal.len())
+                .unwrap_or(u64::MAX)
+                .saturating_add(1);
             records.push(TurnRecord {
                 seat: turn.agent_id.clone(),
-                desk: room.home.get(&turn.agent_id).cloned().unwrap_or_else(|| room.desk.id.clone()),
+                desk: room
+                    .home
+                    .get(&turn.agent_id)
+                    .cloned()
+                    .unwrap_or_else(|| room.desk.id.clone()),
                 reason: format!("{:?}", turn.reason).to_lowercase(),
                 saw: visible.len(),
                 of: journal.len(),
@@ -247,7 +261,9 @@ pub(crate) fn run(
         observe(&RoundRecord {
             round: rounds,
             phase: turns.first().map_or(Phase::Deliberate, |turn| turn.phase),
-            visibility: turns.first().map_or(Visibility::Blind, |turn| turn.visibility),
+            visibility: turns
+                .first()
+                .map_or(Visibility::Blind, |turn| turn.visibility),
             turns: records,
             standings,
             committed,
@@ -277,7 +293,9 @@ pub(crate) fn fold(
     policy: &EpisodePolicy,
 ) -> Result<(Vec<TopicStanding>, Vec<String>)> {
     let traces = read(journal);
-    let at = journal.last().map_or(Sequence(0), |message| message.sequence);
+    let at = journal
+        .last()
+        .map_or(Sequence(0), |message| message.sequence);
     let standing = standings(&traces, at, &policy.quorum)?;
     let mut committed: Vec<String> = Vec::new();
     for trace in &traces {

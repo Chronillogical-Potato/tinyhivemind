@@ -27,7 +27,11 @@ pub(crate) fn tree(loaded: &Loaded) -> String {
     let _ = writeln!(out, "seats");
     let role_of = roles(hive);
     for seat in &hive.seats {
-        let _ = writeln!(out, "  {}", seat_line(seat, role_of.get(seat.id.as_str()).copied().unwrap_or("")));
+        let _ = writeln!(
+            out,
+            "  {}",
+            seat_line(seat, role_of.get(seat.id.as_str()).copied().unwrap_or(""))
+        );
     }
     let _ = writeln!(out, "desks");
     for desk in &hive.desks {
@@ -57,8 +61,18 @@ fn seat_line(seat: &LoweredSeat, role: &str) -> String {
             memory.namespace,
             memory.kind,
             memory.identity.lifecycle,
-            if memory.identity.read_only { ", read-only" } else { "" },
-            memory.settings.reads.iter().map(|reach| reach.at.as_str()).collect::<Vec<_>>().join(","),
+            if memory.identity.read_only {
+                ", read-only"
+            } else {
+                ""
+            },
+            memory
+                .settings
+                .reads
+                .iter()
+                .map(|reach| reach.at.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
             memory.settings.recall_at,
             memory.settings.remember,
         );
@@ -81,7 +95,13 @@ fn links(out: &mut String, hive: &LoweredHive) {
     if !hive.missions.is_empty() {
         let _ = writeln!(out, "missions");
         for mission in &hive.missions {
-            let _ = writeln!(out, "  {}: {} owns {}", mission.id, mission.role, mission.goals.join(", "));
+            let _ = writeln!(
+                out,
+                "  {}: {} owns {}",
+                mission.id,
+                mission.role,
+                mission.goals.join(", ")
+            );
         }
     }
     for (name, links) in [("topology", &hive.topology), ("referrals", &hive.referrals)] {
@@ -117,25 +137,45 @@ fn policies(out: &mut String, hive: &LoweredHive) {
     );
     let referral = &hive.policies.referral;
     if referral.enabled {
-        let _ = writeln!(out, "  referral: max {} hops, reach {:?}, returns {}", referral.max_hops, referral.reach, referral.returns);
+        let _ = writeln!(
+            out,
+            "  referral: max {} hops, reach {:?}, returns {}",
+            referral.max_hops, referral.reach, referral.returns
+        );
     }
     let approval = &hive.policies.approval;
     if approval.enabled {
-        let _ = writeln!(out, "  approval: default {:?}, {} rule(s), approver {:?}", approval.default, approval.rules.len(), approval.approver);
+        let _ = writeln!(
+            out,
+            "  approval: default {:?}, {} rule(s), approver {:?}",
+            approval.default,
+            approval.rules.len(),
+            approval.approver
+        );
     }
     let aside = &hive.policies.aside;
     if aside.enabled {
-        let _ = writeln!(out, "  aside: {} members, {} messages, must surface {}", aside.max_members, aside.max_messages, aside.must_surface);
+        let _ = writeln!(
+            out,
+            "  aside: {} members, {} messages, must surface {}",
+            aside.max_members, aside.max_messages, aside.must_surface
+        );
     }
 }
 
 fn first_line(text: &str) -> String {
-    text.lines().find(|line| !line.trim().is_empty()).unwrap_or("").trim().to_owned()
+    text.lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("")
+        .trim()
+        .to_owned()
 }
 
 /// A mermaid identifier: ASCII alphanumerics and underscores only.
 pub(crate) fn node(id: &str) -> String {
-    id.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect()
+    id.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
 }
 
 /// A mermaid flowchart: a subgraph per desk holding its seats, solid edges
@@ -147,7 +187,12 @@ pub(crate) fn mermaid(hive: &LoweredHive) -> String {
         let _ = writeln!(out, "  subgraph {}[\"{}\"]", node(&desk.id), desk.name);
         for member in &desk.members {
             let role = role_of.get(member.as_str()).copied().unwrap_or("");
-            let _ = writeln!(out, "    {}__{}[\"{member}<br/><i>{role}</i>\"]", node(&desk.id), node(member));
+            let _ = writeln!(
+                out,
+                "    {}__{}[\"{member}<br/><i>{role}</i>\"]",
+                node(&desk.id),
+                node(member)
+            );
         }
         let _ = writeln!(out, "  end");
     }
@@ -155,7 +200,12 @@ pub(crate) fn mermaid(hive: &LoweredHive) -> String {
         let _ = writeln!(out, "  {} --> {}", node(&link.from), node(&link.to));
     }
     for link in &hive.referrals {
-        let _ = writeln!(out, "  {} -. refer .-> {}", node(&link.from), node(&link.to));
+        let _ = writeln!(
+            out,
+            "  {} -. refer .-> {}",
+            node(&link.from),
+            node(&link.to)
+        );
     }
     out
 }

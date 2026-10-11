@@ -140,7 +140,9 @@ pub(crate) fn seat_desks(lowered: &LoweredHive) -> BTreeMap<&str, Vec<&str>> {
     let mut map: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for desk in &lowered.desks {
         for member in &desk.members {
-            map.entry(member.as_str()).or_default().push(desk.id.as_str());
+            map.entry(member.as_str())
+                .or_default()
+                .push(desk.id.as_str());
         }
     }
     map
