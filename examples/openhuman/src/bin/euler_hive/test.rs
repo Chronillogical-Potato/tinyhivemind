@@ -510,3 +510,50 @@ async fn each_recipient_of_concurrent_broadcasts_is_handed_its_own_senders_messa
     );
     assert_eq!(librarian.note, "@research-provenance handed you: from provenance");
 }
+
+fn memory_for(reads: Vec<tinyhivemind_lang::MemoryReach>) -> super::memory::SeatMemory {
+    let (_, hive) = lowered();
+    let mut binding = scope_binding(hive.seats[9].memory.as_ref().expect("bound"), "team:euler-hive", "r1")
+        .expect("scoped");
+    binding.settings.reads = reads;
+    let engine: std::sync::Arc<dyn tinymemory_api::MemoryEngine> =
+        std::sync::Arc::new(tinymemory_api::conformance::reference::ReferenceEngine::new());
+    super::memory::SeatMemory::new(engine, binding, Some("team:euler-hive/ws:r1/project:verified".into()), true)
+}
+
+#[tokio::test]
+async fn a_failed_recall_leaves_the_rejoin_watermark_where_it_was() {
+    use tinyhivemind_core::runtime::{Recall, RecallMoment, RecallRequest};
+    let broken = memory_for(vec![tinyhivemind_lang::MemoryReach {
+        at: "not a namespace".into(),
+        inherit: false,
+        descendants: false,
+    }]);
+    let request = |moment| RecallRequest {
+        seat: "verify-constraints".into(),
+        conversation: "c".into(),
+        focus: Some("findings".into()),
+        moment,
+        budget_chars: 500,
+    };
+    assert!(broken.recall(&request(RecallMoment::Rejoin)).await.is_err());
+    assert!(broken.seen().is_none(), "a failed read must not advance the watermark");
+    let working = memory_for(vec![]);
+    working.recall(&request(RecallMoment::Rejoin)).await.expect("an empty read succeeds");
+    assert!(working.seen().is_some());
+}
+
+#[tokio::test]
+async fn nobody_publishes_to_a_read_only_pool() {
+    let entry = tinyhivemind_core::runtime::RememberEntry {
+        kind: tinyhivemind_core::runtime::EntryKind::Outcome,
+        text: "checked".into(),
+    };
+    let writable = memory_for(vec![]);
+    assert!(writable.pool_writer());
+    writable.publish(&entry, "c").await.expect("a writable pool takes the finding");
+    let pinned = memory_for(vec![]).read_only_pool(true);
+    assert!(!pinned.pool_writer(), "the belt no longer offers verified=true");
+    let refused = pinned.publish(&entry, "c").await.expect_err("a read-only pool refuses");
+    assert!(refused.to_string().contains("read-only"));
+}

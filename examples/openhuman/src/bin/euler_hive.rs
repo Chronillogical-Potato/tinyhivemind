@@ -256,13 +256,21 @@ async fn run(args: Args) -> anyhow::Result<()> {
         package_root: lowered.memory.root.clone(),
         run: run_id.clone(),
     };
-    let pool = lowered
+    let pool_identity = lowered
         .memory
         .identities
         .iter()
-        .find(|identity| identity.kind == MemoryKind::Pool)
+        .find(|identity| identity.kind == MemoryKind::Pool);
+    let pool = pool_identity
         .map(|identity| memory::run_scoped(&identity.namespace, &lowered.memory.root, &run_id))
         .transpose()?;
+    let pool_read_only = pool_identity.is_some_and(|identity| {
+        identity.read_only
+            || package_doc
+                .constitution
+                .read_only_memories
+                .contains(&identity.id)
+    });
     let services = Arc::new(Services {
         search: Some(search),
         sandbox,
@@ -309,7 +317,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
             scoped,
             pool.clone(),
             pool_writer,
-        ));
+        )
+        .read_only_pool(pool_read_only));
         let scope = SeatScope {
             seat: seat.id.clone(),
             desk: desk.id.clone(),
