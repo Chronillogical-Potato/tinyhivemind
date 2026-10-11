@@ -435,3 +435,31 @@ fn searches_that_quote_the_statement_or_look_the_problem_up_are_refused() {
     assert!(refused_query("Witt design S(5,8,24) uniqueness", &literals).is_none());
     assert!(refused_query("Nash equilibrium skew-symmetric game support", &literals).is_none());
 }
+
+#[test]
+fn a_third_of_the_sandbox_budget_is_held_back_for_the_verify_desk() {
+    let mut limits = super::budget::Limits::SMOKE;
+    limits.max_sandbox_runs = 6;
+    let budget = super::budget::Budget::new(limits);
+    for _ in 0..4 {
+        budget.claim_sandbox("compute").expect("compute may use its share");
+    }
+    let refused = budget.claim_sandbox("compute").expect_err("compute is out of its share");
+    assert!(refused.to_string().contains("verify"), "{refused}");
+    budget.claim_sandbox("verify").expect("verify keeps its reserve");
+    budget.claim_sandbox("verify").expect("verify keeps its reserve");
+    assert!(budget.claim_sandbox("verify").is_err(), "the total still binds");
+}
+
+#[test]
+fn a_verify_seat_may_support_only_after_running_a_check_this_turn() {
+    use super::tools::{CallRecord, grounded};
+    let support = Some(super::tools::Verdict::Support);
+    assert!(grounded("verify", support, &[]).is_err());
+    let failed = [CallRecord { tool: "run_python".into(), summary: String::new(), ok: false }];
+    assert!(grounded("verify", support, &failed).is_err());
+    let ran = [CallRecord { tool: "run_python".into(), summary: String::new(), ok: true }];
+    assert!(grounded("verify", support, &ran).is_ok());
+    assert!(grounded("verify", Some(super::tools::Verdict::Object), &[]).is_ok());
+    assert!(grounded("compute", support, &[]).is_ok());
+}
