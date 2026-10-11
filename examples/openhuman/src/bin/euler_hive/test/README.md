@@ -13,3 +13,6 @@ Docker, model or memory service is touched.
 | `routing.rs` | Broadcast router, first-turn prompt, system prompt |
 | `federation.rs` | Asks, referrals and their return chains, verification, synthesis |
 | `artifacts.rs` | Safe names, numbering, failed appends, closing a run with a failed write |
+
+`remember.rs` is wired from `tools.rs` and verifies the production memory
+tool refuses trusted publication until the current turn has a successful check.

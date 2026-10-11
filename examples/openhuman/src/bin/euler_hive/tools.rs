@@ -451,6 +451,10 @@ impl HiveTool {
             .and_then(Value::as_bool)
             .unwrap_or(false);
         if verified {
+            if self.scope.desk != super::budget::VERIFY_DESK {
+                return Err("only verify-desk seats may publish verified findings".into());
+            }
+            grounded(&self.scope.desk, Some(Verdict::Support), &self.turn.calls())?;
             self.memory
                 .publish(&entry, &self.scope.conversation)
                 .await
@@ -549,3 +553,7 @@ fn summarize(kind: SeatTool, args: &Value, result: &Result<String, String>) -> S
         SeatTool::Recall => format!("{} -> {outcome}", field("query")),
     }
 }
+
+#[cfg(test)]
+#[path = "test/remember.rs"]
+mod remember_test;

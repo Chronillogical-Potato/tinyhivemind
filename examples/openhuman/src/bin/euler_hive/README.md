@@ -68,3 +68,14 @@ spend, referrals, and per-seat memory counts read back from CortexDB).
 | `report.rs` | `structure.json`, `--probe`, closing frames, `report.json` |
 | `test/` | Offline tests, one module per behaviour: package wiring, sandbox and search, memory, routing and prompts, federations, artifacts |
 | `request_test.rs` | Real seats on a real runtime against a loopback model: each request carries exactly the seat's allowed tools |
+
+Tool loops reserve their configured maximum model-call capacity before launch.
+Completed loops return unused capacity; cancelled or unknown loops keep it
+charged. A loop is refused if its whole iteration cap cannot fit, so a run can
+stop below `--max-model-calls` when the remaining capacity is too small.
+Optional closing memory reads share the wall deadline and are skipped when it
+is spent. Provider-side web models are refused before runtime setup; research
+uses the filtered search tool. Verified publication requires a completed
+`run_python` tool call in the current verify-seat turn; the host does not check
+its exit code or prove the finding from its output. HTML superscripts/subscripts
+in problem statements are rendered explicitly as `^(...)` / `_(...)`.
