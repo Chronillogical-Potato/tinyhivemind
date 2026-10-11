@@ -7,7 +7,7 @@ pure dependency tree. The root README of the repository describes the library.
 | Path | Purpose |
 | --- | --- |
 | `src/` | shared plumbing (`JsonlSink`, `WallClock`, in-memory log), `bin/` examples, and `swe/`, the SWE hive and baseline |
-| `viewer/` | offline viewer for the JSONL traces |
+| `viewer/` | offline viewer for the JSONL traces, and a live player for the hive-language gallery |
 | `harbor/` | Harbor agent wrapper for Terminal-Bench |
 | `tests/` | mock model server and the offline end-to-end script |
 | `docker/cortex/` | a local CortexDB server for `swe_hive --memory cortex` |

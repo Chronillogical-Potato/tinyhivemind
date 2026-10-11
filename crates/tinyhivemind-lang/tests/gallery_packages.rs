@@ -6,7 +6,8 @@
 use std::collections::BTreeMap;
 use tinyhivemind_core::{approval::RuleVerdict, desk::ResponderMode};
 use tinyhivemind_lang::{
-    LoweredHive, MemoryKind, MemoryLifecycle, Package, lower, parse, patch::PatchClass,
+    LoweredHive, MemoryKind, MemoryLifecycle, Package, lower, parse,
+    patch::{self, Operation, Patch, PatchClass},
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -168,6 +169,30 @@ fn self_improving_constitution_bounds_what_an_editor_may_change() -> Result<()> 
     assert_eq!(constitution.read_only_memories, ["eval-ledger"]);
     assert!(constitution.evaluation.is_object());
     assert!(hive.context.contains_key("context/playbook.md"));
+
+    // A prompt edit is permitted; a policy edit is not.
+    let before = package.documents["seats/solver.md"].clone();
+    let prompt = Patch {
+        class: PatchClass::Prompt,
+        operations: vec![Operation::Prompt {
+            path: "seats/solver.md".into(),
+            before: before.clone(),
+            after: format!("{before}Include canceled invoices.\n"),
+        }],
+    };
+    assert!(patch::apply(&package, &prompt).is_ok());
+    let policy = Patch {
+        class: PatchClass::Policy,
+        operations: vec![Operation::Json {
+            pointer: "/manifest/policies/episode/turn_budget".into(),
+            before: Some(serde_json::json!(9)),
+            after: Some(serde_json::json!(12)),
+        }],
+    };
+    assert!(matches!(
+        patch::apply(&package, &policy),
+        Err(patch::Error::ForbiddenClass)
+    ));
     Ok(())
 }
 
