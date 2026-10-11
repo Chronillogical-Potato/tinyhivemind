@@ -1,4 +1,4 @@
-//! SQLite reopen, competing writers, schema validation and v1 migration.
+//! `SQLite` reopen, competing writers, schema validation and v1 migration.
 // Panicking assertions are confined to deterministic test fixtures.
 #![allow(clippy::unwrap_used, clippy::panic)]
 use super::super::test::{commit, contract, row, state_at};
