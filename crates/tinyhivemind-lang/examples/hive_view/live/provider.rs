@@ -155,7 +155,7 @@ impl Provider {
         if key.is_empty()
             || key
                 .bytes()
-                .any(|b| b < 0x21 || b > 0x7e || b == b'\\' || b == b'"')
+                .any(|b| !(0x21..=0x7e).contains(&b) || b == b'\\' || b == b'"')
         {
             return Err("OPENROUTER_API_KEY is not a printable token".into());
         }

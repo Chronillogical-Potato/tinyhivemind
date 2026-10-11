@@ -190,30 +190,26 @@ pub(crate) fn parse(reply: &str) -> Parsed {
         .iter()
         .find(|line| !line.starts_with('!') && line.contains("@#"))
         .map(|line| clip(line));
-    match trace {
-        Some(trace) => {
-            let mut content = clip(&trace);
-            if let Some(mention) = mention {
-                content.push('\n');
-                content.push_str(&mention);
-            }
-            Parsed {
-                content,
-                valid: true,
-            }
+    if let Some(trace) = trace {
+        let mut content = clip(&trace);
+        if let Some(mention) = mention {
+            content.push('\n');
+            content.push_str(&mention);
         }
-        None => {
-            let first = lines.first().map_or("(empty reply)", String::as_str);
-            let mut content = format!("note: {}", clip(first.trim_start_matches('!')));
-            if let Some(mention) = mention.filter(|mention| mention != first) {
-                content.push('\n');
-                content.push_str(&mention);
-            }
-            Parsed {
-                content,
-                valid: false,
-            }
-        }
+        return Parsed {
+            content,
+            valid: true,
+        };
+    }
+    let first = lines.first().map_or("(empty reply)", String::as_str);
+    let mut content = format!("note: {}", clip(first.trim_start_matches('!')));
+    if let Some(mention) = mention.filter(|mention| mention != first) {
+        content.push('\n');
+        content.push_str(&mention);
+    }
+    Parsed {
+        content,
+        valid: false,
     }
 }
 

@@ -44,10 +44,12 @@ pub(crate) fn print(
         None => prepare(loaded, knobs)?,
     };
     let artifacts = live.map(|_| crate::live::provider::artifacts_root().join(&run_label));
-    let mut kept = artifacts
-        .as_ref()
-        .map(|dir| File::create(dir.join("frames.ndjson")).map(BufWriter::new))
-        .transpose()?;
+    let mut writer = FrameWriter {
+        kept: artifacts
+            .as_ref()
+            .map(|dir| File::create(dir.join("frames.ndjson")).map(BufWriter::new))
+            .transpose()?,
+    };
     let truth = prepared
         .problem
         .as_ref()
@@ -61,33 +63,8 @@ pub(crate) fn print(
         .map(|sink| Tracer::new(prepared.package().to_owned(), sink, &clock));
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
-    let mut emit = |out: &mut dyn Write, frame: &Frame| -> std::io::Result<()> {
-        let line = serde_json::to_string(frame).map_err(std::io::Error::other)?;
-        writeln!(out, "{line}")?;
-        // Live runs are slow; a viewer follows them line by line.
-        out.flush()?;
-        if let Some(kept) = kept.as_mut() {
-            writeln!(kept, "{line}")?;
-        }
-        Ok(())
-    };
     if as_frames {
-        let start = Frame::Start {
-            package: prepared.package().to_owned(),
-            seed: knobs.seed,
-            seats: prepared.seats(),
-            problem: prepared
-                .problem
-                .as_ref()
-                .map(|(problem, answer)| ProblemFrame {
-                    id: problem.id.clone(),
-                    statement: problem.statement.clone(),
-                    answer: answer.to_string(),
-                }),
-            live: live.map(|_| true),
-            model: live.map(|config| config.model.clone()),
-        };
-        emit(&mut out, &start)?;
+        writer.emit(&mut out, &start_frame(&prepared, knobs, live))?;
     } else {
         header(&mut out, &prepared, live)?;
     }
@@ -96,10 +73,12 @@ pub(crate) fn print(
     let outcome = execute(&mut prepared, tracer.as_ref(), &mut |event| {
         let written = if as_frames {
             match event {
-                Event::Round(record) => emit(&mut out, &frames::round(record, truth.as_deref())),
-                Event::Referral(record) => emit(&mut out, &frames::referral(record)),
+                Event::Round(record) => {
+                    writer.emit(&mut out, &frames::round(record, truth.as_deref()))
+                }
+                Event::Referral(record) => writer.emit(&mut out, &frames::referral(record)),
                 Event::DeskEnd(end) if several => {
-                    emit(&mut out, &frames::desk_end(end, truth.as_deref()))
+                    writer.emit(&mut out, &frames::desk_end(end, truth.as_deref()))
                 }
                 Event::DeskEnd(_) => Ok(()),
             }
@@ -122,7 +101,7 @@ pub(crate) fn print(
     let usage = live_usage(&prepared, started);
     if as_frames {
         if let Some(usage) = &usage {
-            emit(&mut out, &Frame::Usage(usage.clone()))?;
+            writer.emit(&mut out, &Frame::Usage(usage.clone()))?;
         }
         let end = Frame::End {
             ending: outcome.ending.name().into(),
@@ -132,7 +111,7 @@ pub(crate) fn print(
             turns: outcome.turns,
             desk: prepared.answer_desk(),
         };
-        emit(&mut out, &end)?;
+        writer.emit(&mut out, &end)?;
     } else {
         ending(
             &mut out,
@@ -141,28 +120,13 @@ pub(crate) fn print(
             prepared.answer_desk().as_deref(),
         )?;
         if let Some(usage) = &usage {
-            writeln!(
-                out,
-                "  live: {} calls, {} tokens ({} prompt, {} completion), ${:.4}, {:.1}s{}",
-                usage.calls,
-                usage.total_tokens,
-                usage.prompt_tokens,
-                usage.completion_tokens,
-                usage.cost_usd,
-                usage.wall_ms as f64 / 1000.0,
-                if usage.exhausted_calls {
-                    " — stopped by --max-calls"
-                } else {
-                    ""
-                }
-            )?;
+            human_usage(&mut out, usage)?;
         }
     }
     if let Some(dir) = &artifacts {
         eprintln!("hive_view: live artifacts in {}", dir.display());
     }
-    drop(emit);
-    if let Some(mut kept) = kept {
+    if let Some(kept) = writer.kept.as_mut() {
         kept.flush()?;
     }
     if let Some(sink) = &sink
@@ -171,6 +135,60 @@ pub(crate) fn print(
         writer.flush()?;
     }
     Ok(())
+}
+
+/// Writes frames to stdout, flushed per line, and to the live run's copy.
+struct FrameWriter {
+    kept: Option<BufWriter<File>>,
+}
+
+impl FrameWriter {
+    fn emit(&mut self, out: &mut dyn Write, frame: &Frame) -> std::io::Result<()> {
+        let json = serde_json::to_string(frame).map_err(std::io::Error::other)?;
+        writeln!(out, "{json}")?;
+        // Live runs are slow; a viewer follows them line by line.
+        out.flush()?;
+        if let Some(kept) = self.kept.as_mut() {
+            writeln!(kept, "{json}")?;
+        }
+        Ok(())
+    }
+}
+
+fn start_frame(prepared: &Prepared, knobs: &Knobs, live: Option<&LiveConfig>) -> Frame {
+    Frame::Start {
+        package: prepared.package().to_owned(),
+        seed: knobs.seed,
+        seats: prepared.seats(),
+        problem: prepared
+            .problem
+            .as_ref()
+            .map(|(problem, answer)| ProblemFrame {
+                id: problem.id.clone(),
+                statement: problem.statement.clone(),
+                answer: answer.to_string(),
+            }),
+        live: live.map(|_| true),
+        model: live.map(|config| config.model.clone()),
+    }
+}
+
+fn human_usage(out: &mut dyn Write, usage: &UsageFrame) -> std::io::Result<()> {
+    writeln!(
+        out,
+        "  live: {} calls, {} tokens ({} prompt, {} completion), ${:.4}, {:.1}s{}",
+        usage.calls,
+        usage.total_tokens,
+        usage.prompt_tokens,
+        usage.completion_tokens,
+        usage.cost_usd,
+        std::time::Duration::from_millis(usage.wall_ms).as_secs_f64(),
+        if usage.exhausted_calls {
+            " — stopped by --max-calls"
+        } else {
+            ""
+        }
+    )
 }
 
 /// The usage frame of a live run; `None` offline.

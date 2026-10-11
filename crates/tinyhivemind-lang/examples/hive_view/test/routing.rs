@@ -21,8 +21,8 @@ struct Seen {
     ends: Vec<DeskEnd>,
 }
 
-fn watch(loaded: &Loaded, seed: u64) -> Result<(Seen, crate::episode::Outcome)> {
-    let mut prepared = prepare(loaded, &knobs(seed))?;
+fn watch(loaded: &Loaded, at: u64) -> Result<(Seen, crate::episode::Outcome)> {
+    let mut prepared = prepare(loaded, &knobs(at))?;
     let mut seen = Seen::default();
     let outcome = execute(&mut prepared, None, &mut |event| match event {
         Event::Round(round) => seen.rounds.push(round.clone()),
