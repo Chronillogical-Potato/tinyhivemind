@@ -6,7 +6,10 @@
 // one reaches the target desk, a refused one stops short and bounces back
 // (red, with the reason), on a temporary dashed edge if no link exists. Each
 // desk that has ended carries a badge. Speech bubbles sit in their own layer
-// so hovering a seat redraws only them.
+// so hovering a seat redraws only them. A seat whose turns made tool calls
+// or used memory (recording hosts annotate turns with both) carries a small
+// counter under its node.
+import { seatActivity } from "./activity.js";
 import { clip, h, s, svgRoot, wrap } from "./dom.js";
 import { exitPoint, glyph, layout } from "./layout.js";
 import { describeReferral, edgeFor, reasonText } from "./referrals.js";
@@ -190,18 +193,28 @@ function drawDesks(g, structure, lay, state) {
   }
 }
 
-function seatTitle(seat, state) {
+function seatTitle(seat, state, act) {
   const bits = [`${seat.label ?? seat.id} (${seat.role})`, `desks: ${(seat.desks ?? []).join(", ")}`, `turns: ${state.spoke.get(seat.id) ?? 0}`];
   const a = state.answers.get(seat.id);
   if (a) bits.push(`answer: ${a.answer}${a.correct == null ? "" : a.correct ? " (correct)" : " (wrong)"}`);
+  if (act) bits.push(`tool calls: ${act.tools}${act.failed ? ` (${act.failed} failed)` : ""}`, `memory: recalled ${act.recalled}, remembered ${act.remembered}`);
   return bits.join("\n");
+}
+
+/** The activity counter under a seat: "🔧3 🧠5", tool failures in red. */
+function activityBadge(node, act, r, compact) {
+  const parts = [act.tools ? `🔧${act.tools}` : "", act.recalled + act.remembered ? `🧠${act.recalled + act.remembered}` : ""].filter(Boolean);
+  if (!parts.length) return;
+  node.append(s("text", { y: compact ? r + 9 : r + 25, "text-anchor": "middle", class: `hv-act${act.failed ? " fail" : ""}` }, parts.join(" ")));
 }
 
 function drawSeats(g, structure, lay, state, ui, onHover) {
   const color = roleColor(structure);
   const blind = state.round?.visibility === "blind";
   const { r, compact } = lay.size;
+  const activity = seatActivity(state.lines);
   for (const { seat, x, y } of lay.seats.values()) {
+    const act = activity.get(seat.id);
     const turn = state.active.get(seat.id);
     const ans = state.answers.get(seat.id);
     const node = s("g", { class: "hv-seat", transform: `translate(${x},${y})`, tabindex: 0, role: "button",
@@ -218,7 +231,8 @@ function drawSeats(g, structure, lay, state, ui, onHover) {
         node.append(s("text", { x: r - 4 + w / 2, y: -r + 3, "text-anchor": "middle", class: `hv-chip-text${ans.correct == null ? " neutral" : ""}` }, clip(String(ans.answer), 8)));
       }
     }
-    node.append(s("title", {}, seatTitle(seat, state)));
+    if (act) activityBadge(node, act, r, compact);
+    node.append(s("title", {}, seatTitle(seat, state, act)));
     node.addEventListener("click", () => ui.onSelect(seat.id));
     node.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ui.onSelect(seat.id); } });
     node.addEventListener("pointerenter", () => onHover(seat.id));
