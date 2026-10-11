@@ -336,7 +336,7 @@ cost spread — illustrating why routine-ification is framed as the top lever.
 four-stage handoff, generalized to N stages with the chat message (rather
 than a formal ticket) as the connective tissue — a looser, less traceable
 handoff than pattern 3's ticket-based one. Type 1 (sentinel) is a
-trigger/condition/escalate loop, matching `tinyhivemind-hive`'s "silent
+trigger/condition/escalate loop, matching the `hive` module's "silent
 unless salience crosses a threshold" shape more than a scheduled cron.
 
 **Worked pipeline example, step by step (operational, but concrete):** (1)
@@ -418,6 +418,6 @@ because they bound how much of this to trust as mechanism):**
 | Routine (skill-by-demonstration, replay on cue) | Nothing analogous — no "teach once, replay" concept in scope | Entirely out of scope: `tinyhivemind` holds no state and does no learning; a routine is host-owned automation, not hive-mind mechanics |
 | Auto-review three-bucket approval trigger (payment / sensitive / low-confidence) | Nothing analogous in the pure crates | No approval-gate port; this is squarely a host concern per the "host owns storage" rule, but the *predicate shape* (a decidable classification over an action) is a plausible future port |
 | Six quota sinks, esp. poll→event-driven and session-boundary-as-topic-boundary | `continuous-sharing.md` (caller-owned watermarks, stateless deltas) already avoids re-paying for full history per read | No automatic "topic changed, start fresh" heuristic — session boundaries are caller-decided, not inferred |
-| Unattended sentinel type (silent-until-threshold escalation) | `tinyhivemind-hive`'s decaying salience + response thresholds is structurally the closest analog (a fold that stays silent below a threshold and escalates above it) | No wall-clock scheduling — hive is a pure fold over caller-supplied state, deliberately holds no timer |
+| Unattended sentinel type (silent-until-threshold escalation) | The `hive` module's decaying salience + response thresholds is structurally the closest analog (a fold that stays silent below a threshold and escalates above it) | No wall-clock scheduling — hive is a pure fold over caller-supplied state, deliberately holds no timer |
 | Unattended pipeline type (N-stage chain via chat handoff) | Sequential episode structure in `hive-mind.md`/ADR-0002 (one turn at a time, no concurrent variants) | No named "pipeline" abstraction chaining desks; would be host-composed from repeated referrals/dispatches |
 | One-message-can-start-many-turns risk (group chat "no one taught it to do this") | Explicit invariant: "@everyone is a list, not a broadcast" — one message starts at most one turn | The orange book's own examples (spontaneous group messaging) show this invariant being *violated* in the wild by Grok Bot — useful negative evidence for why the invariant matters |

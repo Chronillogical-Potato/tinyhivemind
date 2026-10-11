@@ -133,7 +133,7 @@ further reading, not verified findings.
 | `Nesqual-Tech/nesqbot` | Handover ledgers plus human gates before consequential actions — a trust-transfer framing of the handoff-artifact pattern, distinct from a plain kanban. |
 | `pmcclelland/bot-board` | Shared kanban with one MCP surface for humans and Bots together — externalizes the ticket/handoff pattern as shared infrastructure rather than in-memory state. |
 | `Archive228/foreman` | Crew harness with an explicit *effect ledger* and shift reports against declared work — closest catalog analog to an audit trail over agent actions. |
-| `granda/botops` | CoS → L2 → L3 layered fleet lifecycle with stated "quiet swarm" rules — a named hierarchy-depth convention worth comparing against `tinyhivemind-hive`'s cross-inhibition/quorum design. |
+| `granda/botops` | CoS → L2 → L3 layered fleet lifecycle with stated "quiet swarm" rules — a named hierarchy-depth convention worth comparing against the `hive` module's cross-inhibition/quorum design. |
 | `RishabhPatel123/Rixy-Bot` | Push (not poll) approval queues plus swarms in a from-scratch Android multi-agent framework — a second independent implementation of the approval-queue-as-first-class-surface pattern. |
 | `mandarwagh9/botroster` | Named teammates, one durable computer, approvals and routines, built explicitly as an open alternative — a compact reference for what "roster" + "desk" means to another implementer. |
 
