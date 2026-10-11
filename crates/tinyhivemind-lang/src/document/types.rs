@@ -1,4 +1,9 @@
-//! Typed package manifests and caller-supplied document parsing.
+//! Wire types for the package manifest (`hive.json`) and the whole package.
+//!
+//! Every struct denies unknown fields, so a misspelled key is a decode error
+//! rather than a silently ignored setting. Identities are opaque,
+//! case-sensitive strings: [`crate::validate`] rejects an empty (or
+//! whitespace-only) identity and a duplicate within the same section.
 use crate::{Constitution, MemorySpec};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,51 +16,75 @@ use tinyhivemind_core::{
     hive::{DirectoryPolicy, DivisionPolicy, EpisodePolicy, ExchangePolicy},
     runtime::{ApprovalPolicy, BrevityPolicy, DigestPolicy, ReferralPolicy},
 };
-/// Package in the portable hive wire format.
+/// A complete hive package: the three canonical JSON files plus its Markdown.
+///
+/// [`crate::parse`] builds one from a document map keyed by `hive.json`,
+/// `constitution.json`, `memory.json` and relative Markdown paths. The struct
+/// also serializes as a single JSON object with these four fields, which is
+/// the form a host can store or hand across a process boundary in one file.
+/// [`Package::default`] is an empty but valid package.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Package {
-    /// Typed canonical hive definition.
+    /// The decoded `hive.json`: what the hive is made of.
     pub manifest: Manifest,
-    /// Immutable host-pinned constraints and evaluator settings.
+    /// The decoded `constitution.json`: caps and judging settings an editor
+    /// proposal may never change.
     pub constitution: Constitution,
-    /// Memory identities and binding settings without contents.
+    /// The decoded `memory.json`: memory identities and seat bindings, never
+    /// remembered contents.
     pub memory: MemorySpec,
-    /// Markdown side documents keyed by safe relative path.
+    /// Markdown documents keyed by safe relative path.
+    ///
+    /// [`crate::parse`] keeps only keys ending in `.md` (any case); every other
+    /// non-canonical file is dropped. Documents no manifest entry references,
+    /// such as a `README.md`, are accepted and carried along, and so take part
+    /// in [`crate::lineage::content_id`].
     pub documents: BTreeMap<String, String>,
 }
-/// Manifest in the portable hive wire format.
+/// The typed hive definition decoded from `hive.json`.
+///
+/// Every field is required on the wire.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
-    /// Canonical supported schema identifier.
+    /// The `$schema` key; must be exactly
+    /// `https://tinyhumans.ai/schemas/hive/v1` or validation fails with
+    /// [`crate::Error::Schema`].
     #[serde(rename = "$schema")]
     pub schema: String,
-    /// Wire format version, currently one.
+    /// Wire format version; only `1` is accepted.
     pub version: u32,
-    /// Stable case-sensitive identity within this section.
+    /// The hive's identity; must be non-blank. Lowering carries it as
+    /// [`crate::LoweredHive::id`].
     pub id: String,
-    /// Human-readable hive name.
+    /// Human-readable hive name, carried unchanged into lowering.
     pub name: String,
-    /// Independent organizational roles and their charter documents.
+    /// The roles seats and missions refer to, each with its own charter.
     pub roles: Vec<Role>,
-    /// Agents declared for host factory creation.
+    /// The agents the host creates, one per seat.
     pub seats: Vec<Seat>,
-    /// Ordered conversations using existing core desk values.
+    /// Core desk values; every member must name a declared seat, at most once.
     pub desks: Vec<Desk>,
-    /// Task decomposition and host-evaluated acceptance criteria.
+    /// Goals, which may decompose into subgoals; the decomposition must be
+    /// acyclic.
     pub goals: Vec<Goal>,
-    /// Work obligations binding roles to goal identities.
+    /// Missions assigning goals to roles.
     pub missions: Vec<Mission>,
-    /// Directed desk hierarchy; cycles are permitted.
+    /// Directed parent-to-child desk hierarchy; both ends must name declared
+    /// desks, and cycles are permitted.
     pub topology: Vec<Link>,
-    /// Directed channels over which desks may refer work.
+    /// Directed channels along which one desk may refer work to another; both
+    /// ends must name declared desks.
     pub referrals: Vec<Link>,
-    /// Relative Markdown paths under `context/` for shared itemized documents.
+    /// Paths of shared context documents. Each must start with `context/`,
+    /// end in `.md`, be present in [`Package::documents`], and carry
+    /// well-formed, unique `<!-- item:id -->` markers.
     pub context: Vec<String>,
-    /// Existing core policies, frozen in this activation snapshot.
+    /// Core policy values the host installs on activation, bounded by the
+    /// constitution.
     pub policies: Policies,
-    /// Host-neutral scheduling settings.
+    /// Scheduling settings for a host coordinator.
     pub coordinator: CoordinatorSettings,
 }
 impl Default for Manifest {
@@ -78,80 +107,102 @@ impl Default for Manifest {
         }
     }
 }
-/// Role in the portable hive wire format.
+/// One role: a responsibility seats fill and missions are assigned to.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Role {
-    /// Stable case-sensitive identity within this section.
+    /// The role's identity, unique among roles.
     pub id: String,
-    /// Relative Markdown path under `roles/` for this independent charter.
+    /// Path of the role's charter; must start with `roles/`, end in `.md`, and
+    /// be present in [`Package::documents`].
+    ///
+    /// The charter may open with JSON frontmatter between `---\n` and
+    /// `\n---\n`; if it does, the object may hold only `id` and `charter`, with
+    /// the same values as here. The charter body, without frontmatter, becomes
+    /// the routing candidate description of every seat filling this role.
     pub charter: String,
 }
-/// Seat in the portable hive wire format.
+/// One seat: an agent the host creates and places on desks.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Seat {
-    /// Stable case-sensitive identity within this section.
+    /// The seat's identity, unique among seats; desk members, memory bindings
+    /// and routing candidates refer to it.
     pub id: String,
-    /// Human-readable seat label.
+    /// Display label, also used as the routing candidate label.
     pub label: String,
-    /// Identity of the role this seat fills.
+    /// Identity of the [`Role`] this seat fills; must name a declared role.
     pub role: String,
-    /// Relative Markdown path under `seats/` for this seat prompt.
+    /// Path of the seat's prompt; must start with `seats/`, end in `.md`, and
+    /// be present in [`Package::documents`].
+    ///
+    /// The prompt may open with JSON frontmatter between `---\n` and
+    /// `\n---\n`. Every key it holds must name a field of this seat, or one of
+    /// the seat's memory binding settings (`reads`, `recall_at`,
+    /// `budget_chars`, `remember`, and `memory` for the bound identity), with
+    /// exactly the manifest's value; otherwise validation fails with
+    /// [`crate::Error::Frontmatter`]. Lowering hands the host the body alone.
     pub prompt: String,
-    /// Host-defined factory template name; never credentials.
+    /// Name of the host factory template that creates the agent; must be
+    /// non-blank. Never a credential.
     pub template: String,
-    /// Host-defined nonsecret factory configuration.
+    /// Opaque, nonsecret factory configuration passed through to the host.
     pub config: Value,
-    /// Optional host model selection.
+    /// Model the host should run the seat on; `None` leaves it to the host.
     pub model: Option<String>,
-    /// Explicit tool access policy for the host to enforce.
+    /// Tool access the host must enforce; the allow list also becomes the
+    /// routing candidate's capabilities.
     pub tools: ToolAccess,
-    /// Host-defined MCP server configuration names.
+    /// Names of host-defined MCP server configurations to attach.
     pub mcp: Vec<String>,
-    /// Skill names installed by the host.
+    /// Names of skills the host installs for the seat.
     pub skills: Vec<String>,
 }
-/// `ToolAccess` in the portable hive wire format.
+/// A seat's tool access, enforced by the host; this crate only carries it.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ToolAccess {
-    /// Tool names the host permits.
+    /// Tool names the seat may call.
     pub allow: Vec<String>,
-    /// Tool names the host forbids.
+    /// Tool names the seat must not call.
     pub deny: Vec<String>,
 }
-/// Goal in the portable hive wire format.
+/// One goal, optionally decomposed into subgoals.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Goal {
-    /// Stable case-sensitive identity within this section.
+    /// The goal's identity, unique among goals.
     pub id: String,
-    /// Human-readable purpose.
+    /// What the goal is for, in prose.
     pub description: String,
-    /// Criteria checked by the host evaluator.
+    /// Acceptance criteria, opaque to this crate and judged by the host.
+    /// Unlike `acceptance` elsewhere in a package, these are editable by a
+    /// [`crate::patch::PatchClass::Goal`] proposal.
     pub acceptance: Vec<String>,
-    /// Child goal identities; decomposition must be acyclic.
+    /// Identities of child goals; each must name a declared goal, and the
+    /// whole decomposition must be acyclic ([`crate::Error::GoalCycle`]).
     pub subgoals: Vec<String>,
 }
-/// Mission in the portable hive wire format.
+/// One mission: an obligation assigning goals to a role.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Mission {
-    /// Stable case-sensitive identity within this section.
+    /// The mission's identity, unique among missions.
     pub id: String,
-    /// Identity of the role this seat fills.
+    /// Identity of the [`Role`] that carries the mission; must name a declared
+    /// role (a role, not a seat).
     pub role: String,
-    /// Task decomposition and host-evaluated acceptance criteria.
+    /// Identities of the goals the role is responsible for; each must name a
+    /// declared [`Goal`].
     pub goals: Vec<String>,
 }
-/// Link in the portable hive wire format.
+/// A directed edge between two desks, used by topology and referrals.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Link {
-    /// Source desk identity.
+    /// Identity of the desk the edge leaves; must name a declared desk.
     pub from: String,
-    /// Target desk identity.
+    /// Identity of the desk the edge enters; must name a declared desk.
     pub to: String,
 }
 /// Policies in the portable hive wire format.
