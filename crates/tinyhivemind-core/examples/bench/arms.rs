@@ -6,7 +6,7 @@
 //! arms over the *same* rooms and the same private evaluations:
 //!
 //! - **ladder** — today's behaviour. One message selects exactly one responder
-//!   off the deterministic ladder in `tinyhivemind`, that agent answers, and the
+//!   off the deterministic ladder in `tinyhivemind-core`, that agent answers, and the
 //!   interaction ends. One turn.
 //! - **vote** — self-consistency at a matched turn budget. The same number of
 //!   turns the episode was allowed, each spent on one member's independent

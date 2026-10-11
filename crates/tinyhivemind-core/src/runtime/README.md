@@ -1,4 +1,4 @@
-# `tinyhivemind` feature modules
+# `runtime` feature modules
 
 One directory per feature area, wired together and re-exported from
 [`mod.rs`](mod.rs). Each answers a different question a host needs answered

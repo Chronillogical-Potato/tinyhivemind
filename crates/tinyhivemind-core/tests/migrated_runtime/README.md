@@ -1,6 +1,6 @@
 # Runtime integration tests
 
-These tests use only the public `tinyhivemind` API.
+These tests use only the public `tinyhivemind_core::runtime` API.
 
 | File | Coverage |
 | --- | --- |

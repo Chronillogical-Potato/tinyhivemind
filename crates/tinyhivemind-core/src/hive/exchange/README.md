@@ -74,7 +74,7 @@ folded; rounds are carried", below, for why that one cannot come out of the log.
 which members it names, and how many rows the episode may still write. It does
 no waiting and **chooses no peer**: who a member wants to contact is that
 member's judgement, and the audience it writes is validated by
-`tinyhivemind::aside::aside` exactly as an aside riding alongside a turn is.
+`tinyhivemind_core::aside::aside` exactly as an aside riding alongside a turn is.
 
 `ExchangeRound::Open::members` is in desk order and contains only members that
 are active on the episode's desk and still under their own contact cap. A host
