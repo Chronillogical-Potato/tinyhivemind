@@ -14,7 +14,11 @@ fn a_constitution_edit_is_immutable_at_each_changed_field() {
         located(&diagnostics),
         [
             ("constitution.json", Some("/max_turns"), Rule::Immutable),
-            ("constitution.json", Some("/permitted_edits/6"), Rule::Immutable),
+            (
+                "constitution.json",
+                Some("/permitted_edits/6"),
+                Rule::Immutable
+            ),
         ]
     );
     assert_eq!(
@@ -30,7 +34,11 @@ fn a_protected_manifest_key_is_immutable_even_under_a_permitted_class() {
     }));
     assert_eq!(
         located(&diagnostics),
-        [("hive.json", Some("/seats/0/config/telemetry"), Rule::Immutable)]
+        [(
+            "hive.json",
+            Some("/seats/0/config/telemetry"),
+            Rule::Immutable
+        )]
     );
     assert!(diagnostics[0].message.starts_with("telemetry settings"));
 }
@@ -50,7 +58,11 @@ fn a_protected_frontmatter_key_is_reported_on_its_markdown_file() {
             ("README.md", None, Rule::Unowned),
         ]
     );
-    assert!(diagnostics[0].message.ends_with("(frontmatter /evaluation)"));
+    assert!(
+        diagnostics[0]
+            .message
+            .ends_with("(frontmatter /evaluation)")
+    );
 }
 
 #[test]
@@ -90,13 +102,18 @@ fn an_unpermitted_class_is_refused_for_documents_and_fields() {
     }));
     assert_eq!(
         located(&diagnostics),
-        [("hive.json", Some("/policies/digest/budget_chars"), Rule::ForbiddenClass)]
+        [(
+            "hive.json",
+            Some("/policies/digest/budget_chars"),
+            Rule::ForbiddenClass
+        )]
     );
     let mut base = package();
     base.constitution.permitted_edits = vec![PatchClass::Prompt];
     let mut edit = base.clone();
     edit.manifest.seats.push(seat("bob"));
-    edit.documents.insert("seats/bob.md".into(), "Review.\n".into());
+    edit.documents
+        .insert("seats/bob.md".into(), "Review.\n".into());
     let diagnostics = refused(crate::check(&files(&base), &files(&edit)));
     assert_eq!(
         located(&diagnostics),
@@ -122,7 +139,11 @@ fn a_canary_is_located_in_json_values_keys_and_markdown() {
     assert_eq!(
         located(&diagnostics),
         [
-            ("hive.json", Some("/goals/0/description"), Rule::Contamination),
+            (
+                "hive.json",
+                Some("/goals/0/description"),
+                Rule::Contamination
+            ),
             ("roles/writer.md", None, Rule::Contamination),
         ]
     );
@@ -131,7 +152,11 @@ fn a_canary_is_located_in_json_values_keys_and_markdown() {
     }));
     assert_eq!(
         located(&keyed),
-        [("hive.json", Some("/seats/0/config/CANARY-1"), Rule::Contamination)]
+        [(
+            "hive.json",
+            Some("/seats/0/config/CANARY-1"),
+            Rule::Contamination
+        )]
     );
 }
 
@@ -161,7 +186,11 @@ fn a_pinned_memory_and_its_bindings_are_read_only() {
     assert_eq!(
         located(&removed),
         [
-            ("constitution.json", Some("/read_only_memories/0"), Rule::Reference),
+            (
+                "constitution.json",
+                Some("/read_only_memories/0"),
+                Rule::Reference
+            ),
             ("memory.json", Some("/identities/1"), Rule::ReadOnly),
         ]
     );
@@ -174,16 +203,24 @@ fn a_context_edit_must_be_expressible_as_item_deltas() {
             p.documents.insert("context/notes.md".into(), body.into());
         })
     };
-    let item = |result| located(&refused(result)).first().map(|d| (d.0.to_owned(), d.2));
+    let item = |result| {
+        located(&refused(result))
+            .first()
+            .map(|d| (d.0.to_owned(), d.2))
+    };
     let expected = Some(("context/notes.md".to_owned(), Rule::Context));
     // Text before the first item changed.
     assert_eq!(
-        item(notes("# Renamed\n<!-- item:a -->\nFirst.\n<!-- item:b -->\nSecond.\n")),
+        item(notes(
+            "# Renamed\n<!-- item:a -->\nFirst.\n<!-- item:b -->\nSecond.\n"
+        )),
         expected
     );
     // Items swapped.
     assert_eq!(
-        item(notes("# Notes\n<!-- item:b -->\nSecond.\n<!-- item:a -->\nFirst.\n")),
+        item(notes(
+            "# Notes\n<!-- item:b -->\nSecond.\n<!-- item:a -->\nFirst.\n"
+        )),
         expected
     );
     // A new item before the last one.
@@ -195,12 +232,16 @@ fn a_context_edit_must_be_expressible_as_item_deltas() {
     );
     // A last item without its newline.
     assert_eq!(
-        item(notes("# Notes\n<!-- item:a -->\nFirst.\n<!-- item:b -->\nSecond.")),
+        item(notes(
+            "# Notes\n<!-- item:a -->\nFirst.\n<!-- item:b -->\nSecond."
+        )),
         expected
     );
     // A duplicate marker.
     assert_eq!(
-        item(notes("# Notes\n<!-- item:a -->\nFirst.\n<!-- item:a -->\nSecond.\n")),
+        item(notes(
+            "# Notes\n<!-- item:a -->\nFirst.\n<!-- item:a -->\nSecond.\n"
+        )),
         expected
     );
     // An appended item is fine.
@@ -213,8 +254,10 @@ fn a_context_edit_must_be_expressible_as_item_deltas() {
 #[test]
 fn a_new_context_document_must_carry_well_formed_markers() {
     let diagnostics = refused(check_edit(|p| {
-        p.documents
-            .insert("context/extra.md".into(), "<!-- item:bad id -->\nx\n".into());
+        p.documents.insert(
+            "context/extra.md".into(),
+            "<!-- item:bad id -->\nx\n".into(),
+        );
     }));
     assert_eq!(
         located(&diagnostics),

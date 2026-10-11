@@ -151,9 +151,10 @@ pub(super) enum Content<'a> {
 fn find_canary(value: &Value, canary: &str) -> Option<String> {
     match value {
         Value::String(text) => text.contains(canary).then(String::new),
-        Value::Array(values) => values.iter().enumerate().find_map(|(i, value)| {
-            find_canary(value, canary).map(|tail| format!("/{i}{tail}"))
-        }),
+        Value::Array(values) => values
+            .iter()
+            .enumerate()
+            .find_map(|(i, value)| find_canary(value, canary).map(|tail| format!("/{i}{tail}"))),
         Value::Object(map) => map.iter().find_map(|(key, value)| {
             if key.contains(canary) {
                 Some(format!("/{}", escape(key)))

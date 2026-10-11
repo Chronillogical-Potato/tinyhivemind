@@ -4,8 +4,8 @@ mod derive;
 mod items;
 mod types;
 use crate::Package;
-use serde_json::Value;
 pub(crate) use derive::{CLASSES, fields, lifecycle, modification, owner, replay_items};
+use serde_json::Value;
 pub use types::{AppliedPatch, Error, Operation, Patch, PatchClass, Result};
 
 pub(crate) fn validate_context(source: &str) -> Result<()> {

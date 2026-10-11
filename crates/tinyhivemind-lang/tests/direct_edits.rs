@@ -64,7 +64,9 @@ fn edit_json(
 type Checked = std::result::Result<Review, Vec<Diagnostic>>;
 
 fn refusal(result: Checked) -> Result<Vec<Diagnostic>> {
-    result.err().ok_or_else(|| "expected the edit to be refused".into())
+    result
+        .err()
+        .ok_or_else(|| "expected the edit to be refused".into())
 }
 
 /// The review of an accepted edit, or its diagnostics as the test failure.
@@ -197,24 +199,35 @@ fn a_multi_class_edit_reproduces_through_its_derived_patches() -> Result<()> {
     assert_eq!(current, review.candidate);
     assert_eq!(current, parse(&files)?);
     let watermarks = BTreeMap::from([("solver-notes".into(), 0), ("eval-ledger".into(), 0)]);
-    assert_eq!(ids.last(), Some(&lineage::content_id(&current, &watermarks)?));
+    assert_eq!(
+        ids.last(),
+        Some(&lineage::content_id(&current, &watermarks)?)
+    );
     assert_eq!(ids.len(), 3);
     Ok(())
 }
 
 #[test]
 fn unparseable_json_names_its_file_and_line() -> Result<()> {
-    let files = edited("memory.json", |memory| memory.replacen("\"root\"", "root", 1));
+    let files = edited("memory.json", |memory| {
+        memory.replacen("\"root\"", "root", 1)
+    });
     let diagnostics = refusal(check(&original(), &files))?;
     assert_eq!(located(&diagnostics), [("memory.json", None, Rule::Json)]);
-    assert!(diagnostics[0].message.contains("line 2 column 3"), "{}", diagnostics[0]);
+    assert!(
+        diagnostics[0].message.contains("line 2 column 3"),
+        "{}",
+        diagnostics[0]
+    );
     Ok(())
 }
 
 #[test]
 fn an_unowned_change_is_reported_rather_than_accepted() -> Result<()> {
     let mut files = edited("README.md", |readme| format!("{readme}\nEdited.\n"));
-    edit_json(&mut files, "hive.json", |hive| hive["name"] = "Renamed".into())?;
+    edit_json(&mut files, "hive.json", |hive| {
+        hive["name"] = "Renamed".into()
+    })?;
     files.insert("notes.txt".into(), "scratch\n".into());
     let diagnostics = refusal(check(&original(), &files))?;
     assert_eq!(
@@ -240,11 +253,17 @@ fn diagnose_collects_several_validation_errors_at_once() -> Result<()> {
         [
             ("hive.json", Some("/seats/0/role"), Rule::Reference),
             ("hive.json", Some("/desks/0/members/3"), Rule::Reference),
-            ("hive.json", Some("/policies/episode/turn_budget"), Rule::Bound),
+            (
+                "hive.json",
+                Some("/policies/episode/turn_budget"),
+                Rule::Bound
+            ),
         ]
     );
     // `validate` still stops at, and returns, the first of them.
-    let first = validate(&package).err().ok_or("expected a validation error")?;
+    let first = validate(&package)
+        .err()
+        .ok_or("expected a validation error")?;
     assert_eq!(first.to_string(), diagnostics[0].message);
     Ok(())
 }

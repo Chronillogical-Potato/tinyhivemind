@@ -47,7 +47,9 @@ pub(super) fn package() -> Package {
         "context/notes.md".into(),
         "# Notes\n<!-- item:a -->\nFirst.\n<!-- item:b -->\nSecond.\n".into(),
     );
-    p.memory.identities.push(identity("notes", "team:hive/agent:alice", false));
+    p.memory
+        .identities
+        .push(identity("notes", "team:hive/agent:alice", false));
     let mut ledger = identity("ledger", "team:hive/project:ledger", true);
     ledger.kind = MemoryKind::Pool;
     p.memory.identities.push(ledger);

@@ -27,7 +27,8 @@ fn a_dependent_change_is_ordered_after_what_it_depends_on() {
     let review = accepted(check_edit(|p| {
         p.manifest.seats.push(seat("bob"));
         p.manifest.desks[0].members.push("bob".into());
-        p.documents.insert("seats/bob.md".into(), "Review.\n".into());
+        p.documents
+            .insert("seats/bob.md".into(), "Review.\n".into());
         p.memory
             .identities
             .push(identity("bob-notes", "team:hive/agent:bob", false));
@@ -64,15 +65,16 @@ fn a_change_with_no_valid_order_is_a_sequence_finding() {
         [("memory.json", None, Rule::Sequence)]
     );
     let message = &diagnostics[0].message;
-    assert!(message.starts_with("no order of the memory, roster changes"), "{message}");
+    assert!(
+        message.starts_with("no order of the memory, roster changes"),
+        "{message}"
+    );
 }
 
 #[test]
 fn every_class_can_change_in_one_edit() {
     let mut base = package();
-    base.constitution
-        .permitted_edits
-        .push(PatchClass::Policy);
+    base.constitution.permitted_edits.push(PatchClass::Policy);
     let mut edit = base.clone();
     edit.documents
         .insert("roles/writer.md".into(), "Write tersely.\n".into());

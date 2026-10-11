@@ -80,16 +80,16 @@ impl Hive {
         self.everyone.len()
     }
 
-    fn index(&self, desk: &str) -> Option<usize> {
+    pub(crate) fn index(&self, desk: &str) -> Option<usize> {
         self.rooms.iter().position(|room| room.desk.id == desk)
     }
 
-    fn linked(&self, from: &str, to: &str) -> bool {
+    pub(crate) fn linked(&self, from: &str, to: &str) -> bool {
         self.links.iter().any(|(a, b)| a == from && b == to)
     }
 
     /// Desks with a forward link (from an earlier-declared desk) into `desk`.
-    fn upstream(&self, desk: usize) -> Vec<usize> {
+    pub(crate) fn upstream(&self, desk: usize) -> Vec<usize> {
         (0..desk)
             .filter(|from| self.linked(&self.rooms[*from].desk.id, &self.rooms[desk].desk.id))
             .collect()

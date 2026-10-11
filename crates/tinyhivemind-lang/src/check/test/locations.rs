@@ -70,7 +70,8 @@ fn pins_the_review_wire() {
         json!([{"class": "prompt", "operations": []}])
     );
     assert_eq!(
-        wire.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()),
+        wire.as_object()
+            .map(|o| o.keys().cloned().collect::<Vec<_>>()),
         Some(vec!["candidate".to_owned(), "changes".to_owned()])
     );
     let back: crate::Review = serde_json::from_value(wire).expect("a review decodes");
