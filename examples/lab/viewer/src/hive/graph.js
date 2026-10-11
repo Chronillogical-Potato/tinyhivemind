@@ -43,7 +43,7 @@ function edgePath(a, b, kind) {
 function arrowDefs() {
   const defs = s("defs");
   for (const [id, color] of [["topology", "var(--muted)"], ["referral", "var(--accent)"], ["handoff", "var(--accent)"]]) {
-    const m = s("marker", { id: `hv-arrow-${id}`, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+    const m = s("marker", { id: `hv-arrow-${id}`, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 9, markerHeight: 9, markerUnits: "userSpaceOnUse", orient: "auto-start-reverse" });
     m.append(s("path", { d: "M0,0 L10,5 L0,10 z", fill: color }));
     defs.append(m);
   }

@@ -12,8 +12,9 @@ connects no clients, creates no agents, and persists nothing. The host owns
 credentials, evaluation, activation, memory contents, and lineage storage.
 Canonical manifests use JSON. Markdown carries prompts and role charters.
 Frontmatter is optional. When present it is a JSON object between an opening
-`---\n` (the document's first four bytes) and the first `\n---\n`; a document
-that opens with `---\n` and never closes it is rejected. YAML, TOML and other
+`---\n` (the document's first four bytes) and the first `\n---\n`. A seat
+prompt or role charter that opens with `---\n` and never closes it, or whose
+frontmatter is not a JSON object, is rejected. YAML, TOML and other
 frontmatter syntaxes are outside this version.
 
 ## Package and wire contract
@@ -30,6 +31,25 @@ edits, and leaves their meaning and enforcement to the host. Unknown fields
 and unsupported schema/version values fail rather than disappearing during a
 round trip. The `$schema` value `https://tinyhumans.ai/schemas/hive/v1`
 identifies this wire version; parsing does not fetch that URI.
+
+`seats/<id>.md` contains a prompt body, optionally preceded by frontmatter.
+Roles have independent charters in `roles/<id>.md`. Shared `context/*.md`
+documents use stable `<!-- item:id -->` identities, so deltas add, replace or
+remove one item instead of rewriting all accumulated context. Seat and role
+metadata is canonical in the manifest; frontmatter may restate it but must
+agree with it. Every key in a seat's frontmatter must be a field of that
+manifest seat (`id`, `label`, `role`, `prompt`, `template`, `config`, `model`,
+`tools`, `mcp`, `skills`) or one of its memory binding settings (`reads`,
+`recall_at`, `budget_chars`, `remember`, and `memory` for the bound identity),
+with an equal value. A role's frontmatter may hold only `id` and `charter`.
+Declared seat prompts, role charters and context references must use their
+respective package directories, so document purpose cannot bypass edit-class
+authority.
+
+Policies reuse core policy structs. Division and conduct gain serde. The
+coordinator's options gain serde in the coordinator crate; the pure language
+owns a host-neutral options representation that converts in the adapter.
+No dependency from the language to hives or OpenHuman is permitted.
 
 ### Parsing a document map
 
@@ -59,28 +79,11 @@ The parsed package is then validated.
 `Package` also serializes as one JSON object with four fields: `manifest`,
 `constitution`, `memory`, and `documents` (path to contents). A host may store
 or ship a package this way. `crates/tinyhivemind-openhuman/examples/live_language.rs`
-reads one (the `accepted-package.json` the self-edit example writes) with
-`serde_json` directly. That path skips `parse`'s path checks, Markdown filter
-and nested unknown-field pass, so the host must call `validate` or `lower`,
-which validates, before it uses the package.
-
-`seats/<id>.md` contains a prompt body, optionally preceded by frontmatter.
-Roles have independent charters in `roles/<id>.md`. Shared `context/*.md`
-documents use stable `<!-- item:id -->` identities, so deltas add, replace or
-remove one item instead of rewriting all accumulated context. Seat and role
-metadata is canonical in the manifest; frontmatter may restate it but must
-agree with it. Every key in a seat's frontmatter must be a field of that
-manifest seat (`id`, `label`, `role`, `prompt`, `template`, `config`, `model`,
-`tools`, `mcp`, `skills`) or one of its memory binding settings (`reads`,
-`recall_at`, `budget_chars`, `remember`, and `memory` for the bound identity),
-with an equal value. A role's frontmatter may hold only `id` and `charter`. Declared seat prompts, role
-charters and context references must use their respective package directories,
-so document purpose cannot bypass edit-class authority.
-
-Policies reuse core policy structs. Division and conduct gain serde. The
-coordinator's options gain serde in the coordinator crate; the pure language
-owns a host-neutral options representation that converts in the adapter.
-No dependency from the language to hives or OpenHuman is permitted.
+reads one (the `accepted-package.json` that `live_self_edit` writes) with
+`serde_json` directly. That path skips `parse`'s Markdown filter and nested
+unknown-field pass, so the host must call `validate` (or `lower`, which
+validates first) before it uses the package; validation re-checks every
+document path.
 
 ## Validation and lowering
 

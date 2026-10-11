@@ -81,6 +81,12 @@ await send("Runtime.enable");
 await send("Page.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
 
+await open("?view=hive");
+const cards = await waitFor("document.querySelectorAll('.hv-card').length > 0", 60000);
+console.log(cards ? "ok" : "FAIL", "gallery", await evaluate("document.querySelectorAll('.hv-card').length"), "cards");
+if (!cards) failures++;
+await shot("gallery.png");
+
 await hive("review-board");
 await hive("math-swarm", async () => {
   // Step back to the middle and select a seat, so the shot shows a bubble and the transcript highlight.
