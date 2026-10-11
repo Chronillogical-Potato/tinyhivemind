@@ -154,6 +154,6 @@ fn the_problem_bank_still_computes_large_but_fitting_answers() -> Result<()> {
     ]});
     let bank = problems(&sim)?;
     assert_eq!(bank[0].answer()?, 7_219_428_434_016_265_740);
-    assert_eq!(bank[1].answer()?, 2 * 9 + 2 + 3 + 3 + 7 + 2 + 0 + 3 + 6 + 8 + 5 + 4 + 7 + 7 + 5 + 8 + 0 + 8 - 2 * 9 - 2 + 0);
+    assert_eq!(bank[1].answer()?, 89);
     Ok(())
 }

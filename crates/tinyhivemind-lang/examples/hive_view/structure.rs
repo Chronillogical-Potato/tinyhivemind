@@ -92,7 +92,6 @@ pub(crate) fn structure(loaded: &Loaded) -> Result<Value> {
     let desks_of = seat_desks(hive);
     let episode = &hive.policies.episode;
     let sizes: Vec<usize> = hive.desks.iter().map(|desk| desk.members.len()).collect();
-    let seats: usize = sizes.iter().sum();
     let structure = StructureJson {
         id: hive.id.clone(),
         name: hive.name.clone(),

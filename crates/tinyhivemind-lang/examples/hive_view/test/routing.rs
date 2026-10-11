@@ -66,11 +66,7 @@ fn the_desks_split_the_turn_budget_without_exceeding_it() {
             .map(|desk| desk.turn_budget)
             .sum()
     };
-    assert_eq!(
-        spend(60, &[1, 1, 1, 1, 1]),
-        60,
-        "was 13 + 13 + 13 + 13 + 9 style overshoot"
-    );
+    assert_eq!(spend(60, &[1, 1, 1, 1, 1]), 60, "an even split");
     assert_eq!(spend(61, &[3, 3, 3, 3, 3]), 61);
     assert_eq!(
         spend(1, &[2, 2, 2, 2, 2]),
