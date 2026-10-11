@@ -142,19 +142,32 @@ impl Kind {
             if ty == "integer" {
                 field["minimum"] = json!(0);
             }
+            if let Some(description) = self.field_description(name) {
+                field["description"] = json!(description);
+            }
             properties.insert(name.into(), field);
             if needed {
                 required.push(name);
             }
         }
-        let mut schema = json!({"type":"object","properties":properties,"required":required,"additionalProperties":false});
-        if matches!(self, Self::Read) {
-            schema["oneOf"] = json!([
-                {"required":["hive_id"], "not":{"required":["agent_id"]}},
-                {"required":["agent_id"], "not":{"anyOf":[{"required":["hive_id"]},{"required":["thread"]}]}}
-            ]);
+        // Strict (OpenAI-compatible) providers reject top-level combinators
+        // such as oneOf/anyOf/not, so cross-field rules live in field
+        // descriptions and are enforced at runtime by `validate`.
+        json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
+    }
+    /// Human-readable guidance attached to a field's schema, if any.
+    fn field_description(self, name: &str) -> Option<&'static str> {
+        match (self, name) {
+            (Self::Read, "hive_id") => {
+                Some("Joined hive to read. Supply exactly one of hive_id or agent_id.")
+            }
+            (Self::Read, "agent_id") => Some(
+                "Peer whose direct transcript to read. Supply exactly one of hive_id or agent_id; not combinable with thread.",
+            ),
+            (Self::Read, "thread") => Some("Hive thread to read; only valid with hive_id."),
+            (Self::Read, "after") => Some("Exclusive sequence cursor."),
+            _ => None,
         }
-        schema
     }
     pub(super) fn validate(self, args: &Value) -> anyhow::Result<()> {
         let obj = args
