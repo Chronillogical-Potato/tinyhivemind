@@ -18,22 +18,12 @@ function send(res, status, body) {
  * `{ handle(pathname, req, res) -> boolean }`. `packageStructure(name)`
  * resolves to the `--json` structure of a gallery package, or null; it stands
  * in for a recording that carries no `structure.json` (a `hive_view --live`
- * run). A recording with neither is left out of the listing.
+ * run); `hasPackage(name)` says cheaply whether one exists. A recording with
+ * neither is left out of the listing.
  */
-export function recordingsApi({ roots, packageStructure = async () => null, intervalMs = 500 }) {
-  async function hasStructure(rec) {
-    if (rec.structure) return true;
-    try {
-      return !!(await packageStructure(rec.package));
-    } catch {
-      return false;
-    }
-  }
-
+export function recordingsApi({ roots, packageStructure = async () => null, hasPackage = () => false, intervalMs = 500 }) {
   async function listing() {
-    const all = scanRecordings(roots);
-    const keep = await Promise.all(all.map(hasStructure));
-    return all.filter((_, i) => keep[i]);
+    return scanRecordings(roots).filter((rec) => rec.structure || hasPackage(rec.package));
   }
 
   function frames(found, res) {

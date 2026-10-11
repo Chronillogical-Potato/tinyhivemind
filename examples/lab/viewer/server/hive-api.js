@@ -17,7 +17,7 @@ function send(res, status, body) {
   res.end(typeof body === "string" ? body : JSON.stringify(body));
 }
 
-/** `{ root, handle(pathname, query, req, res) -> boolean, structureOf(name) }` for the hive routes. */
+/** `{ root, handle(pathname, query, req, res) -> boolean, structureOf(name), hasPackage(name) }` for the hive routes. */
 export function hiveApi({ repo, env = process.env, log = () => {} }) {
   const root = packagesRoot(env, repo);
   const runner = hiveRunner({ repo, env, log });
@@ -121,5 +121,8 @@ export function hiveApi({ repo, env = process.env, log = () => {} }) {
     return pkg ? runner.structure(pkg.dir) : null;
   }
 
-  return { root, handle, structureOf };
+  /** True when the gallery holds a package called `name`. */
+  const hasPackage = (name) => !!findPackage(listPackageDirs(root), name);
+
+  return { root, handle, structureOf, hasPackage };
 }

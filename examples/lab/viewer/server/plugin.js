@@ -35,7 +35,7 @@ export function runsPlugin() {
       const hives = hiveApi({ repo: repoRoot(here), log: (m) => server.config.logger.info(`  hives: ${m}`) });
       server.config.logger.info(`  hives: ${hives.root}`);
       const recRoots = recordingRoots(process.env, [path.join(mainCheckout(repoRoot(here)), "hive-runs"), path.resolve(here, "../public/fixtures/recordings")]);
-      const recordings = recordingsApi({ roots: recRoots, packageStructure: (name) => hives.structureOf(name) });
+      const recordings = recordingsApi({ roots: recRoots, packageStructure: hives.structureOf, hasPackage: hives.hasPackage });
       server.config.logger.info(`  recordings: ${recRoots.length ? recRoots.join(", ") : "(none; set HIVE_RECORDINGS)"}`);
 
       server.middlewares.use("/api", (req, res, next) => {
