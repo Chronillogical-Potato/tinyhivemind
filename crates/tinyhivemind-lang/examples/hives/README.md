@@ -14,6 +14,7 @@ part of the language; each one's `README.md` opens with what it demonstrates.
 | `self-improving/` | 3 | 1 | A constitution with permitted edits, canaries and protected namespaces |
 | `math-panel/` | 5 | 1 | Five unreliable seats solving exact problems (`sim.json`) |
 | `math-swarm/` | 50 | 5 | Fifty seats in five linked desks on the same problems, rounds of ten |
+| `euler-hive/` | 14 | 5 | A live, problem-agnostic hive: per-seat tool access (web search on research only, Python on compute and verify only), referrals, an agent memory per seat and a shared verified pool. Its own test is `tests/euler_hive_package.rs`. |
 
 `sim.json` and `script.json` are neither canonical nor Markdown, so `parse`
 drops them: they belong to the example, not to the package.
