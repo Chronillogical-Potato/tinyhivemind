@@ -1,7 +1,9 @@
 // The player's controls: package and knobs for a fresh run, the live
 // (OpenRouter) toggle with its model and call cap, then Play/Pause, Step,
 // speed, a scrubber that replays the buffered frames, and Latest, which
-// resumes following a stream after scrubbing back.
+// resumes following a stream after scrubbing back. A recording swaps the run
+// knobs for a recording picker and a LIVE badge while its tail is followed.
+import { recordingLabel } from "./activity.js";
 import { h } from "./dom.js";
 
 const SPEEDS = [0.5, 1, 2, 4, 8];
@@ -41,9 +43,14 @@ export function createControls(on) {
   const liveBar = h("div", { class: "bar hv-live" },
     h("label", { class: "hv-check", title: "Seats are real model calls through OpenRouter: slow (minutes) and billed" }, live, " Live (OpenRouter)"),
     h("label", {}, "Model ", model), h("label", {}, "Max calls ", calls), liveNote);
+  const recPick = h("select", { id: "hv-rec-pick", "aria-label": "Recording", onchange: (e) => on.pickRecording?.(e.target.value) });
+  const liveBadge = h("span", { class: "hv-badge-live", id: "hv-live-badge", hidden: true }, "LIVE");
+  const rewind = h("button", { type: "button", id: "hv-rec-rewind", title: "Replay from the first round, then follow", onclick: () => on.rewind?.() }, "⏮ From start");
+  const recBar = h("div", { class: "bar hv-rec-bar", hidden: true }, h("label", {}, "Recording ", recPick), liveBadge, rewind);
+  const runBar = h("div", { class: "bar" }, h("label", {}, "Package ", pkg), num("hv-seed", "Seed", 0, 4294967296, "1"),
+    num("hv-width", "Round width", 1, 64, "package"), num("hv-budget", "Turn budget", 1, 2000, "package"), problemLabel, run);
   const el = h("section", { class: "card", "aria-label": "Hive controls" },
-    h("div", { class: "bar" }, h("label", {}, "Package ", pkg), num("hv-seed", "Seed", 0, 4294967296, "1"),
-      num("hv-width", "Round width", 1, 64, "package"), num("hv-budget", "Turn budget", 1, 2000, "package"), problemLabel, run),
+    recBar, runBar,
     liveBar,
     h("div", { class: "bar" }, back, play, fwd, h("label", {}, "Speed ", speed), scrub, where, latest),
     msg);
@@ -95,6 +102,22 @@ export function createControls(on) {
       if (k.round_width != null) el.querySelector("#hv-width").value = k.round_width;
       if (k.turn_budget != null) el.querySelector("#hv-budget").value = k.turn_budget;
       if (k.problem) problem.value = k.problem;
+    },
+    /** `"run"` shows the package knobs; `"recording"` the recording picker. */
+    setMode(mode) {
+      const rec = mode === "recording";
+      recBar.hidden = !rec;
+      runBar.hidden = liveBar.hidden = rec;
+    },
+    setRecordings(list, current) {
+      const known = list.some((r) => r.id === current);
+      const rows = known ? list : [{ id: current, package: current }, ...list];
+      recPick.replaceChildren(...rows.map((r) => h("option", { value: r.id, selected: r.id === current },
+        `${r.ended ? "" : r.live ? "● " : "○ "}${recordingLabel(r)}${r.ended ? ` · ${r.ending ?? "ended"}` : ""}`)));
+    },
+    /** The LIVE badge: on while a recording's tail is open and being followed or buffered. */
+    setLive(on) {
+      liveBadge.hidden = !on;
     },
     update(state) {
       play.textContent = state.playing ? "Pause" : "Play";
