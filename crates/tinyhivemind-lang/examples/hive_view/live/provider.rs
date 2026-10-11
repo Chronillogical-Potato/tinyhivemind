@@ -227,7 +227,8 @@ impl Provider {
             writeln!(stdin, "header = \"Authorization: Bearer {}\"", self.key)?;
         }
         let output = child.wait_with_output()?;
-        let stdout = String::from_utf8_lossy(&output.stdout).replace(&self.key, "[redacted]");
+        let stdout =
+            redact_user(&String::from_utf8_lossy(&output.stdout).replace(&self.key, "[redacted]"));
         let (payload, status) = stdout
             .rsplit_once('\n')
             .map_or((stdout.as_str(), ""), |(body, code)| (body, code.trim()));
@@ -279,4 +280,19 @@ impl Provider {
             .to_owned();
         Ok((number, Reply::Text(text)))
     }
+}
+
+/// Blank the account's `user_id` that OpenRouter echoes in error bodies.
+pub(crate) fn redact_user(body: &str) -> String {
+    const FIELD: &str = "\"user_id\":\"";
+    let mut out = String::with_capacity(body.len());
+    let mut rest = body;
+    while let Some(at) = rest.find(FIELD) {
+        let (head, tail) = rest.split_at(at + FIELD.len());
+        out.push_str(head);
+        out.push_str("[redacted]");
+        rest = tail.find('"').map_or("", |end| &tail[end..]);
+    }
+    out.push_str(rest);
+    out
 }

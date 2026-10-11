@@ -42,7 +42,8 @@ fn editor(files: &Files, charter: &str, tamper: bool) -> Files {
     let mut edited = files.clone();
     edited.insert("roles/editor.md".into(), charter.into());
     if tamper {
-        let constitution = files["constitution.json"].replace("\"max_turns\": 60", "\"max_turns\": 600");
+        let constitution =
+            files["constitution.json"].replace("\"max_turns\": 60", "\"max_turns\": 600");
         edited.insert("constitution.json".into(), constitution);
     }
     edited
@@ -132,17 +133,24 @@ fn run() -> Result<Summary> {
     };
 
     // A charter rewrite is accepted, evaluated and archived.
-    let improved = editor(&founding, "Answer the task and cite concrete evidence.\n", false);
+    let improved = editor(
+        &founding,
+        "Answer the task and cite concrete evidence.\n",
+        false,
+    );
     let review = check(&founding, &improved).map_err(|d| format!("refused: {d:?}"))?;
     archive(&mut records, &original, &review, Verdict::Accepted)?;
     let accepted_id = records.last().map(|r| r.id.clone()).unwrap_or_default();
 
-    // A worse follow-up is accepted by the checker but rejected by the host.
-    let mut accepted_files = improved.clone();
-    let worse = editor(&accepted_files, "Guess without checking.\n", false);
-    let review = check(&accepted_files, &worse).map_err(|d| format!("refused: {d:?}"))?;
-    archive(&mut records, &review_base(&accepted_files)?, &review, Verdict::Rejected)?;
-    accepted_files.clear();
+    // A worse follow-up passes the check but the host rejects it.
+    let worse = editor(&improved, "Guess without checking.\n", false);
+    let follow_up = check(&improved, &worse).map_err(|d| format!("refused: {d:?}"))?;
+    archive(
+        &mut records,
+        &review.candidate,
+        &follow_up,
+        Verdict::Rejected,
+    )?;
 
     let head = lineage::accepted_head(&records)?.ok_or("expected an accepted design")?;
     Ok(Summary {
@@ -152,10 +160,6 @@ fn run() -> Result<Summary> {
         head: head.id.clone(),
         accepted_id,
     })
-}
-
-fn review_base(files: &Files) -> Result<Package> {
-    Ok(tinyhivemind_lang::parse(files)?)
 }
 
 fn main() -> Result<()> {

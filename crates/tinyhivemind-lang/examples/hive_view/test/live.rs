@@ -11,7 +11,9 @@ use tinyhivemind_core::hive::{
 
 use crate::episode::{message, speech};
 use crate::live::prompt::{self, Brief, Parsed, parse};
-use crate::live::provider::{DEFAULT_MODEL, FORBIDDEN_KEYS, check_model, request_body};
+use crate::live::provider::{
+    DEFAULT_MODEL, FORBIDDEN_KEYS, check_model, redact_user, request_body,
+};
 
 #[test]
 fn the_request_body_pins_its_form_and_carries_no_tools_plugins_or_web_search() {
@@ -174,4 +176,14 @@ fn a_blind_turn_prompt_shows_only_what_core_projects() {
     };
     let text = prompt::turn(&brief(), &commit, &visible, &home, Some("4"));
     assert!(text.contains("`!commit #4 <reason>`"));
+}
+
+#[test]
+fn an_error_body_has_its_account_id_redacted() {
+    let body = r#"{"error":{"message":"bad","code":400},"user_id":"user_abc123"}"#;
+    assert_eq!(
+        redact_user(body),
+        r#"{"error":{"message":"bad","code":400},"user_id":"[redacted]"}"#
+    );
+    assert_eq!(redact_user("plain"), "plain");
 }

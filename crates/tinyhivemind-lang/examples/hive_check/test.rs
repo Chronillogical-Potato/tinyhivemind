@@ -52,7 +52,10 @@ fn a_refused_edit_prints_one_line_per_finding() {
     let mut edited = original.clone();
     let hive = edited["hive.json"]
         .replace("\"turn_budget\": 9", "\"turn_budget\": 12")
-        .replace("\"role\": \"solver\",\n      \"goals\"", "\"role\": \"ghost\",\n      \"goals\"");
+        .replace(
+            "\"role\": \"solver\",\n      \"goals\"",
+            "\"role\": \"ghost\",\n      \"goals\"",
+        );
     edited.insert("hive.json".into(), hive);
     let (diagnostics, classes) = findings(&original, Some(&edited));
     assert!(classes.is_empty());
@@ -79,7 +82,10 @@ fn an_accepted_edit_names_the_classes_it_changed() {
     let mut edited = original.clone();
     edited.insert(
         "seats/solver.md".into(),
-        format!("{}Include canceled invoices.\n", original["seats/solver.md"]),
+        format!(
+            "{}Include canceled invoices.\n",
+            original["seats/solver.md"]
+        ),
     );
     let (diagnostics, classes) = findings(&original, Some(&edited));
     assert!(diagnostics.is_empty());
