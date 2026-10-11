@@ -362,9 +362,8 @@ commits the round's state after all authorized turns are appended.
 
 `tinyhivemind-lang` makes a hive’s definition editable data: roles, goals,
 seats, memory bindings and policies, with guarded patches and an evaluated
-lineage. A package is a `hive.json`, Markdown prompts, and a constitution no
-self-edit may touch. Read the [language specification](docs/specs/hive-language.md),
-or start from a ready package in the [gallery](crates/tinyhivemind-lang/examples/hives).
+lineage. A package is a `hive.json`, Markdown prompts, and a constitution no self-edit may
+touch. Read the [language specification](docs/specs/hive-language.md), or start from the [gallery](crates/tinyhivemind-lang/examples/hives).
 
 `tinyhivemind-tools` renders native `tinytools::ToolSpec` definitions and
 records episode calls. `tinyhivemind-hives` coordinates durable messages and
@@ -485,6 +484,7 @@ That prints one deliberation episode turn by turn—the fastest way to see the m
 | [Cross-desk referral](https://github.com/tinyhumansai/tinyhivemind/wiki/Cross-desk-referral) | asking another channel a question, and getting the answer back |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | salience, quorum, cross-inhibition, and the attention market |
 | [Trace grammar](https://github.com/tinyhumansai/tinyhivemind/wiki/Trace-grammar) | what a marker deposits, and what real models get wrong |
+| [Hive language](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-language) | a hive as a portable package, its guarded edits, and the gallery |
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to the size of a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the ports, and what your application owes the library |
