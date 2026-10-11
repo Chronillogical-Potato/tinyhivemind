@@ -98,12 +98,15 @@ fn an_unknown_nested_field_is_reported_at_its_pointer() {
 #[test]
 fn a_decoded_but_invalid_package_is_returned_with_its_findings() {
     let mut docs = documents();
-    docs.insert("hive.json".into(), {
-        let mut manifest = Manifest::default();
-        manifest.id = String::new();
-        manifest.version = 3;
-        serde_json::to_string(&manifest).expect("serializes")
-    });
+    let manifest = Manifest {
+        id: String::new(),
+        version: 3,
+        ..Manifest::default()
+    };
+    docs.insert(
+        "hive.json".into(),
+        serde_json::to_string(&manifest).expect("serializes"),
+    );
     let (package, diagnostics) = diagnose_documents(&docs);
     assert!(package.is_some());
     assert_eq!(
