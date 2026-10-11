@@ -14,8 +14,6 @@ use crate::Result;
 /// A package read from disk, parsed, lowered, and its example-only sidecars.
 #[derive(Debug)]
 pub(crate) struct Loaded {
-    /// Directory the package was read from.
-    pub(crate) dir: PathBuf,
     /// The parsed package.
     pub(crate) package: Package,
     /// The lowered activation snapshot.
@@ -88,7 +86,6 @@ pub(crate) fn load(dir: &Path) -> Result<Loaded> {
         .map(|source| serde_json::from_str(source))
         .transpose()?;
     Ok(Loaded {
-        dir: dir.to_path_buf(),
         package,
         lowered,
         summary,
