@@ -531,6 +531,5 @@ async fn inherited_config() -> anyhow::Result<RuntimeConfig> {
 fn memory_services() -> ServiceSet {
     let mut services = ServiceSet::none();
     services.memory_queue = true;
-    services.harness_init = true;
     services
 }
