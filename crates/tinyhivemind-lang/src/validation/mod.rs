@@ -1,107 +1,200 @@
 //! Referential integrity, bounded policies and namespace access validation.
-use crate::{Error, Package, Result};
+//!
+//! Every rule pushes its finding, with the file and JSON Pointer it concerns,
+//! into one collector. [`validate`] returns the first finding as an
+//! [`Error`]; [`diagnose`] returns them all. The rules run in a fixed order,
+//! so the first finding is the error a fail-fast check would have stopped
+//! at. A check that depends on an earlier one for the same entry, such as
+//! the frontmatter of a document that is missing, is skipped rather than
+//! reported twice.
+mod bounds;
+mod memory;
+use crate::{
+    Diagnostic, Error, Package, Result,
+    diagnostic::{Findings, HIVE},
+};
 use std::collections::{BTreeMap, BTreeSet};
+
+/// The only `$schema` value this version accepts.
+const SCHEMA: &str = "https://tinyhumans.ai/schemas/hive/v1";
 
 /// Validate references and host-pinned invariants of a complete candidate.
 /// # Errors
-/// Returns a typed failure for any malformed identity, reference or bound.
+/// Returns a typed failure for any malformed identity, reference or bound:
+/// the first finding [`diagnose`] would report.
 pub fn validate(package: &Package) -> Result<()> {
+    let mut found = Findings::default();
+    rules(package, &mut found);
+    found.into_first()
+}
+
+/// Run every validation rule and return every finding, located.
+///
+/// An empty result means [`validate`] succeeds; otherwise its first element
+/// is the error [`validate`] returns.
+#[must_use]
+pub fn diagnose(package: &Package) -> Vec<Diagnostic> {
+    let mut found = Findings::default();
+    rules(package, &mut found);
+    found.into_diagnostics()
+}
+
+/// Push every validation finding for `package`, in fail-fast order.
+pub(crate) fn rules(package: &Package, found: &mut Findings) {
     let manifest = &package.manifest;
-    if manifest.version != 1 || manifest.schema != "https://tinyhumans.ai/schemas/hive/v1" {
-        return Err(Error::Schema);
+    if manifest.version != 1 {
+        found.push(Error::Schema, HIVE, "/version".to_owned());
     }
-    identities("hive", [&manifest.id])?;
-    let roles = identities("role", manifest.roles.iter().map(|v| &v.id))?;
-    let seats = identities("seat", manifest.seats.iter().map(|v| &v.id))?;
-    let desks = identities("desk", manifest.desks.iter().map(|v| &v.id))?;
-    let goals = identities("goal", manifest.goals.iter().map(|v| &v.id))?;
-    identities("mission", manifest.missions.iter().map(|v| &v.id))?;
+    if manifest.schema != SCHEMA {
+        found.push(Error::Schema, HIVE, "/$schema".to_owned());
+    }
+    identities(found, HIVE, "hive", [&manifest.id], |_| "/id".into());
+    let roles = identities(found, HIVE, "role", manifest.roles.iter().map(|v| &v.id), |i| {
+        format!("/roles/{i}/id")
+    });
+    let seats = identities(found, HIVE, "seat", manifest.seats.iter().map(|v| &v.id), |i| {
+        format!("/seats/{i}/id")
+    });
+    let desks = identities(found, HIVE, "desk", manifest.desks.iter().map(|v| &v.id), |i| {
+        format!("/desks/{i}/id")
+    });
+    let goals = identities(found, HIVE, "goal", manifest.goals.iter().map(|v| &v.id), |i| {
+        format!("/goals/{i}/id")
+    });
+    identities(
+        found,
+        HIVE,
+        "mission",
+        manifest.missions.iter().map(|v| &v.id),
+        |i| format!("/missions/{i}/id"),
+    );
     for path in package.documents.keys() {
-        validate_path(path)?;
+        found.check(validate_path(path), path, None);
     }
-    for role in &manifest.roles {
-        document_purpose(&role.charter, "roles/")?;
-        document(package, &role.charter)?;
-        if let Some(rest) = package.documents[&role.charter].strip_prefix("---\n") {
-            let Some((metadata, _)) = rest.split_once("\n---\n") else {
-                return Err(Error::Frontmatter {
-                    seat: role.id.clone(),
-                });
-            };
-            let value: serde_json::Value =
-                serde_json::from_str(metadata).map_err(|_| Error::Frontmatter {
-                    seat: role.id.clone(),
-                })?;
-            let canonical = serde_json::json!({"id":role.id,"charter":role.charter});
-            if value.as_object().is_none_or(|fields| {
-                fields
-                    .iter()
-                    .any(|(key, value)| canonical.get(key) != Some(value))
-            }) {
-                return Err(Error::Frontmatter {
-                    seat: role.id.clone(),
-                });
+    for (i, role) in manifest.roles.iter().enumerate() {
+        let at = format!("/roles/{i}/charter");
+        if declared_document(package, found, &role.charter, "roles/", &at) {
+            found.check(charter_frontmatter(package, role), &role.charter, None);
+        }
+    }
+    for (i, seat) in manifest.seats.iter().enumerate() {
+        found.check(
+            reference("role", &seat.role, &roles),
+            HIVE,
+            format!("/seats/{i}/role"),
+        );
+        let at = format!("/seats/{i}/prompt");
+        let present = declared_document(package, found, &seat.prompt, "seats/", &at);
+        if seat.template.trim().is_empty() {
+            found.push(
+                Error::Identity {
+                    kind: "template".into(),
+                    id: seat.template.clone(),
+                },
+                HIVE,
+                format!("/seats/{i}/template"),
+            );
+        }
+        if present {
+            found.check(frontmatter(package, seat), &seat.prompt, None);
+        }
+    }
+    for (d, desk) in manifest.desks.iter().enumerate() {
+        identities(found, HIVE, "desk member", desk.members.iter(), |k| {
+            format!("/desks/{d}/members/{k}")
+        });
+        for (k, member) in desk.members.iter().enumerate() {
+            found.check(
+                reference("seat", member, &seats),
+                HIVE,
+                format!("/desks/{d}/members/{k}"),
+            );
+        }
+    }
+    for (g, goal) in manifest.goals.iter().enumerate() {
+        for (k, child) in goal.subgoals.iter().enumerate() {
+            found.check(
+                reference("goal", child, &goals),
+                HIVE,
+                format!("/goals/{g}/subgoals/{k}"),
+            );
+        }
+    }
+    if let Some(cycle) = goal_cycle(package) {
+        let index = manifest.goals.iter().position(|goal| goal.id == cycle);
+        found.push(
+            Error::GoalCycle { id: cycle },
+            HIVE,
+            index.map(|i| format!("/goals/{i}")),
+        );
+    }
+    for (m, mission) in manifest.missions.iter().enumerate() {
+        found.check(
+            reference("role", &mission.role, &roles),
+            HIVE,
+            format!("/missions/{m}/role"),
+        );
+        for (k, goal) in mission.goals.iter().enumerate() {
+            found.check(
+                reference("goal", goal, &goals),
+                HIVE,
+                format!("/missions/{m}/goals/{k}"),
+            );
+        }
+    }
+    for (section, links) in [
+        ("topology", &manifest.topology),
+        ("referrals", &manifest.referrals),
+    ] {
+        for (i, link) in links.iter().enumerate() {
+            for (end, desk) in [("from", &link.from), ("to", &link.to)] {
+                found.check(
+                    reference("desk", desk, &desks),
+                    HIVE,
+                    format!("/{section}/{i}/{end}"),
+                );
             }
         }
     }
-    for seat in &manifest.seats {
-        reference("role", &seat.role, &roles)?;
-        document_purpose(&seat.prompt, "seats/")?;
-        document(package, &seat.prompt)?;
-        if seat.template.trim().is_empty() {
-            return Err(Error::Identity {
-                kind: "template".into(),
-                id: seat.template.clone(),
-            });
-        }
-        frontmatter(package, seat)?;
-    }
-    for desk in &manifest.desks {
-        identities("desk member", desk.members.iter())?;
-        for member in &desk.members {
-            reference("seat", member, &seats)?;
+    for (i, path) in manifest.context.iter().enumerate() {
+        let at = format!("/context/{i}");
+        if declared_document(package, found, path, "context/", &at) {
+            found.check(
+                crate::patch::validate_context(&package.documents[path])
+                    .map_err(|_| Error::Context { path: path.clone() }),
+                path,
+                None,
+            );
         }
     }
-    for goal in &manifest.goals {
-        for child in &goal.subgoals {
-            reference("goal", child, &goals)?;
-        }
-    }
-    validate_goal_graph(package)?;
-    for mission in &manifest.missions {
-        reference("role", &mission.role, &roles)?;
-        for goal in &mission.goals {
-            reference("goal", goal, &goals)?;
-        }
-    }
-    for link in manifest.topology.iter().chain(&manifest.referrals) {
-        reference("desk", &link.from, &desks)?;
-        reference("desk", &link.to, &desks)?;
-    }
-    for path in &manifest.context {
-        document_purpose(path, "context/")?;
-        document(package, path)?;
-        crate::patch::validate_context(&package.documents[path])
-            .map_err(|_| Error::Context { path: path.clone() })?;
-    }
-    bounds(package)?;
-    memory(package, &seats)
+    bounds::bounds(package, found);
+    memory::memory(package, &seats, found);
 }
+
+/// Check identities for blanks and repeats; return the distinct ones seen.
 fn identities<'a>(
+    found: &mut Findings,
+    file: &str,
     kind: &str,
     values: impl IntoIterator<Item = &'a String>,
-) -> Result<BTreeSet<&'a str>> {
+    at: impl Fn(usize) -> String,
+) -> BTreeSet<&'a str> {
     let mut seen = BTreeSet::new();
-    for value in values {
+    for (i, value) in values.into_iter().enumerate() {
         if value.trim().is_empty() || !seen.insert(value.as_str()) {
-            return Err(Error::Identity {
-                kind: kind.into(),
-                id: value.clone(),
-            });
+            found.push(
+                Error::Identity {
+                    kind: kind.into(),
+                    id: value.clone(),
+                },
+                file,
+                at(i),
+            );
         }
     }
-    Ok(seen)
+    seen
 }
+
 fn reference(kind: &str, id: &str, known: &BTreeSet<&str>) -> Result<()> {
     if known.contains(id) {
         Ok(())
@@ -112,6 +205,7 @@ fn reference(kind: &str, id: &str, known: &BTreeSet<&str>) -> Result<()> {
         })
     }
 }
+
 /// Check that a document key remains a safe relative package path.
 /// # Errors
 /// Returns [`Error::Path`] for absolute, traversal or control-character paths.
@@ -128,6 +222,20 @@ pub fn validate_path(path: &str) -> Result<()> {
     }
     Ok(())
 }
+
+/// Check a manifest-declared document's directory and presence; report
+/// against the manifest field `at` that names it.
+fn declared_document(
+    package: &Package,
+    found: &mut Findings,
+    path: &str,
+    prefix: &str,
+    at: &str,
+) -> bool {
+    found.check(document_purpose(path, prefix), HIVE, at.to_owned())
+        && found.check(document(package, path), HIVE, at.to_owned())
+}
+
 fn document_purpose(path: &str, prefix: &str) -> Result<()> {
     validate_path(path)?;
     if !path.starts_with(prefix)
@@ -139,15 +247,17 @@ fn document_purpose(path: &str, prefix: &str) -> Result<()> {
     }
     Ok(())
 }
+
 fn document(package: &Package, path: &str) -> Result<()> {
-    validate_path(path)?;
     if package.documents.contains_key(path) {
         Ok(())
     } else {
         Err(Error::MissingDocument { path: path.into() })
     }
 }
-fn validate_goal_graph(package: &Package) -> Result<()> {
+
+/// The first goal found on a decomposition cycle, if any.
+fn goal_cycle(package: &Package) -> Option<String> {
     let goals: BTreeMap<_, _> = package
         .manifest
         .goals
@@ -171,7 +281,7 @@ fn validate_goal_graph(package: &Package) -> Result<()> {
                 continue;
             }
             if !active.insert(current) {
-                return Err(Error::GoalCycle { id: current.into() });
+                return Some(current.into());
             }
             stack.push((current, true));
             if let Some(goal) = goals.get(current) {
@@ -181,98 +291,9 @@ fn validate_goal_graph(package: &Package) -> Result<()> {
             }
         }
     }
-    Ok(())
+    None
 }
-fn bound(field: &str, valid: bool) -> Result<()> {
-    if valid {
-        Ok(())
-    } else {
-        Err(Error::Bound {
-            field: field.into(),
-        })
-    }
-}
-fn bounds(package: &Package) -> Result<()> {
-    let p = &package.manifest.policies;
-    let c = &package.constitution;
-    let settings = &package.manifest.coordinator;
-    bound("constitution", c.max_turns > 0 && c.max_width > 0)?;
-    bound(
-        "episode.turn_budget",
-        p.episode.turn_budget > 0 && u64::from(p.episode.turn_budget) <= c.max_turns,
-    )?;
-    bound(
-        "episode.width",
-        p.episode.round_width > 0
-            && p.episode.round_width <= p.episode.revealed_width
-            && u64::from(p.episode.revealed_width)
-                <= u64::try_from(c.max_width).unwrap_or(u64::MAX),
-    )?;
-    bound("episode.dominance_cap", p.episode.dominance_cap <= 100)?;
-    bound(
-        "division.round_width",
-        p.division.round_width > 0
-            && u64::from(p.division.round_width) <= u64::try_from(c.max_width).unwrap_or(u64::MAX),
-    )?;
-    bound(
-        "routing",
-        p.routing.round_width > 0
-            && p.routing.round_width <= c.max_width
-            && p.routing.choice_option_limit > 0,
-    )?;
-    bound(
-        "routing.probability",
-        [
-            p.routing.minimum_confidence,
-            p.routing.high_impact_minimum_confidence,
-            p.routing.clarification_threshold,
-            p.routing.high_impact_threshold,
-        ]
-        .iter()
-        .all(|value| value.parts() <= 1_000_000),
-    )?;
-    bound(
-        "coordinator.round_width",
-        settings.round_width > 0 && settings.round_width <= c.max_width,
-    )?;
-    for policy in [&p.conduct, &settings.conduct_policy] {
-        bound(
-            "conduct",
-            policy.child_turn_wall > 0
-                && policy.turn_wall > 0
-                && policy.child_turn_wall <= policy.turn_wall
-                && policy.turn_wall <= c.max_turns,
-        )?;
-    }
-    bound("broadcast_budget", settings.broadcast_budget != Some(0))?;
-    bound(
-        "digest",
-        p.digest.input_limit > 0 && p.digest.budget_chars > 0,
-    )?;
-    bound(
-        "aside",
-        !p.aside.enabled || (p.aside.max_members > 0 && p.aside.max_messages > 0),
-    )?;
-    bound(
-        "quorum",
-        p.episode.quorum.threshold > 0 && p.episode.quorum.window > 0,
-    )?;
-    bound("episode.repetition_cap", p.episode.repetition_cap > 0)?;
-    bound(
-        "half_life",
-        p.episode.weights.half_life > 0 && p.directory.half_life > 0,
-    )?;
-    bound("referral", !p.referral.enabled || p.referral.max_hops > 0)?;
-    bound(
-        "brevity",
-        p.brevity.message_chars > 0 && p.brevity.window > 0,
-    )?;
-    bound(
-        "exchange",
-        !p.exchange.enabled || (p.exchange.contact_cap > 0 && p.exchange.round_cap > 0),
-    )?;
-    Ok(())
-}
+
 /// Check namespace syntax independently of a memory engine.
 /// # Errors
 /// Returns [`Error::Namespace`] for malformed namespace paths.
@@ -299,154 +320,55 @@ pub fn validate_namespace(namespace: &str) -> Result<()> {
     }
     Ok(())
 }
-fn protected(package: &Package, namespace: &str, inherit: bool, descendants: bool) -> Result<()> {
-    validate_namespace(namespace)?;
-    if package.constitution.protected_namespaces.iter().any(|p| {
-        namespace == p
-            || namespace
-                .strip_prefix(p)
-                .is_some_and(|tail| tail.starts_with('/'))
-            || (descendants
-                && p.strip_prefix(namespace)
-                    .is_some_and(|tail| tail.starts_with('/')))
-            || (inherit && namespace.starts_with(&format!("{p}/")))
-    }) {
-        return Err(Error::MemoryAccess {
-            namespace: namespace.into(),
-        });
-    }
 
-    Ok(())
-}
-fn memory(package: &Package, seats: &BTreeSet<&str>) -> Result<()> {
-    let spec = &package.memory;
-    validate_namespace(&spec.root)?;
-    let ids = identities("memory", spec.identities.iter().map(|v| &v.id))?;
-    identities(
-        "memory namespace",
-        spec.identities.iter().map(|v| &v.namespace),
-    )?;
-    identities("memory binding", spec.bindings.iter().map(|v| &v.seat))?;
-    for namespace in &package.constitution.protected_namespaces {
-        validate_namespace(namespace)?;
-    }
-    for id in &package.constitution.read_only_memories {
-        reference("memory", id, &ids)?;
-    }
-    for identity in &spec.identities {
-        protected(package, &identity.namespace, false, false)?;
-        if identity.kind == crate::MemoryKind::Agent
-            && (!identity
-                .namespace
-                .rsplit('/')
-                .next()
-                .is_some_and(|part| part.starts_with("agent:"))
-                || identity.namespace == spec.root)
-        {
-            return Err(Error::MemoryAccess {
-                namespace: identity.namespace.clone(),
-            });
-        }
-
-        if identity.namespace != spec.root
-            && !identity.namespace.starts_with(&format!("{}/", spec.root))
-        {
-            return Err(Error::MemoryAccess {
-                namespace: identity.namespace.clone(),
-            });
-        }
-        if let Some(parent) = &identity.fork_parent {
-            reference("memory", parent, &ids)?;
-            let parent_namespace = &spec
-                .identities
+/// A role charter's frontmatter may restate only its `id` and `charter`.
+fn charter_frontmatter(package: &Package, role: &crate::Role) -> Result<()> {
+    let malformed = || Error::Frontmatter {
+        seat: role.id.clone(),
+    };
+    if let Some(rest) = package.documents[&role.charter].strip_prefix("---\n") {
+        let (metadata, _) = rest.split_once("\n---\n").ok_or_else(malformed)?;
+        let value: serde_json::Value = serde_json::from_str(metadata).map_err(|_| malformed())?;
+        let canonical = serde_json::json!({"id":role.id,"charter":role.charter});
+        if value.as_object().is_none_or(|fields| {
+            fields
                 .iter()
-                .find(|v| &v.id == parent)
-                .ok_or_else(|| Error::Reference {
-                    kind: "memory".into(),
-                    id: parent.clone(),
-                })?
-                .namespace;
-            if !identity
-                .namespace
-                .starts_with(&format!("{parent_namespace}/"))
-            {
-                return Err(Error::MemoryAccess {
-                    namespace: identity.namespace.clone(),
-                });
-            }
-        }
-        if package
-            .constitution
-            .read_only_memories
-            .contains(&identity.id)
-            && !identity.read_only
-        {
-            return Err(Error::MemoryAccess {
-                namespace: identity.namespace.clone(),
-            });
-        }
-    }
-    for binding in &spec.bindings {
-        reference("seat", &binding.seat, seats)?;
-        reference("memory", &binding.identity, &ids)?;
-        bound("memory.budget_chars", binding.budget_chars > 0)?;
-        for reach in &binding.reads {
-            if reach.inherit {
-                return Err(Error::MemoryAccess {
-                    namespace: reach.at.clone(),
-                });
-            }
-            protected(package, &reach.at, reach.inherit, reach.descendants)?;
-            if reach.at != spec.root && !reach.at.starts_with(&format!("{}/", spec.root)) {
-                return Err(Error::MemoryAccess {
-                    namespace: reach.at.clone(),
-                });
-            }
+                .any(|(key, value)| canonical.get(key) != Some(value))
+        }) {
+            return Err(malformed());
         }
     }
     Ok(())
 }
+
+/// A seat prompt's frontmatter must agree with the seat and its binding.
 fn frontmatter(package: &Package, seat: &crate::Seat) -> Result<()> {
+    let malformed = || Error::Frontmatter {
+        seat: seat.id.clone(),
+    };
     let source = &package.documents[&seat.prompt];
     if let Some(rest) = source.strip_prefix("---\n") {
-        let Some((metadata, _)) = rest.split_once("\n---\n") else {
-            return Err(Error::Frontmatter {
-                seat: seat.id.clone(),
-            });
-        };
-        let value: serde_json::Value =
-            serde_json::from_str(metadata).map_err(|_| Error::Frontmatter {
-                seat: seat.id.clone(),
-            })?;
-        let mut canonical = serde_json::to_value(seat).map_err(|_| Error::Frontmatter {
-            seat: seat.id.clone(),
-        })?;
+        let (metadata, _) = rest.split_once("\n---\n").ok_or_else(malformed)?;
+        let value: serde_json::Value = serde_json::from_str(metadata).map_err(|_| malformed())?;
+        let mut canonical = serde_json::to_value(seat).map_err(|_| malformed())?;
         if let Some(binding) = package
             .memory
             .bindings
             .iter()
             .find(|binding| binding.seat == seat.id)
         {
-            let settings = serde_json::to_value(binding).map_err(|_| Error::Frontmatter {
-                seat: seat.id.clone(),
-            })?;
+            let settings = serde_json::to_value(binding).map_err(|_| malformed())?;
             for key in ["reads", "recall_at", "budget_chars", "remember"] {
                 canonical[key] = settings[key].clone();
             }
             canonical["memory"] = serde_json::Value::String(binding.identity.clone());
         }
-        let Some(fields) = value.as_object() else {
-            return Err(Error::Frontmatter {
-                seat: seat.id.clone(),
-            });
-        };
+        let fields = value.as_object().ok_or_else(malformed)?;
         if fields
             .iter()
             .any(|(key, value)| canonical.get(key) != Some(value))
         {
-            return Err(Error::Frontmatter {
-                seat: seat.id.clone(),
-            });
+            return Err(malformed());
         }
     }
     Ok(())
