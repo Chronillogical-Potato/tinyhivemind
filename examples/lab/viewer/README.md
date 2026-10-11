@@ -7,7 +7,8 @@ to upload: runs appear in a table, a click loads one, **Compare** loads every
 arm of a task side by side, and a run that is still being written follows live.
 **Hive** and **Compare** run the hive-language gallery packages offline through
 the `hive_view` example and replay each episode round by round (see
-[Hive tab](#hive-tab)).
+[Hive tab](#hive-tab)). The Hive tab also lists every **recorded run** on this
+machine and follows one that is still going (see [Recordings](#recordings)).
 
 ```sh
 cd examples/lab/viewer
@@ -34,6 +35,9 @@ roots, and can start `hive_view` runs (see [Security](#security)).
 | `server/hives.js` | Hive packages: listing, name, knob and live-knob validation, argv, NDJSON splitting, the `hive_view` runner |
 | `server/hive-api.js` | The `/api/hives` and `/api/compare` routes |
 | `server/hives.test.js` | `npm test`: listing, path escape, knob bounds, live availability, model and call-cap validation, argv, line splitting, streaming, kill and timeout |
+| `server/recordings.js` | Recordings: the main-checkout resolution, scanning `hive-runs/` for `frames.ndjson`, live detection, safe ids, and tailing a file still being written |
+| `server/recordings-api.js` | The `/api/recordings` routes, including the pushed `events` stream |
+| `server/recordings.test.js` | `npm test`: scan depth, live and stale, partial lines, id safety, symlink escape, commondir, tailing (split lines, split UTF-8, stale stop), the routes and the events stream |
 | `src/hive/` | The Hive and Compare tabs; see [`src/hive/README.md`](src/hive/README.md) |
 | `tools/probe.mjs`, `tools/live-check.mjs` | Headless-Chromium checks over the DevTools protocol |
 | `tools/hive-check.mjs` | Headless check of the Hive and Compare tabs; saves screenshots |
@@ -41,6 +45,7 @@ roots, and can start `hive_view` runs (see [Security](#security)).
 | `tools/fake-frames.mjs` | Pure: rewrites a hive-floor fixture into the multi-desk stream (per-desk rounds, referrals, desk endings, live usage); shared by the fake and the page tests |
 | `public/fixtures/sample.jsonl` | Two demo runs: `hive-4seat` and `baseline-serial` |
 | `public/fixtures/hives/` | Hand-written `hive_view` output: structures, frame streams and a compare stream (`.ndjson`, so the runs scanner skips them) |
+| `public/fixtures/recordings/` | One hand-made recording (`coin-panel`, two desks) whose turns carry `tool_calls` and `memory`, one of them long enough to fold |
 
 ## How runs are found
 
@@ -152,6 +157,42 @@ the player and streams one episode from
 `?hive=<name>&seed=N` (plus `round_width`, `turn_budget`, `problem`) reopens
 and reruns a player.
 
+## Recordings
+
+A recording is a run directory holding `frames.ndjson` (the `hive_view --run
+--frames` wire contract) and usually `structure.json` (the `--json`
+structure). `hive_view --live` and `hive_view --run --record` write both into
+`hive-runs/hive-view/<package>-seed<N>-<ms>/`, every run started from this
+page is recorded the same way, and other hosts (such as the OpenHuman hives)
+write their own folders under `hive-runs/`. Turns may carry extra fields the
+page shows: `tool_calls: [{tool, summary, ok}]` and `memory: {recalled,
+remembered}` (counts or lists).
+
+The server scans `HIVE_RECORDINGS` (colon-separated) or, by default, the
+main checkout's `hive-runs/` (a linked worktree's `.git` file is followed
+through `commondir`, as `hive_view` does) plus `public/fixtures/recordings/`,
+to depth 5. A folder with no `structure.json` is listed only when its `start`
+frame names a gallery package, whose structure stands in.
+
+- **Live now**: a strip at the top of the Hive tab shows every run still
+  being written: package, problem or seed, newest round and desk, calls so
+  far and elapsed time, with a pulsing **LIVE** badge (changed in the last
+  30 s) or **QUIET** (no end frame, frames written, quiet for under 10
+  minutes; a live round can take that long). Click one to follow it at its
+  newest round, or ⏮ to replay it from round one (**Latest ⇥** then catches
+  up). A run that starts while the page is open raises a toast with
+  **Watch**; with nothing open on the Hive tab the page follows it at once.
+- **Recorded runs** on the landing lists live runs first, then the rest,
+  newest first, with their ending. A finished one replays like any run.
+- In the player a recording swaps the run knobs for a recording picker, a
+  LIVE badge while its tail is followed, and **From start**. The transcript
+  shows tool calls (🐍 `run_python`, 🔎 `web_search`, 🔧 anything else; ✓ or
+  ✗) and memory (🧠 ↑recalled ↓remembered) under each turn, and each seat in
+  the room carries a 🔧/🧠 counter. Turns over 280 characters or four lines
+  fold until **more** is clicked, and frames are folded once per animation
+  frame, so recordings of thousands of long turns stay responsive.
+- `?recording=<id>` reopens one.
+
 ## Compare tab
 
 `?compare=math-panel,math-swarm&seeds=N` runs
@@ -185,6 +226,22 @@ and problem in the player.
   300). A live run is stopped after 30 minutes; offline runs have no cap.
 - `GET /api/compare?packages=a,b&seeds=N` streams `seed` events and a final
   `summary`, then `done` or `error`.
+- `GET /api/recordings` returns `{roots, recordings: [{id, path, package,
+  problem, model, seed, round, desk, turns, tool_calls, calls, started,
+  frames, size, mtime, live, active, ended, ending, correct, structure}]}`,
+  newest change first. `live` is no `end` frame and a change within 30 s;
+  `active` the same within 10 minutes. Ids are `<root index>:<relative dir>`
+  and resolve only to a `frames.ndjson` inside its root (symlinks included).
+- `GET /api/recordings/events` pushes one `recordings` event with that listing
+  at once and again whenever a recording appears, grows, goes quiet or ends
+  (rescanned every second while a page listens).
+- `GET /api/recordings/<id>/structure` returns its `structure.json`, or its
+  package's structure.
+- `GET /api/recordings/<id>/frames` streams `status` (`{live, active,
+  ended}`), one `frame` per line already written, then, while the run is
+  `active`, every line appended (polled every 500 ms; a partial last line
+  waits for its newline), and `done` (`{ended}`) after the `end` frame, or
+  once the file has not grown for 10 minutes.
 
 The first request builds the binary once with
 `cargo build -p tinyhivemind-lang --example hive_view` (concurrent requests
@@ -197,7 +254,8 @@ and skips the build. The child's environment is the server's own. A `.mjs` runs 
 ## Security
 
 There is no authentication. Anyone who can reach the port can read every
-trace under the roots and make the server run `hive_view`, which costs CPU.
+trace and recording under the roots (recordings carry model replies and tool
+summaries) and make the server run `hive_view`, which costs CPU.
 Hive runs are fenced in: every process is spawned from an argv array with no
 shell, `<name>` must be a package from the listing (anything else is a 404,
 `..` included), and every knob is a plain integer inside its bounds (seed
@@ -224,4 +282,10 @@ node tools/hive-check.mjs http://localhost:8099/ shots   # SCHEME=light for ligh
 refused referral row, and shooting `math-swarm-end.png` and one desk's
 transcript tab)
 and `?compare=math-panel,math-swarm&seeds=10`, waits for each ending, replays
-a seed from the compare strip, and writes PNGs to `shots/` (git-ignored).
+a seed from the compare strip, and writes PNGs to `shots/` (git-ignored). It
+also opens the `coin-panel` fixture through `?recording=` and asserts its
+tool-call, memory, seat-counter and fold badges (`recording.png`). With
+`FOLLOW_LIVE=1` it then waits for a run in the Live now strip (start one with
+`hive_view <math-swarm> --run --live --max-calls 80` from a terminal), follows
+it, checks the player advances, and shoots `live-strip.png`, `live-mid.png`
+and `live-end.png`.
