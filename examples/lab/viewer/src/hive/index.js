@@ -219,9 +219,11 @@ function onRecordings(list) {
   drawLiveStrip();
   if (!$("hv-recordings").hidden) drawRecordings();
   if (current?.recording) controls.setRecordings(list, current.recording);
-  for (const rec of fresh) toast($("hv-toasts"), rec, () => followRecording(rec.id));
-  // Nothing open on the Hive tab: follow the newest run that just started.
-  if (fresh.length && document.body.dataset.view === "hive" && !current && !opening) followRecording(fresh[0].id);
+  // Nothing open on the Hive tab: follow the newest run that just started,
+  // and announce the others (or all of them, when something is open).
+  const follow = fresh.length && document.body.dataset.view === "hive" && !current && !opening ? fresh[0] : null;
+  for (const rec of fresh) if (rec !== follow) toast($("hv-toasts"), rec, () => followRecording(rec.id));
+  if (follow) followRecording(follow.id);
 }
 
 /**
