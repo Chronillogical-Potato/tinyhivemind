@@ -56,9 +56,11 @@ impl Federation {
             .clone()
             .ok_or_else(|| anyhow::anyhow!("a crossing forward carries no origin"))?;
         self.floors[desk].asks += 1;
-        self.owe(desk, seat);
         let chain = self.next_chain;
         self.next_chain += 1;
+        // The answering chain's id names this question, so its answer finds
+        // the asker's chain again whatever order answers arrive in.
+        self.owe(desk, seat, chain);
         let floor = &mut self.floors[target];
         let row = floor.row(seat, "referral", &format!("from #{from}: {message}"));
         frame.sequence = Some(row.sequence);
@@ -118,7 +120,9 @@ impl Federation {
             .and_then(|(_, _, candidate, _)| candidate.clone());
         let from = floor.desk.id.clone();
         match mode {
-            Mode::Answering { origin, hop, .. } => self.answer(desk, &last, &report, origin, hop),
+            Mode::Answering { origin, hop, .. } => {
+                self.answer(desk, &last, &report, origin, hop, chain)
+            }
             Mode::Pipeline { hop, .. } => {
                 self.floors[desk].reported = true;
                 if desk + 1 == self.floors.len() {
@@ -212,6 +216,7 @@ impl Federation {
         report: &str,
         origin: ReferralOrigin,
         hop: u32,
+        request: u64,
     ) -> anyhow::Result<()> {
         let from = self.floors[desk].desk.id.clone();
         let sequence = self.floors[desk]
@@ -229,7 +234,7 @@ impl Federation {
                 let reason = snake(&format!("{reason:?}"));
                 if let Some(asker) = self.index(&to) {
                     let notice = format!("host: the answer from #{from} was refused ({reason})");
-                    self.come_back(asker, &origin_asker, "refused", &notice);
+                    self.come_back(asker, &origin_asker, request, "refused", &notice);
                 }
                 return self.refuse(desk, frame, &reason);
             }
@@ -245,13 +250,14 @@ impl Federation {
             if let Some(asker) = self.index(&to) {
                 let notice =
                     format!("host: the answer from #{from} could not travel back (unlinked)");
-                self.come_back(asker, &origin_asker, "refused", &notice);
+                self.come_back(asker, &origin_asker, request, "refused", &notice);
             }
             return self.refuse(desk, frame, "unlinked");
         };
         let sequence = self.come_back(
             target,
             &one.target_id,
+            request,
             "return",
             &format!("answer from #{from}:\n{report}"),
         );
@@ -273,20 +279,33 @@ impl Federation {
         })
     }
 
-    /// Record that `seat`'s current chain on `desk` is owed one answer.
-    fn owe(&mut self, desk: usize, seat: &str) {
+    /// Record that `seat`'s current chain on `desk` is owed one answer, to the
+    /// question numbered `request`.
+    fn owe(&mut self, desk: usize, seat: &str, request: u64) {
         let floor = &mut self.floors[desk];
         let mode = floor
             .mode
             .clone()
             .unwrap_or(Mode::Pipeline { hop: 0, chain: 0 });
         *floor.outstanding.entry(mode.chain()).or_insert(0) += 1;
-        floor.waiting.entry(seat.to_owned()).or_default().push(mode);
+        floor
+            .waiting
+            .entry(seat.to_owned())
+            .or_default()
+            .push((request, mode));
     }
 
-    /// Hand `seat` back the chain it asked from, with `body` (an answer or a
-    /// refusal) as the row that reopens it. Returns that row's sequence.
-    fn come_back(&mut self, desk: usize, seat: &str, reason: &'static str, body: &str) -> u64 {
+    /// Hand `seat` back the chain that asked question `request`, with `body`
+    /// (an answer or a refusal) as the row that reopens it. Returns that row's
+    /// sequence.
+    fn come_back(
+        &mut self,
+        desk: usize,
+        seat: &str,
+        request: u64,
+        reason: &'static str,
+        body: &str,
+    ) -> u64 {
         let floor = &mut self.floors[desk];
         let author = if reason == "return" { seat } else { "host" };
         let row = floor.row(
@@ -301,7 +320,12 @@ impl Federation {
         let mode = floor
             .waiting
             .get_mut(seat)
-            .and_then(Vec::pop)
+            .and_then(|asked| {
+                asked
+                    .iter()
+                    .position(|(id, _)| *id == request)
+                    .map(|at| asked.remove(at).1)
+            })
             .unwrap_or(Mode::Pipeline { hop: 0, chain: 0 });
         let sequence = row.sequence;
         floor.queue.push_back(Incoming {
@@ -404,8 +428,10 @@ impl Federation {
             frame.to_desk
         );
         let seat = frame.seat.clone();
-        self.owe(desk, &seat);
-        self.come_back(desk, &seat, "refused", &notice);
+        let request = self.next_chain;
+        self.next_chain += 1;
+        self.owe(desk, &seat, request);
+        self.come_back(desk, &seat, request, "refused", &notice);
         self.referrals.push(frame);
         Ok(())
     }

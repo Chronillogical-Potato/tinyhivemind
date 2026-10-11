@@ -122,8 +122,9 @@ pub(super) struct Floor {
     pub(super) next_sequence: u64,
     pub(super) state: Option<DriverState>,
     pub(super) mode: Option<Mode>,
-    /// The chain each seat's outstanding question belongs to, innermost last.
-    pub(super) waiting: BTreeMap<String, Vec<Mode>>,
+    /// The chain each seat's outstanding questions belong to, keyed by the
+    /// number of the question so answers may arrive in any order.
+    pub(super) waiting: BTreeMap<String, Vec<(u64, Mode)>>,
     pub(super) queue: VecDeque<Incoming>,
     pub(super) notes: BTreeMap<String, Assignment>,
     pub(super) seen: BTreeMap<String, usize>,
