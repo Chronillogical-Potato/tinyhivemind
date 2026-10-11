@@ -110,3 +110,18 @@ fn the_structure_reports_the_policy_each_desk_runs_under() -> Result<()> {
     assert_eq!(panel["desks"][0]["episode"]["turn_budget"], 15);
     Ok(())
 }
+
+#[test]
+fn the_problem_bank_rejects_zero_divisors_instead_of_panicking() {
+    for (kind, args) in [
+        ("multiples", serde_json::json!([10, 0, 5])),
+        ("multiples", serde_json::json!([10, 3, 0])),
+        ("modsum", serde_json::json!([4, 2, 0])),
+    ] {
+        let sim = serde_json::json!({"problems": [
+            {"id": "bad", "kind": kind, "args": args, "statement": "s"}
+        ]});
+        let error = problems(&sim).err().map(|error| error.to_string());
+        assert!(error.is_some_and(|error| error.contains("zero")), "{kind}");
+    }
+}
