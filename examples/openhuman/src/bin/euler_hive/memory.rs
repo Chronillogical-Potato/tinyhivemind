@@ -15,7 +15,7 @@
 //!   writer (the verify desk), with the same kind filter.
 //!
 //! `lifecycle: run` is honoured by the run scope: every namespace in the
-//! package is moved under `<root>/workspace:<run>` before any engine call,
+//! package is moved under `<root>/ws:<run>` (a workspace segment) before any engine call,
 //! so a run reads only what this run wrote.
 
 use std::collections::BTreeMap;
@@ -41,7 +41,7 @@ const NOTES_PER_REACH: usize = 6;
 ///
 /// Fails when `namespace` is not `root` or below it.
 pub(super) fn run_scoped(namespace: &str, root: &str, run: &str) -> anyhow::Result<String> {
-    let scope = format!("{root}/workspace:{run}");
+    let scope = format!("{root}/ws:{run}");
     if namespace == root {
         return Ok(scope);
     }

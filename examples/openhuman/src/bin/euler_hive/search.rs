@@ -11,7 +11,8 @@
 use serde_json::{Value, json};
 use tinyhumans_sdk::TinyHumansClient;
 use tinyhumans_sdk::api::agent_integrations::{
-    GeminiContent, GeminiGenerateContentRequest, GeminiTool,
+    GeminiContent, GeminiGenerateContentRequest, GeminiTool, ParallelSearchRequest,
+    TinyFishSearchRequest,
 };
 
 /// The TinyHumans backend origin; `TINYHUMANS_BACKEND_URL` overrides it.
@@ -31,6 +32,10 @@ pub(super) enum Provider {
     Exa,
     /// Gemini with Google Search grounding: a synthesized answer and sources.
     Gemini,
+    /// Parallel's web search: ranked pages with excerpts.
+    Parallel,
+    /// TinyFish search: ranked pages with snippets.
+    Tinyfish,
 }
 
 impl Provider {
@@ -39,7 +44,9 @@ impl Provider {
         match value.unwrap_or("exa") {
             "exa" => Ok(Self::Exa),
             "gemini" => Ok(Self::Gemini),
-            other => anyhow::bail!("unknown provider {other:?}; use \"exa\" or \"gemini\""),
+            "parallel" => Ok(Self::Parallel),
+            "tinyfish" => Ok(Self::Tinyfish),
+            other => anyhow::bail!("unknown provider {other:?}"),
         }
     }
 }
@@ -61,6 +68,9 @@ pub(super) struct Found {
     pub(super) urls: Vec<String>,
     /// What the backend charged, when it said.
     pub(super) cost_usd: Option<f64>,
+    /// Gemini's grounding metadata, kept whole for the run record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) grounding: Option<Value>,
 }
 
 impl WebSearch {
@@ -90,6 +100,43 @@ impl WebSearch {
                     .await?;
                 Ok(condense_exa(&data))
             }
+            Provider::Parallel => {
+                let response = self
+                    .client
+                    .agent_integrations()
+                    .parallel_search(&ParallelSearchRequest {
+                        objective: query.into(),
+                        search_queries: vec![query.into()],
+                        mode: None,
+                        excerpts: None,
+                    })
+                    .await?;
+                let pages = response
+                    .results
+                    .iter()
+                    .map(|page| (page.title.clone(), page.url.clone(), page.excerpts.join(" … ")))
+                    .collect::<Vec<_>>();
+                Ok(pages_found(provider, &pages, Some(response.cost_usd)))
+            }
+            Provider::Tinyfish => {
+                let response = self
+                    .client
+                    .agent_integrations()
+                    .tinyfish_search(&TinyFishSearchRequest {
+                        query: query.into(),
+                        location: None,
+                        language: None,
+                        page: None,
+                        include_thumbnail: None,
+                    })
+                    .await?;
+                let pages = response
+                    .results
+                    .iter()
+                    .map(|page| (page.title.clone(), page.url.clone(), page.snippet.clone().unwrap_or_default()))
+                    .collect::<Vec<_>>();
+                Ok(pages_found(provider, &pages, Some(response.cost_usd)))
+            }
             Provider::Gemini => {
                 let request = GeminiGenerateContentRequest {
                     contents: vec![GeminiContent {
@@ -115,6 +162,10 @@ impl WebSearch {
                     text: response.text(),
                     urls,
                     cost_usd: Some(response.cost_usd),
+                    grounding: response
+                        .candidates
+                        .first()
+                        .and_then(|candidate| candidate.grounding_metadata.clone()),
                 })
             }
         }
@@ -166,6 +217,30 @@ pub(super) fn condense_exa(data: &Value) -> Found {
         text,
         urls,
         cost_usd,
+        grounding: None,
+    }
+}
+
+/// Ranked `(title, url, text)` pages as a seat reads them.
+pub(super) fn pages_found(provider: Provider, pages: &[(String, String, String)], cost_usd: Option<f64>) -> Found {
+    let mut text = String::new();
+    let mut urls = Vec::new();
+    for (index, (title, url, body)) in pages.iter().take(EXA_RESULTS).enumerate() {
+        let snippet: String = body.chars().take(SNIPPET_CHARS).collect();
+        text.push_str(&format!("[{}] {title}\n{url}\n{snippet}\n\n", index + 1));
+        if !url.is_empty() {
+            urls.push(url.clone());
+        }
+    }
+    if text.is_empty() {
+        text = "no results".into();
+    }
+    Found {
+        provider,
+        text,
+        urls,
+        cost_usd,
+        grounding: None,
     }
 }
 

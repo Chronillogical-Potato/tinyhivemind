@@ -58,13 +58,16 @@ pub(super) async fn probe(
     root: &str,
     run_id: &str,
 ) -> anyhow::Result<()> {
-    for provider in [Provider::Exa, Provider::Gemini] {
+    for provider in [Provider::Exa, Provider::Gemini, Provider::Parallel, Provider::Tinyfish] {
         match search.search("Steiner system S(5,8,24) Witt design", provider).await {
-            Ok(found) => println!(
-                "probe search {provider:?}: ok, {} sources, {} chars",
-                found.urls.len(),
-                found.text.len()
-            ),
+            Ok(found) => {
+                println!(
+                    "probe search {provider:?}: ok, {} sources, {} chars",
+                    found.urls.len(),
+                    found.text.len()
+                );
+                run.json(&format!("probe-{provider:?}.json"), &found);
+            }
             Err(error) => println!("probe search {provider:?}: FAILED {error}"),
         }
     }
@@ -74,7 +77,7 @@ pub(super) async fn probe(
         &name,
     )?;
     println!("probe sandbox: code={:?} stdout={:?}", output.code, output.stdout);
-    let at = format!("{root}/workspace:probe-{}/agent:probe", run_id.to_lowercase());
+    let at = format!("{root}/ws:probe-{}/agent:probe", run_id.to_lowercase());
     let meta = tinymemory_api::MemoryMeta {
         namespace: at.parse()?,
         agent_id: Some("probe".into()),
