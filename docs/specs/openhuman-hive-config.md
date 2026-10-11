@@ -24,9 +24,16 @@ policy, membership-role and scheduled-origin metadata must reach the existing
 host-neutral coordinator. They belong in hives rather than OpenHuman-owned
 algebra. No new crate, runtime, storage journal or ADR is required.
 
-[#112](https://github.com/tinyhumansai/tinyhivemind/issues/112)'s future
-`tinyhivemind-lang` layer lowers into this manifest. It must use this wire
-contract rather than maintain a second deployment schema. `ProfileRuntime`
+[#112](https://github.com/tinyhumansai/tinyhivemind/issues/112)'s
+`tinyhivemind-lang` package does **not** lower into this manifest. `HiveConfig`
+is a parallel, OpenHuman-specific deployment schema. A language package
+lowers to a host-neutral `LoweredHive`, and the adapter's helpers in
+`crates/tinyhivemind-openhuman/src/language/mod.rs` carry that to OpenHuman
+directly: `coordinator_options` maps `CoordinatorSettings` onto
+`CoordinatorOptions`, `memory_binding` maps an agent `LoweredMemoryBinding`
+onto the harness `MemoryBinding`, and `management_request` turns a
+`LoweredSeat` into a `ManagementRequest::CreateAgent`. Neither format
+converts into the other. `ProfileRuntime`
 (openhuman#7250) is out of scope: it cannot coexist with `Runtime` in one
 process and represents a future multi-tenant mode.
 
@@ -350,4 +357,5 @@ no unattended repository mutation is installed by the configuration layer.
 Existing pin-consistency assertions remain required.
 
 Open questions: none. The memory choice and additive permission semantics are
-settled above; future config-language work consumes this contract.
+settled above. The hive language is a separate, host-neutral format; see
+[`hive-language.md`](hive-language.md).
