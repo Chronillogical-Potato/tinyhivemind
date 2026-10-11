@@ -282,7 +282,7 @@ impl Provider {
     }
 }
 
-/// Blank the account's `user_id` that OpenRouter echoes in error bodies.
+/// Blank the account's `user_id` that `OpenRouter` echoes in error bodies.
 pub(crate) fn redact_user(body: &str) -> String {
     const FIELD: &str = "\"user_id\":\"";
     let mut out = String::with_capacity(body.len());
