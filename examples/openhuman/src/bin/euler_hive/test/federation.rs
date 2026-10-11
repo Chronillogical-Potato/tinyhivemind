@@ -149,3 +149,50 @@ async fn synthesis_commits_only_a_candidate_the_verify_desk_supported() {
         .expect("a verified candidate is committed");
     assert_eq!(finished.candidate.as_deref(), Some("42"));
 }
+
+#[test]
+fn an_older_answer_returns_to_the_chain_that_asked_it_not_the_latest_waiting_one() {
+    use super::super::floors::Mode;
+
+    let (_, hive) = lowered();
+    let mut federation = Federation::new(&hive).expect("federation builds");
+    federation.open("go");
+    let (research, theory) = (
+        federation.index("research").expect("research desk"),
+        federation.index("theory").expect("theory desk"),
+    );
+    // One seat asks theory from two different task chains, oldest first.
+    for chain in [100, 200] {
+        federation.floors[research].mode = Some(Mode::Pipeline { hop: 0, chain });
+        federation
+            .ask(research, "research-librarian", "theory", "please derive")
+            .expect("the ask is routed");
+    }
+    assert_eq!(federation.floors[theory].queue.len(), 2);
+    // The older question is answered first (the other is still open).
+    let older = federation.floors[theory].queue.pop_front().expect("queued");
+    let newer = federation.floors[theory].queue.pop_front().expect("queued");
+    let chain = older.mode.chain();
+    let answerer = older.assign[0].clone();
+    federation.floors[theory].mode = Some(older.mode);
+    federation.floors[theory]
+        .completions
+        .entry(chain)
+        .or_default()
+        .push((answerer, "derived".into(), None, None));
+    federation
+        .finish_episode(theory)
+        .expect("the answer routes");
+    let back = federation.floors[research]
+        .queue
+        .back()
+        .expect("the answer reopens the asker");
+    assert_eq!(back.reason, "return");
+    assert_eq!(back.mode.chain(), 100, "the first question's chain resumes");
+    assert!(
+        federation.floors[research].waiting["research-librarian"]
+            .iter()
+            .any(|(request, _)| *request == newer.mode.chain()),
+        "the other question is still owed"
+    );
+}
