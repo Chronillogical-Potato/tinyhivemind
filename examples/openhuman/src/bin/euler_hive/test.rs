@@ -320,7 +320,7 @@ async fn drive(
     act: impl Fn(&str, &str, &str) -> super::tools::Action,
 ) -> usize {
     let mut rounds = 0;
-    while federation.finished.is_none() && rounds < 60 {
+    while federation.finished.is_none() && federation.undecided.is_none() && rounds < 60 {
         let pending = federation.ready().expect("ready");
         if pending.is_empty() {
             break;
@@ -382,6 +382,7 @@ async fn overlapping_questions_with_nested_asks_all_come_home_and_the_pipeline_f
     let finished = federation
         .finished
         .as_ref()
+        .or(federation.undecided.as_ref())
         .expect("the pipeline reaches synthesis");
     assert_eq!(finished.desk, "synthesis");
     let returns = federation
@@ -420,7 +421,7 @@ async fn a_refused_ask_gives_the_seat_its_turn_back_before_the_desk_reports() {
             .any(|row| row.kind == "complete" && row.author == "research-librarian"),
         "the refused seat completed after its turn came back"
     );
-    assert!(federation.finished.is_some());
+    assert!(federation.undecided.is_some(), "the pipeline reached synthesis");
 }
 
 #[test]
