@@ -137,7 +137,7 @@ function bubbleSeats(state, ui, hover, compact) {
   return out;
 }
 
-function drawBubbles(layer, lay, state, ui, hover, height) {
+function drawBubbles(layer, lay, state, ui, hover, top, bottom) {
   layer.replaceChildren();
   const placed = [];
   const overlaps = (b) => placed.some((p) => b.x < p.x + p.w + 4 && p.x < b.x + b.w + 4 && b.y < p.y + p.h + 4 && p.y < b.y + b.h + 4);
@@ -152,7 +152,7 @@ function drawBubbles(layer, lay, state, ui, hover, height) {
     const x = Math.max(2, Math.min(lay.width - w - 2, at.x - w / 2));
     const gap = lay.size.r + 8;
     const tries = [-gap - bh, gap, -gap - bh * 2 - 6, gap + bh + 6, -gap - bh * 3 - 12, gap + bh * 2 + 12].map((dy) => ({ x, y: at.y + dy, w, h: bh }));
-    const spot = tries.find((b) => b.y >= 0 && b.y + b.h <= height && !overlaps(b)) ?? (id === hover || id === ui.selected ? tries.find((b) => b.y >= 0) : null);
+    const spot = tries.find((b) => b.y >= top && b.y + b.h <= bottom && !overlaps(b)) ?? (id === hover || id === ui.selected ? tries.find((b) => b.y >= top && b.y + b.h <= bottom) : null);
     if (!spot) continue;
     placed.push(spot);
     const g = s("g", { class: `hv-bubble${old ? " old" : ""}`, "pointer-events": "none" });
@@ -191,7 +191,7 @@ export function renderGraph(host, structure, state, ui) {
   svg.append(arrowDefs());
   const g = s("g", { transform: `translate(0,${m})` });
   const bubbles = s("g", { transform: `translate(0,${m})` });
-  const onHover = (id) => drawBubbles(bubbles, lay, state, ui, id, lay.height + m);
+  const onHover = (id) => drawBubbles(bubbles, lay, state, ui, id, -m + 2, lay.height + m - 2);
   drawDesks(g, structure, lay, state);
   drawEdges(g, structure, lay, state.crossings);
   drawSeats(g, structure, lay, state, ui, onHover);
