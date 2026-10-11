@@ -312,3 +312,99 @@ fn the_system_prompt_opens_with_the_persona_and_carries_the_charter() {
     assert!(text.contains("## Your role\nCheck things."));
     assert!(text.ends_with("## Protocol"));
 }
+
+/// Drive a federation offline: `act` chooses each seat's action from its
+/// desk and the reason it was called. Returns the rounds run.
+async fn drive(
+    federation: &mut Federation,
+    act: impl Fn(&str, &str, &str) -> super::tools::Action,
+) -> usize {
+    let mut rounds = 0;
+    while federation.finished.is_none() && rounds < 60 {
+        let pending = federation.ready().expect("ready");
+        if pending.is_empty() {
+            break;
+        }
+        for round in pending {
+            let desk = federation.floors[round.desk].desk.id.clone();
+            let at = federation.floors[round.desk].journal.len();
+            let results = round
+                .seats
+                .iter()
+                .map(|seat| {
+                    let reason = federation.assignment(round.desk, seat).reason;
+                    (seat.clone(), act(&desk, seat, &reason))
+                })
+                .collect();
+            federation.commit(round.desk, at, results).await.expect("commit");
+        }
+        rounds += 1;
+    }
+    rounds
+}
+
+fn complete(report: &str) -> super::tools::Action {
+    super::tools::Action::Complete {
+        report: report.into(),
+        candidate: None,
+        verdict: None,
+    }
+}
+
+fn refer(desk: &str) -> super::tools::Action {
+    super::tools::Action::Refer {
+        desk: desk.into(),
+        message: "please check".into(),
+    }
+}
+
+#[tokio::test]
+async fn overlapping_questions_with_nested_asks_all_come_home_and_the_pipeline_finishes() {
+    let (_, hive) = lowered();
+    let mut federation = Federation::new(&hive).expect("federation builds");
+    federation.open("go");
+    // Two research seats ask theory at once; each theory answer first asks
+    // compute, so two answering chains overlap on the theory desk.
+    drive(&mut federation, |desk, seat, reason| match (desk, reason) {
+        ("research", "opening") if seat != "research-scout" => refer("theory"),
+        ("theory", "referral") => refer("compute"),
+        _ => complete(&format!("{seat} done")),
+    })
+    .await;
+    let research = &federation.floors[0];
+    assert!(research.reported, "research never reported: a return was lost");
+    let finished = federation.finished.as_ref().expect("the pipeline reaches synthesis");
+    assert_eq!(finished.desk, "synthesis");
+    let returns = federation
+        .referrals
+        .iter()
+        .filter(|frame| frame.kind == "return" && frame.to_desk == "research" && frame.accepted)
+        .count();
+    assert_eq!(returns, 2, "both research questions were answered");
+}
+
+#[tokio::test]
+async fn a_refused_ask_gives_the_seat_its_turn_back_before_the_desk_reports() {
+    let (_, hive) = lowered();
+    let mut federation = Federation::new(&hive).expect("federation builds");
+    federation.open("go");
+    // research may not refer to verify: no declared link.
+    drive(&mut federation, |desk, seat, reason| match (desk, seat, reason) {
+        ("research", "research-librarian", "opening") => refer("verify"),
+        _ => complete(&format!("{seat} done")),
+    })
+    .await;
+    let refused = federation
+        .referrals
+        .iter()
+        .find(|frame| frame.kind == "forward")
+        .expect("the ask is recorded");
+    assert!(!refused.accepted);
+    let research = &federation.floors[0];
+    assert!(research.reported);
+    assert!(
+        research.journal.iter().any(|row| row.kind == "complete" && row.author == "research-librarian"),
+        "the refused seat completed after its turn came back"
+    );
+    assert!(federation.finished.is_some());
+}
