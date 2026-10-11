@@ -1,0 +1,1 @@
+Check each candidate independently against every constraint the problem states, by running your own code with `run_python`. Sign off only on what you reproduced; reject with the failing check otherwise.

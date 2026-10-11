@@ -1,0 +1,519 @@
+{
+  "root": "team:euler-hive",
+  "identities": [
+    {
+      "id": "research-librarian-notes",
+      "namespace": "team:euler-hive/agent:research-librarian",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "research-provenance-notes",
+      "namespace": "team:euler-hive/agent:research-provenance",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "research-scout-notes",
+      "namespace": "team:euler-hive/agent:research-scout",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "theory-designer-notes",
+      "namespace": "team:euler-hive/agent:theory-designer",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "theory-coder-notes",
+      "namespace": "team:euler-hive/agent:theory-coder",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "theory-counter-notes",
+      "namespace": "team:euler-hive/agent:theory-counter",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "compute-exhaustive-notes",
+      "namespace": "team:euler-hive/agent:compute-exhaustive",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "compute-linear-notes",
+      "namespace": "team:euler-hive/agent:compute-linear",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "compute-minimalist-notes",
+      "namespace": "team:euler-hive/agent:compute-minimalist",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "verify-constraints-notes",
+      "namespace": "team:euler-hive/agent:verify-constraints",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "verify-rederiver-notes",
+      "namespace": "team:euler-hive/agent:verify-rederiver",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "verify-adversary-notes",
+      "namespace": "team:euler-hive/agent:verify-adversary",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "synthesis-judge-notes",
+      "namespace": "team:euler-hive/agent:synthesis-judge",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "synthesis-dissent-notes",
+      "namespace": "team:euler-hive/agent:synthesis-dissent",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "verified",
+      "namespace": "team:euler-hive/project:verified",
+      "kind": "pool",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    }
+  ],
+  "bindings": [
+    {
+      "seat": "research-librarian",
+      "identity": "research-librarian-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:research-librarian",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "research-provenance",
+      "identity": "research-provenance-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:research-provenance",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "research-scout",
+      "identity": "research-scout-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:research-scout",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "theory-designer",
+      "identity": "theory-designer-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:theory-designer",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "theory-coder",
+      "identity": "theory-coder-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:theory-coder",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "theory-counter",
+      "identity": "theory-counter-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:theory-counter",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "compute-exhaustive",
+      "identity": "compute-exhaustive-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:compute-exhaustive",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "compute-linear",
+      "identity": "compute-linear-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:compute-linear",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "compute-minimalist",
+      "identity": "compute-minimalist-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:compute-minimalist",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "verify-constraints",
+      "identity": "verify-constraints-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:verify-constraints",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "verify-rederiver",
+      "identity": "verify-rederiver-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:verify-rederiver",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "verify-adversary",
+      "identity": "verify-adversary-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:verify-adversary",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "synthesis-judge",
+      "identity": "synthesis-judge-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:synthesis-judge",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "synthesis-dissent",
+      "identity": "synthesis-dissent-notes",
+      "reads": [
+        {
+          "at": "team:euler-hive/agent:synthesis-dissent",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:euler-hive/project:verified",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 2500,
+      "remember": [
+        "observation",
+        "failed_attempt",
+        "outcome",
+        "note"
+      ]
+    }
+  ]
+}

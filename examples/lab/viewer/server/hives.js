@@ -192,7 +192,8 @@ export function card(name, structure) {
 
 /**
  * Runs `hive_view`: builds it once (one shared promise, so concurrent first
- * requests wait on one cargo), caches structures by package mtime, and spawns
+ * requests wait on one cargo), caches structures by package and binary
+ * mtime, and spawns
  * runs with an argv array and no shell. Children get `env` as their whole
  * environment, which is how a live run's OPENROUTER_API_KEY reaches the
  * binary (never through argv). HIVE_VIEW_BIN swaps the binary (a `.mjs` runs
@@ -236,8 +237,18 @@ export function hiveRunner({ repo, env = process.env, log = () => {} }) {
     });
   }
 
+  // A rebuilt binary can describe the same package differently, so the
+  // cache key covers the binary as well as the package.
+  function binaryMtime() {
+    try {
+      return fs.statSync(bin).mtimeMs;
+    } catch {
+      return 0;
+    }
+  }
+
   async function structure(dir) {
-    const mtime = packageMtime(dir);
+    const mtime = `${packageMtime(dir)}:${binaryMtime()}`;
     const hit = cache.get(dir);
     if (hit && hit.mtime === mtime) return hit.structure;
     await ensureBuilt();

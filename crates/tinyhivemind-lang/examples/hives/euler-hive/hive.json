@@ -1,0 +1,830 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "euler-hive",
+  "name": "Euler hive",
+  "roles": [
+    {
+      "id": "researcher",
+      "charter": "roles/researcher.md"
+    },
+    {
+      "id": "theorist",
+      "charter": "roles/theorist.md"
+    },
+    {
+      "id": "computer",
+      "charter": "roles/computer.md"
+    },
+    {
+      "id": "verifier",
+      "charter": "roles/verifier.md"
+    },
+    {
+      "id": "synthesizer",
+      "charter": "roles/synthesizer.md"
+    }
+  ],
+  "seats": [
+    {
+      "id": "research-librarian",
+      "label": "research-librarian",
+      "role": "researcher",
+      "prompt": "seats/research-librarian.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "web_search",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "run_python"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "research-provenance",
+      "label": "research-provenance",
+      "role": "researcher",
+      "prompt": "seats/research-provenance.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "web_search",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "run_python"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "research-scout",
+      "label": "research-scout",
+      "role": "researcher",
+      "prompt": "seats/research-scout.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "web_search",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "run_python"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "theory-designer",
+      "label": "theory-designer",
+      "role": "theorist",
+      "prompt": "seats/theory-designer.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search",
+          "run_python"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "theory-coder",
+      "label": "theory-coder",
+      "role": "theorist",
+      "prompt": "seats/theory-coder.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search",
+          "run_python"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "theory-counter",
+      "label": "theory-counter",
+      "role": "theorist",
+      "prompt": "seats/theory-counter.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search",
+          "run_python"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-exhaustive",
+      "label": "compute-exhaustive",
+      "role": "computer",
+      "prompt": "seats/compute-exhaustive.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "run_python",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-linear",
+      "label": "compute-linear",
+      "role": "computer",
+      "prompt": "seats/compute-linear.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "run_python",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-minimalist",
+      "label": "compute-minimalist",
+      "role": "computer",
+      "prompt": "seats/compute-minimalist.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "run_python",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-constraints",
+      "label": "verify-constraints",
+      "role": "verifier",
+      "prompt": "seats/verify-constraints.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "run_python",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-rederiver",
+      "label": "verify-rederiver",
+      "role": "verifier",
+      "prompt": "seats/verify-rederiver.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "run_python",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-adversary",
+      "label": "verify-adversary",
+      "role": "verifier",
+      "prompt": "seats/verify-adversary.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "run_python",
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-judge",
+      "label": "synthesis-judge",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-judge.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search",
+          "run_python"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-dissent",
+      "label": "synthesis-dissent",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-dissent.md",
+      "template": "euler-seat",
+      "config": {
+        "max_iterations": 10,
+        "temperature": 0.2
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "hive_broadcast",
+          "hive_refer",
+          "hive_complete",
+          "hive_remember",
+          "hive_recall"
+        ],
+        "deny": [
+          "shell",
+          "file_read",
+          "file_write",
+          "file_edit",
+          "web_fetch",
+          "browser",
+          "http",
+          "glob",
+          "grep",
+          "git",
+          "web_search",
+          "run_python"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    }
+  ],
+  "desks": [
+    {
+      "id": "research",
+      "name": "Research",
+      "description": "Find the theory and literature the problem rests on; report sources, never a copied answer",
+      "members": [
+        "research-librarian",
+        "research-provenance",
+        "research-scout"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "theory",
+      "name": "Theory",
+      "description": "Identify the combinatorial structure, prove what it forces, and turn it into a checkable plan",
+      "members": [
+        "theory-designer",
+        "theory-coder",
+        "theory-counter"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "compute",
+      "name": "Compute",
+      "description": "Turn the plan into exact programs, run them in the sandbox, and report outputs verbatim",
+      "members": [
+        "compute-exhaustive",
+        "compute-linear",
+        "compute-minimalist"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "verify",
+      "name": "Verify",
+      "description": "Re-derive every candidate independently and check it against each stated constraint",
+      "members": [
+        "verify-constraints",
+        "verify-rederiver",
+        "verify-adversary"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "synthesis",
+      "name": "Synthesis",
+      "description": "Commit the hive's answer once verification has signed it off",
+      "members": [
+        "synthesis-judge",
+        "synthesis-dissent"
+      ],
+      "responder_mode": "auto"
+    }
+  ],
+  "goals": [
+    {
+      "id": "answer",
+      "description": "Commit the exact answer to the problem in context/problem.md, in the format it asks for",
+      "acceptance": [
+        "Signed off by the verify desk with sandbox output",
+        "Every stated constraint checked separately"
+      ],
+      "subgoals": [
+        "structure",
+        "candidate"
+      ]
+    },
+    {
+      "id": "structure",
+      "description": "Identify the structure the problem describes and what determines the answer",
+      "acceptance": [
+        "Cites at least one source or a derivation"
+      ],
+      "subgoals": []
+    },
+    {
+      "id": "candidate",
+      "description": "Compute a candidate answer exactly in the sandbox",
+      "acceptance": [
+        "Printed by a program the hive ran"
+      ],
+      "subgoals": []
+    }
+  ],
+  "missions": [
+    {
+      "id": "survey",
+      "role": "researcher",
+      "goals": [
+        "structure"
+      ]
+    },
+    {
+      "id": "derive",
+      "role": "theorist",
+      "goals": [
+        "structure"
+      ]
+    },
+    {
+      "id": "compute",
+      "role": "computer",
+      "goals": [
+        "candidate"
+      ]
+    },
+    {
+      "id": "check",
+      "role": "verifier",
+      "goals": [
+        "answer"
+      ]
+    },
+    {
+      "id": "commit",
+      "role": "synthesizer",
+      "goals": [
+        "answer"
+      ]
+    }
+  ],
+  "topology": [
+    {
+      "from": "research",
+      "to": "theory"
+    },
+    {
+      "from": "theory",
+      "to": "compute"
+    },
+    {
+      "from": "compute",
+      "to": "verify"
+    },
+    {
+      "from": "verify",
+      "to": "synthesis"
+    }
+  ],
+  "referrals": [
+    {
+      "from": "research",
+      "to": "theory"
+    },
+    {
+      "from": "theory",
+      "to": "compute"
+    },
+    {
+      "from": "compute",
+      "to": "verify"
+    },
+    {
+      "from": "verify",
+      "to": "synthesis"
+    },
+    {
+      "from": "theory",
+      "to": "research"
+    },
+    {
+      "from": "compute",
+      "to": "theory"
+    },
+    {
+      "from": "verify",
+      "to": "compute"
+    },
+    {
+      "from": "verify",
+      "to": "theory"
+    },
+    {
+      "from": "synthesis",
+      "to": "verify"
+    }
+  ],
+  "context": [
+    "context/problem.md"
+  ],
+  "policies": {
+    "episode": {
+      "turn_budget": 60,
+      "round_width": 3,
+      "revealed_width": 3,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 2,
+        "window": 60,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 50
+      }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 3,
+      "choice_option_limit": 8
+    },
+    "approval": {
+      "enabled": false,
+      "default": "deny",
+      "rules": [],
+      "approver": {
+        "kind": "absent"
+      },
+      "allow_grants": false,
+      "max_grant_ttl": null
+    },
+    "aside": {
+      "enabled": false,
+      "max_members": 0,
+      "max_messages": 0,
+      "must_surface": false,
+      "require_thread": false
+    },
+    "referral": {
+      "enabled": true,
+      "max_hops": 6,
+      "reach": "desks",
+      "returns": true
+    },
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 1800,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 3,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    }
+  },
+  "coordinator": {
+    "round_width": 3,
+    "conduct_policy": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    },
+    "broadcast_budget": 4,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
+    }
+  }
+}

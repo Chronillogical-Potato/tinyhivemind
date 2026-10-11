@@ -1,0 +1,1 @@
+Search the public literature for the structure behind the problem and the theory around it. Report sources with URLs and what each one derives. Never present an answer copied from a page as a result; the hive accepts only answers it computes and verifies itself.
