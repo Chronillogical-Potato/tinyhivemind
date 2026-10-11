@@ -102,19 +102,13 @@ fn shared_memory_across_tasks_requires_an_explicit_flag() {
 #[test]
 fn task_deployment_ids_are_safe_bounded_and_deterministic() {
     let first = deployment_id_for_task("Task/ABC with a very long instance identifier");
-    assert_eq!(
-        first,
-        deployment_id_for_task("Task/ABC with a very long instance identifier")
-    );
+    assert_eq!(first, deployment_id_for_task("Task/ABC with a very long instance identifier"));
     assert!(first.len() <= 64);
     assert!(first.starts_with("deepswe-"));
     assert!(first.bytes().all(|byte| {
         byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
     }));
-    assert_ne!(
-        first,
-        deployment_id_for_task("task/abc with a very long instance identifier")
-    );
+    assert_ne!(first, deployment_id_for_task("task/abc with a very long instance identifier"));
 }
 
 #[test]

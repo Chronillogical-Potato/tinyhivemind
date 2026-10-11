@@ -143,14 +143,9 @@ fn a_symlinked_package_file_is_refused_not_followed() {
 
 #[test]
 fn problem_markdown_preserves_superscripts_and_subscripts() {
-    assert_eq!(
-        package::problem_markdown("<p>2<sup>10</sup> + a<sub>i</sub>.</p>"),
-        "2^(10) + a_(i)."
-    );
-    assert_eq!(
-        package::problem_markdown("<p>x<SUP class=\"math\"><b>n+1</b></SUP></p>"),
-        "x^(n+1)"
-    );
+    assert_eq!(package::problem_markdown("<p>2<sup>10</sup> + a<sub>i</sub>.</p>"),
+        "2^(10) + a_(i).");
+    assert_eq!(package::problem_markdown("<p>x<SUP class=\"math\"><b>n+1</b></SUP></p>"), "x^(n+1)");
 }
 
 #[test]
@@ -158,35 +153,17 @@ fn web_enabled_models_are_refused_before_runtime_setup() {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(16 * 1024 * 1024)
-        .build()
-        .expect("runtime")
-        .block_on(async {
-            tokio::spawn(async {
-                for model in [
-                    "x/y:online",
-                    "perplexity/sonar",
-                    "x/search-preview",
-                    "x/Web",
-                ] {
-                    let args = super::super::Args {
-                        package: "does-not-exist".into(),
-                        problem: "does-not-exist".into(),
-                        problem_id: "test".into(),
-                        runs: "does-not-exist".into(),
-                        limits: super::super::budget::Limits::SMOKE,
-                        model: model.into(),
-                        probe: false,
-                    };
-                    let error = Box::pin(super::super::run(args))
-                        .await
-                        .expect_err("refused model");
-                    assert!(
-                        error.to_string().contains("web-enabled model"),
-                        "{model}: {error}"
-                    );
-                }
-            })
-            .await
-        })
-        .expect("test worker");
+        .build().expect("runtime")
+        .block_on(async { tokio::spawn(async {
+            for model in ["x/y:online", "perplexity/sonar", "x/search-preview", "x/Web"] {
+                let args = super::super::Args {
+                    package: "does-not-exist".into(), problem: "does-not-exist".into(),
+                    problem_id: "test".into(), runs: "does-not-exist".into(),
+                    limits: super::super::budget::Limits::SMOKE,
+                    model: model.into(), probe: false,
+                };
+                let error = Box::pin(super::super::run(args)).await.expect_err("refused model");
+                assert!(error.to_string().contains("web-enabled model"), "{model}: {error}");
+            }
+        }).await }).expect("test worker");
 }

@@ -192,14 +192,8 @@ async fn requests_carry_allowed_tools(call_limit: Option<u64>) {
         .await;
         if call_limit.is_some() {
             let requests = script.bodies.lock().expect("capture lock").len();
-            assert!(
-                requests <= 1,
-                "the one-call cap allowed {requests} provider requests"
-            );
-            assert!(
-                output.error.is_some(),
-                "a tool loop that cannot fit is refused"
-            );
+            assert!(requests <= 1, "the one-call cap allowed {requests} provider requests");
+            assert!(output.error.is_some(), "a tool loop that cannot fit is refused");
             return;
         }
         assert!(output.error.is_none(), "{id}: {:?}", output.error);

@@ -263,13 +263,10 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
     // Read the store back: what CortexDB actually holds for each seat.
     // Optional store inspection shares the run's deadline; never force a
     // five-second tail after the execution budget has already expired.
-    let settled = !budget.turn_timeout().is_zero()
-        && super::turn::within(
-            budget.turn_timeout(),
-            tokio::time::sleep(std::time::Duration::from_secs(5)),
-        )
-        .await
-        .is_some();
+    let settled = !budget.turn_timeout().is_zero() && super::turn::within(
+        budget.turn_timeout(),
+        tokio::time::sleep(std::time::Duration::from_secs(5)),
+    ).await.is_some();
     let mut memory = serde_json::Map::new();
     for (id, seat) in seats {
         let namespace = seat.memory.binding().namespace.clone();
@@ -279,39 +276,28 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
                 Some(Err(error)) => json!({"error": error.to_string()}),
                 None => json!({"skipped": "wall-clock deadline"}),
             }
-        } else {
-            json!({"skipped": "wall-clock deadline"})
-        };
+        } else { json!({"skipped": "wall-clock deadline"}) };
         // Read the binding's reaches once more, after indexing has settled:
         // what a seat joining now would recall.
         let host = seat.memory.ledger.snapshot();
         let recall_after_run = if settled {
-            match super::turn::within(
-                budget.turn_timeout(),
-                seat.memory.search("verified findings and outcomes"),
-            )
-            .await
-            {
+            match super::turn::within(budget.turn_timeout(), seat.memory.search("verified findings and outcomes")).await {
                 Some(Ok(notes)) => json!(notes.iter().map(|note| note.lines.len()).sum::<usize>()),
                 Some(Err(error)) => json!({"error": error.to_string()}),
                 None => json!({"skipped": "wall-clock deadline"}),
             }
-        } else {
-            json!({"skipped": "wall-clock deadline"})
-        };
+        } else { json!({"skipped": "wall-clock deadline"}) };
         memory.insert(
             id.clone(),
             json!({"namespace": namespace, "host": host, "stored": stored, "recall_after_run": recall_after_run, "last_recall": seat.memory.seen()}),
         );
     }
     let pool_counts = match pool {
-        Some(pool) if settled => {
-            match super::turn::within(budget.turn_timeout(), count_at(engine, pool)).await {
-                Some(Ok(counts)) => json!({"namespace": pool, "stored": counts}),
-                Some(Err(error)) => json!({"namespace": pool, "error": error.to_string()}),
-                None => json!({"namespace": pool, "skipped": "wall-clock deadline"}),
-            }
-        }
+        Some(pool) if settled => match super::turn::within(budget.turn_timeout(), count_at(engine, pool)).await {
+            Some(Ok(counts)) => json!({"namespace": pool, "stored": counts}),
+            Some(Err(error)) => json!({"namespace": pool, "error": error.to_string()}),
+            None => json!({"namespace": pool, "skipped": "wall-clock deadline"}),
+        },
         Some(pool) => json!({"namespace": pool, "skipped": "wall-clock deadline"}),
         None => json!(null),
     };

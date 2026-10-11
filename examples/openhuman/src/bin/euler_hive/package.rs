@@ -180,13 +180,8 @@ pub(super) fn problem_markdown(html: &str) -> String {
         };
         let raw = rest[start + 1..start + end].trim();
         let closing = raw.starts_with('/');
-        let tag = raw
-            .trim_start_matches('/')
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .trim_end_matches('/')
-            .to_ascii_lowercase();
+        let tag = raw.trim_start_matches('/').split_whitespace().next()
+            .unwrap_or("").trim_end_matches('/').to_ascii_lowercase();
         match tag.as_str() {
             "sup" => text.push_str(if closing { ")" } else { "^(" }),
             "sub" => text.push_str(if closing { ")" } else { "_(" }),

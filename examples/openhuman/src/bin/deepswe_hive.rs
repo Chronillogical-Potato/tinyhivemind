@@ -367,25 +367,21 @@ fn deployment_id_for_task(instance_id: &str) -> String {
             break;
         }
     }
-    let hash = instance_id
-        .bytes()
-        .fold(0xcbf29ce484222325_u64, |hash, byte| {
-            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
-        });
+    let hash = instance_id.bytes().fold(0xcbf29ce484222325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+    });
     format!("deepswe-{readable}-{hash:016x}")
 }
 
 #[cfg(test)]
-async fn shared_memory_engine() -> anyhow::Result<std::sync::Arc<dyn tinymemory_api::MemoryEngine>>
-{
+async fn shared_memory_engine() -> anyhow::Result<std::sync::Arc<dyn tinymemory_api::MemoryEngine>> {
     Ok(std::sync::Arc::new(
         tinymemory_api::conformance::reference::ReferenceEngine::new(),
     ))
 }
 
 #[cfg(not(test))]
-async fn shared_memory_engine() -> anyhow::Result<std::sync::Arc<dyn tinymemory_api::MemoryEngine>>
-{
+async fn shared_memory_engine() -> anyhow::Result<std::sync::Arc<dyn tinymemory_api::MemoryEngine>> {
     let config = RuntimeConfig::load_or_init().await?;
     match openhuman_core::memory::engine::resolve(&config) {
         openhuman_core::memory::engine::Binding::On(bound) => Ok(bound.engine),
