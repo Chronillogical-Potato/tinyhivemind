@@ -143,12 +143,18 @@ fn package() -> Result<Package> {
 /// A package as the files an editor reads and rewrites.
 fn files(p: &Package) -> Result<Files> {
     let mut docs = p.documents.clone();
-    docs.insert("hive.json".into(), serde_json::to_string_pretty(&p.manifest)?);
+    docs.insert(
+        "hive.json".into(),
+        serde_json::to_string_pretty(&p.manifest)?,
+    );
     docs.insert(
         "constitution.json".into(),
         serde_json::to_string_pretty(&p.constitution)?,
     );
-    docs.insert("memory.json".into(), serde_json::to_string_pretty(&p.memory)?);
+    docs.insert(
+        "memory.json".into(),
+        serde_json::to_string_pretty(&p.memory)?,
+    );
     Ok(docs)
 }
 
@@ -158,7 +164,9 @@ fn edit(active: &Package, returned: &Value) -> std::result::Result<Review, Strin
     let original = files(active).map_err(|error| error.to_string())?;
     let mut edited = original.clone();
     for (path, body) in returned.as_object().into_iter().flatten() {
-        let body = body.as_str().ok_or("returned file contents must be strings")?;
+        let body = body
+            .as_str()
+            .ok_or("returned file contents must be strings")?;
         edited.insert(path.clone(), body.to_owned());
     }
     check(&original, &edited).map_err(|diagnostics| {
