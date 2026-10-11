@@ -424,7 +424,17 @@ async fn run(args: Args) -> anyhow::Result<()> {
     if let Ok(usage) = budget::openrouter_usage(&http, &openrouter_key).await {
         budget.record_account(usage);
     }
-    report::finish(&run, &federation, &seats, &budget, engine.as_ref(), pool.as_deref(), stop, &args.model).await?;
+    report::finish(report::Closing {
+        run: &run,
+        federation: &federation,
+        seats: &seats,
+        budget: &budget,
+        engine: engine.as_ref(),
+        pool: pool.as_deref(),
+        stop,
+        model: &args.model,
+    })
+    .await?;
     // Give OpenHuman's background conversation logging a moment to land.
     tokio::time::sleep(Duration::from_secs(2)).await;
     Ok(())

@@ -97,8 +97,6 @@ pub(super) async fn probe(
 
 /// Save one turn's prompt, reply and tool calls.
 pub(super) fn turn_artifacts(run: &RunDir, output: &TurnOutput) {
-    let number = run.next_program();
-    let _ = number;
     run.event(&json!({
         "event": "turn",
         "seat": output.seat,
@@ -144,22 +142,34 @@ pub(super) fn usage(budget: &Budget) -> UsageFrame {
     }
 }
 
+/// What closing a run reads.
+pub(super) struct Closing<'a> {
+    pub(super) run: &'a RunDir,
+    pub(super) federation: &'a Federation,
+    pub(super) seats: &'a BTreeMap<String, Arc<Seat>>,
+    pub(super) budget: &'a Budget,
+    pub(super) engine: &'a dyn MemoryEngine,
+    pub(super) pool: Option<&'a str>,
+    pub(super) stop: Option<String>,
+    pub(super) model: &'a str,
+}
+
 /// Close the run: desk and hive endings, the store read back, and the report.
 ///
 /// # Errors
 ///
 /// Returns an engine failure while counting.
-#[allow(clippy::too_many_arguments)]
-pub(super) async fn finish(
-    run: &RunDir,
-    federation: &Federation,
-    seats: &BTreeMap<String, Arc<Seat>>,
-    budget: &Budget,
-    engine: &dyn MemoryEngine,
-    pool: Option<&str>,
-    stop: Option<String>,
-    model: &str,
-) -> anyhow::Result<()> {
+pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
+    let Closing {
+        run,
+        federation,
+        seats,
+        budget,
+        engine,
+        pool,
+        stop,
+        model,
+    } = closing;
     for floor in &federation.floors {
         let ending = if floor.reported {
             "converged"

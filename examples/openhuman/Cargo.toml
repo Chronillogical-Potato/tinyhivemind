@@ -42,7 +42,7 @@ tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "f3
 # Diagnostic only: OpenHuman sanitises a hosted-agent failure into a fixed
 # string, so the underlying reason is only visible through its own logging.
 env_logger = "0.11"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 tempfile = "3"
 # The inspector must terminate a hung Docker CLI from the host side.
 wait-timeout = "0.2"
