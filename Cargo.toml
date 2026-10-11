@@ -55,17 +55,17 @@ tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
 # host writes the same four lines against its own. `tinytools` is pinned at
 # the commit OpenHuman's own tree vendors, which is what makes the unification
 # exact; `.github/scripts/assert-openhuman-pin.sh` checks all three revs.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "bc59324d2ef7aaac2d7ead81097f1f9c264dc3bd", default-features = false }
-openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "bc59324d2ef7aaac2d7ead81097f1f9c264dc3bd", default-features = false }
-tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "8a87a26293341c51afa11bccfdbe920def7ca9d6" }
-tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "8a87a26293341c51afa11bccfdbe920def7ca9d6" }
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "4739e97284f04bdca9e0efcf5d7f453d4b8fb8f9", default-features = false }
+openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "4739e97284f04bdca9e0efcf5d7f453d4b8fb8f9", default-features = false }
+tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "360721bc3c7a26221b61f6629f5f0415cfccb568" }
+tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "360721bc3c7a26221b61f6629f5f0415cfccb568" }
 # The memory engine contract and the per-agent lifecycle OpenHuman runs its
 # seats' memory through, for the adapter's `Recall`/`Remember` over the same
 # engine and layout. Git sources pinned at the commit OpenHuman's tree vendors
 # and patched onto that copy below, for the same one-copy reason as the tool
 # crates; `.github/scripts/assert-openhuman-pin.sh` checks the rev.
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "f30b9bbb7319a6a7c2fb1aaa3670281f1dc4a9ba" }
-tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", rev = "f30b9bbb7319a6a7c2fb1aaa3670281f1dc4a9ba" }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "7973cac089afaad1068f14e4ded6f4a1724f79e3" }
+tinymemory-tools = { git = "https://github.com/tinyhumansai/tinymemory", rev = "7973cac089afaad1068f14e4ded6f4a1724f79e3" }
 # Derive macros for the crate-wide error type in `crates/tinyhivemind-core/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.

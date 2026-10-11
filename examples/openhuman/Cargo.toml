@@ -14,7 +14,7 @@ default-run = "tinyhivemind-openhuman-example"
 anyhow = "1"
 # The multi-hive host supplies one classified native filesystem proof tool.
 async-trait = "0.1"
-tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "8a87a26293341c51afa11bccfdbe920def7ca9d6" }
+tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "360721bc3c7a26221b61f6629f5f0415cfccb568" }
 futures = "0.3"
 # The live hive uses OpenHuman's native runtime, agents, sessions, and TinyCortex module.
 openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed", default-features = false, features = ["mcp", "modules", "skills"] }
@@ -38,7 +38,7 @@ tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman", feature
 # Pure core tool bookkeeping used by the research experiments.
 tinyhivemind-tools = { path = "../../crates/tinyhivemind-tools" }
 # The DeepSWE opt-in resolves the same durable engine for hive recall and OpenHuman.
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "f30b9bbb7319a6a7c2fb1aaa3670281f1dc4a9ba" }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "7973cac089afaad1068f14e4ded6f4a1724f79e3" }
 # Diagnostic only: OpenHuman sanitises a hosted-agent failure into a fixed
 # string, so the underlying reason is only visible through its own logging.
 env_logger = "0.11"
@@ -49,7 +49,7 @@ wait-timeout = "0.2"
 wiremock = "0.6"
 
 [dev-dependencies]
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "f30b9bbb7319a6a7c2fb1aaa3670281f1dc4a9ba", features = ["conformance"] }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "7973cac089afaad1068f14e4ded6f4a1724f79e3", features = ["conformance"] }
 
 # `tinyhivemind-openhuman` above is a member of the root workspace and inherits
 # its harness dependencies from there, which name git sources (see the root
