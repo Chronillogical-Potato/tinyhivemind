@@ -367,3 +367,32 @@ fn a_desk_may_ask_only_a_constant_number_of_times() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn referral_answers_cannot_exceed_the_shared_turn_budget() -> Result<()> {
+    let loaded = load(&gallery("math-swarm"))?;
+    let mut hive = hive_of(&loaded)?;
+    for room in &mut hive.rooms {
+        room.policy.turn_budget = 0;
+    }
+    hive.rooms[0].policy.turn_budget = 1;
+    hive.rooms[0].policy.round_width = 1;
+    let mut speaker = Asking {
+        asks: BTreeMap::from([(
+            "conjecture-01".into(),
+            "!propose #7 ^1 Seven?\n@#verify can you check seven?".into(),
+        )]),
+        answered: Vec::new(),
+    };
+    let outcome = run_hive(&hive, &mut speaker, None, &mut |_| {})?;
+    assert_eq!(
+        outcome.turns, 1,
+        "the asking turn uses the entire hive budget"
+    );
+    assert!(
+        speaker.answered.is_empty(),
+        "an answer requires another turn"
+    );
+    assert!(outcome.spent);
+    Ok(())
+}

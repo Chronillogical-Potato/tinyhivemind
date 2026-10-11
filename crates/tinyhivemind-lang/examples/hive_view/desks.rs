@@ -128,6 +128,8 @@ struct Federation<'h, 'o, 't, 's> {
     hive: &'h Hive,
     floors: Vec<Floor>,
     round: u32,
+    /// Shared capacity includes both authorized rounds and referral answers.
+    turns_left: u64,
     tracer: Option<&'t Tracer<'s>>,
     observe: &'o mut dyn FnMut(Event<'_>),
 }
@@ -164,6 +166,11 @@ pub(crate) fn run_hive(
         hive,
         floors,
         round: 0,
+        turns_left: hive
+            .rooms
+            .iter()
+            .map(|room| u64::from(room.policy.turn_budget))
+            .sum(),
         tracer,
         observe,
     };
@@ -195,7 +202,7 @@ impl Federation<'_, '_, '_, '_> {
                     continue;
                 }
                 if let Some(incoming) = self.floors[desk].pending.pop_front() {
-                    if speaker.remaining() == Some(0) {
+                    if self.turns_left == 0 || speaker.remaining() == Some(0) {
                         spent = true;
                         break;
                     }
@@ -283,12 +290,17 @@ impl Federation<'_, '_, '_, '_> {
         let HiveStep::Speak { turns, next_state } = decision else {
             return Ok(true);
         };
+        let width = u64::try_from(turns.len()).unwrap_or(u64::MAX);
+        if self.turns_left < width {
+            return Ok(false);
+        }
         if speaker
             .remaining()
             .is_some_and(|left| (left as usize) < turns.len())
         {
             return Ok(false);
         }
+        self.turns_left -= width;
         self.round += 1;
         let floor = &mut self.floors[desk];
         floor.rounds += 1;
@@ -337,6 +349,7 @@ impl Federation<'_, '_, '_, '_> {
         let hive = self.hive;
         let room = &hive.rooms[desk];
         let visible = self.floors[desk].journal.clone();
+        self.turns_left -= 1;
         let content = speaker.answer(&incoming.target_id, &incoming.content, &visible)?;
         let floor = &mut self.floors[desk];
         let sequence = next_sequence(&floor.journal);

@@ -294,3 +294,6 @@ Custom math problems are bounded before computation: `primes` accepts limits
 through 100,000, `multiples` through 1,000,000, `sqdiff` through 10,000, and
 `modsum` accepts at most 1,000,000 units of `n * max(power, 1)` work. Larger
 operands are refused during package validation, including gallery listings.
+
+Referral answers consume the same hive-wide turn capacity as desk rounds;
+when the asking turn spends the last slot, its answer cannot launch.
