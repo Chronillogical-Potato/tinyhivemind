@@ -45,12 +45,12 @@ pub struct Package {
 /// The typed hive definition decoded from `hive.json`.
 ///
 /// Only `$schema`, `version`, `id`, `name` and `seats` are required on the
-/// wire. Every list section defaults to empty, and `policies` and
-/// `coordinator` are overlaid on [`Policies::default`] and
-/// [`CoordinatorSettings::default`]: a JSON object merges key by key into the
-/// default (recursively), and any other value replaces it, so a manifest names
-/// only the settings it changes. Serialization always writes every field, so
-/// a stored manifest is complete.
+/// wire. Every list section defaults to empty; `policies` is overlaid on
+/// [`Policies::default`] (a JSON object merges key by key into the default,
+/// recursively, and any other value replaces it), and any omitted
+/// `coordinator` field takes its [`CoordinatorSettings::default`] value. A
+/// manifest therefore names only the settings it changes. Serialization
+/// always writes every field, so a stored manifest is complete.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
@@ -101,7 +101,7 @@ pub struct Manifest {
     #[serde(default, deserialize_with = "super::defaults::policies")]
     pub policies: Policies,
     /// Scheduling settings for a host coordinator.
-    #[serde(default, deserialize_with = "super::defaults::coordinator")]
+    #[serde(default)]
     pub coordinator: CoordinatorSettings,
 }
 impl Default for Manifest {
@@ -239,6 +239,10 @@ pub struct Link {
 /// reported as [`crate::Error::Bound`] naming the field. The default is a
 /// valid sequential configuration: `round_width` 1 everywhere, routing
 /// thresholds at zero, and approval disabled with a deny default.
+///
+/// Inside a [`Manifest`] a block or any of its fields may be omitted and takes
+/// its value from this default. Decoded on its own, a `Policies` value must
+/// spell out every block and field.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policies {
