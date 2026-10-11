@@ -69,8 +69,40 @@ fn tool_names(body: &Value) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn each_request_carries_exactly_the_seats_allowed_tools() {
+/// OpenHuman's secret store asks the OS keychain for its master key unless
+/// one is in the environment, and a headless keychain lookup blocks for
+/// minutes. The test re-runs itself with a throwaway per-process key rather
+/// than mutate its own environment.
+const MASTER_KEY: &str = "OPENHUMAN_KEYRING_MASTER_KEY";
+
+#[test]
+fn each_request_carries_exactly_the_seats_allowed_tools() {
+    if std::env::var_os(MASTER_KEY).is_none() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos());
+        let key = format!("{nanos:032x}{:032x}", u128::from(std::process::id()) ^ nanos.rotate_left(64));
+        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--exact",
+                "request_test::each_request_carries_exactly_the_seats_allowed_tools",
+                "--test-threads=1",
+            ])
+            .env(MASTER_KEY, key)
+            .status()
+            .expect("the test re-runs itself");
+        assert!(status.success(), "the keyed re-run failed");
+        return;
+    }
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(16 * 1024 * 1024)
+        .build()
+        .expect("tokio runtime")
+        .block_on(requests_carry_allowed_tools());
+}
+
+async fn requests_carry_allowed_tools() {
     let documents = package::read_package(&super::test::package_dir()).expect("package reads");
     let (_, hive) = package::load(documents, "A test problem.").expect("package lowers");
     let provider = MockServer::start().await;
