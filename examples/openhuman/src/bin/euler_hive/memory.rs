@@ -217,7 +217,7 @@ impl SeatMemory {
                 .into_iter()
                 .filter(|hit| hit.meta.agent_id.as_deref() != Some(self.binding.agent_id.as_str()))
                 .collect();
-            hits.sort_by(|a, b| b.meta.observed_at.cmp(&a.meta.observed_at));
+            hits.sort_by_key(|hit| std::cmp::Reverse(hit.meta.observed_at));
             let lines: Vec<String> = hits
                 .into_iter()
                 .take(NOTES_PER_REACH)

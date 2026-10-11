@@ -20,7 +20,7 @@ use tinyhivemind_core::runtime::responder::{PROBABILITY_SCALE, Probability};
 pub(super) struct MentionRouter;
 
 /// The candidate a message's first `@<id>` names, if it is one.
-pub(super) fn addressed<'a>(request: &'a RoutingRequest) -> Option<&'a str> {
+pub(super) fn addressed(request: &RoutingRequest) -> Option<&str> {
     let message = request.message.trim_start();
     let named = message.strip_prefix('@')?;
     let id: String = named
