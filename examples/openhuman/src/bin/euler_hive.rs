@@ -497,3 +497,6 @@ fn turn_frame(
 #[cfg(test)]
 #[path = "euler_hive/test.rs"]
 mod test;
+#[cfg(test)]
+#[path = "euler_hive/request_test.rs"]
+mod request_test;

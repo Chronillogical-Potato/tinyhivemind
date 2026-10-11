@@ -19,7 +19,7 @@ use super::search::{Provider, condense_exa};
 use super::tools::{SeatScope, schema};
 use super::turn::{TurnInput, prompt};
 
-fn package_dir() -> std::path::PathBuf {
+pub(super) fn package_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../crates/tinyhivemind-lang/examples/hives/euler-hive")
 }
