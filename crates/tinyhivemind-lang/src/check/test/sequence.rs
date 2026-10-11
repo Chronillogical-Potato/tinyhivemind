@@ -5,7 +5,7 @@ use crate::{Rule, patch, patch::PatchClass};
 #[test]
 fn an_unchanged_package_needs_no_change() {
     let review = accepted(check_edit(|_| {}));
-    assert!(review.changes.is_empty());
+    assert_eq!((review.changes).len(), 0);
     assert_eq!(review.candidate, package());
 }
 

@@ -125,7 +125,7 @@ fn the_collector_keeps_order_drops_repeats_and_yields_the_first_error() {
     found.push(Error::Schema, HIVE, "/version".to_owned());
     found.push(Error::Path { path: "a".into() }, "a", None);
     let diagnostics = Findings(vec![]).into_diagnostics();
-    assert!(diagnostics.is_empty());
+    assert_eq!((diagnostics).len(), 0);
     let mut second = Findings::default();
     second.push(Error::Schema, HIVE, None);
     assert_eq!(second.into_first(), Err(Error::Schema));

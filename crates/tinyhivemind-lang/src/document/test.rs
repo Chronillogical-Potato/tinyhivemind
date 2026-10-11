@@ -33,7 +33,7 @@ fn rules(diagnostics: &[Diagnostic]) -> Vec<(&str, Option<&str>, Rule)> {
 fn a_valid_map_decodes_with_no_findings() {
     let (package, diagnostics) = diagnose_documents(&documents());
     assert_eq!(package, Some(Package::default()));
-    assert!(diagnostics.is_empty());
+    assert_eq!((diagnostics).len(), 0);
 }
 
 #[test]
