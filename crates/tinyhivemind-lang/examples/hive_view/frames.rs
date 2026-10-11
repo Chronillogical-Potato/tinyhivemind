@@ -6,6 +6,7 @@
 use serde::Serialize;
 use tinyhivemind_core::hive::{SessionAuthor, TraceKind, trace::read};
 
+use crate::desks::{DeskEnd, ReferralRecord};
 use crate::episode::{RoundRecord, TurnRecord, speech};
 
 /// The problem a math run poses, with its exact answer.
@@ -17,7 +18,7 @@ pub(crate) struct ProblemFrame {
 }
 
 /// One NDJSON line of a run.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(crate) enum Frame {
     /// First line: what is running.
@@ -26,15 +27,39 @@ pub(crate) enum Frame {
         seed: u64,
         seats: usize,
         problem: Option<ProblemFrame>,
+        /// Addition: `true` on a `--live` run, absent otherwise.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        live: Option<bool>,
+        /// Addition: the model a `--live` run calls, absent otherwise.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
     },
-    /// One line per speaking round.
+    /// One line per speaking round (or per referral answer, phase `answer`).
     Round {
+        /// Counted across every desk of the run.
         round: u32,
+        /// Addition: the desk the round ran on.
+        desk: String,
+        /// Addition: the round's number on that desk.
+        desk_round: u32,
         phase: String,
         visibility: String,
         turns: Vec<TurnFrame>,
         standings: Vec<StandingFrame>,
     },
+    /// Addition: a referral between desks, routed or refused.
+    Referral(ReferralFrame),
+    /// Addition: one desk's ending, before the final `end` (several desks only).
+    DeskEnd {
+        desk: String,
+        ending: String,
+        topic: Option<String>,
+        correct: Option<bool>,
+        rounds: u32,
+        turns: u32,
+    },
+    /// Addition: what a `--live` run spent, just before `end`.
+    Usage(UsageFrame),
     /// Last line: how core ended the episode.
     End {
         ending: String,
@@ -42,7 +67,45 @@ pub(crate) enum Frame {
         correct: Option<bool>,
         rounds: u32,
         turns: u32,
+        /// Addition: the desk whose ending this is, on a run of several desks.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        desk: Option<String>,
     },
+}
+
+/// A referral between desks.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(crate) struct ReferralFrame {
+    pub(crate) round: u32,
+    /// `report`, `forward` or `return`.
+    pub(crate) kind: String,
+    pub(crate) from_desk: String,
+    pub(crate) to_desk: String,
+    pub(crate) seat: String,
+    /// The seat core chose to receive it, when it chose one.
+    pub(crate) target: Option<String>,
+    pub(crate) content: String,
+    pub(crate) hops: u32,
+    pub(crate) accepted: bool,
+    /// Present only when `accepted` is false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) reason: Option<String>,
+    /// Where it landed in the receiving desk's journal; `null` if refused.
+    pub(crate) sequence: Option<u64>,
+}
+
+/// What a `--live` run spent.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub(crate) struct UsageFrame {
+    pub(crate) calls: u64,
+    pub(crate) prompt_tokens: u64,
+    pub(crate) completion_tokens: u64,
+    pub(crate) total_tokens: u64,
+    /// As OpenRouter reported it per call, summed; `0.0` if it reported none.
+    pub(crate) cost_usd: f64,
+    pub(crate) wall_ms: u64,
+    /// Whether `--max-calls` stopped the run.
+    pub(crate) exhausted_calls: bool,
 }
 
 /// One turn inside a round frame.
@@ -122,7 +185,11 @@ pub(crate) enum CompareFrame {
 pub(crate) fn round(record: &RoundRecord, truth: Option<&str>) -> Frame {
     Frame::Round {
         round: record.round,
-        phase: snake(&format!("{:?}", record.phase)),
+        desk: record.desk.clone(),
+        desk_round: record.desk_round,
+        phase: record
+            .phase
+            .map_or_else(|| "answer".to_owned(), |phase| snake(&format!("{phase:?}"))),
         visibility: snake(&format!("{:?}", record.visibility)),
         turns: record
             .turns
@@ -140,6 +207,36 @@ pub(crate) fn round(record: &RoundRecord, truth: Option<&str>) -> Frame {
                 supporters: standing.supporters.clone(),
             })
             .collect(),
+    }
+}
+
+/// The referral frame for a routed or refused referral.
+pub(crate) fn referral(record: &ReferralRecord) -> Frame {
+    Frame::Referral(ReferralFrame {
+        round: record.round,
+        kind: record.kind.to_owned(),
+        from_desk: record.from_desk.clone(),
+        to_desk: record.to_desk.clone(),
+        seat: record.seat.clone(),
+        target: record.target.clone(),
+        content: record.content.clone(),
+        hops: record.hops,
+        accepted: record.accepted,
+        reason: record.reason.clone(),
+        sequence: record.sequence,
+    })
+}
+
+/// The `desk_end` frame for one desk's ending; `truth` as for [`round`].
+pub(crate) fn desk_end(end: &DeskEnd, truth: Option<&str>) -> Frame {
+    let topic = end.ending.topic().map(str::to_owned);
+    Frame::DeskEnd {
+        desk: end.desk.clone(),
+        ending: end.ending.name().into(),
+        correct: truth.map(|truth| topic.as_deref() == Some(truth)),
+        topic,
+        rounds: end.rounds,
+        turns: end.turns,
     }
 }
 
