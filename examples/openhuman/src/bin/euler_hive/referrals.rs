@@ -131,7 +131,11 @@ impl Federation {
                         candidate,
                         report,
                     };
-                    if ending.candidate.is_some() {
+                    if ending
+                        .candidate
+                        .as_deref()
+                        .is_some_and(|candidate| self.verified(candidate))
+                    {
                         self.finished = Some(ending);
                     } else {
                         self.undecided = Some(ending);
@@ -255,6 +259,18 @@ impl Federation {
         frame.accepted = true;
         self.referrals.push(frame);
         Ok(())
+    }
+
+    /// Whether a verify-desk seat supported `candidate`. A support there is
+    /// grounded (`tools::grounded`: it ran a check that turn), so a committed
+    /// answer always rests on at least one executed verification.
+    pub(super) fn verified(&self, candidate: &str) -> bool {
+        self.index(super::budget::VERIFY_DESK).is_some_and(|desk| {
+            self.floors[desk]
+                .standings
+                .get(candidate.trim())
+                .is_some_and(|(supporters, _)| !supporters.is_empty())
+        })
     }
 
     /// Record that `seat`'s current chain on `desk` is owed one answer.
