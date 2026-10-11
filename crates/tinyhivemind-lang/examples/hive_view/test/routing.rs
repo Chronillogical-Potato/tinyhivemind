@@ -8,7 +8,7 @@ use tinyhivemind_core::hive::{EpisodePolicy, HiveTurn, SessionMessage, Visibilit
 use crate::Result;
 use crate::desks::{DeskEnd, FORWARD_CAP, ReferralRecord, run_hive};
 use crate::episode::{Ending, Event, RoundRecord, Speaker};
-use crate::hive::{Hive, desk_policy};
+use crate::hive::{Hive, desk_policies};
 use crate::load::{Loaded, load};
 use crate::run::{Plan, execute, prepare};
 
@@ -47,12 +47,38 @@ fn a_desk_takes_its_share_of_the_package_policy() {
     policy.turn_budget = 150;
     policy.round_width = 10;
     policy.revealed_width = 12;
-    let desk = desk_policy(&policy, 10, 50);
+    let desks = desk_policies(&policy, &[10, 10, 10, 10, 10]);
+    let desk = desks[0];
     assert_eq!(desk.quorum.threshold, 6, "26 x 10 / 50, rounded up");
     assert_eq!(desk.turn_budget, 30);
     assert_eq!((desk.round_width, desk.revealed_width), (10, 10));
-    let tiny = desk_policy(&policy, 1, 50);
+    let tiny = desk_policies(&policy, &[1, 49])[0];
     assert_eq!((tiny.quorum.threshold, tiny.turn_budget), (1, 3));
+}
+
+#[test]
+fn the_desks_split_the_turn_budget_without_exceeding_it() {
+    let spend = |budget: u32, sizes: &[usize]| -> u32 {
+        let mut policy = EpisodePolicy::default();
+        policy.turn_budget = budget;
+        desk_policies(&policy, sizes)
+            .iter()
+            .map(|desk| desk.turn_budget)
+            .sum()
+    };
+    assert_eq!(
+        spend(60, &[1, 1, 1, 1, 1]),
+        60,
+        "was 13 + 13 + 13 + 13 + 9 style overshoot"
+    );
+    assert_eq!(spend(61, &[3, 3, 3, 3, 3]), 61);
+    assert_eq!(
+        spend(1, &[2, 2, 2, 2, 2]),
+        1,
+        "one turn is one turn, not five"
+    );
+    assert_eq!(spend(0, &[2, 3]), 0);
+    assert_eq!(spend(7, &[5, 1, 1]), 7);
 }
 
 #[test]

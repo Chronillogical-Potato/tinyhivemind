@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use tinyhivemind_lang::Link;
 
 use crate::Result;
-use crate::hive::desk_policy;
+use crate::hive::desk_policies;
 use crate::load::{Loaded, body, roles, seat_desks};
 use crate::math::problems;
 
@@ -91,7 +91,8 @@ pub(crate) fn structure(loaded: &Loaded) -> Result<Value> {
     let role_of = roles(hive);
     let desks_of = seat_desks(hive);
     let episode = &hive.policies.episode;
-    let seats: usize = hive.desks.iter().map(|desk| desk.members.len()).sum();
+    let sizes: Vec<usize> = hive.desks.iter().map(|desk| desk.members.len()).collect();
+    let seats: usize = sizes.iter().sum();
     let structure = StructureJson {
         id: hive.id.clone(),
         name: hive.name.clone(),
@@ -134,7 +135,8 @@ pub(crate) fn structure(loaded: &Loaded) -> Result<Value> {
         desks: hive
             .desks
             .iter()
-            .map(|desk| DeskJson {
+            .zip(desk_policies(episode, &sizes))
+            .map(|(desk, split)| DeskJson {
                 id: desk.id.clone(),
                 name: desk.name.clone(),
                 description: desk.description.clone(),
@@ -142,7 +144,7 @@ pub(crate) fn structure(loaded: &Loaded) -> Result<Value> {
                 responder_mode: format!("{:?}", desk.responder_mode).to_lowercase(),
                 episode: {
                     let own = if hive.desks.len() > 1 {
-                        desk_policy(episode, desk.members.len(), seats)
+                        split
                     } else {
                         *episode
                     };
