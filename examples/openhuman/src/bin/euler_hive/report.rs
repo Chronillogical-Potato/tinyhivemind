@@ -116,6 +116,25 @@ pub(super) async fn probe(
         "probe memory count at {at}: {:?}",
         count_at(engine, &at).await?
     );
+    for (label, kinds) in [
+        ("learnings", vec![tinymemory_api::ItemKind::Learning]),
+        ("any kind", vec![]),
+    ] {
+        let mut request = tinymemory_api::FetchRequest::new(
+            "can the euler hive write to CortexDB",
+            tinymemory_api::FetchMode::Hybrid,
+            5,
+        );
+        request.filter = tinymemory_api::MetaFilter {
+            reach: Some(tinymemory_api::Reach::exact(at.parse()?)),
+            kinds,
+            ..tinymemory_api::MetaFilter::default()
+        };
+        match engine.fetch(request).await {
+            Ok(page) => println!("probe memory fetch ({label}): {} hits", page.hits.len()),
+            Err(error) => println!("probe memory fetch ({label}): FAILED {error}"),
+        }
+    }
     run.write("probe.txt", "probe complete\n");
     Ok(())
 }
