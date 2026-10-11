@@ -22,8 +22,8 @@ macro_rules! package {
     };
 }
 
-fn lowered(documents: BTreeMap<String, String>) -> Result<(Package, LoweredHive)> {
-    let package = parse(&documents)?;
+fn lowered(documents: &BTreeMap<String, String>) -> Result<(Package, LoweredHive)> {
+    let package = parse(documents)?;
     let lowered = lower(&package)?;
     Ok((package, lowered))
 }
@@ -267,7 +267,7 @@ fn math_swarm_is_five_linked_desks_of_ten_with_wide_blind_rounds() -> Result<()>
 }
 
 fn incident_response() -> Result<(Package, LoweredHive)> {
-    lowered(package!(
+    lowered(&package!(
         "incident-response",
         [
             "hive.json",
@@ -288,7 +288,7 @@ fn incident_response() -> Result<(Package, LoweredHive)> {
 }
 
 fn math_panel() -> Result<(Package, LoweredHive)> {
-    lowered(package!(
+    lowered(&package!(
         "math-panel",
         [
             "hive.json",
@@ -308,7 +308,7 @@ fn math_panel() -> Result<(Package, LoweredHive)> {
 }
 
 fn math_swarm() -> Result<(Package, LoweredHive)> {
-    lowered(package!(
+    lowered(&package!(
         "math-swarm",
         [
             "hive.json",
@@ -374,7 +374,7 @@ fn math_swarm() -> Result<(Package, LoweredHive)> {
 }
 
 fn memory_guild() -> Result<(Package, LoweredHive)> {
-    lowered(package!(
+    lowered(&package!(
         "memory-guild",
         [
             "hive.json",
@@ -392,7 +392,7 @@ fn memory_guild() -> Result<(Package, LoweredHive)> {
 }
 
 fn research_debate() -> Result<(Package, LoweredHive)> {
-    lowered(package!(
+    lowered(&package!(
         "research-debate",
         [
             "hive.json",
@@ -412,7 +412,7 @@ fn research_debate() -> Result<(Package, LoweredHive)> {
 }
 
 fn review_board() -> Result<(Package, LoweredHive)> {
-    lowered(package!(
+    lowered(&package!(
         "review-board",
         [
             "hive.json",
@@ -428,7 +428,7 @@ fn review_board() -> Result<(Package, LoweredHive)> {
 }
 
 fn self_improving() -> Result<(Package, LoweredHive)> {
-    lowered(package!(
+    lowered(&package!(
         "self-improving",
         [
             "hive.json",
