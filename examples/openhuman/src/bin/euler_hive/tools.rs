@@ -349,7 +349,7 @@ impl HiveTool {
             .map_err(|e| e.to_string())?
             .map_err(|e| format!("sandbox failed: {e}"))?;
         self.services.run.json(&format!("{stem}.out.json"), &output);
-        self.services.run.event(&json!({"event": "run_python", "seat": self.scope.seat, "program": number, "run": index, "code": output.code, "timed_out": output.timed_out, "elapsed_ms": output.elapsed_ms}));
+        self.services.run.event(&json!({"event": "run_python", "seat": self.scope.seat, "desk": self.scope.desk, "program": number, "run": index, "code": output.code, "timed_out": output.timed_out, "elapsed_ms": output.elapsed_ms}));
         Ok(format!(
             "exit code: {}{}\n--- stdout ---\n{}\n--- stderr ---\n{}",
             output.code.map_or_else(|| "killed".into(), |code| code.to_string()),
@@ -443,7 +443,10 @@ fn summarize(kind: SeatTool, args: &Value, result: &Result<String, String>) -> S
     };
     match kind {
         SeatTool::WebSearch => format!("{} [{}] -> {outcome}", field("query"), field("provider")),
-        SeatTool::RunPython => format!("{} lines -> {outcome}", field("code").lines().count().max(1)),
+        SeatTool::RunPython => format!(
+            "{} lines -> {outcome}",
+            args.get("code").and_then(Value::as_str).unwrap_or("").lines().count()
+        ),
         SeatTool::Broadcast => format!("@{} -> {outcome}", field("to")),
         SeatTool::Refer => format!("#{} -> {outcome}", field("desk")),
         SeatTool::Complete => format!("complete -> {outcome}"),

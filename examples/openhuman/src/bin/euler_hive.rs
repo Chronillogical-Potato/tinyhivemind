@@ -176,6 +176,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
     println!("memory_engine: cortexdb via tinyhumans ({health:?})");
     let sandbox = sandbox::PythonSandbox::from_env();
     sandbox.preflight()?;
+    println!("sandbox: docker {} (no network, nothing mounted)", sandbox.image());
     let search = search::WebSearch::new(
         &backend,
         tinyhumans_key.clone(),

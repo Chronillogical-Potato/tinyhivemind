@@ -10,7 +10,7 @@ use tinyhivemind_core::referral::{
 };
 use tinyhivemind_core::roster::Roster;
 
-use super::floors::{ASK_CAP, Federation, Final, Incoming, Mode, Row};
+use super::floors::{ASK_CAP, Federation, Final, Incoming, Mode};
 use super::frames::ReferralFrame;
 use super::tools::Verdict;
 

@@ -25,8 +25,7 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use serde::Serialize;
-use tinyhivemind_core::desk::{Desk, DeskSet};
-use tinyhivemind_core::dispatch::{DispatchConversation, DispatchKey};
+use tinyhivemind_core::desk::Desk;
 use tinyhivemind_core::driver::{
     AgentBinding, BoundAgent, BoundHive, BroadcastRouting, CommittedUtterance, CompletionDriver,
     DriverState, HiveGraph, HostAction,
@@ -35,11 +34,10 @@ use tinyhivemind_core::embed::RoutingPolicy;
 use tinyhivemind_core::hive::{
     CompletionEpisodeState, CompletionStep, apply_assignment, completion_status,
 };
-use tinyhivemind_core::mention::{MentionAuthor, resolve as mentions_in};
 use tinyhivemind_core::referral::{
-    ReferralDecision, ReferralInput, ReferralKind, ReferralOrigin, ReferralPolicy, referral,
+    ReferralOrigin, ReferralPolicy,
 };
-use tinyhivemind_core::roster::{Roster, RosterMember};
+use tinyhivemind_core::roster::RosterMember;
 use tinyhivemind_core::runtime::speech::Utterance;
 use tinyhivemind_core::runtime::{Conversation, Sequence};
 use tinyhivemind_lang::LoweredHive;
