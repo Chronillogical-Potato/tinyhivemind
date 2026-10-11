@@ -88,6 +88,16 @@ impl SimConfig {
         if config.slices.iter().any(|modulus| *modulus < 2) || config.slices.is_empty() {
             return Err("sim.json slices must be moduli of at least two".into());
         }
+        let ranges = config
+            .roles
+            .values()
+            .chain(std::iter::once(&config.baseline.sim))
+            .map(|role| role.accuracy);
+        for [low, high] in ranges {
+            if low > high || high > PPM {
+                return Err("sim.json accuracy ranges must be ordered parts per million".into());
+            }
+        }
         Ok(config)
     }
 }
@@ -148,12 +158,12 @@ impl MathSim {
             *index += 1;
             let accuracy = Rng::stream(seed, &format!("accuracy/{seat}")).between(sim.accuracy[0], sim.accuracy[1]);
             let mut draw = Rng::stream(seed, &format!("answer/{}/{seat}", problem.id));
-            let right = draw.chance(accuracy);
-            let wrong = || wrong_answer(&mut draw.clone(), &config.errors, answer, classic);
-            let (own, residue) = match (sim.behaviour.as_str(), right) {
-                (_, true) => (Some(answer), None),
-                ("slice", false) => (None, Some((modulus, answer % modulus))),
-                (_, false) => (Some(wrong()), None),
+            let (own, residue) = if draw.chance(accuracy) {
+                (Some(answer), None)
+            } else if sim.behaviour == "slice" {
+                (None, Some((modulus, answer % modulus)))
+            } else {
+                (Some(wrong_answer(&mut draw, &config.errors, answer, classic)), None)
             };
             states.insert(
                 seat.clone(),
@@ -176,9 +186,6 @@ impl MathSim {
 }
 
 fn wrong_answer(rng: &mut Rng, errors: &Errors, answer: u64, classic: u64) -> u64 {
-    // Skip the draw already spent on right-or-wrong so the error pick is
-    // independent of it.
-    rng.next_u64();
     let total = (errors.classic + errors.plus_one + errors.minus_one).max(1);
     let roll = rng.below(total);
     if roll < errors.classic {
@@ -240,20 +247,29 @@ fn revealed(seat: &mut SeatState, id: &str, visible: &[SessionMessage], policy: 
             }
         }
     }
+    let leader = ranked.first().map(|(topic, _)| *topic);
     let wanted = match seat.behaviour.as_str() {
-        "guess" | "lead" => ranked.first().map(|(topic, _)| (*topic).to_owned()),
-        _ => ranked.iter().find(|(topic, _)| seat.admits(topic)).map(|(topic, _)| (*topic).to_owned()),
+        // A guesser cannot check anything, so it follows the room, once.
+        "guess" => leader.filter(|_| seat.supported.is_empty()),
+        // A lead follows the room as the room moves.
+        "lead" => leader,
+        // A partial calculator backs the leading answer its slice admits, once.
+        "slice" => ranked
+            .iter()
+            .map(|(topic, _)| *topic)
+            .find(|topic| seat.admits(topic))
+            .filter(|_| seat.supported.is_empty()),
+        // A solver or checker already advocates its own answer by proposing it.
+        _ => None,
     };
+    let own = seat.own.map(|own| own.to_string());
     if let Some(topic) = wanted
-        && seat.own.is_none_or(|own| own.to_string() != topic || seat.behaviour != "guess")
-        && !seat.supported.contains(&topic)
-        && let Some(cited) = advocacy_of(visible, &topic, id)
+        && own.as_deref() != Some(topic)
+        && !seat.supported.contains(topic)
+        && let Some(cited) = advocacy_of(visible, topic, id)
     {
-        let herding = matches!(seat.behaviour.as_str(), "guess" | "lead");
-        if !herding || seat.supported.is_empty() {
-            seat.supported.insert(topic.clone());
-            lines.push(format!("!support #{topic} ^{cited} I reproduce {topic}."));
-        }
+        seat.supported.insert(topic.to_owned());
+        lines.push(format!("!support #{topic} ^{cited} I reproduce {topic}."));
     }
     lines
 }
@@ -295,9 +311,4 @@ fn targets(
     }
     found.sort_by_key(|(support, sequence, _)| (std::cmp::Reverse(*support), *sequence));
     found.into_iter().map(|(_, sequence, topic)| (sequence, topic)).collect()
-}
-
-/// Whether `ppm` is a valid probability.
-pub(crate) fn valid_ppm(ppm: u64) -> bool {
-    ppm <= PPM
 }
