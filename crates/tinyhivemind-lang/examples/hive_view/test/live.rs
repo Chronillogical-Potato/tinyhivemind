@@ -12,7 +12,8 @@ use tinyhivemind_core::hive::{
 use crate::episode::{message, speech};
 use crate::live::prompt::{self, Brief, Parsed, parse};
 use crate::live::provider::{
-    DEFAULT_MODEL, FORBIDDEN_KEYS, artifacts_root_in, check_model, main_checkout, redact_user, request_body,
+    DEFAULT_MODEL, FORBIDDEN_KEYS, artifacts_root_in, check_model, main_checkout, redact_user,
+    request_body,
 };
 
 #[test]
@@ -208,13 +209,13 @@ fn live_artifacts_live_outside_target_unless_hive_runs_dir_says_otherwise() {
 struct Scratch(std::path::PathBuf);
 
 impl Scratch {
-    fn new(name: &str) -> Self {
+    fn new(name: &str) -> crate::Result<Self> {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/hive-view-test")
             .join(format!("{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("scratch dir");
-        Self(std::fs::canonicalize(&dir).expect("scratch dir resolves"))
+        std::fs::create_dir_all(&dir)?;
+        Ok(Self(std::fs::canonicalize(&dir)?))
     }
 }
 
@@ -225,19 +226,18 @@ impl Drop for Scratch {
 }
 
 #[test]
-fn a_linked_worktree_keeps_live_artifacts_in_its_main_checkout() {
-    let scratch = Scratch::new("worktree");
+fn a_linked_worktree_keeps_live_artifacts_in_its_main_checkout() -> crate::Result<()> {
+    let scratch = Scratch::new("worktree")?;
     let main = scratch.0.join("main");
     let gitdir = main.join(".git/worktrees/feature");
-    std::fs::create_dir_all(&gitdir).unwrap();
-    std::fs::write(gitdir.join("commondir"), "../..\n").unwrap();
+    std::fs::create_dir_all(&gitdir)?;
+    std::fs::write(gitdir.join("commondir"), "../..\n")?;
     let worktree = main.join("worktrees/feature");
-    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::create_dir_all(&worktree)?;
     std::fs::write(
         worktree.join(".git"),
         format!("gitdir: {}\n", gitdir.display()),
-    )
-    .unwrap();
+    )?;
 
     assert_eq!(main_checkout(&worktree), main);
     assert_eq!(main_checkout(&main), main, "a main checkout is its own");
@@ -245,20 +245,21 @@ fn a_linked_worktree_keeps_live_artifacts_in_its_main_checkout() {
         artifacts_root_in(&main_checkout(&worktree), None),
         main.join("hive-runs/hive-view")
     );
+    Ok(())
 }
 
 #[test]
-fn a_submodule_or_a_bare_directory_is_its_own_checkout() {
-    let scratch = Scratch::new("submodule");
+fn a_submodule_or_a_bare_directory_is_its_own_checkout() -> crate::Result<()> {
+    let scratch = Scratch::new("submodule")?;
     let parent = scratch.0.join("super");
-    let module_gitdir = parent.join(".git/modules/child");
-    std::fs::create_dir_all(&module_gitdir).unwrap();
+    std::fs::create_dir_all(parent.join(".git/modules/child"))?;
     let child = parent.join("child");
-    std::fs::create_dir_all(&child).unwrap();
-    std::fs::write(child.join(".git"), "gitdir: ../.git/modules/child\n").unwrap();
+    std::fs::create_dir_all(&child)?;
+    std::fs::write(child.join(".git"), "gitdir: ../.git/modules/child\n")?;
     assert_eq!(main_checkout(&child), child, "no commondir: not a worktree");
 
     let plain = scratch.0.join("plain");
-    std::fs::create_dir_all(&plain).unwrap();
+    std::fs::create_dir_all(&plain)?;
     assert_eq!(main_checkout(&plain), plain, "no .git at all");
+    Ok(())
 }
