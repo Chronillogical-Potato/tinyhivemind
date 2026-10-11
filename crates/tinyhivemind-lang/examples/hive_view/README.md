@@ -109,14 +109,19 @@ every round and ending; `desks.rs` still routes every referral.
   with the redacted error; any other failed call (a timeout, a 429 or 5xx
   after curl's retries) is recorded as a `note:` line. A run the cap stopped
   says so on stderr and in `usage.exhausted_calls`.
-- **Artifacts.** `target/hive-live/<package>-seed<N>-<ms>/`: every request
-  body and response, `calls.ndjson` (seat, desk, raw reply, recorded line),
-  `frames.ndjson` and `usage.json`. Never the key.
+- **Artifacts.** `hive-runs/hive-view/<package>-seed<N>-<ms>/` at the root of
+  the workspace the example was built in (git-ignored, and outside `target/`
+  so `cargo clean` keeps it), or `$HIVE_RUNS_DIR/<package>-seed<N>-<ms>/` when
+  `HIVE_RUNS_DIR` is set: every request body and response, `calls.ndjson`
+  (seat, desk, raw reply, recorded line), `frames.ndjson` and `usage.json`.
+  Never the key.
 
 ### No web access
 
 Enforced three times. Every gallery seat denies `web_search`, `web_fetch`,
-`browser` and `http` and allows none (`tests/gallery_packages.rs`). The only
+`browser` and `http` and allows none (`tests/gallery_packages.rs`); the one
+exception is `euler-hive`, whose research-desk seats opt in to `web_search`
+and nothing else. The only
 request body sent carries no `tools`, `tool_choice`, `functions`, `plugins` or
 `web_search_options` (pinned in `test/live.rs`, and checked again before each
 send). And a model id with `online`, `search`, `sonar` or `web` in it (such
