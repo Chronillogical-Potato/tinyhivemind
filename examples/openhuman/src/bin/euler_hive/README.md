@@ -35,7 +35,7 @@ program, and the hive's answer, none of which may be committed.
 | Memory | CortexDB behind the TinyHumans backend (`CortexEngine::tinyhumans`), installed as the runtime's memory engine. `language::memory_binding` binds each agent, so OpenHuman logs its turns under `<root>/agent:<seat>`; `SeatMemory` honours the rest of the binding (moments, reads, budget, kinds, read-only, the verified pool) as core `Recall`/`Remember`. `lifecycle: run` is a `ws:<run>` scope under the package root. |
 | Desks | One floor per desk under core's `CompletionDriver`; broadcasts routed by core with `MentionRouter`; desks reach each other only through core's `referral` fold along declared links (`floors.rs`, `referrals.rs`). |
 | Budgets | Seat turns, model calls, wall clock, sandbox runs, searches and dollars, each checked before the spend it guards. Spend is the larger of OpenHuman's per-turn cost and OpenRouter's own account delta for the key. |
-| Secrets | Keys come from the environment only and reach no argv, prompt, artifact or log. OpenHuman's secret store gets a throwaway master key from `/dev/urandom` per run (the process re-executes itself with it) instead of waiting minutes on the OS keychain. |
+| Secrets | Keys come from the environment only and reach no argv, prompt, artifact or log. OpenHuman's secret store never asks the OS keychain: a run re-executes itself with the encrypted file store pinned (`OPENHUMAN_KEYRING_BACKEND=encrypted_file`) and a throwaway master key from `/dev/urandom`. Tests and other cargo-launched processes use the file store via the repo's `.cargo/config.toml`. |
 
 ## Artifacts
 
