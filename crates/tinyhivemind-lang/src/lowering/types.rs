@@ -39,7 +39,8 @@ pub struct LoweredHive {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LoweredMemoryBinding {
-    /// Resolved memory namespace identifying the agent or pool.
+    /// The namespace's final id: the text after its last `:`, so
+    /// `team:hive/agent:critic` yields `critic`.
     pub agent_id: String,
     /// Full resolved namespace retained for host capability checks.
     pub namespace: String,
@@ -47,7 +48,9 @@ pub struct LoweredMemoryBinding {
     pub kind: crate::MemoryKind,
     /// Identity lifecycle, freeze and fork requirements.
     pub identity: crate::MemoryIdentity,
-    /// Root namespace supplied to the runtime.
+    /// The namespace's parent: the text before its last `/`, so
+    /// `team:hive/agent:critic` yields `team:hive`. A namespace with no `/`
+    /// yields [`crate::MemorySpec::root`].
     pub root: String,
     /// Recall, remember and read settings the host must install.
     pub settings: SeatMemory,
