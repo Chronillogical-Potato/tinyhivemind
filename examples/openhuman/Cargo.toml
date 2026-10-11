@@ -14,7 +14,7 @@ default-run = "tinyhivemind-openhuman-example"
 anyhow = "1"
 # The multi-hive host supplies one classified native filesystem proof tool.
 async-trait = "0.1"
-tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "8a87a26293341c51afa11bccfdbe920def7ca9d6" }
+tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "360721bc3c7a26221b61f6629f5f0415cfccb568" }
 futures = "0.3"
 # The live hive uses OpenHuman's native runtime, agents, sessions, and TinyCortex module.
 openhuman-embed = { path = "../../vendor/openhuman/crates/openhuman-embed", default-features = false, features = ["mcp", "modules", "skills"] }
