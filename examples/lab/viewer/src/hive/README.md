@@ -11,19 +11,20 @@ covers them under node.
 | `index.js` | Entry: tabs, URL state (`?view=hive`, `?hive=<name>&seed=N`, `?compare=a,b&seeds=N`), and the wiring from streams to panels |
 | `api.js` | Fetches the listing and structures and opens the run and compare streams |
 | `stream.js` | Server-sent events over `fetch`, so a 400 shows its message and a finished stream does not reconnect |
-| `simulation.js` | Pure reducer: frames → the room after N rounds (lines, answers, standings carried over, crossings, ending), plus `sawBy` |
-| `player.js` | The replay clock: buffers frames and steps through them at 0.5× to 8× |
+| `simulation.js` | Pure reducer: frames → the room after N rounds (lines tagged with their floor, transcript entries, referrals and this step's fresh ones, desk endings, usage, standings carried over, crossings, ending), plus `sawBy` |
+| `referrals.js` | Pure: the declared link a referral travelled (`edgeFor`), its wording, and the per-desk transcript filter and tabs |
+| `player.js` | The replay clock: buffers frames and steps through them at 0.5× to 8×, or follows a live stream to its newest round |
 | `layout.js` | Pure geometry: desk boxes in a wrapping grid, seats in their first desk, compact nodes above 16 seats |
-| `graph.js` | The room in SVG: desks, topology and referral edges (animated when crossed), seats, answer chips, speech bubbles |
+| `graph.js` | The room in SVG: desks with ending badges, topology and referral edges, referral packets (accepted or refused, on a temporary edge when unlinked), seats, answer chips, speech bubbles |
 | `standings.js` | Support and object bars per topic with the quorum threshold line |
-| `transcript.js` | The rolling transcript and the selected seat's `saw`/`of` highlight |
-| `banner.js` | The ending banner |
-| `controls.js` | Package, knobs, Run, Play/Pause, Step, speed and the scrubber |
+| `transcript.js` | The rolling transcript with desk tabs, referral and desk-ending rows, and the selected seat's `saw`/`of` highlight |
+| `banner.js` | The ending banner (with the answer desk), per-desk ending chips, and the live usage line |
+| `controls.js` | Package, knobs, the live toggle with model and call cap, Run, Play/Pause, Step, speed, the scrubber and Latest |
 | `gallery.js` | Landing cards for every package |
 | `compare.js` | Compare bars, the per-seed strip, and the pure `summarize`/`outcome`/`order` |
 | `dom.js` | Small DOM and SVG builders and text wrapping |
 | `hive.css` | Styles for both tabs, built on the theme tokens in `index.html` |
-| `simulation.test.js` | `npm test`: seek, step past the end, ending, standings carry-over, `sawBy`, crossings, SSE parsing |
+| `simulation.test.js` | `npm test`: seek, step past the end, ending, standings carry-over, `sawBy`, crossings, SSE parsing; per-desk rounds, referrals, desk endings, `end.desk`, usage, desk filter, link matching, live follow |
 | `compare.test.js` | `npm test`: summaries match the stream's own, outcome classes, baseline ordering |
 
 ## Constraints
@@ -34,6 +35,16 @@ covers them under node.
 - Which lines a turn saw is reconstructed: the binary reports only the counts
   `saw` and `of`, so the transcript highlights the `saw` most recent lines in
   front of the turn (earlier rounds only, for a blind turn).
+- A multi-desk run is one floor per desk: `round.desk` names the floor,
+  `round` stays global and floors may interleave. Messages cross desks only
+  as `referral` frames, so the inferred round-to-round crossing animation is
+  off for such a stream. A referral or `desk_end` belongs to the step that
+  was current when it streamed; a referral's packet flies only on that step.
+  Packets are moved by `requestAnimationFrame` from when each was first
+  drawn, so a redraw mid-flight resumes rather than restarts (reduced motion
+  draws them where they stop).
+- In live mode the player follows the stream until the user pauses, steps
+  or scrubs; `usage` is shown whenever it has arrived.
 - Speech bubbles avoid desk headers and seat nodes. In a compact hive, a
   bubble that has no free spot is dropped unless its seat is hovered or
   selected.
