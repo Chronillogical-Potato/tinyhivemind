@@ -221,7 +221,7 @@ function onRecordings(list) {
   if (current?.recording) controls.setRecordings(list, current.recording);
   for (const rec of fresh) toast($("hv-toasts"), rec, () => followRecording(rec.id));
   // Nothing open on the Hive tab: follow the newest run that just started.
-  if (fresh.length && document.body.dataset.view === "hive" && !current && !opening && !recAbort) followRecording(fresh[0].id);
+  if (fresh.length && document.body.dataset.view === "hive" && !current && !opening) followRecording(fresh[0].id);
 }
 
 /**
