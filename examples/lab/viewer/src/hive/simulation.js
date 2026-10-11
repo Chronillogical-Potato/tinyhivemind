@@ -64,6 +64,7 @@ export function stateAt(tl, n) {
   const spoke = new Map();
   const deskEnds = new Map();
   let standings = [];
+  let standingsDesk = null;
   const shown = (list, i) => list.filter((x) => x.step === i);
   const note = (i) => {
     for (const ref of shown(tl.referrals, i)) entries.push({ kind: "referral", ref });
@@ -83,7 +84,14 @@ export function stateAt(tl, n) {
       spoke.set(t.seat, (spoke.get(t.seat) ?? 0) + 1);
       if (t.answer != null) answers.set(t.seat, { answer: t.answer, correct: t.correct ?? null });
     }
-    if (Array.isArray(r.standings) && r.standings.length) standings = r.standings;
+    // Standings are cumulative within a desk, so an empty report keeps them;
+    // on another desk the carried candidates are not that desk's, so it clears them.
+    if (Array.isArray(r.standings)) {
+      const desk = r.desk ?? null;
+      if (r.standings.length) standings = r.standings;
+      else if (desk !== standingsDesk) standings = [];
+      standingsDesk = desk;
+    }
     note(i + 1);
   }
   const round = step ? tl.rounds[step - 1] : null;

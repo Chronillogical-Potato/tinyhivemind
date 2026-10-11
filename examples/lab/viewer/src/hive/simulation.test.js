@@ -38,6 +38,15 @@ test("seeks to any step and clamps outside the episode", () => {
   assert.equal(stateAt(tl, 0).round, null);
 });
 
+test("clears carried standings when the next desk's first round reports none", () => {
+  const round = (n, desk, standings) => ({ type: "round", round: n, desk, desk_round: 1, turns: [], standings });
+  const standing = [{ topic: "alpha", supporters: ["a"], objectors: [], committed: false }];
+  const tl = timeline([{ type: "start", package: "p" }, round(1, "first", standing), round(2, "second", []), round(3, "second", [])]);
+  assert.deepEqual(stateAt(tl, 1).standings, standing);
+  assert.deepEqual(stateAt(tl, 2).standings, [], "the second desk has no candidates yet");
+  assert.deepEqual(stateAt(tl, 3).standings, []);
+});
+
 test("stepping past the end stays on the last round", () => {
   const tl = board();
   assert.equal(stepBy(tl, 3, 1), 3);
