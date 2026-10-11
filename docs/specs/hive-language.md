@@ -33,6 +33,66 @@ and unsupported schema/version values fail rather than disappearing during a
 round trip. The `$schema` value `https://tinyhumans.ai/schemas/hive/v1`
 identifies this wire version; parsing does not fetch that URI.
 
+### Optional fields and defaults
+
+Only what has no safe default is required. Omitting any other field is the
+same as writing its default, and serializing a package always writes every
+field, so a stored package is complete and its content identity does not
+depend on how tersely it was written.
+
+| File | Required | Omitted field → default |
+| --- | --- | --- |
+| `hive.json` | `$schema`, `version`, `id`, `name`, `seats` | `roles`, `desks`, `goals`, `missions`, `topology`, `referrals`, `context` → `[]`; `policies` → `Policies::default()`; `coordinator` → `CoordinatorSettings::default()` |
+| seat | `id`, `role`, `prompt`, `template` | `label` → the seat's `id`; `config` → `{}`; `model` → `null`; `tools` → `{"allow": [], "deny": []}` (either list may be omitted); `mcp`, `skills` → `[]` |
+| desk | `id`, `name`, `members` | `description` → `null`; `responder_mode` → `lead` |
+| role, mission, link | every field | none |
+| goal | `id`, `description` | `acceptance`, `subgoals` → `[]` |
+| `policies` | nothing | each of the eleven blocks, and each field inside a block, takes its `Policies::default()` value |
+| `coordinator` | nothing | `round_width` → `1`; `conduct_policy` → `{"child_turn_wall": 6, "turn_wall": 60}`; `broadcast_budget` → `null`; each `retention` bound → `null` |
+| `constitution.json` | nothing | `max_turns` → `60`; `max_width` → `8`; the five lists → `[]`; `evaluation`, `acceptance`, `telemetry` → `null` |
+| `memory.json` | `root` | `identities`, `bindings` → `[]` |
+| memory identity | `id`, `namespace`, `kind`, `lifecycle` | `read_only` → `false`; `fork_parent` → `null` |
+| seat binding | `seat`, `identity`, `budget_chars` | `reads`, `recall_at`, `remember` → `[]` |
+| read reach | `at` | `inherit`, `descendants` → `false` |
+
+`policies` is an overlay: a JSON object merges key by key, recursively, into
+`Policies::default()`, and an array, scalar or `null` replaces the default
+value outright. So `{"episode": {"turn_budget": 20}}` changes one field and
+keeps the other episode settings, and `"rules": [...]` replaces the approval
+rules rather than appending to them. `Policies::default()` is the sequential
+configuration: episode `turn_budget` 12, `round_width` and `revealed_width` 1,
+routing thresholds 0 with `round_width` 1 and `choice_option_limit` 8,
+approval disabled with a deny default and no approver, aside, referral and
+exchange disabled, division `round_width` 4, and conduct walls 6 and 60; the
+remaining blocks take their core defaults.
+
+`memory.json`'s `root` stays required because a shared default namespace
+would let two hives' memories collide in one engine. Core policy values and
+core desks keep their complete wire form when decoded on their own; only
+their place in a manifest is lenient. A defaulted value is validated exactly
+like a written one: the defaults fit the default constitution, but a
+constitution with `max_turns` below 60 or `max_width` below 4 rejects the
+default conduct walls or division width until the manifest sets them.
+
+A minimal package that parses, validates and lowers:
+
+```json
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "mini",
+  "name": "Mini",
+  "roles": [{ "id": "solver", "charter": "roles/solver.md" }],
+  "seats": [
+    { "id": "solver", "role": "solver", "prompt": "seats/solver.md", "template": "default" }
+  ],
+  "desks": [{ "id": "room", "name": "Room", "members": ["solver"] }]
+}
+```
+
+with `constitution.json` of `{}`, `memory.json` of `{"root": "team:mini"}`,
+and the two Markdown files `roles/solver.md` and `seats/solver.md`.
+
 `seats/<id>.md` contains a prompt body, optionally preceded by frontmatter.
 Roles have independent charters in `roles/<id>.md`. Shared `context/*.md`
 documents use stable `<!-- item:id -->` identities, so deltas add, replace or
@@ -71,7 +131,12 @@ No dependency from the language to hives or OpenHuman is permitted.
   decoded value with its input and rejects unknown keys nested inside reused
   core policy values. The one exception is `"responder_mode": "lead"` on a
   desk: core omits the lead mode when serializing, so an explicit `lead` is
-  accepted rather than reported as unknown.
+  accepted rather than reported as unknown. Omitted fields pass this check,
+  since it only looks for input keys missing from the output.
+- A JSON array where the language expects an object is rejected at its
+  pointer. serde would otherwise read a struct from an array of its fields in
+  order, and with defaults an empty array (`"tools": []`, or a
+  `constitution.json` of `[]`) would quietly decode as the defaults.
 
 The parsed package is then validated.
 
@@ -94,7 +159,8 @@ namespaces, and invalid policy bounds. Topology is a graph and may contain
 cycles; goal decomposition is acyclic. Widths and budgets must be nonzero.
 The language requires `round_width <= revealed_width`, as requested in #112.
 This is stricter than core, whose default is blind width 4 and revealed width
-1: packages must explicitly choose compatible widths. Core defaults are
+1, so the language's own default episode uses width 1 for both; a package that
+widens the blind round must also widen `revealed_width`. Core defaults are
 unchanged. Constitution caps apply regardless of edit class.
 
 Routing confidences and thresholds (`minimum_confidence`,

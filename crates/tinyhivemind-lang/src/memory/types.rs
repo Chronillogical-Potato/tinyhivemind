@@ -8,8 +8,12 @@ use serde_json::Value;
 /// are judged by. [`crate::patch::guard`] rejects any proposal whose candidate
 /// changes it ([`crate::patch::Error::Immutable`]). The default caps are 60
 /// turns and a width of 8, with no edit class permitted.
+///
+/// Every field may be omitted on the wire and takes its value from
+/// [`Constitution::default`]: the caps above, empty lists, and `null` for the
+/// opaque evaluator settings.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct Constitution {
     /// Requirements stated in prose, opaque to this crate; the host evaluator
     /// enforces them.
@@ -62,6 +66,10 @@ impl Default for Constitution {
 ///
 /// It names where memory lives and who may read or write it. It never holds
 /// remembered entries; those stay in the host's memory engine.
+///
+/// `root` is required on the wire: a shared default namespace would let two
+/// hives' memories collide in one engine. `identities` and `bindings` default
+/// to empty.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MemorySpec {
@@ -70,8 +78,10 @@ pub struct MemorySpec {
     /// sit below it.
     pub root: String,
     /// Declared memories, private to an agent or shared as a pool.
+    #[serde(default)]
     pub identities: Vec<MemoryIdentity>,
     /// Per-seat bindings; a seat has at most one.
+    #[serde(default)]
     pub bindings: Vec<SeatMemory>,
 }
 impl Default for MemorySpec {
@@ -105,10 +115,12 @@ pub struct MemoryIdentity {
     /// Whether the memory lasts for one run or for the life of the hive.
     pub lifecycle: MemoryLifecycle,
     /// Whether the host must refuse writes to this memory; must be true when
-    /// the constitution pins the identity read-only.
+    /// the constitution pins the identity read-only. `false` when omitted.
+    #[serde(default)]
     pub read_only: bool,
     /// Identity this memory forks from; it must be declared, and this
-    /// namespace must sit below the parent's.
+    /// namespace must sit below the parent's. `None` when omitted.
+    #[serde(default)]
     pub fork_parent: Option<String>,
 }
 /// One seat's memory binding: what it writes to, reads, and when it recalls.
@@ -121,12 +133,18 @@ pub struct SeatMemory {
     /// Identity of the [`MemoryIdentity`] the seat writes to; must be declared.
     pub identity: String,
     /// Namespaces the seat may recall from, each bounded within the root.
+    /// Empty when omitted.
+    #[serde(default)]
     pub reads: Vec<MemoryReach>,
     /// The moments at which the host recalls memory into the seat's session.
+    /// Empty when omitted, so the host never recalls.
+    #[serde(default)]
     pub recall_at: Vec<RecallMoment>,
     /// Most characters one recall may return; must be nonzero.
     pub budget_chars: usize,
     /// Kinds of entry the host may store for the seat after an activation.
+    /// Empty when omitted, so the host stores nothing.
+    #[serde(default)]
     pub remember: Vec<EntryKind>,
 }
 /// One namespace a seat may recall from.
@@ -138,10 +156,12 @@ pub struct MemoryReach {
     pub at: String,
     /// Whether ancestors of `at` are read too. Must be false: engine
     /// inheritance would include the global root. List each permitted
-    /// ancestor as its own reach instead.
+    /// ancestor as its own reach instead. `false` when omitted.
+    #[serde(default)]
     pub inherit: bool,
     /// Whether namespaces below `at` are read too. When true, no protected
-    /// namespace may sit below `at`.
+    /// namespace may sit below `at`. `false` when omitted.
+    #[serde(default)]
     pub descendants: bool,
 }
 /// Who a memory belongs to.

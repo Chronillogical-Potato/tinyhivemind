@@ -12,6 +12,17 @@ nested inside core policy values, which serde alone would accept. The one
 exception is `"responder_mode": "lead"` on a desk: core omits the lead mode
 when it serializes, so an explicit `lead` is accepted.
 
+Every field with a safe default may be omitted; `defaults.rs` holds the
+three cases plain `#[serde(default)]` cannot express. `policies` is decoded
+as an overlay on `Policies::default()` (objects merge key by key, anything
+else replaces), a desk's `description` defaults to `None` without relaxing
+core's own `Desk` wire form, and a seat's `label` defaults to its `id`.
+Serialization still writes every field. Because serde reads a struct from an
+array of its fields, and an empty array as all defaults, a JSON array where
+an object is expected is rejected at its pointer. The full table of
+defaults is in the
+[language specification](../../../../docs/specs/hive-language.md#optional-fields-and-defaults).
+
 `diagnose_documents` runs the same steps without stopping: every unsafe
 path, every canonical file that is missing or fails to decode (with serde's
 line and column), an unknown nested field at its JSON Pointer, and every
@@ -22,6 +33,7 @@ finding.
 | --- | --- |
 | `mod.rs` | `parse`, `diagnose_documents`, JSON decoding, and the nested unknown-field check shared with `patch` |
 | `types.rs` | `Package`, `Manifest` and its sections, `Policies`, and coordinator settings |
+| `defaults.rs` | Wire defaults for policies, desks and seats that `#[serde(default)]` alone cannot give |
 | `test.rs` | Collected parse findings and their agreement with `parse` |
 
 Parsing regressions also run alongside validation in
