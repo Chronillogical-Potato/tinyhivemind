@@ -40,14 +40,14 @@ export function recordingsApi({ roots, packageStructure = async () => null, inte
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive", "X-Accel-Buffering": "no" });
     res.flushHeaders?.();
     const info = describeRecording(found.rootIndex, found.root, found.frames);
-    res.write(sse("status", { live: info.live, ended: info.ended }));
+    res.write(sse("status", { live: info.live, active: info.active, ended: info.ended }));
     let closed = false;
     const keepalive = setInterval(() => { if (!closed) res.write(": keepalive\n\n"); }, KEEPALIVE_MS);
-    // A run that is neither ended nor live crashed or was killed: send what
-    // it wrote and stop, rather than tail a file that will never grow.
+    // A run with no end frame that has not grown for STALE_MS crashed or was
+    // killed: send what it wrote and stop, rather than tail it forever.
     const tail = tailFrames(found.frames, {
       intervalMs,
-      follow: info.live,
+      follow: info.active,
       onLine: (line) => { if (!closed) res.write(sse("frame", line)); },
       onEnd: ({ ended }) => {
         clearInterval(keepalive);

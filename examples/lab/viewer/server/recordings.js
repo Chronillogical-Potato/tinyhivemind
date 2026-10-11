@@ -13,6 +13,12 @@ export const FRAMES = "frames.ndjson";
 export const STRUCTURE = "structure.json";
 /** A recording whose file changed this recently, with no `end` frame yet, is live. */
 export const LIVE_MS = 30_000;
+/**
+ * A recording with no `end` frame is tailed until it has not grown for this
+ * long: a live model round can take minutes, so `live` (30 s) is too short a
+ * leash for the tail, while a run that crashed should not be followed forever.
+ */
+export const STALE_MS = 10 * 60_000;
 const MAX_DEPTH = 5;
 const SKIP = new Set(["node_modules", ".git", "target", "dist"]);
 
@@ -115,6 +121,7 @@ export function describeRecording(rootIndex, root, file, now = Date.now()) {
     size: st.size,
     mtime,
     live: !end && now - mtime < LIVE_MS,
+    active: !end && now - mtime < STALE_MS,
     ended: !!end,
     ending: end?.ending ?? null,
     correct: end?.correct ?? null,
@@ -165,15 +172,17 @@ export function resolveRecording(roots, id) {
  * there and for every line appended later, polled every `intervalMs`. A
  * partial last line waits until its newline arrives (or, once the run is
  * over, is flushed as is). Stops after a line whose frame is `end`, calling
- * `onEnd({ ended: true })`; with `follow: false` it stops after the existing
- * content with `onEnd({ ended })`. Returns `{ stop() }`.
+ * `onEnd({ ended: true })`; with `follow: false`, or once the file has not
+ * grown for `staleMs`, it stops after the content there with `onEnd({ ended })`.
+ * Returns `{ stop() }`.
  */
-export function tailFrames(file, { onLine, onEnd = () => {}, intervalMs = 500, follow = true }) {
+export function tailFrames(file, { onLine, onEnd = () => {}, intervalMs = 500, follow = true, staleMs = STALE_MS, now = Date.now }) {
   const decoder = new StringDecoder("utf8");
   let offset = 0;
   let rest = "";
   let stopped = false;
   let timer = null;
+  let grew = now();
 
   const finish = (ended) => {
     if (stopped) return;
@@ -204,6 +213,7 @@ export function tailFrames(file, { onLine, onEnd = () => {}, intervalMs = 500, f
         const n = fs.readSync(fd, buf, 0, Math.min(buf.length, size - offset), offset);
         if (n <= 0) break;
         offset += n;
+        grew = now();
         const lines = (rest + decoder.write(buf.subarray(0, n))).split("\n");
         rest = lines.pop();
         for (const l of lines) if (emit(l.replace(/\r$/, ""))) return finish(true);
@@ -214,7 +224,7 @@ export function tailFrames(file, { onLine, onEnd = () => {}, intervalMs = 500, f
       if (fd != null) fs.closeSync(fd);
     }
     if (stopped) return;
-    if (!follow) {
+    if (!follow || now() - grew >= staleMs) {
       const last = rest + decoder.end();
       rest = "";
       return finish(emit(last));
