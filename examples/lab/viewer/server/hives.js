@@ -24,6 +24,8 @@ export const LIVE_MAX_CALLS = 300;
 /** A live run is killed after this long; offline runs have no cap. */
 export const LIVE_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._\-/]{0,99}(:[A-Za-z0-9._-]{1,30})?$/;
+/** Words that name a web-search model; the same list `hive_view`'s `check_model` refuses. */
+const WEB_MODEL = /online|search|sonar|web/i;
 
 /** True when the server's own env carries a non-empty OPENROUTER_API_KEY. Never returns the key. */
 export function liveAvailable(env) {
@@ -32,11 +34,13 @@ export function liveAvailable(env) {
 
 /**
  * A model id safe to pass as one argv element: plain characters, an optional
- * `:variant`, and nothing that turns on web search (`online` anywhere, or a
- * `:web` variant), since a live run must stay offline apart from the model.
+ * `:variant`, and nothing that names web search. Like `hive_view`'s
+ * `check_model`, an id containing `online`, `search`, `sonar` or `web` (any
+ * case, anywhere) is refused, since a live run must stay offline apart from
+ * the model.
  */
 export function validModel(id) {
-  return typeof id === "string" && MODEL.test(id) && !/online/i.test(id) && !/:web/i.test(id);
+  return typeof id === "string" && MODEL.test(id) && !WEB_MODEL.test(id);
 }
 
 /** The default model a live run offers: OPENROUTER_MODEL when it is valid, else LIVE_MODEL_DEFAULT. */
@@ -57,7 +61,7 @@ export function parseLive(query, env) {
   if (raw !== "1") return { ok: false, error: "live must be 1 or 0" };
   if (!liveAvailable(env)) return { ok: false, error: "live runs are unavailable: OPENROUTER_API_KEY is not set in the server's environment" };
   const model = query.get("model") || liveModelDefault(env);
-  if (!validModel(model)) return { ok: false, error: "bad model id (plain characters only; web-search variants such as :online are refused)" };
+  if (!validModel(model)) return { ok: false, error: "bad model id (plain characters only; ids naming online, search, sonar or web are refused)" };
   const calls = query.get("max_calls");
   let max_calls = LIVE_MAX_CALLS;
   if (calls != null && calls !== "") {
