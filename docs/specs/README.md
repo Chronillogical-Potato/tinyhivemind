@@ -153,3 +153,4 @@ rather than restating it. Two run across several specifications:
 - [`working-memory.md`](working-memory.md) — the port seats carry observations across activations through, with the engine left to the host ([ADR 0029](../adr/0029-working-memory-is-a-host-adapter.md)).
 
 - [`hive-language.md`](hive-language.md) — pure declarative hive packages, guarded edits, memory bindings, and evaluated lineage.
+- [`hive-language-checking.md`](hive-language-checking.md) — direct file edits checked like a compiler: located diagnostics, collected findings, and per-class changes for lineage.

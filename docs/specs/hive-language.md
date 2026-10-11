@@ -3,6 +3,7 @@
 Status: Accepted for the initial host-neutral format. Implements issue #112.
 Implementation: [plan](../plans/2026-10-10-hive-language.md).
 Boundary: [ADR 0032](../adr/0032-hive-language-owns-the-wire-format.md).
+Editing: [checking direct edits](hive-language-checking.md), [ADR 0033](../adr/0033-editors-write-files-and-the-crate-checks-them.md).
 
 ## Purpose and ownership
 
@@ -142,6 +143,11 @@ extension, superseding the memory spec's run-only non-goal for these packages;
 the existing HiveMemory default remains run-scoped.
 
 ## Edits and archive
+
+Editors edit a package's files directly; [checking direct
+edits](hive-language-checking.md) specifies how `check` validates them and
+derives the patches below, which are the recorded form of an edit
+([ADR 0033](../adr/0033-editors-write-files-and-the-crate-checks-them.md)).
 
 Patch classes are `prompt`, `context`, `memory`, `roster`, `topology`, `policy`,
 and `goal`. Typed manifest operations and stable Markdown item deltas carry
