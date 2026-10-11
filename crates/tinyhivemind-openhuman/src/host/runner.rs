@@ -42,7 +42,8 @@ impl AgentRunner for SuppliedRunner {
             }
             let usage = Arc::new(Mutex::new(None));
             let meter = usage.clone();
-            let prompt = format!("{}\n{}", hooks.context(&scope), render(&request)?);
+            let context = hooks.context_async(&scope).await;
+            let prompt = format!("{context}\n{}", render(&request)?);
             let mut turn = agent.turn(prompt).meter(move |value| {
                 *meter.lock().unwrap_or_else(PoisonError::into_inner) = value;
             });

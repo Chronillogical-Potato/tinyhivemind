@@ -164,3 +164,14 @@ pub struct PendingRequest {
 }
 /// Seat handles sharing the deployment's single runtime.
 pub type Seats = BTreeMap<String, openhuman_embed::Agent>;
+
+/// Which persistent data to remove when retiring a configured seat.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Purge {
+    /// Remove the agent home, transcripts, cron jobs and MCP state.
+    Agent,
+    /// Remove memory authored by the seat from its deployment and hive roots.
+    Memory,
+    /// Remove both the `OpenHuman` agent data and its memory.
+    Both,
+}

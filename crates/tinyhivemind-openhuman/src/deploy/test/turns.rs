@@ -274,6 +274,70 @@ fn one_continuing_seat_uses_two_roles_and_tool_restrictions() -> anyhow::Result<
         Ok::<_, anyhow::Error>(())
     })
 }
+
+#[test]
+fn a_seat_in_two_hives_receives_only_the_active_hives_memory() -> anyhow::Result<()> {
+    use tinyhivemind_core::runtime::{EntryKind, Remember, RememberEntry, RememberRequest};
+    use tinymemory_api::conformance::reference::ReferenceEngine;
+
+    let _lock = crate::RUNTIME_LOCK
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    run(async {
+        let (mut options, _backend, model) = build_options().await;
+        let script = Script::default();
+        mount(&model, script.clone()).await;
+        let engine = Arc::new(ReferenceEngine::new());
+        for (hive, note) in [
+            ("a", "private note for hive a"),
+            ("b", "private note for hive b"),
+        ] {
+            let root = native_memory_root(&format!("team:{hive}"))?;
+            let memory = crate::HiveMemory::with_root(root).map_err(anyhow::Error::from)?;
+            let store =
+                crate::HiveMemoryStore::new(engine.clone(), memory).map_err(anyhow::Error::from)?;
+            store
+                .remember(&RememberRequest {
+                    seat: "alice".into(),
+                    conversation: "earlier".into(),
+                    through: None,
+                    entries: vec![RememberEntry {
+                        kind: EntryKind::Outcome,
+                        text: note.into(),
+                    }],
+                })
+                .await?;
+        }
+        let mut config = manifest()?;
+        config.runtime.memory_engine = "host".into();
+        options.memory_engine = Some(engine);
+        let deployment = Box::pin(HiveDeployment::build_with(
+            config.validate()?,
+            Arc::new(Secrets),
+            options,
+        ))
+        .await?;
+        for hive in ["a", "b"] {
+            deployment
+                .host()
+                .coordinator()
+                .send_as_host(message(hive, hive))
+                .await?;
+            let report = deployment.host().coordinator().run_until_idle().await?;
+            assert_eq!(report.failed, 0, "{report:?}");
+        }
+        let seen = script.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        let a_turn = seen
+            .iter()
+            .find(|text| text.contains("private note for hive a"));
+        let b_turn = seen
+            .iter()
+            .find(|text| text.contains("private note for hive b"));
+        assert!(a_turn.is_some_and(|text| !text.contains("private note for hive b")));
+        assert!(b_turn.is_some_and(|text| !text.contains("private note for hive a")));
+        Ok(())
+    })
+}
 struct AllowHandler;
 struct CleanupGate {
     entered: Arc<tokio::sync::Notify>,

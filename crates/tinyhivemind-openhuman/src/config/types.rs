@@ -117,7 +117,7 @@ pub struct McpServer {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Memory {
-    /// Logical namespace root; absent defaults to `seat:<seat-id>`.
+    /// Logical namespace root; absent inherits the deployment memory root.
     /// Deployment encodes it with [`crate::deploy::native_memory_root`].
     pub root: Option<String>,
 }
@@ -148,6 +148,12 @@ pub struct PermissionProfile {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RuntimeSection {
+    /// Stable deployment identity used to derive `OpenHuman` agent ids.
+    /// Change it to start fresh transcripts and agent homes.
+    pub deployment_id: String,
+    /// Logical memory root shared by this deployment; absent derives
+    /// `deployment:<deployment_id>`.
+    pub memory_root: Option<String>,
     /// Provider connection.
     pub provider: Provider,
     /// Default model settings.
@@ -185,6 +191,8 @@ pub struct RuntimeSection {
 impl Default for RuntimeSection {
     fn default() -> Self {
         Self {
+            deployment_id: "default".into(),
+            memory_root: None,
             provider: Provider::default(),
             model: Model::default(),
             workspace: None,
@@ -272,10 +280,24 @@ pub struct SeatOverrides {
 pub struct Seat {
     /// OpenHuman-compatible agent id.
     pub id: String,
+    /// Optional `OpenHuman` agent id. When absent, deployment lowers this to
+    /// `<deployment_id>-<seat_id>` while coordinator configuration keeps the
+    /// stable seat id.
+    pub agent_id: Option<String>,
     /// Reusable profile reference.
     pub profile: String,
     /// Typed final seat settings.
     pub overrides: SeatOverrides,
+}
+impl Seat {
+    /// `OpenHuman` agent id used for sessions, transcripts and the workspace
+    /// profile, leaving [`Seat::id`] as the stable coordinator identity.
+    #[must_use]
+    pub fn resolved_agent_id(&self, deployment_id: &str) -> String {
+        self.agent_id
+            .clone()
+            .unwrap_or_else(|| format!("{deployment_id}-{}", self.id))
+    }
 }
 /// Per-hive captured overlay; cannot rebind memory or credentials.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

@@ -28,6 +28,7 @@ pub(crate) struct Inner {
 struct Entry {
     /// `None` while a replacement is being built, or after one failed.
     agent: Option<Agent>,
+    openhuman_id: String,
     source: HostTools,
     runner: Arc<SuppliedRunner>,
     activation: Arc<Activation>,
@@ -188,14 +189,41 @@ impl OpenHumanHost {
         self.register_agent(agent.clone()).await?;
         Ok(agent)
     }
+    /// Register a deployment-scoped `OpenHuman` identity under a stable seat key.
+    /// # Errors
+    /// Runtime construction or ordinary registration failures.
+    pub async fn register_spec_as(
+        &self,
+        runtime: &Runtime,
+        coordinator_id: &str,
+        spec: AgentSpec,
+    ) -> Result<Agent> {
+        let agent = runtime.agent(spec)?;
+        self.register_as(agent.clone(), coordinator_id).await?;
+        Ok(agent)
+    }
     async fn register(&self, agent: Agent, session_id: Option<&str>) -> Result<()> {
+        let coordinator_id = agent.id().to_owned();
+        self.register_as_with_session(agent, &coordinator_id, session_id)
+            .await
+    }
+    async fn register_as(&self, agent: Agent, coordinator_id: &str) -> Result<()> {
+        self.register_as_with_session(agent, coordinator_id, None)
+            .await
+    }
+    async fn register_as_with_session(
+        &self,
+        agent: Agent,
+        coordinator_id: &str,
+        session_id: Option<&str>,
+    ) -> Result<()> {
         if agent.runtime_id() != self.inner.runtime_id {
             return Err(Error::RuntimeMismatch);
         }
         if let Some(memory) = &self.inner.memory {
             memory.check(&agent)?;
         }
-        let id = agent.id().to_owned();
+        let id = coordinator_id.to_owned();
         let (runner, activation) = self.attach(&id, &agent)?;
         self.register_runner(
             AgentRegistration {
@@ -266,6 +294,7 @@ impl OpenHumanHost {
             id.into(),
             Entry {
                 agent: Some(agent.clone()),
+                openhuman_id: agent.id().to_owned(),
                 source,
                 runner: runner.clone(),
                 activation: activation.clone(),
@@ -294,18 +323,22 @@ impl OpenHumanHost {
         agent_id: &str,
         build: impl FnOnce() -> Result<Agent>,
     ) -> Result<Agent> {
-        let (runner, source) = {
+        let (runner, source, openhuman_id) = {
             let entries = self.inner.agents.lock().map_err(|_| Error::Poisoned)?;
             let entry = entries
                 .get(agent_id)
                 .ok_or_else(|| tinyhivemind_hives::Error::UnknownAgent(agent_id.into()))?;
-            (entry.runner.clone(), entry.source.clone())
+            (
+                entry.runner.clone(),
+                entry.source.clone(),
+                entry.openhuman_id.clone(),
+            )
         };
         let mut handle = runner.agent.write().await;
         *handle = None;
         self.set_entry_agent(agent_id, None)?;
         let agent = build()?;
-        if agent.id() != agent_id {
+        if agent.id() != openhuman_id {
             return Err(Error::AgentConflict(agent.id().into()));
         }
         if agent.runtime_id() != self.inner.runtime_id {
@@ -330,6 +363,27 @@ impl OpenHumanHost {
             entry.agent = agent;
         }
         Ok(())
+    }
+    pub(crate) async fn deactivate_agent(&self, coordinator_id: &str) -> Result<Agent> {
+        let runner = self
+            .inner
+            .agents
+            .lock()
+            .map_err(|_| Error::Poisoned)?
+            .get(coordinator_id)
+            .map(|entry| entry.runner.clone())
+            .ok_or_else(|| tinyhivemind_hives::Error::UnknownAgent(coordinator_id.into()))?;
+        let mut handle = runner.agent.write().await;
+        let mut entries = self.inner.agents.lock().map_err(|_| Error::Poisoned)?;
+        let entry = entries
+            .get_mut(coordinator_id)
+            .ok_or_else(|| tinyhivemind_hives::Error::UnknownAgent(coordinator_id.into()))?;
+        let agent = entry
+            .agent
+            .take()
+            .ok_or_else(|| tinyhivemind_hives::Error::UnknownAgent(coordinator_id.into()))?;
+        *handle = None;
+        Ok(agent)
     }
     /// Bind a supplied agent to an already running host conversation.
     ///
@@ -388,6 +442,10 @@ impl OpenHumanHost {
                 config,
                 memory,
             } => {
+                let coordinator_id = config
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned);
                 if let Some(memory) = &memory {
                     crate::language::validate_binding(memory)?;
                 }
@@ -406,8 +464,8 @@ impl OpenHumanHost {
                         });
                     }
                 }
-                let id = agent.id().to_owned();
-                self.register_agent(agent).await?;
+                let id = coordinator_id.unwrap_or_else(|| agent.id().to_owned());
+                self.register_as(agent, &id).await?;
                 Ok(serde_json::json!({"agent_id":id}))
             }
             ManagementRequest::JoinHive { hive_id, agent_id } => {

@@ -69,7 +69,10 @@ action, and the host commits the whole round only after every seat has supplied
 exactly one action.
 
 The CLI requires `--task`, `--api-base`, and an absolute `--output` path;
-`--model` is optional and defaults to `openai/gpt-oss-120b:nitro`.
+`--model` is optional and defaults to `openai/gpt-oss-120b:nitro`. Each task
+gets its own deployment identity by default, so configured memory remains
+task-scoped. Pass `--share-memory-across-tasks` only when configured memory
+should share the same seat namespace across tasks.
 `OPENROUTER_API_KEY` remains host-side. The task JSON requires `instance_id`,
 absolute `repo_path`, `base_commit`, `problem_statement`, and `test_command`,
 with unknown fields rejected. An episode may commit at most 24 seat turns.

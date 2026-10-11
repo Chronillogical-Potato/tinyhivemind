@@ -72,6 +72,15 @@ refused because it isolates nothing.
 `HiveMemory::recall_budget_tokens` plus `HiveMemory::configure` on the runtime's
 base config size the per-turn pack.
 
+`HiveDeployment` keeps the manifest seat key as its coordinator identity and
+uses `<deployment-id>-<seat-id>` as the OpenHuman agent id by default. Its
+memory binding uses the stable seat id under `deployment:<deployment-id>`;
+changing the deployment id starts a fresh OpenHuman profile and memory scope.
+Coordinator turns synchronously recall from a hive-specific store before the
+native turn starts, so one seat can enter two hives without seeing the other
+hive's stored learnings. `HiveDeployment::retire_seat` removes the seat from
+its hives and can purge its OpenHuman home, memory, or both.
+
 The host supplies the engine: `[memory] engine = "cortexdb"`,
 `[memory.engines.cortexdb] endpoint = "<url>"`, and the API key in the keychain
 under `memory-cortexdb`. Seat sessions persist in OpenHuman across turns, and
@@ -81,9 +90,10 @@ compaction is the only thing that drops history from the live context.
 engine and namespace. Use `HiveMemoryStore::from_config(&config, memory)` for
 the engine OpenHuman binds, or `HiveMemoryStore::new(engine, memory)` for one
 the host supplies. It serves session-start, rejoin and compaction recalls and
-structured entries (failed attempts are marked). OpenHuman already injects a
-memory pack into every bound seat's turn, so the adapter's runner adds no
-second block. See
+structured entries (failed attempts are marked). Manifest deployments disable
+OpenHuman's process-wide recall prefetch and inject the captured hive's notes
+in the runner; legacy `with_hive_memory` hosts retain native cached-pack
+behavior. See
 [`src/memory`](src/memory/README.md) and the wiki's Host integration page.
 
 The host must keep its `OpenHumanHost` alive while attached tools are in use.

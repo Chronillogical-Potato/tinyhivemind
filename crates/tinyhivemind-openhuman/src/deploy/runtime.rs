@@ -33,13 +33,20 @@ pub(super) async fn build(
     config: &HiveConfig,
     secrets: &dyn SecretResolver,
     options: &BuildOptions,
+    memory_engine: Option<Arc<dyn tinymemory_api::MemoryEngine>>,
 ) -> DeployResult<Runtime> {
     let section = &config.runtime;
     let mut native = options.config.clone().unwrap_or_default();
     native.agent.tool_dispatcher = "auto".into();
     native.scheduler.max_concurrent = section.concurrency;
-    native.memory.recall.enabled = section.memory_engine != "disabled";
+    // Coordinator turns synchronously recall their captured hive's memory
+    // before the native turn. OpenHuman's process-wide prefetch cache has no
+    // hive dimension and could return another hive's cold-cache neighbor.
+    native.memory.recall.enabled = false;
     native.memory.conversations.enabled = section.memory_engine != "disabled";
+    if section.memory_engine != "disabled" {
+        native.memory.layout = openhuman_core::config::MemoryLayoutMode::Legacy;
+    }
     let mut builder = RuntimeBuilder::new()
         .config(native)
         .modules([
@@ -90,19 +97,8 @@ pub(super) async fn build(
         }
         _ => return Err(unsupported("runtime.session_store")),
     }
-    match section.memory_engine.as_str() {
-        "disabled" => {}
-        "memory" => {
-            builder = builder.memory_engine(Arc::new(
-                tinymemory_api::conformance::reference::ReferenceEngine::new(),
-            ));
-        }
-        "host" => {
-            if let Some(port) = &options.memory_engine {
-                builder = builder.memory_engine(port.clone());
-            }
-        }
-        _ => return Err(unsupported("runtime.memory_engine")),
+    if let Some(memory_engine) = memory_engine {
+        builder = builder.memory_engine(memory_engine);
     }
     let mut servers = Vec::new();
     for server in &section.mcp {
@@ -111,6 +107,24 @@ pub(super) async fn build(
     Box::pin(builder.mcp_baseline(servers).build())
         .await
         .map_err(|_| DeployError::Runtime)
+}
+
+pub(super) fn memory_engine(
+    config: &HiveConfig,
+    options: &BuildOptions,
+) -> DeployResult<Option<Arc<dyn tinymemory_api::MemoryEngine>>> {
+    match config.runtime.memory_engine.as_str() {
+        "disabled" => Ok(None),
+        "memory" => Ok(Some(Arc::new(
+            tinymemory_api::conformance::reference::ReferenceEngine::new(),
+        ))),
+        "host" => options
+            .memory_engine
+            .clone()
+            .map(Some)
+            .ok_or_else(|| unsupported("runtime.memory_engine")),
+        _ => Err(unsupported("runtime.memory_engine")),
+    }
 }
 
 pub(super) fn budget_micros(usd: f64) -> Option<u64> {

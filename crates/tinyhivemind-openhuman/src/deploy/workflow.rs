@@ -15,7 +15,11 @@ pub(super) fn register(deployment: &HiveDeployment) -> DeployResult<()> {
         };
         let mut spec = match &workflow.target {
             WorkflowTarget::Seat(seat) => {
-                JobSpec::agent(&workflow.id, seat, &workflow.prompt, schedule)
+                let agent_id = deployment
+                    .config
+                    .agent_id_for_seat(seat)
+                    .unwrap_or_else(|| seat.clone());
+                JobSpec::agent(&workflow.id, &agent_id, &workflow.prompt, schedule)
             }
             WorkflowTarget::Hive(hive) => {
                 let weak: Weak<crate::host::Inner> = Arc::downgrade(&deployment.host.inner);

@@ -14,7 +14,7 @@ pub use factory::ManifestFactory;
 pub use memory_root::native_memory_root;
 use permission::Permissions;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex, PoisonError},
 };
 use tinyhivemind_hives::{Coordinator, CoordinatorOptions, HiveInfo, HiveSettings, MemoryStorage};
@@ -59,8 +59,16 @@ impl HiveDeployment {
     ) -> DeployResult<Self> {
         let config = validated.into_config();
         runtime::preflight(&config, &options)?;
-        let runtime =
-            Arc::new(Box::pin(runtime::build(&config, secrets.as_ref(), &options)).await?);
+        let memory_engine = runtime::memory_engine(&config, &options)?;
+        let runtime = Arc::new(
+            Box::pin(runtime::build(
+                &config,
+                secrets.as_ref(),
+                &options,
+                memory_engine.clone(),
+            ))
+            .await?,
+        );
         for profile in &config.profiles {
             runtime
                 .define_template(&profile.id, profile::definition(&config, profile))
@@ -81,7 +89,12 @@ impl HiveDeployment {
         .await
         .map_err(|_| DeployError::Coordinator)?;
         let permissions = Arc::new(Permissions::new(config.clone(), &options));
-        let hooks = Arc::new(hooks::Hooks::new(permissions.clone(), &options));
+        let memories = memory_stores(&config, memory_engine.as_ref())?;
+        let hooks = Arc::new(hooks::Hooks::with_memories(
+            permissions.clone(),
+            &options,
+            memories,
+        ));
         let factory = ManifestFactory::new(
             runtime.clone(),
             permissions.clone(),
@@ -114,7 +127,7 @@ impl HiveDeployment {
         for seat in &config.seats {
             let spec = profile::seat(&config, seat, secrets.as_ref(), permissions.clone())?;
             let agent = host
-                .register_spec(&runtime, spec)
+                .register_spec_as(&runtime, &seat.id, spec)
                 .await
                 .map_err(|_| DeployError::Agent(seat.id.clone()))?;
             seats.insert(seat.id.clone(), agent);
@@ -172,6 +185,82 @@ impl HiveDeployment {
         self.runtime
             .memory(&native_memory_root(root)?)
             .map_err(|_| DeployError::Runtime)
+    }
+    /// Remove a declared seat from every hive and retire its live `OpenHuman`
+    /// agent, optionally purging its home and/or memory records.
+    ///
+    /// # Errors
+    /// Unknown seat, coordinator refusal, failed agent teardown or unavailable
+    /// memory engine when memory purge was requested.
+    pub async fn retire_seat(&mut self, seat_id: &str, purge: Purge) -> DeployResult<()> {
+        let seat = self
+            .config
+            .seats
+            .iter()
+            .find(|seat| seat.id == seat_id)
+            .ok_or_else(|| DeployError::Agent(seat_id.into()))?;
+        let openhuman_id = seat.resolved_agent_id(&self.config.runtime.deployment_id);
+        let memberships: Vec<_> = self
+            .config
+            .hives
+            .iter()
+            .filter(|hive| hive.members.iter().any(|member| member.seat == seat_id))
+            .map(|hive| hive.id.clone())
+            .collect();
+        for hive in memberships {
+            self.host
+                .coordinator()
+                .leave_hive(&hive, seat_id)
+                .await
+                .map_err(|_| DeployError::Coordinator)?;
+        }
+        let agent = self
+            .host
+            .deactivate_agent(seat_id)
+            .await
+            .map_err(|_| DeployError::Coordinator)?;
+        if agent.id() != openhuman_id {
+            return Err(DeployError::Agent(seat_id.into()));
+        }
+        self.seats.remove(seat_id);
+        let agent = self.runtime.remove_agent(&openhuman_id);
+        match purge {
+            Purge::Agent | Purge::Both => agent.purge().await.map_err(|_| DeployError::Runtime)?,
+            Purge::Memory => agent.await.map_err(|_| DeployError::Runtime)?,
+        }
+        if matches!(purge, Purge::Memory | Purge::Both)
+            && self.config.runtime.memory_engine != "disabled"
+        {
+            let profile = self.config.profile_for(seat)?;
+            let seat_root = seat
+                .overrides
+                .memory
+                .as_ref()
+                .or(profile.memory.as_ref())
+                .and_then(|memory| memory.root.as_deref())
+                .or(self.config.runtime.memory_root.as_deref())
+                .map_or_else(
+                    || format!("deployment:{}", self.config.runtime.deployment_id),
+                    str::to_owned,
+                );
+            let mut roots = BTreeSet::from([native_memory_root(&seat_root)?]);
+            for hive in &self.config.hives {
+                roots.insert(native_memory_root(
+                    hive.memory_root
+                        .as_deref()
+                        .unwrap_or(&format!("team:{}", hive.id)),
+                )?);
+            }
+            for root in roots {
+                self.runtime
+                    .memory(&root)
+                    .map_err(|_| DeployError::Runtime)?
+                    .forget_agent(seat_id)
+                    .await
+                    .map_err(|_| DeployError::Runtime)?;
+            }
+        }
+        Ok(())
     }
     /// Replace the fallback consent snapshot for subsequent tool calls.
     /// A supplied `ApprovalContext` remains authoritative when present.
@@ -264,6 +353,29 @@ impl HiveDeployment {
         }
         Ok(())
     }
+}
+
+fn memory_stores(
+    config: &crate::config::HiveConfig,
+    engine: Option<&Arc<dyn tinymemory_api::MemoryEngine>>,
+) -> DeployResult<BTreeMap<String, crate::HiveMemoryStore>> {
+    let mut memories = BTreeMap::new();
+    if let Some(engine) = engine {
+        for hive in &config.hives {
+            let logical_root = hive
+                .memory_root
+                .clone()
+                .unwrap_or_else(|| format!("team:{}", hive.id));
+            let root = native_memory_root(&logical_root)?;
+            let memory = crate::HiveMemory::with_root(root).map_err(|_| DeployError::Runtime)?;
+            memories.insert(
+                hive.id.clone(),
+                crate::HiveMemoryStore::new(engine.clone(), memory)
+                    .map_err(|_| DeployError::Runtime)?,
+            );
+        }
+    }
+    Ok(memories)
 }
 async fn register_hives(
     host: &OpenHumanHost,

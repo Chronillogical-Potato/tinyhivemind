@@ -131,7 +131,7 @@ fn native_seat_job_keeps_baseline_denials_and_isolates_session() -> anyhow::Resu
             .ok_or_else(|| anyhow::anyhow!("missing job"))?;
         assert!(!job.single_flight);
         assert!(
-            matches!(job.target,openhuman_embed::JobTarget::Agent { ref agent_id,.. } if agent_id == "alice")
+            matches!(job.target,openhuman_embed::JobTarget::Agent { ref agent_id,.. } if agent_id == "default-alice")
         );
         assert!(
             !deployment

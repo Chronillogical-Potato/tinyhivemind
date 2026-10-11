@@ -43,7 +43,11 @@ answers and stale approvals cannot release running or later work, even when
 the later turn resumes the same input. Hosts can supply an `ApprovalContext` to share roster, epochs,
 consent state and sequence ordering with the application.
 
-Seat memory roots are fixed across hives, defaulting to `seat:<id>`. `native_memory_root` encodes every logical UTF-8 root below
+Seat memory bindings are fixed across hives. They use the stable seat id under
+`deployment:<deployment_id>` by default, or the profile/seat override. OpenHuman
+agent ids use `<deployment_id>-<seat_id>` unless explicitly configured. Hive
+`Remember` entries use a separate store rooted per hive; coordinator turns
+recall from that captured hive before invoking the native agent. `native_memory_root` encodes every logical UTF-8 root below
 `project:hivemind` using 64-byte hex chunks as `team` segments; roots over
 384 bytes fail before boot. This includes roots resembling native namespaces.
 Hive shared

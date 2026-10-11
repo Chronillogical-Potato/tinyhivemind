@@ -76,6 +76,26 @@ fn cli_defaults_to_exact_gpt_oss_model() {
     )
     .expect("valid CLI");
     assert_eq!(cli.model, DEFAULT_MODEL);
+    assert!(!cli.share_memory_across_tasks);
+}
+
+#[test]
+fn shared_memory_across_tasks_requires_an_explicit_flag() {
+    let cli = parse_cli(
+        [
+            "--task",
+            "/tmp/task.json",
+            "--api-base",
+            "http://127.0.0.1",
+            "--output",
+            "/tmp/out.json",
+            "--share-memory-across-tasks",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    )
+    .expect("valid CLI");
+    assert!(cli.share_memory_across_tasks);
 }
 
 #[test]
@@ -264,6 +284,7 @@ fn ignored_secret_refusal_happens_before_docker_or_provider() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output,
+            share_memory_across_tasks: false,
         };
         let error = run(cli).await.expect_err("ignored checkout refused");
         assert!(error.to_string().contains("ignored"));

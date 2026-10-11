@@ -91,9 +91,12 @@ impl Permissions {
         });
         let scope = captured.as_ref();
         let config = self.config();
-        let Some(seat) = config.seats.iter().find(|seat| seat.id == seat_id) else {
+        let Some(seat) = config.seats.iter().find(|seat| {
+            seat.id == seat_id || seat.resolved_agent_id(&config.runtime.deployment_id) == seat_id
+        }) else {
             return deny("unknown seat");
         };
+        let seat_id = seat.id.as_str();
         let Ok(profile) = config.profile_for(seat) else {
             return deny("unknown profile");
         };
@@ -260,11 +263,11 @@ fn basic_gate(
         .subagents
         .as_ref()
         .unwrap_or(&profile.subagents);
-    if context
-        .agent_id
-        .as_ref()
-        .is_none_or(|id| id != &seat.id && !children.contains(id))
-    {
+    if context.agent_id.as_ref().is_none_or(|id| {
+        id != &seat.id
+            && id != &seat.resolved_agent_id(&config.runtime.deployment_id)
+            && !children.contains(id)
+    }) {
         return Err("unauthenticated actor");
     }
     let tool_scope = seat
@@ -335,7 +338,12 @@ fn child_policy<'a>(
     context: &ToolHookContext,
     effect: Effect,
 ) -> Result<Option<&'a PermissionProfile>, &'static str> {
-    let Some(id) = context.agent_id.as_ref().filter(|id| *id != &seat.id) else {
+    let agent_id = seat.resolved_agent_id(&config.runtime.deployment_id);
+    let Some(id) = context
+        .agent_id
+        .as_ref()
+        .filter(|id| *id != &seat.id && *id != &agent_id)
+    else {
         return Ok(None);
     };
     let Some(child) = config.profiles.iter().find(|profile| &profile.id == id) else {

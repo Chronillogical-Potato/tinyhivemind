@@ -36,6 +36,12 @@ seat's `AgentSpec` before building it; `register_agent` refuses an agent built
 without it. `memory_test.rs` covers bound seats, unbound and foreign-bound
 refusals, the recall budget, and memory switched off.
 
+Configured deployments use a fixed per-seat binding and recall synchronously
+from the active hive's store before each coordinator turn, including the first
+turn of a session. They disable OpenHuman's process-wide prefetch because its
+cache key does not include hive identity; direct native jobs therefore do not
+receive that coordinator-specific brief.
+
 Seat sessions persist in OpenHuman: the coordinator stores the session id the
 first turn returns, and every later turn continues it through `turn.session(id)`.
 The adapter never clears a session; compaction is the only thing that drops

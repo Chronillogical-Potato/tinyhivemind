@@ -126,7 +126,13 @@ fn builds_two_hives_and_fixed_memory_seats_then_releases_runtime() -> anyhow::Re
         );
         assert_eq!(
             deployment.seats()["bob"].config().memory.root.as_deref(),
-            Some(native_memory_root("seat:bob")?.as_str())
+            Some(native_memory_root("deployment:default")?.as_str())
+        );
+        assert_eq!(deployment.seats()["alice"].id(), "default-alice");
+        assert_eq!(deployment.seats()["bob"].id(), "default-bob");
+        assert_eq!(
+            deployment.host().coordinator().list_agents()?,
+            ["alice", "bob"]
         );
         assert!(deployment.memory("b").is_err());
         assert!(format!("{deployment:?}").contains("alice"));
@@ -140,6 +146,91 @@ fn builds_two_hives_and_fixed_memory_seats_then_releases_runtime() -> anyhow::Re
         ))
         .await?;
         assert_eq!(deployment.runtime().agent_ids().len(), 2);
+        Ok::<_, anyhow::Error>(())
+    })
+}
+
+#[test]
+fn retiring_a_seat_purges_its_agent_home_and_leaves_its_hives() -> anyhow::Result<()> {
+    use openhuman_embed::memory::ItemsQuery;
+    use tinymemory_api::{
+        LearningKind, MemoryEngine, MemoryMeta, Namespace, StoreItem,
+        conformance::reference::ReferenceEngine,
+    };
+    use tinymemory_tools::MemoryLayout;
+
+    let _lock = crate::RUNTIME_LOCK
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    run(async {
+        let (mut options, _backend, _model) = build_options().await;
+        let workspace = tempfile::tempdir()?;
+        let mut config = manifest()?;
+        config.runtime.memory_engine = "host".into();
+        config.runtime.workspace = Some(workspace.path().display().to_string());
+        config.seats[0].overrides.memory = Some(crate::config::Memory {
+            root: Some("seat-specific".into()),
+        });
+        let engine = Arc::new(ReferenceEngine::new());
+        let logical_root = "seat-specific";
+        let native_root = native_memory_root(logical_root)?;
+        let root: Namespace = native_root.parse()?;
+        let seat_node = MemoryLayout::new(root)?.conversations("alice")?;
+        engine
+            .store(StoreItem::learning(
+                "alice's private memory",
+                LearningKind::Preference,
+                0.8,
+                MemoryMeta {
+                    namespace: seat_node,
+                    ..Default::default()
+                },
+            ))
+            .await?;
+        options.memory_engine = Some(engine);
+        let deployment = Box::pin(HiveDeployment::build_with(
+            config.validate()?,
+            Arc::new(Secrets),
+            options,
+        ))
+        .await?;
+        let agent_id = deployment.seats()["alice"].id().to_owned();
+        let home = workspace.path().join("agents").join(&agent_id);
+        assert!(home.exists());
+        let memory = deployment.runtime().memory(&native_root)?;
+        assert_eq!(
+            memory
+                .list(ItemsQuery {
+                    agent_id: Some("alice".into()),
+                    ..Default::default()
+                })
+                .await?
+                .items
+                .len(),
+            1
+        );
+        assert!(deployment.runtime().agent_ids().contains(&agent_id));
+        let mut deployment = deployment;
+        deployment.retire_seat("alice", Purge::Both).await?;
+        assert!(!deployment.seats().contains_key("alice"));
+        assert!(!deployment.runtime().agent_ids().contains(&agent_id));
+        assert!(!home.exists());
+        assert_eq!(
+            deployment
+                .runtime()
+                .memory(&native_root)?
+                .list(ItemsQuery {
+                    agent_id: Some("alice".into()),
+                    ..Default::default()
+                })
+                .await?
+                .items
+                .len(),
+            0
+        );
+        for hive in deployment.host().coordinator().list_hives()? {
+            assert!(!hive.members.contains(&"alice".to_owned()));
+        }
         Ok::<_, anyhow::Error>(())
     })
 }

@@ -154,6 +154,35 @@ pub enum ConfigError {
     /// Invalid declaration or native seat identifier.
     #[error("invalid id in {0}")]
     InvalidId(String),
+    /// Invalid `OpenHuman` agent identity after applying the deployment rule.
+    #[error("invalid OpenHuman agent id for seat {seat}: {agent_id:?}")]
+    InvalidAgentId {
+        /// Stable manifest seat key.
+        seat: String,
+        /// Derived or explicitly configured `OpenHuman` id.
+        agent_id: String,
+    },
+    /// An `OpenHuman` agent identity collides with a built-in definition.
+    #[error("OpenHuman agent id {agent_id:?} for seat {seat} is reserved")]
+    ReservedAgentId {
+        /// Stable manifest seat key.
+        seat: String,
+        /// Reserved `OpenHuman` id.
+        agent_id: String,
+    },
+    /// Two configured seats resolve to the same `OpenHuman` identity.
+    #[error("seats {first} and {second} resolve to the same OpenHuman agent id {agent_id:?}")]
+    DuplicateAgentId {
+        /// First seat resolving to the identity.
+        first: String,
+        /// Later seat resolving to the same identity.
+        second: String,
+        /// Colliding `OpenHuman` identity.
+        agent_id: String,
+    },
+    /// A seat cannot use the host-wide default memory root.
+    #[error("seat {0} cannot use the default shared memory root")]
+    DefaultMemoryRoot(String),
     /// Nonpositive or impossible resource limit.
     #[error("invalid limit in {0}")]
     InvalidLimit(String),

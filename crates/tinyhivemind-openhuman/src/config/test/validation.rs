@@ -102,6 +102,55 @@ fn empty_hives_bad_ids_limits_and_selectors_are_typed() {
     assert!(matches!(c.validate(), Err(ConfigError::InvalidWorkflow(_))));
 }
 #[test]
+fn deployment_agent_identities_are_valid_unique_and_not_reserved() {
+    let mut c = minimal();
+    assert_eq!(
+        c.seats[0].resolved_agent_id(&c.runtime.deployment_id),
+        "default-alice"
+    );
+    c.seats.push(Seat {
+        id: "bob".into(),
+        profile: "worker".into(),
+        ..Default::default()
+    });
+    c.seats[1].agent_id = Some("default-alice".into());
+    assert!(matches!(
+        c.validate(),
+        Err(ConfigError::DuplicateAgentId { .. })
+    ));
+
+    let mut c = minimal();
+    c.seats[0].agent_id = Some("Bad Seat".into());
+    assert!(matches!(
+        c.validate(),
+        Err(ConfigError::InvalidAgentId { .. })
+    ));
+
+    let mut c = minimal();
+    c.seats[0].agent_id = Some("orchestrator".into());
+    assert!(matches!(
+        c.validate(),
+        Err(ConfigError::ReservedAgentId { .. })
+    ));
+
+    let mut c = minimal();
+    c.runtime.deployment_id = "Run-1006".into();
+    assert!(matches!(c.validate(), Err(ConfigError::InvalidId(_))));
+}
+#[test]
+fn memory_roots_cannot_fall_back_to_the_shared_default() {
+    for root in ["", "root"] {
+        let mut c = minimal();
+        c.seats[0].overrides.memory = Some(Memory {
+            root: Some(root.into()),
+        });
+        assert!(matches!(
+            c.validate(),
+            Err(ConfigError::DefaultMemoryRoot(_))
+        ));
+    }
+}
+#[test]
 fn permission_restrictions_allow_subsets_and_reject_each_widening() {
     let parent = PermissionProfile {
         id: "baseline".into(),

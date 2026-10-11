@@ -78,6 +78,12 @@ fn rejects_an_unusable_seat_id() {
             Err(Error::InvalidMemoryAgentId { agent_id, .. }) if agent_id == seat
         ));
     }
+    for seat in ["Upper", &"x".repeat(65), "_starts_bad"] {
+        assert!(matches!(
+            memory.agent_id(seat),
+            Err(Error::InvalidMemoryAgentId { .. })
+        ));
+    }
     assert!(matches!(
         memory.bind(AgentSpec::new("bad seat")),
         Err(Error::InvalidMemoryAgentId { .. })
@@ -87,8 +93,13 @@ fn rejects_an_unusable_seat_id() {
 #[test]
 fn configure_sets_the_recall_budget_only_when_given() {
     let mut config = RuntimeConfig::default();
+    config.memory.layout = openhuman_core::config::MemoryLayoutMode::V3;
     let default = config.memory.recall.budget_tokens;
     HiveMemory::for_hive("h").unwrap().configure(&mut config);
+    assert_eq!(
+        config.memory.layout,
+        openhuman_core::config::MemoryLayoutMode::Legacy
+    );
     assert_eq!(config.memory.recall.budget_tokens, default);
     let memory = HiveMemory::for_hive("h")
         .unwrap()

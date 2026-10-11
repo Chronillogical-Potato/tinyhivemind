@@ -45,6 +45,7 @@ struct Cli {
     api_base: String,
     model: String,
     output: PathBuf,
+    share_memory_across_tasks: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -164,6 +165,11 @@ async fn run_prepared_with_mcp_executable(
         .mount(&backend)
         .await;
     let mut config = manifest("deepswe_hive")?;
+    config.runtime.deployment_id = if cli.share_memory_across_tasks {
+        "deepswe-shared".into()
+    } else {
+        format!("deepswe-{}", task.instance_id)
+    };
     config.runtime.workspace = Some(artifacts.runtime.display().to_string());
     config.runtime.mcp[0].endpoint = mcp_executable.display().to_string();
     config.runtime.mcp[0].args = sandbox.mcp_args();
@@ -582,8 +588,13 @@ fn offline_config() -> RuntimeConfig {
 
 fn parse_cli(args: impl Iterator<Item = String>) -> anyhow::Result<Cli> {
     let mut values = BTreeMap::new();
+    let mut share_memory_across_tasks = false;
     let mut args = args;
     while let Some(flag) = args.next() {
+        if flag == "--share-memory-across-tasks" {
+            share_memory_across_tasks = true;
+            continue;
+        }
         if !matches!(
             flag.as_str(),
             "--task" | "--api-base" | "--model" | "--output"
@@ -607,6 +618,7 @@ fn parse_cli(args: impl Iterator<Item = String>) -> anyhow::Result<Cli> {
             .remove("--model")
             .unwrap_or_else(|| DEFAULT_MODEL.into()),
         output,
+        share_memory_across_tasks,
     })
 }
 

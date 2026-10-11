@@ -162,6 +162,8 @@ async fn run() -> anyhow::Result<()> {
         );
     }
     let mut manifest = manifest("pe1006_hive")?;
+    manifest.runtime.deployment_id =
+        std::env::var("OPENHUMAN_HIVE_DEPLOYMENT_ID").unwrap_or_else(|_| format!("pe{problem}"));
     manifest.runtime.workspace = Some(run_dir.join("openhuman-runtime").display().to_string());
     let executable = std::env::current_exe()?;
     for profile in &mut manifest.profiles {
