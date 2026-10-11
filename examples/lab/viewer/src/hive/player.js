@@ -49,7 +49,12 @@ export function createPlayer(onChange) {
       emit();
     },
     push(frame) {
-      frames.push(frame);
+      api.pushMany([frame]);
+    },
+    /** Several frames at once, folded and drawn once: a long recording loads in one go. */
+    pushMany(list) {
+      if (!list.length) return;
+      for (const f of list) frames.push(f);
       tl = timeline(frames);
       if (following) step = tl.rounds.length;
       if (!playing) emit();
