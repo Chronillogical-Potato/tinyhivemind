@@ -159,28 +159,75 @@ fn sandbox_output_is_bounded_while_it_is_read() {
 #[test]
 fn model_call_reservations_cover_concurrent_tool_loops_and_refund_unused_calls() {
     use super::super::budget::{Budget, Limits};
-    let budget = std::sync::Arc::new(Budget::new(Limits { max_model_calls: 20, ..Limits::SMOKE }));
-    let threads: Vec<_> = (0..8).map(|_| {
-        let budget = budget.clone();
-        std::thread::spawn(move || budget.reserve_model_calls(10).is_ok())
-    }).collect();
-    let granted = threads.into_iter().map(|thread| usize::from(thread.join().expect("claimant"))).sum::<usize>();
-    assert_eq!(granted, 2, "only two ten-call loops fit the shared twenty-call cap");
-    assert!(budget.reserve_model_calls(1).is_err(), "unsettled loops keep their capacity charged");
+    let budget = std::sync::Arc::new(Budget::new(Limits {
+        max_model_calls: 20,
+        ..Limits::SMOKE
+    }));
+    let threads: Vec<_> = (0..8)
+        .map(|_| {
+            let budget = budget.clone();
+            std::thread::spawn(move || budget.reserve_model_calls(10).is_ok())
+        })
+        .collect();
+    let granted = threads
+        .into_iter()
+        .map(|thread| usize::from(thread.join().expect("claimant")))
+        .sum::<usize>();
+    assert_eq!(
+        granted, 2,
+        "only two ten-call loops fit the shared twenty-call cap"
+    );
+    assert!(
+        budget.reserve_model_calls(1).is_err(),
+        "unsettled loops keep their capacity charged"
+    );
 }
 
 #[test]
 fn model_call_reservations_settle_only_known_unused_capacity() {
     use super::super::budget::{Budget, Limits};
     use std::sync::atomic::Ordering;
-    let budget = Budget::new(Limits { max_model_calls: 10, ..Limits::SMOKE });
+    let budget = Budget::new(Limits {
+        max_model_calls: 10,
+        ..Limits::SMOKE
+    });
     let loop_calls = budget.reserve_model_calls(10).expect("loop fits");
     assert!(budget.reserve_model_calls(1).is_err());
     loop_calls.finish(2).expect("two calls issued");
     assert_eq!(budget.model_calls.load(Ordering::Acquire), 2);
-    budget.reserve_model_calls(8).expect("unused capacity refunded").finish(8).expect("all issued");
+    budget
+        .reserve_model_calls(8)
+        .expect("unused capacity refunded")
+        .finish(8)
+        .expect("all issued");
     assert!(budget.reserve_model_calls(1).is_err());
-    let budget = Budget::new(Limits { max_model_calls: 1, ..Limits::SMOKE });
-    assert!(budget.reserve_model_calls(1).expect("fits").finish(2).is_err());
+    let budget = Budget::new(Limits {
+        max_model_calls: 1,
+        ..Limits::SMOKE
+    });
+    assert!(
+        budget
+            .reserve_model_calls(1)
+            .expect("fits")
+            .finish(2)
+            .is_err()
+    );
     assert_eq!(budget.model_calls.load(Ordering::Acquire), 1);
+}
+
+#[tokio::test]
+async fn account_polling_never_starts_after_the_wall_deadline() {
+    let budget = super::super::budget::Budget::new(super::super::budget::Limits {
+        max_wall_seconds: 0,
+        ..super::super::budget::Limits::SMOKE
+    });
+    let called = std::sync::atomic::AtomicBool::new(false);
+    let result = budget
+        .poll_usage(async {
+            called.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(1.0)
+        })
+        .await;
+    assert!(result.is_none());
+    assert!(!called.load(std::sync::atomic::Ordering::SeqCst));
 }
