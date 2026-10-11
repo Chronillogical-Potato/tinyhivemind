@@ -98,7 +98,7 @@ pub enum Error {
     /// Snapshot wire representation failed.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-    /// SQLite operation failed.
+    /// `SQLite` operation failed.
     #[cfg(feature = "sqlite")]
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
