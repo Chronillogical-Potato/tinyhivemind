@@ -26,9 +26,18 @@ fn minimal() -> BTreeMap<String, String> {
     BTreeMap::from([
         ("hive.json".to_owned(), hive.to_owned()),
         ("constitution.json".to_owned(), "{}".to_owned()),
-        ("memory.json".to_owned(), r#"{ "root": "team:mini" }"#.to_owned()),
-        ("roles/solver.md".to_owned(), "Solve the problem.\n".to_owned()),
-        ("seats/solver.md".to_owned(), "Show your working.\n".to_owned()),
+        (
+            "memory.json".to_owned(),
+            r#"{ "root": "team:mini" }"#.to_owned(),
+        ),
+        (
+            "roles/solver.md".to_owned(),
+            "Solve the problem.\n".to_owned(),
+        ),
+        (
+            "seats/solver.md".to_owned(),
+            "Show your working.\n".to_owned(),
+        ),
     ])
 }
 
@@ -211,7 +220,10 @@ fn an_array_is_not_accepted_for_a_defaulted_object() -> Result<()> {
 #[test]
 fn required_fields_stay_required() -> Result<()> {
     for (file, source) in [
-        ("hive.json", r#"{"$schema": "https://tinyhumans.ai/schemas/hive/v1", "version": 1, "id": "x", "name": "x"}"#),
+        (
+            "hive.json",
+            r#"{"$schema": "https://tinyhumans.ai/schemas/hive/v1", "version": 1, "id": "x", "name": "x"}"#,
+        ),
         ("memory.json", "{}"),
     ] {
         let mut documents = minimal();
@@ -219,10 +231,16 @@ fn required_fields_stay_required() -> Result<()> {
         let found = diagnose_documents(&documents).1;
         assert_eq!(found.len(), 1);
         assert_eq!((found[0].file.as_str(), found[0].rule), (file, Rule::Json));
-        assert!(found[0].message.contains("missing field"), "{}", found[0].message);
+        assert!(
+            found[0].message.contains("missing field"),
+            "{}",
+            found[0].message
+        );
     }
     let documents = with_hive(|hive| {
-        hive["seats"][0].as_object_mut().map(|seat| seat.remove("template"));
+        hive["seats"][0]
+            .as_object_mut()
+            .map(|seat| seat.remove("template"));
     })?;
     assert_eq!(
         findings(&documents),
