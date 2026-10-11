@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Hive Lab Run Viewer</title>
+<title>Hive Lab Viewer</title>
 <style>
 :root {
   --bg: #f7f7f5; --panel: #ffffff; --ink: #1c1d21; --muted: #5d6068;
@@ -85,7 +85,14 @@ details summary { cursor: pointer; padding: 4px 0; }
 </head>
 <body>
 <main>
-  <h1>Hive Lab Run Viewer</h1>
+  <h1>Hive Lab Viewer</h1>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" id="tab-runs" aria-controls="view-runs" aria-selected="true">Runs</button>
+    <button type="button" role="tab" id="tab-hive" aria-controls="view-hive" aria-selected="false">Hive</button>
+    <button type="button" role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false">Compare</button>
+  </nav>
+
+  <div id="view-runs" role="tabpanel" aria-labelledby="tab-runs">
   <p class="muted">Inspect telemetry from one or more runs: per-seat waterfall, room timeline, token cost, and a side-by-side summary. Everything stays in your browser.</p>
 
   <section class="card" id="runs-panel" aria-label="Runs on disk"></section>
@@ -111,8 +118,45 @@ details summary { cursor: pointer; padding: 4px 0; }
     </section>
     <div id="runs"></div>
   </div>
+  </div>
+
+  <div id="view-hive" role="tabpanel" aria-labelledby="tab-hive" hidden>
+    <p class="muted">Run a hive package from the gallery and watch it deliberate: who speaks each round, what they saw, and how quorum forms.</p>
+    <section class="card" id="hv-gallery" aria-label="Hive packages"><p class="muted">Loading packages…</p></section>
+    <div id="hv-player" hidden>
+      <div class="bar"><button type="button" id="hv-back">← All packages</button><h2 id="hv-title"></h2></div>
+      <p class="muted" id="hv-summary"></p>
+      <div id="hv-banner"></div>
+      <div class="hv-layout">
+        <section class="card hv-room" aria-labelledby="h-room">
+          <h2 id="h-room">Room</h2>
+          <p id="hv-problem-text" class="muted"></p>
+          <div id="hv-graph"></div>
+        </section>
+        <div class="hv-side">
+          <section class="card" aria-labelledby="h-standings"><h2 id="h-standings">Quorum standings</h2><div id="hv-standings"></div></section>
+          <section class="card" aria-labelledby="h-transcript"><h2 id="h-transcript">Transcript</h2><div id="hv-transcript" class="hv-transcript" tabindex="0" role="region" aria-label="Transcript"></div></section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
+    <section class="card" aria-labelledby="h-compare">
+      <h2 id="h-compare">Compare packages over seeds</h2>
+      <p class="muted">Runs each package on the same seeds, next to a single-seat baseline.</p>
+      <div class="bar" id="hv-compare-pick"></div>
+      <div class="bar">
+        <label>Seeds <input id="hv-seeds" type="number" min="1" max="200" step="1" value="20" class="hv-num"></label>
+        <button type="button" id="hv-compare-run" class="primary">Run compare</button>
+      </div>
+      <p id="hv-compare-status" class="muted" role="status"></p>
+    </section>
+    <section class="card" aria-label="Compare results" id="hv-compare-out"><p class="muted">Pick packages and press Run compare.</p></section>
+  </div>
 </main>
 <div id="tip" role="tooltip"></div>
 <script type="module" src="/src/main.js"></script>
+<script type="module" src="/src/hive/index.js"></script>
 </body>
 </html>

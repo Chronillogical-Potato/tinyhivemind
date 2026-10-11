@@ -19,6 +19,7 @@ const KNOB_KEYS = ["seed", "round_width", "turn_budget", "problem"];
 const DEFAULT_COMPARE = ["math-panel", "math-swarm"];
 
 let packages = null; // listing, once fetched
+let listing = null; // the one in-flight or settled listing request
 const structures = new Map();
 let current = null; // { name, structure }
 let selected = null;
@@ -52,15 +53,16 @@ function writeUrl() {
   history.replaceState(null, "", `?${q}`);
 }
 
-async function ensureListing() {
-  if (packages) return packages;
-  try {
-    packages = await listHives();
-  } catch (err) {
-    packages = [];
-    $("hv-gallery").replaceChildren(h("p", { class: "err" }, `No hive API here (${err.message}). Run the viewer with npm run dev.`));
-  }
-  return packages;
+function ensureListing() {
+  listing ??= listHives().then(
+    (list) => (packages = list),
+    (err) => {
+      packages = [];
+      $("hv-gallery").replaceChildren(h("p", { class: "err" }, `No hive API here (${err.message}). Run the viewer with npm run dev.`));
+      return packages;
+    },
+  );
+  return listing;
 }
 
 // ---------- hive player ----------
@@ -85,7 +87,9 @@ async function openHive(name, knobs, autorun) {
   try {
     if (!structures.has(name)) structures.set(name, await getHive(name));
   } catch (err) {
-    controls.status(`Could not load ${name}: ${err.message}`, true);
+    current = null;
+    showHive();
+    $("hv-gallery").prepend(h("p", { class: "err" }, `Could not open ${name}: ${err.message}`));
     return;
   }
   runAbort?.abort();
