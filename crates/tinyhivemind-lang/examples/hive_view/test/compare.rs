@@ -57,3 +57,26 @@ fn compare_refuses_a_package_without_a_simulation() {
         .map(|error| error.to_string());
     assert!(error.is_some_and(|error| error.contains("has no sim.json")));
 }
+
+#[test]
+fn compare_refuses_arms_that_define_the_same_problem_id_differently() -> Result<()> {
+    let dir = gallery("math-swarm");
+    let first = packages(&dir, &["math-panel".into()])?;
+    let mut second = packages(&dir, &["math-swarm".into()])?;
+    let sim = second[0].sim.as_mut().ok_or("sim")?;
+    let bank = sim["problems"].as_array_mut().ok_or("bank")?;
+    for problem in bank {
+        problem["statement"] = Value::from("a different question under the same id");
+    }
+    let mut loaded = first;
+    loaded.append(&mut second);
+    let knobs = Knobs::default();
+    let error = compare(&loaded, 2, &knobs, false, &mut Vec::new())
+        .err()
+        .map(|error| error.to_string());
+    assert!(
+        error.is_some_and(|error| error.contains("differently")),
+        "arms must share the same problem"
+    );
+    Ok(())
+}

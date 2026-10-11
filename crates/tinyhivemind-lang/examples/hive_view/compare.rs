@@ -136,6 +136,16 @@ pub(crate) fn compare(
             .as_ref()
             .ok_or("the first package has no sim.json")?,
     )?;
+    let banks = loaded
+        .iter()
+        .map(|package| {
+            let sim = package
+                .sim
+                .as_ref()
+                .ok_or_else(|| format!("{} has no sim.json", package.lowered.id))?;
+            Ok((package.lowered.id.as_str(), problems(sim)?))
+        })
+        .collect::<Result<Vec<_>>>()?;
     let mut tallies: Vec<Tally> = std::iter::once(BASELINE.to_owned())
         .chain(loaded.iter().map(|package| package.lowered.id.clone()))
         .map(|package| Tally {
@@ -150,6 +160,17 @@ pub(crate) fn compare(
             problem: Some(problem.id.clone()),
             ..knobs.clone()
         };
+        for (package, own) in &banks {
+            if let Some(theirs) = own.iter().find(|other| other.id == problem.id)
+                && theirs != &problem
+            {
+                return Err(format!(
+                    "{package} defines problem {} differently from {}; --compare needs the same problem in every package",
+                    problem.id, first.lowered.id
+                )
+                .into());
+            }
+        }
         let mut results = vec![result(BASELINE, baseline(first, &knobs)?)?];
         for package in loaded {
             results.push(result(&package.lowered.id, prepare(package, &knobs)?)?);

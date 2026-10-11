@@ -9,7 +9,7 @@ use serde_json::Value;
 use crate::Result;
 
 /// One problem as `sim.json` declares it.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub(crate) struct Problem {
     /// Stable problem id, e.g. `lattice-6x6`.
     pub(crate) id: String,
