@@ -482,3 +482,31 @@ fn a_verify_seat_may_support_only_after_running_a_check_this_turn() {
     assert!(grounded("verify", Some(super::tools::Verdict::Object), &[]).is_ok());
     assert!(grounded("compute", support, &[]).is_ok());
 }
+
+#[tokio::test]
+async fn each_recipient_of_concurrent_broadcasts_is_handed_its_own_senders_message() {
+    let (_, hive) = lowered();
+    let mut federation = Federation::new(&hive).expect("federation builds");
+    federation.open("go");
+    let pending = federation.ready().expect("ready");
+    let at = federation.floors[0].journal.len();
+    let broadcast = |to: &str, message: &str| super::tools::Action::Broadcast {
+        to: to.into(),
+        message: message.into(),
+    };
+    let results = vec![
+        ("research-librarian".to_owned(), broadcast("research-scout", "from the librarian")),
+        ("research-provenance".to_owned(), broadcast("research-librarian", "from provenance")),
+        ("research-scout".to_owned(), complete("scout done")),
+    ];
+    assert_eq!(pending[0].seats.len(), 3);
+    federation.commit(0, at, results).await.expect("commit");
+    let scout = federation.assignment(0, "research-scout");
+    let librarian = federation.assignment(0, "research-librarian");
+    assert!(
+        scout.note.starts_with("@research-librarian handed you:") && scout.note.ends_with("from the librarian"),
+        "{}",
+        scout.note
+    );
+    assert_eq!(librarian.note, "@research-provenance handed you: from provenance");
+}

@@ -456,15 +456,32 @@ impl Federation {
                     }),
                 )
                 .await?;
+            // Each broadcast emits its own `RunAgents`, in commit order; the
+            // recipient a broadcast named is matched to it first, and a
+            // recipient routed by fallback takes its action's broadcast.
+            let broadcasts: Vec<(&String, &String, &String)> = results
+                .iter()
+                .filter_map(|(seat, action)| match action {
+                    Action::Broadcast { to, message } => Some((seat, to, message)),
+                    _ => None,
+                })
+                .collect();
+            let mut run_index = 0;
             for action in &transition.actions {
                 match action {
                     HostAction::RunAgents { agent_ids, .. } => {
-                        let handed = results.iter().find_map(|(seat, action)| match action {
-                            Action::Broadcast { message, .. } => Some((seat, message)),
-                            _ => None,
-                        });
+                        let positional = broadcasts
+                            .get(run_index)
+                            .or_else(|| broadcasts.last())
+                            .copied();
+                        run_index += 1;
                         for id in agent_ids {
-                            if let Some((from, message)) = handed {
+                            let handed = broadcasts
+                                .iter()
+                                .find(|(_, to, _)| *to == id)
+                                .copied()
+                                .or(positional);
+                            if let Some((from, _, message)) = handed {
                                 floor.notes.insert(
                                     id.clone(),
                                     Assignment {
