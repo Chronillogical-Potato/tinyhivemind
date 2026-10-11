@@ -396,7 +396,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
     federation.open("The host opened the hive on the problem above. Work it from your desk's angle, then report with hive_complete.");
     let mut stop = None;
     loop {
-        if federation.finished.is_some() {
+        if federation.finished.is_some() || federation.undecided.is_some() {
             break;
         }
         let pending = federation.ready()?;

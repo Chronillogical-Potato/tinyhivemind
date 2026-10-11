@@ -189,6 +189,16 @@ pub(super) fn usage(budget: &Budget) -> UsageFrame {
     }
 }
 
+/// The run's ending: `converged` only for a committed candidate.
+pub(super) fn ending_of(decided: bool, undecided: bool, stop: Option<&str>) -> String {
+    match (decided, undecided, stop) {
+        (true, ..) => "converged".into(),
+        (false, true, _) => "no_decision".into(),
+        (false, false, Some(stop)) => stop.into(),
+        (false, false, None) => "idle".into(),
+    }
+}
+
 /// What closing a run reads.
 pub(super) struct Closing<'a> {
     pub(super) run: &'a RunDir,
@@ -236,11 +246,7 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
     }
     run.frame(&Frame::Usage(usage(budget)));
     let answer = federation.finished.as_ref();
-    let ending = match (&stop, answer) {
-        (_, Some(_)) => "converged".to_owned(),
-        (Some(stop), None) => stop.clone(),
-        (None, None) => "idle".to_owned(),
-    };
+    let ending = ending_of(answer.is_some(), federation.undecided.is_some(), stop.as_deref());
     run.frame(&Frame::End {
         ending: ending.clone(),
         topic: answer.and_then(|answer| answer.candidate.clone()),

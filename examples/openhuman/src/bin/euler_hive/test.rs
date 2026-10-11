@@ -655,3 +655,16 @@ async fn a_memory_call_past_the_wall_clock_is_abandoned() {
     assert!(super::turn::within(Duration::from_millis(20), pending).await.is_none());
     assert_eq!(super::turn::within(Duration::from_secs(5), async { 7 }).await, Some(7));
 }
+
+#[tokio::test]
+async fn a_synthesis_report_without_a_candidate_is_no_decision() {
+    let (_, hive) = lowered();
+    let mut federation = Federation::new(&hive).expect("federation builds");
+    federation.open("go");
+    drive(&mut federation, |_, seat, _| complete(&format!("{seat} has no answer"))).await;
+    assert!(federation.finished.is_none(), "nothing was decided");
+    assert!(federation.undecided.is_some(), "synthesis reported without a candidate");
+    assert_eq!(super::report::ending_of(false, true, None), "no_decision");
+    assert_eq!(super::report::ending_of(true, false, None), "converged");
+    assert_eq!(super::report::ending_of(false, false, Some("exhausted_turns")), "exhausted_turns");
+}
