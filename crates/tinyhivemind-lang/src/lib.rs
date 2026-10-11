@@ -63,10 +63,11 @@
 //!
 //! ```
 //! use std::collections::BTreeMap;
-//! use tinyhivemind_lang::{CoordinatorSettings, Policies, lower, parse};
+//! use tinyhivemind_lang::{Policies, lower, parse};
 //!
-//! // Every core policy is spelled out on the wire; this example takes the
-//! // defaults rather than repeating them.
+//! // Only what has no safe default is written: every omitted section, seat
+//! // field and policy takes its default, and the constitution's caps default
+//! // to 60 turns and a width of 8.
 //! let hive = serde_json::json!({
 //!     "$schema": "https://tinyhumans.ai/schemas/hive/v1",
 //!     "version": 1,
@@ -75,44 +76,16 @@
 //!     "roles": [{ "id": "reviewer", "charter": "roles/reviewer.md" }],
 //!     "seats": [{
 //!         "id": "reviewer",
-//!         "label": "Reviewer",
 //!         "role": "reviewer",
 //!         "prompt": "seats/reviewer.md",
 //!         "template": "default",
-//!         "config": {},
-//!         "model": null,
-//!         "tools": { "allow": ["file_read"], "deny": [] },
-//!         "mcp": [],
-//!         "skills": []
+//!         "tools": { "allow": ["file_read"] }
 //!     }],
-//!     "desks": [{
-//!         "id": "board",
-//!         "name": "Board",
-//!         "description": "review one change",
-//!         "members": ["reviewer"],
-//!         "responder_mode": "auto"
-//!     }],
-//!     "goals": [],
-//!     "missions": [],
-//!     "topology": [],
-//!     "referrals": [],
-//!     "context": [],
-//!     "policies": Policies::default(),
-//!     "coordinator": CoordinatorSettings::default(),
+//!     "desks": [{ "id": "board", "name": "Board", "members": ["reviewer"] }],
+//!     "policies": { "episode": { "turn_budget": 8 } }
 //! });
-//! let constitution = serde_json::json!({
-//!     "hard_constraints": [],
-//!     "max_turns": 60,
-//!     "max_width": 8,
-//!     "permitted_edits": [],
-//!     "read_only_memories": [],
-//!     "protected_namespaces": [],
-//!     "contamination_canaries": [],
-//!     "evaluation": null,
-//!     "acceptance": null,
-//!     "telemetry": null
-//! });
-//! let memory = serde_json::json!({ "root": "team:hive", "identities": [], "bindings": [] });
+//! let constitution = serde_json::json!({});
+//! let memory = serde_json::json!({ "root": "team:hive" });
 //!
 //! let documents = BTreeMap::from([
 //!     ("hive.json".to_owned(), hive.to_string()),
@@ -133,6 +106,11 @@
 //! // Lowering hands the host the prompt body without its frontmatter.
 //! assert_eq!(hive.seats[0].prompt, "Cite a line for every finding.\n");
 //! assert_eq!(hive.desks[0].members, ["reviewer"]);
+//! // An omitted label is the seat's id; an omitted policy field its default.
+//! assert_eq!(package.manifest.seats[0].label, "reviewer");
+//! let episode = package.manifest.policies.episode;
+//! assert_eq!(episode.turn_budget, 8);
+//! assert_eq!(episode.quorum, Policies::default().episode.quorum);
 //! # Ok::<(), tinyhivemind_lang::Error>(())
 //! ```
 //!
