@@ -64,6 +64,7 @@ struct Args {
     packages: Vec<String>,
     knobs: Knobs,
     live: bool,
+    record: bool,
     model: Option<String>,
     max_calls: u32,
     max_tokens: u32,
@@ -137,6 +138,7 @@ fn parse_args(words: impl IntoIterator<Item = String>) -> Result<Args> {
             }
             "--problem" => args.knobs.problem = Some(words.next().ok_or("--problem needs an id")?),
             "--live" => args.live = true,
+            "--record" => args.record = true,
             "--model" => {
                 let model = words.next().ok_or("--model needs an id")?;
                 live::provider::check_model(&model)?;
@@ -182,6 +184,9 @@ fn run_main() -> Result<()> {
     if live.is_some() && args.mode != Mode::Run {
         return Err("--live drives a run: use it with --run [--frames]".into());
     }
+    if args.record && args.mode != Mode::Run {
+        return Err("--record keeps a run: use it with --run [--frames]".into());
+    }
     if args.mode == Mode::Compare {
         let names = if args.packages.is_empty() {
             compare::DEFAULT_PACKAGES
@@ -210,6 +215,7 @@ fn run_main() -> Result<()> {
             args.frames,
             args.trace.as_deref(),
             live.as_ref(),
+            args.record,
         )?,
         Mode::Json => println!(
             "{}",

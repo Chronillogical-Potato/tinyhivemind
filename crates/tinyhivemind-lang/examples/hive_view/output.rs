@@ -17,18 +17,23 @@ use crate::load::Loaded;
 use crate::run::{Knobs, Plan, Prepared, correct, execute, prepare, prepare_with};
 
 /// Print one run: human lines, or NDJSON frames. With `live`, every seat is
-/// a model call and the frames are also kept in the run's artifact folder.
+/// a model call. A live run, or one with `record`, is also kept as a
+/// recording in its run folder (`hive-runs/hive-view/<run>/`): the package's
+/// `--json` structure as `structure.json`, written before the first frame,
+/// and every frame in `frames.ndjson`, flushed as it is written, so a viewer
+/// can follow the run while it is still going. Stdout is unchanged by it.
 ///
 /// # Errors
 ///
-/// Fails on a run error, a refused `--live` setup, or a trace file that
-/// cannot be created.
+/// Fails on a run error, a refused `--live` setup, or a trace file or
+/// recording that cannot be created.
 pub(crate) fn print(
     loaded: &Loaded,
     knobs: &Knobs,
     as_frames: bool,
     trace: Option<&Path>,
     live: Option<&LiveConfig>,
+    record: bool,
 ) -> Result<()> {
     let started = Instant::now();
     let run_label = format!(
@@ -43,11 +48,13 @@ pub(crate) fn print(
         Some(config) => prepare_with(loaded, knobs, Some((config, &run_label)))?,
         None => prepare(loaded, knobs)?,
     };
-    let artifacts = live.map(|_| crate::live::provider::artifacts_root().join(&run_label));
+    let artifacts = (live.is_some() || record)
+        .then(|| crate::live::provider::artifacts_root().join(&run_label));
     let mut writer = FrameWriter {
+        stdout: as_frames,
         kept: artifacts
             .as_ref()
-            .map(|dir| File::create(dir.join("frames.ndjson")).map(BufWriter::new))
+            .map(|dir| recording(dir, loaded))
             .transpose()?,
     };
     let truth = prepared
@@ -63,9 +70,8 @@ pub(crate) fn print(
         .map(|sink| Tracer::new(prepared.package().to_owned(), sink, &clock));
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
-    if as_frames {
-        writer.emit(&mut out, &start_frame(&prepared, knobs, live))?;
-    } else {
+    writer.emit(&mut out, &start_frame(&prepared, knobs, live))?;
+    if !as_frames {
         header(&mut out, &prepared, live)?;
     }
     let several = matches!(prepared.plan, Plan::Hive(_));
@@ -94,20 +100,19 @@ pub(crate) fn print(
             "hive_view: stopped exhausted: the calls left under --max-calls {cap} cannot fill the next round"
         );
     }
-    if as_frames {
-        if let Some(usage) = &usage {
-            writer.emit(&mut out, &Frame::Usage(usage.clone()))?;
-        }
-        let end = Frame::End {
-            ending: outcome.ending.name().into(),
-            topic: outcome.ending.topic().map(str::to_owned),
-            correct,
-            rounds: outcome.rounds,
-            turns: outcome.turns,
-            desk: prepared.answer_desk(),
-        };
-        writer.emit(&mut out, &end)?;
-    } else {
+    if let Some(usage) = &usage {
+        writer.emit(&mut out, &Frame::Usage(usage.clone()))?;
+    }
+    let end = Frame::End {
+        ending: outcome.ending.name().into(),
+        topic: outcome.ending.topic().map(str::to_owned),
+        correct,
+        rounds: outcome.rounds,
+        turns: outcome.turns,
+        desk: prepared.answer_desk(),
+    };
+    writer.emit(&mut out, &end)?;
+    if !as_frames {
         ending(
             &mut out,
             &outcome,
@@ -119,10 +124,8 @@ pub(crate) fn print(
         }
     }
     if let Some(dir) = &artifacts {
-        eprintln!("hive_view: live artifacts in {}", dir.display());
-    }
-    if let Some(kept) = writer.kept.as_mut() {
-        kept.flush()?;
+        let what = if live.is_some() { "live artifacts" } else { "recording" };
+        eprintln!("hive_view: {what} in {}", dir.display());
     }
     if let Some(sink) = &sink
         && let Ok(mut writer) = sink.0.lock()
@@ -132,26 +135,46 @@ pub(crate) fn print(
     Ok(())
 }
 
-/// Writes frames to stdout, flushed per line, and to the live run's copy.
-struct FrameWriter {
-    kept: Option<BufWriter<File>>,
+/// Open a recording in `dir`: write the package's structure as
+/// `structure.json` and return the `frames.ndjson` writer.
+fn recording(dir: &Path, loaded: &Loaded) -> Result<Box<dyn Write>> {
+    std::fs::create_dir_all(dir)?;
+    let structure = serde_json::to_vec(&crate::structure::structure(loaded)?)?;
+    std::fs::write(dir.join("structure.json"), structure)?;
+    Ok(Box::new(BufWriter::new(File::create(
+        dir.join("frames.ndjson"),
+    )?)))
+}
+
+/// Writes frames to stdout (in `--frames` mode) and to the recording, when
+/// there is one; both are flushed per line, since a viewer follows a run
+/// line by line.
+pub(crate) struct FrameWriter {
+    pub(crate) stdout: bool,
+    pub(crate) kept: Option<Box<dyn Write>>,
 }
 
 impl FrameWriter {
-    fn emit(&mut self, out: &mut dyn Write, frame: &Frame) -> std::io::Result<()> {
+    pub(crate) fn emit(&mut self, out: &mut dyn Write, frame: &Frame) -> std::io::Result<()> {
+        if !self.stdout && self.kept.is_none() {
+            return Ok(());
+        }
         let json = serde_json::to_string(frame).map_err(std::io::Error::other)?;
-        writeln!(out, "{json}")?;
-        // Live runs are slow; a viewer follows them line by line.
-        out.flush()?;
+        if self.stdout {
+            writeln!(out, "{json}")?;
+            out.flush()?;
+        }
         if let Some(kept) = self.kept.as_mut() {
             writeln!(kept, "{json}")?;
+            kept.flush()?;
         }
         Ok(())
     }
 }
 
-/// One event as a frame or a human line. A one-desk run reports no desk
-/// endings: its `end` is its desk's.
+/// One event as a frame (to stdout in `--frames` mode, and to a recording)
+/// and, otherwise, a human line. A one-desk run reports no desk endings: its
+/// `end` is its desk's.
 fn write_event(
     writer: &mut FrameWriter,
     out: &mut dyn Write,
@@ -160,14 +183,20 @@ fn write_event(
     several: bool,
     truth: Option<&str>,
 ) -> std::io::Result<()> {
-    match (event, as_frames) {
-        (Event::Round(record), true) => writer.emit(out, &frames::round(record, truth)),
-        (Event::Referral(record), true) => writer.emit(out, &frames::referral(record)),
-        (Event::DeskEnd(end), true) if several => writer.emit(out, &frames::desk_end(end, truth)),
-        (Event::Round(record), false) => human(out, record),
-        (Event::Referral(record), false) => human_referral(out, record),
-        (Event::DeskEnd(end), false) if several => human_desk_end(out, end),
-        (Event::DeskEnd(_), _) => Ok(()),
+    match event {
+        Event::Round(record) => writer.emit(out, &frames::round(record, truth))?,
+        Event::Referral(record) => writer.emit(out, &frames::referral(record))?,
+        Event::DeskEnd(end) if several => writer.emit(out, &frames::desk_end(end, truth))?,
+        Event::DeskEnd(_) => {}
+    }
+    if as_frames {
+        return Ok(());
+    }
+    match event {
+        Event::Round(record) => human(out, record),
+        Event::Referral(record) => human_referral(out, record),
+        Event::DeskEnd(end) if several => human_desk_end(out, end),
+        Event::DeskEnd(_) => Ok(()),
     }
 }
 
