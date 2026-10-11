@@ -133,11 +133,15 @@ export function jsonArgs(dir) {
   return [dir, "--json"];
 }
 
-/** argv for one framed episode run; `live` is `parseLive`'s value (the key never goes in argv). */
-export function runArgs(dir, knobs = {}, problem = null, live = null) {
+/**
+ * argv for one framed episode run; `live` is `parseLive`'s value (the key
+ * never goes in argv). `record` keeps an offline run as a recording under
+ * `hive-runs/hive-view/` (a live run always is one).
+ */
+export function runArgs(dir, knobs = {}, problem = null, live = null, record = false) {
   return [
     dir, "--run", "--frames", ...knobArgs(knobs), ...(problem ? ["--problem", problem] : []),
-    ...(live ? ["--live", "--model", live.model, "--max-calls", String(live.max_calls)] : []),
+    ...(live ? ["--live", "--model", live.model, "--max-calls", String(live.max_calls)] : record ? ["--record"] : []),
   ];
 }
 

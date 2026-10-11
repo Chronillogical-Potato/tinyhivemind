@@ -66,6 +66,8 @@ test("builds argv arrays with flags in the contract's spelling", () => {
     "/p/rb", "--run", "--frames", "--seed", "3", "--round-width", "2", "--turn-budget", "9", "--problem", "lattice-6x6",
   ]);
   assert.deepEqual(runArgs("/p/rb"), ["/p/rb", "--run", "--frames"]);
+  assert.deepEqual(runArgs("/p/rb", {}, null, null, true), ["/p/rb", "--run", "--frames", "--record"]);
+  assert.deepEqual(runArgs("/p/rb", {}, null, { model: "m/x", max_calls: 5 }, true), ["/p/rb", "--run", "--frames", "--live", "--model", "m/x", "--max-calls", "5"]);
   assert.deepEqual(compareArgs(["/p/a", "/p/b"], ["a", "b"], 10), ["/p/a", "--compare", "--seeds", "10", "--packages", "a,b"]);
 });
 

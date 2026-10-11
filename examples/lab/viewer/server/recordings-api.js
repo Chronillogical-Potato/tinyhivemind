@@ -7,6 +7,11 @@ import { sse } from "./hives.js";
 import { describeRecording, resolveRecording, scanRecordings, tailFrames } from "./recordings.js";
 
 const KEEPALIVE_MS = 15000;
+/** How often `/api/recordings/events` rescans while a page listens. */
+export const WATCH_MS = 1000;
+
+/** What changes when a recording appears, grows, goes quiet or ends. */
+export const listingSignature = (list) => list.map((r) => `${r.id}:${r.size}:${r.mtime}:${r.live}:${r.ended}`).join("|");
 
 function send(res, status, body) {
   res.statusCode = status;
@@ -21,9 +26,42 @@ function send(res, status, body) {
  * run); `hasPackage(name)` says cheaply whether one exists. A recording with
  * neither is left out of the listing.
  */
-export function recordingsApi({ roots, packageStructure = async () => null, hasPackage = () => false, intervalMs = 500 }) {
+export function recordingsApi({ roots, packageStructure = async () => null, hasPackage = () => false, intervalMs = 500, watchMs = WATCH_MS }) {
   async function listing() {
     return scanRecordings(roots).filter((rec) => rec.structure || hasPackage(rec.package));
+  }
+
+  // `/api/recordings/events`: one `recordings` event carrying the whole
+  // listing now, and again whenever it changes. One timer serves every page
+  // and runs only while one listens.
+  const watchers = new Set();
+  let timer = null;
+  let last = "";
+  async function poll() {
+    const list = await listing();
+    const sig = listingSignature(list);
+    if (sig !== last) {
+      last = sig;
+      const event = sse("recordings", { recordings: list });
+      for (const res of watchers) res.write(event);
+    }
+  }
+  async function watch(req, res) {
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+    res.flushHeaders?.();
+    res.write(sse("recordings", { recordings: await listing() }));
+    watchers.add(res);
+    const keepalive = setInterval(() => res.write(": keepalive\n\n"), KEEPALIVE_MS);
+    timer ??= setInterval(() => { poll().catch(() => {}); }, watchMs);
+    res.on("close", () => {
+      watchers.delete(res);
+      clearInterval(keepalive);
+      if (!watchers.size) {
+        clearInterval(timer);
+        timer = null;
+        last = "";
+      }
+    });
   }
 
   function frames(found, res) {
@@ -58,6 +96,10 @@ export function recordingsApi({ roots, packageStructure = async () => null, hasP
       send(res, 200, { roots, recordings: await listing() });
       return true;
     }
+    if (pathname === "/recordings/events") {
+      await watch(req, res);
+      return true;
+    }
     const m = /^\/recordings\/(.+)\/(structure|frames)$/.exec(pathname);
     if (!m) return false;
     let id;
@@ -87,5 +129,8 @@ export function recordingsApi({ roots, packageStructure = async () => null, hasP
     return true;
   }
 
-  return { handle };
+  /** Stop the watch timer (the dev server is closing). */
+  const close = () => { clearInterval(timer); timer = null; };
+
+  return { handle, close };
 }

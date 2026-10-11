@@ -98,7 +98,9 @@ export function hiveApi({ repo, env = process.env, log = () => {} }) {
       if (problem && !validProblem(problem)) return send(res, 400, "bad problem id"), true;
       const live = parseLive(query, env);
       if (!live.ok) return send(res, 400, live.error), true;
-      streamTo(res, runArgs(pkg.dir, knobs.value, problem, live.value), () => "frame", { maxMs: live.value ? LIVE_TIMEOUT_MS : 0 });
+      // Every run started here is recorded, so it is listed (and followable)
+      // on every open page and is still there after a reload.
+      streamTo(res, runArgs(pkg.dir, knobs.value, problem, live.value, true), () => "frame", { maxMs: live.value ? LIVE_TIMEOUT_MS : 0 });
       return true;
     }
     if (pathname === "/compare") {
