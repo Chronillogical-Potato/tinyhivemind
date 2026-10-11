@@ -431,11 +431,11 @@ async fn a_refused_ask_gives_the_seat_its_turn_back_before_the_desk_reports() {
 #[test]
 fn searches_that_quote_the_statement_or_look_the_problem_up_are_refused() {
     use super::search::{refused_query, statement_literals};
-    let statement = "Nights: ABCDKMPR and ABJKLMNW. Given S(10) = 1.1546112276 and n = 24.";
+    let statement = "Rows: QWERTYUI and ZXCVBNMA. Given T(10) = 3.1415926535 and n = 24.";
     let literals = statement_literals(statement);
-    assert_eq!(literals, ["1.1546112276", "ABCDKMPR", "ABJKLMNW"]);
-    assert!(refused_query("\"ABCDKMPR\" octad", &literals).is_some());
-    assert!(refused_query("sum equal to 1.1546112276", &literals).is_some());
+    assert_eq!(literals, ["3.1415926535", "QWERTYUI", "ZXCVBNMA"]);
+    assert!(refused_query("\"QWERTYUI\" octad", &literals).is_some());
+    assert!(refused_query("sum equal to 3.1415926535", &literals).is_some());
     assert!(refused_query("Project Euler rock paper scissors", &literals).is_some());
     assert!(refused_query("Witt design S(5,8,24) uniqueness", &literals).is_none());
     assert!(refused_query("Nash equilibrium skew-symmetric game support", &literals).is_none());
