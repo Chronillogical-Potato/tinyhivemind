@@ -39,8 +39,8 @@ export function renderRecordings(host, list, onOpen, showAll, onShowAll) {
   host.replaceChildren(
     h("h2", {}, "Recorded runs"),
     h("ul", { class: "hv-recs" }, ...rows.map((r) => {
-      const state = r.ended ? `${r.ending ?? "ended"}${verdict(r)}` : r.live ? "live" : liveNow([r]).length ? "quiet" : "stopped";
       const going = liveNow([r]).length > 0;
+      const state = r.ended ? `${r.ending ?? "ended"}${verdict(r)}` : r.live ? "live" : going ? "quiet" : "stopped";
       return h("li", {},
         h("button", { type: "button", class: "hv-rec", "data-id": r.id, onclick: () => onOpen(r.id), title: r.path },
           r.ended ? null : h("span", { class: `hv-badge-live${r.live ? "" : " quiet"}` }, r.live ? "LIVE" : going ? "QUIET" : "STOPPED"),
