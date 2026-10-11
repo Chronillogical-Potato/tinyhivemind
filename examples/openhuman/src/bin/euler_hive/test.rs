@@ -755,3 +755,43 @@ fn sandbox_output_is_bounded_while_it_is_read() {
         .expect("log driver set");
     assert_eq!(args[at + 1], "none", "Docker keeps no copy of the output");
 }
+
+fn propose(candidate: &str, verdict: Option<super::tools::Verdict>) -> super::tools::Action {
+    super::tools::Action::Complete {
+        report: "worked".into(),
+        candidate: Some(candidate.into()),
+        verdict,
+    }
+}
+
+#[tokio::test]
+async fn synthesis_commits_only_a_candidate_the_verify_desk_supported() {
+    use super::tools::Verdict;
+    let (_, hive) = lowered();
+    let mut unverified = Federation::new(&hive).expect("federation builds");
+    unverified.open("go");
+    drive(&mut unverified, |desk, _, _| match desk {
+        "synthesis" => propose("42", Some(Verdict::Support)),
+        "verify" => propose("42", Some(Verdict::Object)),
+        _ => complete("done"),
+    })
+    .await;
+    assert!(
+        unverified.finished.is_none(),
+        "an unverified candidate is not committed"
+    );
+    assert!(unverified.undecided.is_some());
+
+    let mut verified = Federation::new(&hive).expect("federation builds");
+    verified.open("go");
+    drive(&mut verified, |desk, _, _| match desk {
+        "synthesis" | "verify" => propose("42", Some(Verdict::Support)),
+        _ => complete("done"),
+    })
+    .await;
+    let finished = verified
+        .finished
+        .as_ref()
+        .expect("a verified candidate is committed");
+    assert_eq!(finished.candidate.as_deref(), Some("42"));
+}
