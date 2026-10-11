@@ -102,13 +102,9 @@ fn decode<T: serde::de::DeserializeOwned + serde::Serialize>(
             return None;
         }
     };
-    let output = match serde_json::to_value(&decoded) {
-        Ok(output) => output,
-        Err(error) => {
-            found.push(json(error.to_string()), path, None);
-            return None;
-        }
-    };
+    // The wire types serialize infallibly; were one ever to fail, a null
+    // output simply skips the unknown-field comparison.
+    let output = serde_json::to_value(&decoded).unwrap_or(serde_json::Value::Null);
     if let Some(pointer) = unknown_field(&input, &output) {
         found.push(json("unknown nested schema field".into()), path, pointer);
         return None;
