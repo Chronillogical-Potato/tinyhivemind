@@ -5,7 +5,7 @@ use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 use tinyhivemind_hives::{Destination, EpisodeContext, HiveInfo, TurnDisposition, TurnRequest};
 use tinyhivemind_lang::LoweredMemoryBinding;
 /// Default maximum duration of a supplied agent turn.
-pub const TURN_TIMEOUT: Duration = Duration::from_secs(300);
+pub const TURN_TIMEOUT: Duration = Duration::from_mins(5);
 /// Host factory result future.
 pub type AgentFuture = Pin<Box<dyn Future<Output = Result<Agent>> + Send>>;
 /// Host creates configured agents from nonsecret template references.

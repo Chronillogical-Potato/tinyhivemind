@@ -155,7 +155,7 @@ fn the_turn_timeout_is_configurable_and_nonzero() {
             ));
             let host = host.with_turn_timeout(Duration::from_millis(20)).unwrap();
             assert_eq!(host.turn_timeout(), Duration::from_millis(20));
-            let provider = provider(Duration::from_secs(60)).await;
+            let provider = provider(Duration::from_mins(1)).await;
             host.register_agent(runtime.agent(spec("slow", &provider)).unwrap())
                 .await
                 .unwrap();
