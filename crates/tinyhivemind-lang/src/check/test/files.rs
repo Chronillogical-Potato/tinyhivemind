@@ -80,8 +80,8 @@ fn a_constitution_that_is_not_an_object_is_immutable_as_a_whole() {
     assert_eq!(
         located(&diagnostics),
         [
-            ("constitution.json", None, Rule::Immutable),
             ("constitution.json", None, Rule::Json),
+            ("constitution.json", None, Rule::Immutable),
         ]
     );
 }
