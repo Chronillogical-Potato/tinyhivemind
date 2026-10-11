@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use tinyhivemind_lang::Link;
 
 use crate::Result;
+use crate::hive::desk_policy;
 use crate::load::{Loaded, body, roles, seat_desks};
 use crate::math::problems;
 
@@ -31,6 +32,17 @@ struct DeskJson {
     description: Option<String>,
     members: Vec<String>,
     responder_mode: String,
+    /// Addition: the policy this desk's own floor runs under — the package's
+    /// for one desk, its share of it for several.
+    episode: DeskEpisodeJson,
+}
+
+#[derive(Debug, Serialize)]
+struct DeskEpisodeJson {
+    turn_budget: u32,
+    round_width: u32,
+    revealed_width: u32,
+    quorum_threshold: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -79,6 +91,7 @@ pub(crate) fn structure(loaded: &Loaded) -> Result<Value> {
     let role_of = roles(hive);
     let desks_of = seat_desks(hive);
     let episode = &hive.policies.episode;
+    let seats: usize = hive.desks.iter().map(|desk| desk.members.len()).sum();
     let structure = StructureJson {
         id: hive.id.clone(),
         name: hive.name.clone(),
@@ -127,6 +140,19 @@ pub(crate) fn structure(loaded: &Loaded) -> Result<Value> {
                 description: desk.description.clone(),
                 members: desk.members.clone(),
                 responder_mode: format!("{:?}", desk.responder_mode).to_lowercase(),
+                episode: {
+                    let own = if hive.desks.len() > 1 {
+                        desk_policy(episode, desk.members.len(), seats)
+                    } else {
+                        *episode
+                    };
+                    DeskEpisodeJson {
+                        turn_budget: own.turn_budget,
+                        round_width: own.round_width,
+                        revealed_width: own.revealed_width,
+                        quorum_threshold: own.quorum.threshold,
+                    }
+                },
             })
             .collect(),
         topology: hive.topology.clone(),

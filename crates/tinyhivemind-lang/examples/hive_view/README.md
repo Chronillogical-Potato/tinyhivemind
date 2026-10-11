@@ -172,7 +172,7 @@ none may be renamed or removed. Additions so far: `seats[].memory`,
 `episode.quorum_window`, `episode.require_grounded`, `missions`,
 `sim.scripted`, `turns[].sequence`, `standings[].supporters`,
 `results[].topic`, `rows[].deadlocked`/`exhausted`/`idle`, `round.desk`,
-`round.desk_round`, phase `answer`, the `referral`, `desk_end` and `usage`
+`round.desk_round`, `desks[].episode`, phase `answer`, the `referral`, `desk_end` and `usage`
 frames, `end.desk`, and `start.live`/`start.model`. `correct` in an
 `end` frame is `false` (not `null`) for a math run that did not decide.
 `standings[].object` counts advocates silenced by a grounded objection.
@@ -204,7 +204,8 @@ stderr.
   "id": "math-swarm", "name": "Math swarm", "summary": "<first paragraph of package README.md, or empty>",
   "roles":  [{"id":"verifier","charter":"<first line of charter body>"}],
   "seats":  [{"id":"verify-03","label":"verify-03","role":"verifier","desks":["verify"]}],
-  "desks":  [{"id":"verify","name":"Verify","description":"...","members":["verify-01",...],"responder_mode":"auto"}],
+  "desks":  [{"id":"verify","name":"Verify","description":"...","members":["verify-01",...],"responder_mode":"auto",
+              "episode":{"turn_budget":30,"round_width":10,"revealed_width":10,"quorum_threshold":6}}],   // this desk's floor
   "topology":  [{"from":"conjecture","to":"compute"}],
   "referrals": [{"from":"verify","to":"synthesis"}],
   "goals":  [{"id":"...","description":"...","subgoals":[]}],
