@@ -13,7 +13,7 @@ import { LIVE_MS, mainCheckout, recordingRoots, resolveRecording, scanRecordings
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "hive-rec-"));
 const line = (o) => `${JSON.stringify(o)}\n`;
 const START = line({ type: "start", package: "coin-panel", seed: 1, seats: 4, problem: { id: "coins-10", statement: "s", answer: "10" } });
-const ROUND = line({ type: "round", round: 1, turns: [] });
+const ROUND = line({ type: "round", round: 1, desk: "solve", turns: [{ seat: "a", tool_calls: [{ tool: "run_python", ok: true }] }, { seat: "b" }] });
 const END = line({ type: "end", ending: "converged", topic: "10", correct: true, rounds: 1, turns: 0 });
 
 function run(root, rel, body, { structure = true, ageMs = 0 } = {}) {
@@ -48,6 +48,12 @@ test("scan finds frames.ndjson at any depth up to five and describes the run", (
   assert.equal(rec.package, "coin-panel");
   assert.deepEqual(rec.problem, { id: "coins-10", statement: "s" });
   assert.equal(rec.frames, 3);
+  assert.equal(rec.seed, 1);
+  assert.equal(rec.round, 1);
+  assert.equal(rec.desk, "solve");
+  assert.equal(rec.turns, 2);
+  assert.equal(rec.tool_calls, 1);
+  assert.equal(rec.calls, 2);
   assert.equal(rec.started, 1790000000000);
   assert.equal(rec.ended, true);
   assert.equal(rec.ending, "converged");

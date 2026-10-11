@@ -71,14 +71,17 @@ function* walk(dir, depth = 0) {
 const summaries = new Map(); // file -> { key, value }
 
 /**
- * What the frames say: `{ frames, start, end }`, counting complete JSON
- * lines. Cached by size and mtime, so a listing rereads only files that grew.
+ * What the frames say: `{ frames, start, end, round, desk, turns, tools,
+ * calls }`, counting complete JSON lines: the newest round and its desk, the
+ * turns and tool calls so far, and the model calls (`usage.calls` once it
+ * has arrived, else one per turn). Cached by size and mtime, so a listing
+ * rereads only files that grew.
  */
 export function summarizeFrames(file, st = fs.statSync(file)) {
   const key = `${st.size}:${st.mtimeMs}`;
   const hit = summaries.get(file);
   if (hit && hit.key === key) return hit.value;
-  let frames = 0, start = null, end = null;
+  let frames = 0, start = null, end = null, round = null, desk = null, turns = 0, tools = 0, calls = null;
   for (const line of fs.readFileSync(file, "utf8").split("\n")) {
     if (!line.trim()) continue;
     let f;
@@ -90,8 +93,17 @@ export function summarizeFrames(file, st = fs.statSync(file)) {
     frames++;
     if (f?.type === "start" && !start) start = f;
     else if (f?.type === "end") end = f;
+    else if (f?.type === "usage") calls = f.calls ?? null;
+    else if (f?.type === "round") {
+      round = f.round ?? round;
+      desk = f.desk ?? desk;
+      for (const t of f.turns ?? []) {
+        turns++;
+        if (Array.isArray(t.tool_calls)) tools += t.tool_calls.length;
+      }
+    }
   }
-  const value = { frames, start, end };
+  const value = { frames, start, end, round, desk, turns, tools, calls: calls ?? turns };
   summaries.set(file, { key, value });
   return value;
 }
@@ -107,7 +119,7 @@ export function describeRecording(rootIndex, root, file, now = Date.now()) {
   const st = fs.statSync(file);
   const dir = path.dirname(file);
   const rel = path.relative(root, dir).split(path.sep).join("/") || ".";
-  const { frames, start, end } = summarizeFrames(file, st);
+  const { frames, start, end, round, desk, turns, tools, calls } = summarizeFrames(file, st);
   const mtime = Math.round(st.mtimeMs);
   const problem = start?.problem ? { id: start.problem.id ?? null, statement: start.problem.statement ?? null } : null;
   return {
@@ -116,6 +128,12 @@ export function describeRecording(rootIndex, root, file, now = Date.now()) {
     package: typeof start?.package === "string" ? start.package : path.basename(dir),
     problem,
     model: start?.model ?? null,
+    seed: start?.seed ?? null,
+    round,
+    desk,
+    turns,
+    tool_calls: tools,
+    calls,
     started: stampFromName(dir) ?? Math.round(st.birthtimeMs || st.ctimeMs),
     frames,
     size: st.size,
