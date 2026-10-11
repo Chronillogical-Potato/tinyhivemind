@@ -164,6 +164,9 @@ fn run() -> Result<Summary> {
 
 fn main() -> Result<()> {
     let summary = run()?;
+    if summary.head != summary.accepted_id {
+        return Err("a rejected design became the accepted head".into());
+    }
     println!("Refused edit:");
     for line in &summary.refusal {
         println!("  {line}");

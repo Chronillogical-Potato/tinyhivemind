@@ -158,9 +158,9 @@ fn a_multi_class_edit_reproduces_through_its_derived_patches() -> Result<()> {
         files["context/playbook.md"].replace("integer cents", "whole cents"),
     );
     edit_json(&mut files, "hive.json", |hive| {
-        hive["goals"][0]["acceptance"]
-            .as_array_mut()
-            .map(|criteria| criteria.push("Shows every line item".into()));
+        if let Some(criteria) = hive["goals"][0]["acceptance"].as_array_mut() {
+            criteria.push("Shows every line item".into());
+        }
     })?;
     let review = accepted(check(&original(), &files))?;
     let classes: Vec<_> = review.changes.iter().map(|change| change.class).collect();

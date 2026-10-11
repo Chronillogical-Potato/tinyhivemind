@@ -101,13 +101,19 @@ fn render(diagnostics: &[Diagnostic], classes: &[String], json: bool) -> Result<
     if json {
         return Ok(serde_json::to_string_pretty(diagnostics)? + "\n");
     }
-    let mut text: String = diagnostics.iter().map(|d| format!("{d}\n")).collect();
-    text += &match (diagnostics.len(), classes.is_empty()) {
-        (0, true) => "ok: no findings\n".to_owned(),
-        (0, false) => format!("ok: changes {}\n", classes.join(", ")),
-        (1, _) => "1 finding\n".to_owned(),
-        (count, _) => format!("{count} findings\n"),
+    let mut text = String::new();
+    for diagnostic in diagnostics {
+        text.push_str(&diagnostic.to_string());
+        text.push('\n');
+    }
+    let summary = match (diagnostics.len(), classes.is_empty()) {
+        (0, true) => "ok: no findings".to_owned(),
+        (0, false) => format!("ok: changes {}", classes.join(", ")),
+        (1, _) => "1 finding".to_owned(),
+        (count, _) => format!("{count} findings"),
     };
+    text.push_str(&summary);
+    text.push('\n');
     Ok(text)
 }
 
