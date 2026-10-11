@@ -162,6 +162,17 @@ export function scanRecordings(roots, now = Date.now()) {
   return out.sort((a, b) => b.mtime - a.mtime);
 }
 
+/** `file` when it is a regular file whose real path stays inside `root`, else null. */
+function structureInside(root, file) {
+  try {
+    const realRoot = fs.realpathSync(root);
+    const real = fs.realpathSync(file);
+    return real.startsWith(realRoot + path.sep) && fs.statSync(real).isFile() ? file : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolve a recording id to `{ rootIndex, root, dir, frames, structure }`
  * (`structure` null when absent) inside its root, or
@@ -181,8 +192,7 @@ export function resolveRecording(roots, id) {
   } catch {
     return null;
   }
-  const structure = path.join(dir, STRUCTURE);
-  return { rootIndex: Number(m[1]), root, dir, frames, structure: fs.existsSync(structure) ? structure : null };
+  return { rootIndex: Number(m[1]), root, dir, frames, structure: structureInside(root, path.join(dir, STRUCTURE)) };
 }
 
 /**

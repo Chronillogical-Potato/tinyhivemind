@@ -94,6 +94,19 @@ test("ids resolve only to frames.ndjson inside a root", () => {
   }
 });
 
+test("a structure.json symlinked out of the root is not served", () => {
+  const root = tmp();
+  const outside = tmp();
+  run(root, "r", START, { structure: false });
+  const secret = path.join(outside, "secret.json");
+  fs.writeFileSync(secret, '{"leak":true}');
+  fs.symlinkSync(secret, path.join(root, "r", "structure.json"));
+  assert.equal(resolveRecording([root], "0:r").structure, null);
+  const inside = tmp();
+  run(inside, "ok", START);
+  assert.equal(resolveRecording([inside], "0:ok").structure, path.join(inside, "ok", "structure.json"));
+});
+
 test("roots come from HIVE_RECORDINGS, colon-separated, keeping only directories", () => {
   const a = tmp(), b = tmp();
   assert.deepEqual(recordingRoots({ HIVE_RECORDINGS: `${a}:${b}:/no/such/dir` }, []), [a, b]);
