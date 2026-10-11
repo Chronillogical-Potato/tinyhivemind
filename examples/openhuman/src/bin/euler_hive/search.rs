@@ -1,12 +1,17 @@
 //! `web_search`: the TinyHumans backend's agent integrations, through the
 //! TinyHumans SDK.
 //!
-//! Two providers sit behind one tool. `exa` is Exa's neural web search
-//! (`/agent-integrations/exa/search`; the SDK has no typed method for it, so
-//! the SDK's raw client posts it and unwraps the backend envelope). `gemini`
-//! is Gemini with Google Search grounding through the SDK's typed
-//! `gemini_generate_content`. Both authenticate with `TINYHUMANS_API_KEY`,
+//! Two providers sit behind one tool, both through the SDK's typed clients:
+//! `parallel` is Parallel's web search (`parallel_search`: ranked pages with
+//! excerpts) and `gemini` is Gemini with Google Search grounding
+//! (`gemini_generate_content`). Both authenticate with `TINYHUMANS_API_KEY`,
 //! sent by the SDK as `x-api-key`; inference never goes this way.
+//!
+//! Exa (`/agent-integrations/exa/search`, posted with the SDK's raw client
+//! as it has no typed method) and TinyFish are wired too, but the backend
+//! refuses an API-key caller on both (Exa: 403 "API keys cannot be used on
+//! this endpoint"; TinyFish: 404), so `--probe` exercises them and seats are
+//! not offered them.
 
 use serde_json::{Value, json};
 use tinyhumans_sdk::TinyHumansClient;
@@ -39,9 +44,17 @@ pub(super) enum Provider {
 }
 
 impl Provider {
-    /// Read the tool's `provider` argument; absent means Exa.
+    /// The providers a seat may pick: those the backend serves an API key.
+    /// Exa and TinyFish refuse API-key callers (`--probe` records why).
+    pub(super) const SEAT_CHOICES: [&'static str; 2] = ["parallel", "gemini"];
+
+    /// Read the tool's `provider` argument; absent means Parallel.
     pub(super) fn parse(value: Option<&str>) -> anyhow::Result<Self> {
-        match value.unwrap_or("exa") {
+        let value = value.unwrap_or("parallel");
+        if !Self::SEAT_CHOICES.contains(&value) {
+            anyhow::bail!("unknown provider {value:?}; use one of {:?}", Self::SEAT_CHOICES);
+        }
+        match value {
             "exa" => Ok(Self::Exa),
             "gemini" => Ok(Self::Gemini),
             "parallel" => Ok(Self::Parallel),

@@ -141,3 +141,34 @@ svg .hv-committed { fill: var(--good); font-weight: 700; }
 .hv-cell.none { fill: var(--blind); stroke: var(--line); background: var(--blind); }
 .hv-cell.open { cursor: pointer; }
 .hv-cell.open:hover, .hv-cell.open:focus-visible { stroke: var(--ink); stroke-width: 2; outline: none; }
+
+/* recordings: the live strip, the recorded-runs list, toasts, turn badges */
+.hv-badge-live { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; padding: 1px 6px; border-radius: 4px;
+  color: #fff; background: var(--bad); animation: hv-pulse 1.4s ease-in-out infinite; }
+.hv-badge-live.quiet { background: var(--muted); animation: none; }
+.hv-badge-live[hidden] { display: none; }
+@keyframes hv-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .hv-badge-live { animation: none; } }
+.hv-live-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin: 6px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--line)); border-radius: 8px; background: color-mix(in srgb, var(--bad) 6%, var(--panel)); }
+.hv-live-title { font-weight: 700; font-size: 13px; }
+.hv-live-item { display: inline-flex; gap: 2px; max-width: 100%; }
+.hv-live-item.open .hv-live-go { border-color: var(--accent); }
+.hv-live-go { font-size: 12.5px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(640px, 80vw); }
+.hv-live-rewind { font-size: 12px; padding-inline: 6px; }
+.hv-recs { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 4px; }
+.hv-rec { width: 100%; text-align: left; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--bg); }
+.hv-rec .hv-badge-live { margin-right: 4px; }
+.hv-toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 20; max-width: calc(100vw - 32px); }
+.hv-toast { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); box-shadow: 0 6px 24px rgb(0 0 0 / .18); font-size: 13px; }
+.hv-rec-bar[hidden] { display: none; }
+#hv-rec-pick { max-width: min(560px, 70vw); }
+.hv-badges { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 1px; }
+.hv-tool, .hv-mem { font-size: 11px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; }
+.hv-tool.ok { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.hv-tool.fail { border-color: var(--bad); color: var(--bad); }
+.hv-fold { font-size: 11px; padding: 0 5px; margin-left: 2px; }
+.hv-content { white-space: pre-wrap; }
+.hv-act { font-size: 9.5px; fill: var(--muted); pointer-events: none; }
+.hv-act.fail { fill: var(--bad); }

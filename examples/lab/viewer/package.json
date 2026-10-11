@@ -8,7 +8,7 @@
     "dev": "vite --host 0.0.0.0 --port 8099 --strictPort",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 8099 --strictPort",
-    "test": "node --test server/scan.test.js server/hives.test.js server/recordings.test.js src/marks.test.js src/hive/simulation.test.js src/hive/compare.test.js",
+    "test": "node --test server/scan.test.js server/hives.test.js server/recordings.test.js src/marks.test.js src/hive/simulation.test.js src/hive/compare.test.js src/hive/activity.test.js",
     "hive-check": "node tools/hive-check.mjs"
   },
   "devDependencies": {

@@ -164,8 +164,8 @@ pub(super) fn schema(kind: SeatTool, scope: &SeatScope, pool_writer: bool) -> Va
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "What to look up."},
-                "provider": {"type": "string", "enum": ["exa", "gemini"],
-                    "description": "exa: ranked pages with text (default). gemini: a grounded summary with sources."}
+                "provider": {"type": "string", "enum": Provider::SEAT_CHOICES,
+                    "description": "parallel: ranked pages with excerpts (default). gemini: a Google-grounded summary."}
             },
             "required": ["query"]
         }),
@@ -220,7 +220,7 @@ pub(super) fn schema(kind: SeatTool, scope: &SeatScope, pool_writer: bool) -> Va
 
 fn description(kind: SeatTool) -> &'static str {
     match kind {
-        SeatTool::WebSearch => "Search the public web (Exa, or Gemini with Google Search grounding). Report sources; never treat a copied answer as verified.",
+        SeatTool::WebSearch => "Search the public web (Parallel, or Gemini with Google Search grounding). Report sources; never treat a copied answer as verified.",
         SeatTool::RunPython => "Run one Python program in a fresh sandbox: no network, no files kept, 120 s, 1 GB. Returns exit code, stdout and stderr.",
         SeatTool::Broadcast => "End your turn by handing work to a colleague on your desk.",
         SeatTool::Refer => "End your turn by referring work to another desk; its answer returns to your desk.",
