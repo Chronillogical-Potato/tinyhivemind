@@ -142,9 +142,15 @@ fn a_report_past_max_hops_is_refused_by_core() -> Result<()> {
             assert_eq!(referral.reason.as_deref(), Some("hop_limit_reached"));
         }
     }
-    let from = |desk: &str| seen.referrals.iter().filter(move |r| r.from_desk == desk);
-    assert!(from("conjecture").all(|referral| referral.accepted));
-    assert!(from("compute").all(|referral| !referral.accepted));
+    let from = |desk: &str| -> Vec<bool> {
+        seen.referrals
+            .iter()
+            .filter(|referral| referral.from_desk == desk)
+            .map(|referral| referral.accepted)
+            .collect()
+    };
+    assert_eq!(from("conjecture"), [true, true]);
+    assert_eq!(from("compute"), [false, false]);
     Ok(())
 }
 
