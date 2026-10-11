@@ -5,6 +5,12 @@ Fifty prompts, one per seat, named `<desk>-<NN>.md` for desk `conjecture`,
 seat on a desk fills that desk's role; each prompt gives the seat a distinct
 focus (a heuristic, a residue slice, a proof method, a check, or a weighing).
 
+Each prompt is three lines: a persona (`You are a "<persona>".`, fifty of
+them, no two alike), one sentence on how that persona thinks, and the seat's
+job. The persona is what a `--live` model plays, for variety of ideas across a
+desk; the offline simulation draws behaviour from `sim.json` and ignores it.
+`tests/gallery_packages.rs` asserts the fifty personas are distinct.
+
 | Pattern | Role | Focus varies by |
 | --- | --- | --- |
 | `conjecture-NN.md` | conjecturer | guessing heuristic |

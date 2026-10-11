@@ -9,15 +9,24 @@ synthesis`, with synthesis feeding back to conjecture) and joined by referrals
 into the verify desk and out of it to synthesis. The constitution raises the
 caps to 200 turns and width 10; blind rounds run ten seats at a time; quorum is
 a grounded majority of the room (26), the threshold
-`EpisodePolicy::for_room(50)` derives.
+`EpisodePolicy::for_room(50)` derives. Referral is enabled with
+`max_hops` 4, the depth of the `conjecture -> ... -> synthesis` pipeline, so
+synthesis's feedback to conjecture and prove is the hop the budget refuses.
+
+`hive_view` runs each desk on its own floor (each desk takes its share of the
+quorum and budget: 6 of 10, 30 turns) and moves answers between desks only
+by referral along these links; synthesis's ending is the hive's answer. Every
+seat prompt opens with a distinct persona (`You are a "..."`), which is what a
+`--live` model plays; offline the simulation ignores it. No seat may use a web
+tool: each denies `web_search`, `web_fetch`, `browser` and `http`.
 
 | Path | Purpose |
 | --- | --- |
-| `hive.json` | Five desks of ten, topology, referrals, rounds of ten, quorum of 26 |
+| `hive.json` | Five desks of ten, topology, referrals (`max_hops` 4), rounds of ten, quorum of 26, web tools denied |
 | `constitution.json` | `max_turns` 200, `max_width` 10 |
 | `memory.json` | No memory |
 | `sim.json` | The offline problem bank and seat behaviour (same ranges as the panel) |
-| `roles/`, `seats/` | Charters and fifty seat prompts |
+| `roles/`, `seats/` | Charters and fifty seat prompts, each with its own persona |
 
 ## Simulation (`sim.json`)
 
