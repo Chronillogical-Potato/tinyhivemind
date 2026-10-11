@@ -65,6 +65,12 @@ nothing, so the hive could not reach them.
 | full 1 | 1012 | idle (host defect) | — | 17 | 78 | 875k / 62k | $0.62 | $0.12 | 26 min | 25 | 12 |
 | full 2 | 1012 | converged | no | 21 | 99 | 1.04M / 64k | $0.65 | $0.07 | 23 min | 40 | 5 |
 | full 3 | 1012 | converged | no | 52 | 211 | 3.10M / 172k | $1.80 | $0.09 | 51 min | 60 | 4 |
+| full 4 (final code) | 1014 | converged | **yes** | 21 | 70 | 340k / 36k | see below | $0.04 | 18 min | 15 | 4 |
+| full 4 (final code) | 1012 | no decision | (none committed) | 48 | 184 | 2.28M / 135k | $2.09 for both full-4 runs | $0.09 | 53 min | 60 | 12 |
+
+The two full-4 runs ran at the same time on one key, so their account deltas
+overlap. $2.09 covers both. Over every run, including probes, the total was
+about $5.7 of OpenRouter and $0.6 of search.
 
 The OpenRouter column is the key's own account delta for the run. OpenHuman
 reported a cost of zero for this model, so the host meters spend from the
@@ -101,10 +107,18 @@ correct sum.
   forever. This was a host defect and is fixed below.
 - **Run 2** converged on a value the oracle rejects. Compute spent all 40
   sandbox runs, so the verify desk ran nothing and still signed off.
-- **Run 3** ran with the fixes. Verify reserved and spent 20 programs, and
+- **Run 3** ran with the chain and sandbox fixes. Verify reserved and spent 20 programs, and
   the support gate refused one ungrounded support. No verify seat supported a
   candidate. Synthesis committed a value anyway, against its own charter, and
   the oracle rejects it. The host now refuses that; see below.
+- **Run 4** ran with every fix and ended `no_decision`. Compute and theory
+  converged on a wrong value. All five verify verdicts on it were
+  grounded objections, and the host refused synthesis's attempt to commit it
+  anyway. On a problem the hive could not solve, it now reports no decision
+  instead of a wrong answer.
+
+The PE1014 rerun on the final code (full 4) was correct again. Its research
+seats had two literal-data queries refused by the guard.
 
 ## Memory, read back from CortexDB
 
@@ -116,6 +130,8 @@ These counts are read from the store after each run, per seat namespace
 | 1014 full 1 | 36 | 21 | 3 | 0 | not measured |
 | 1012 full 2 | 46 | 27 | 0 | 0 | 27 |
 | 1012 full 3 | 113 | 56 | 0 | 55 | 48 |
+| 1014 full 4 | 41 | 25 | 3 | 0 | 67 |
+| 1012 full 4 | 106 | 52 | 0 | 0 | 46 |
 
 Every seat holds both kinds. Early in-run recall was empty by design: a
 binding reads only the seat's own namespace and the verified pool, and a
@@ -173,11 +189,13 @@ Excerpts are trimmed, and every answer and data string is redacted:
 
 It shows that a hive-language package can be lowered into live, tool-gated,
 memory-bound OpenHuman agents on desk floors joined only by referral. A
-14-seat hive solved a design problem correctly for about $0.40. On the harder
-problem it reproduced every sample and the right structure, but still
-committed wrong answers twice. Its own verification desk was the weak point:
-first it was starved of runs, then it was ignored. Both are now enforced by
-the host instead of asked of the model.
+14-seat hive solved a design problem correctly, twice, for about $0.40 a run.
+
+On the harder problem it reproduced every sample and the right structure, but
+never reached the right sum. Its verification desk was the weak point: first
+it was starved of runs, then it was ignored. Both are now enforced by the
+host instead of asked of the model. With them in place, the hive's verdict on
+its own wrong answer was "no decision".
 
 These are single runs of one model, not a benchmark. Nothing here measures
 the hive against a single agent at matched budget.
