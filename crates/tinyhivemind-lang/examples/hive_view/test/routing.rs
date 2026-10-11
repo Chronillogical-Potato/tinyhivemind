@@ -130,17 +130,21 @@ fn a_report_past_max_hops_is_refused_by_core() -> Result<()> {
         assert_eq!(referral.reason.as_deref(), Some("hop_limit_reached"));
         assert_eq!(referral.hops, loaded.lowered.policies.referral.max_hops);
     }
-    // With a budget of one hop only the first desk's reports land.
+    // With a budget of one hop a desk that received a report cannot pass
+    // one on; a desk whose upstream reports were refused starts afresh.
     let mut shallow = load(&gallery("math-swarm"))?;
     shallow.lowered.policies.referral.max_hops = 1;
     let (seen, _) = watch(&shallow, 3)?;
     for referral in &seen.referrals {
-        let first = referral.from_desk == "conjecture";
-        assert_eq!(referral.accepted, first, "{referral:?}");
-        if !first {
+        if referral.accepted {
+            assert_eq!(referral.hops, 1, "{referral:?}");
+        } else {
             assert_eq!(referral.reason.as_deref(), Some("hop_limit_reached"));
         }
     }
+    let from = |desk: &str| seen.referrals.iter().filter(move |r| r.from_desk == desk);
+    assert!(from("conjecture").all(|referral| referral.accepted));
+    assert!(from("compute").all(|referral| !referral.accepted));
     Ok(())
 }
 
