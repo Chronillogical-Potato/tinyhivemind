@@ -6,8 +6,9 @@ use tinyhivemind_core::hive::{
 use tinyhivemind_core::telemetry::Tracer;
 
 use crate::Result;
-use crate::desks::{Hive, run_hive};
+use crate::desks::run_hive;
 use crate::episode::{Event, Outcome, Room, Speaker, run};
+use crate::hive::Hive;
 use crate::live::LiveConfig;
 use crate::live::LiveSpeaker;
 use crate::load::{Loaded, roles};

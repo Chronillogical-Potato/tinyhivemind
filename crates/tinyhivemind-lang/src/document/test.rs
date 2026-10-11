@@ -50,14 +50,18 @@ fn reports_every_missing_canonical_file_and_unsafe_path() {
             ("memory.json", None, Rule::MissingDocument),
         ]
     );
-    assert_eq!(parse(&docs), Err(Error::Path { path: "../x.md".into() }));
+    assert_eq!(
+        parse(&docs),
+        Err(Error::Path {
+            path: "../x.md".into()
+        })
+    );
 }
 
 #[test]
 fn a_schema_error_is_located_by_line_and_column() {
     let mut docs = documents();
-    let mut hive: serde_json::Value =
-        serde_json::from_str(&docs["hive.json"]).expect("decodes");
+    let mut hive: serde_json::Value = serde_json::from_str(&docs["hive.json"]).expect("decodes");
     hive["surprise"] = json!(true);
     docs.insert(
         "hive.json".into(),
@@ -72,8 +76,7 @@ fn a_schema_error_is_located_by_line_and_column() {
 #[test]
 fn an_unknown_nested_field_is_reported_at_its_pointer() {
     let mut docs = documents();
-    let mut hive: serde_json::Value =
-        serde_json::from_str(&docs["hive.json"]).expect("decodes");
+    let mut hive: serde_json::Value = serde_json::from_str(&docs["hive.json"]).expect("decodes");
     hive["policies"]["approval"]["rules"] = json!([]);
     hive["desks"] = json!([
         {"id": "a", "name": "A", "description": null, "members": [], "responder_mode": "lead"},

@@ -6,8 +6,9 @@ use std::collections::BTreeMap;
 use tinyhivemind_core::hive::{EpisodePolicy, HiveTurn, SessionMessage, Visibility};
 
 use crate::Result;
-use crate::desks::{DeskEnd, FORWARD_CAP, Hive, ReferralRecord, desk_policy, run_hive};
+use crate::desks::{DeskEnd, FORWARD_CAP, ReferralRecord, run_hive};
 use crate::episode::{Ending, Event, RoundRecord, Speaker};
+use crate::hive::{Hive, desk_policy};
 use crate::load::{Loaded, load};
 use crate::run::{Plan, execute, prepare};
 

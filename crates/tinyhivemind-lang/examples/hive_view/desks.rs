@@ -35,25 +35,21 @@ use std::collections::VecDeque;
 
 use tinyhivemind_core::dispatch::{DispatchConversation, DispatchKey};
 use tinyhivemind_core::hive::{
-    Conversation, EpisodePolicy, EpisodeState, HiveStep, Sequence, SessionAuthor, SessionMessage,
-    desk::{Desk, DeskSet},
-    roster::{Roster, RosterMember},
-    step,
+    Conversation, EpisodeState, HiveStep, Sequence, SessionAuthor, SessionMessage, desk::DeskSet,
+    roster::Roster, step,
 };
 use tinyhivemind_core::mention::{MentionAuthor, MentionTarget, resolve as mentions_in};
 use tinyhivemind_core::referral::{
-    Referral, ReferralDecision, ReferralInput, ReferralKind, ReferralOrigin, ReferralPolicy,
-    referral,
+    Referral, ReferralDecision, ReferralInput, ReferralKind, ReferralOrigin, referral,
 };
 use tinyhivemind_core::telemetry::Tracer;
-use tinyhivemind_lang::LoweredHive;
 
 use crate::Result;
 use crate::episode::{
-    Ending, Event, Outcome, Room, RoundRecord, Speaker, ending_of, fold, member_ids, message, play,
+    Ending, Event, Outcome, RoundRecord, Speaker, ending_of, fold, member_ids, message, play,
     speech,
 };
-pub(crate) use crate::hive::{Hive, desk_policy};
+use crate::hive::Hive;
 
 /// Asks one desk may refer to other desks across its episode.
 pub(crate) const FORWARD_CAP: u32 = 2;
