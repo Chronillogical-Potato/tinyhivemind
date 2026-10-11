@@ -99,3 +99,24 @@ async fn closing_the_run_fails_when_a_closing_artifact_could_not_be_written() {
     let error = closed.expect_err("a truncated recording is not a clean exit");
     assert!(error.to_string().contains("disk full"), "{error}");
 }
+
+#[tokio::test]
+async fn closing_an_exhausted_run_skips_optional_memory_waits() {
+    use std::collections::BTreeMap;
+    use super::super::budget::{Budget, Limits};
+    use super::super::floors::Federation;
+    use super::super::report::{Closing, finish};
+    let (_, hive) = super::support::lowered();
+    let federation = Federation::new(&hive).expect("federation");
+    let dir = tempfile::tempdir().expect("dir");
+    let run = super::super::artifacts::RunDir::create(dir.path().join("run")).expect("run");
+    let engine = tinymemory_api::conformance::reference::ReferenceEngine::new();
+    let budget = Budget::new(Limits { max_wall_seconds: 0, ..Limits::SMOKE });
+    let seats = BTreeMap::new();
+    let mut closing = Box::pin(finish(Closing {
+        run: &run, federation: &federation, seats: &seats, budget: &budget,
+        engine: &engine, pool: Some("not-a-namespace"), stop: Some("wall_clock".into()), model: "test",
+    }));
+    assert!(matches!(futures::poll!(closing.as_mut()), std::task::Poll::Ready(Ok(()))),
+        "finalization must not wait or read optional memory once the deadline is spent");
+}
