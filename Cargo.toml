@@ -55,8 +55,8 @@ tinyhivemind-tools = { path = "crates/tinyhivemind-tools" }
 # host writes the same four lines against its own. `tinytools` is pinned at
 # the commit OpenHuman's own tree vendors, which is what makes the unification
 # exact; `.github/scripts/assert-openhuman-pin.sh` checks all three revs.
-openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "bc59324d2ef7aaac2d7ead81097f1f9c264dc3bd", default-features = false }
-openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "bc59324d2ef7aaac2d7ead81097f1f9c264dc3bd", default-features = false }
+openhuman-embed = { git = "https://github.com/tinyhumansai/openhuman", rev = "467ab703acccb63391a8dd6a530297ef904dda76", default-features = false }
+openhuman = { git = "https://github.com/tinyhumansai/openhuman", rev = "467ab703acccb63391a8dd6a530297ef904dda76", default-features = false }
 tinytools = { git = "https://github.com/tinyhumansai/tinytools", rev = "8a87a26293341c51afa11bccfdbe920def7ca9d6" }
 tinytools-agent = { git = "https://github.com/tinyhumansai/tinytools", rev = "8a87a26293341c51afa11bccfdbe920def7ca9d6" }
 # The memory engine contract and the per-agent lifecycle OpenHuman runs its
