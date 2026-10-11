@@ -136,6 +136,7 @@ registration, and membership APIs directly without exposing management tools.
 | `src/proof/dynamic.rs` | Authorized host factory and native dynamic management calls. |
 | `src/bin/deepswe_hive.rs` | Docker-confined four-agent software-engineering experiment. |
 | `src/bin/pe1006_hive.rs` | Five-agent research experiment with live TypeSafe routing. |
+| `src/bin/euler_hive.rs` | A fourteen-seat, five-desk live hive defined entirely by the `euler-hive` hive-language package. |
 
 The research binaries retain their explicit host loops and use `RegisteredAgent`
 to bind host-created handles to the pure driver. The obsolete runner comparison
@@ -307,3 +308,25 @@ outside the repository; the run artifacts stay under the ignored workspace.
 The multi-hive host injects a native, classified `file_write` tool scoped to an
 isolated `proof.txt`. The deployment replaces the native host tool belt, so this
 example explicitly supplies its filesystem tool through `BuildOptions.tools`.
+
+## The Euler hive
+
+`euler_hive` runs a hive that is defined entirely in the hive language: the
+[`euler-hive`](../../crates/tinyhivemind-lang/examples/hives/euler-hive/README.md)
+package's five desks and fourteen persona seats, their tool access, topology,
+referral policy and CortexDB memory bindings. The host injects the problem
+statement at run time, so the committed package names no problem.
+
+```sh
+set -a; . .env; set +a    # OPENROUTER_API_KEY, TINYHUMANS_API_KEY
+cargo run --manifest-path examples/openhuman/Cargo.toml --bin euler_hive -- \
+  --problem hive-runs/<id>/problem.html --problem-id <id> --runs hive-runs [--smoke]
+```
+
+All inference is OpenRouter. The TinyHumans key reaches only the backend's
+non-inference modules, through the TinyHumans SDK (Parallel and Gemini-grounded
+web search, research seats only) and CortexDB memory behind the backend. Code
+runs only on compute and verify seats, in a network-less Docker container with
+nothing mounted. Each desk is its own `CompletionDriver` floor, and desks meet
+only through core's referral fold. Runs write the lab viewer's `frames.ndjson`
+under the git-ignored `hive-runs/`. See [`src/bin/euler_hive/README.md`](src/bin/euler_hive/README.md).

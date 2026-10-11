@@ -12,3 +12,5 @@
 | `pe1006_hive/tools.rs` | Local MCP completion tools and per-seat outbox persistence. |
 | `pe1006_hive/typesafe.rs` | Live TypeSafe transport plus the shared routing policy and thread context. |
 | `pe1006_hive/workspace.rs` | Workspace templates, non-overwriting initialization, and exact per-turn prompt/reply snapshots. |
+| `euler_hive.rs` | Live hive defined entirely by the `euler-hive` hive-language package: OpenRouter seats, SDK web search, Docker Python, CortexDB memory, one floor per desk, referrals between them. |
+| `euler_hive/` | Package loading, the seat factory, tools, sandbox, memory binding, desk floors and referrals, viewer frames, and offline tests (its own README). |
