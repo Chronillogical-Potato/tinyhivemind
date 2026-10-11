@@ -29,7 +29,13 @@ const read = (file) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 if (flag("--json")) {
-  process.stdout.write(JSON.stringify(JSON.parse(read(`${name}.json`))) + "\n");
+  // Like the routing binary, each desk reports the policy its own floor runs under.
+  const structure = JSON.parse(read(`${name}.json`));
+  for (const d of structure.desks ?? []) {
+    d.episode ??= { turn_budget: Math.min(30, structure.episode?.turn_budget ?? 30), round_width: structure.episode?.round_width ?? 1,
+      revealed_width: structure.episode?.revealed_width ?? 1, quorum_threshold: Math.max(1, Math.ceil((d.members?.length ?? 1) * 0.6)) };
+  }
+  process.stdout.write(JSON.stringify(structure) + "\n");
 } else if (flag("--compare")) {
   const seeds = Number(value("--seeds") ?? 20);
   for (const line of read("compare.ndjson").split("\n").filter(Boolean).filter((l) => JSON.parse(l).seed == null || JSON.parse(l).seed <= seeds)) {

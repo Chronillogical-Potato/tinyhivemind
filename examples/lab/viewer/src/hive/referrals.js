@@ -65,3 +65,18 @@ export function deskTabs(structure, state) {
 export function deskCounts(entries, desks) {
   return new Map(desks.map((d) => [d, entries.filter((e) => entryOnDesk(e, d)).length]));
 }
+
+/**
+ * The policy a desk's floor runs under: that desk's `episode` from `--json`
+ * when the binary reports one, else the package's `episode`. `desk` null (a
+ * one-floor stream) is the package policy. Returns `{ desk, name, episode }`
+ * where `desk`/`name` are null for the package.
+ */
+export function deskPolicy(structure, desk) {
+  const meta = desk == null ? null : (structure.desks ?? []).find((d) => d.id === desk) ?? null;
+  return {
+    desk: meta ? meta.id : null,
+    name: meta ? meta.name || meta.id : null,
+    episode: { ...(structure.episode ?? {}), ...(meta?.episode ?? {}) },
+  };
+}

@@ -10,6 +10,7 @@ import { h } from "./dom.js";
 import { renderGallery } from "./gallery.js";
 import { renderGraph } from "./graph.js";
 import { createPlayer } from "./player.js";
+import { deskPolicy } from "./referrals.js";
 import { renderStandings } from "./standings.js";
 import { renderTranscript } from "./transcript.js";
 
@@ -165,7 +166,10 @@ function draw(state) {
   const p = state.problem;
   $("hv-problem-text").textContent = p ? `Problem ${p.id}: ${p.statement}` : "";
   renderGraph($("hv-graph"), st, state, { selected, onSelect: select });
-  renderStandings($("hv-standings"), state.standings, st.episode?.quorum_threshold ?? 0, p?.answer ?? null);
+  // Standings are the current round's floor; on a per-desk run that desk's quorum applies.
+  const policy = deskPolicy(st, (st.desks ?? []).length > 1 ? state.round?.desk ?? null : null);
+  $("h-standings").textContent = policy.name ? `Quorum standings · ${policy.name}` : "Quorum standings";
+  renderStandings($("hv-standings"), state.standings, policy.episode.quorum_threshold ?? 0, p?.answer ?? null);
   renderTranscript($("hv-transcript"), state, selected, select, { structure: st, desk: deskFilter, onDesk: filterDesk });
 }
 

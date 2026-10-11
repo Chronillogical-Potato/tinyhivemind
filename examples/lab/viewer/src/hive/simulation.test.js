@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { multiDeskFrames } from "../../tools/fake-frames.mjs";
-import { deskCounts, deskTabs, describeReferral, edgeFor, entryOnDesk, reasonText } from "./referrals.js";
+import { deskCounts, deskPolicy, deskTabs, describeReferral, edgeFor, entryOnDesk, reasonText } from "./referrals.js";
 import { createPlayer } from "./player.js";
 import { atEnd, clampStep, crossings, sawBy, stateAt, stepBy, timeline } from "./simulation.js";
 import { sseParser } from "./stream.js";
@@ -242,4 +242,15 @@ test("a followed live stream stays on the newest round until the user steps back
   player.latest();
   assert.equal(last.following, false, "nothing to follow once the stream closed");
   player.pause();
+});
+
+test("standings use the current desk's own quorum, falling back to the package's", () => {
+  const st = structure("math-swarm");
+  assert.equal(deskPolicy(st, "verify").episode.quorum_threshold, st.episode.quorum_threshold, "no desks[].episode: the package policy");
+  assert.equal(deskPolicy(st, "verify").name, "Verify");
+  const routed = { ...st, desks: st.desks.map((d) => ({ ...d, episode: { turn_budget: 30, round_width: 10, revealed_width: 10, quorum_threshold: 6 } })) };
+  assert.equal(deskPolicy(routed, "verify").episode.quorum_threshold, 6);
+  assert.equal(deskPolicy(routed, "verify").episode.blind_round, st.episode.blind_round, "fields a desk leaves out come from the package");
+  assert.deepEqual(deskPolicy(routed, null), { desk: null, name: null, episode: st.episode });
+  assert.equal(deskPolicy(routed, "nowhere").desk, null);
 });
