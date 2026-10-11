@@ -21,3 +21,11 @@ sha2.workspace = true
 
 [lints]
 workspace = true
+
+# Discovered automatically like the other examples; declared only so that
+# `cargo test` runs its offline tests (the gallery runs, the pinned frame wire
+# form, the 50-seat turn-budget check) rather than just building it.
+[[example]]
+name = "hive_view"
+path = "examples/hive_view/main.rs"
+test = true
