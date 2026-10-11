@@ -19,4 +19,4 @@ Accepted and rejected evaluated candidates remain host-owned lineage records.
 | --- | --- |
 | src | Typed wire definitions, validation, lowering, edits and lineage. |
 | tests | Checked-in package fixtures and public API integration evidence. |
-| examples | Deterministic host-driven self-edit demonstration. |
+| examples | Self-edit demonstrations, the `hives/` package gallery, and the `hive_view` viewer. |
