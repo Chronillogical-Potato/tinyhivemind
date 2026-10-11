@@ -254,3 +254,17 @@ test("standings use the current desk's own quorum, falling back to the package's
   assert.deepEqual(deskPolicy(routed, null), { desk: null, name: null, episode: st.episode });
   assert.equal(deskPolicy(routed, "nowhere").desk, null);
 });
+
+test("pushMany folds a batch of frames and redraws once", () => {
+  let draws = 0;
+  let last = null;
+  const player = createPlayer((st) => { draws++; last = st; });
+  player.reset(true, true);
+  const before = draws;
+  player.pushMany([{ type: "start", package: "p" }, { type: "round", round: 1, turns: [] }, { type: "round", round: 2, turns: [] }]);
+  assert.equal(draws - before, 1);
+  assert.equal(last.received, 2);
+  assert.equal(last.step, 2, "a followed stream lands on the newest round");
+  player.pushMany([]);
+  assert.equal(draws - before, 1, "an empty batch draws nothing");
+});
