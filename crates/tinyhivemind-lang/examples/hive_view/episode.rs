@@ -222,6 +222,8 @@ pub(crate) struct Outcome {
     pub(crate) rounds: u32,
     /// Turns taken, across every desk, including referral answers.
     pub(crate) turns: u32,
+    /// Whether a metered speaker could not fill the next round (`--max-calls`).
+    pub(crate) spent: bool,
 }
 
 /// Something a run reports as it happens.
@@ -340,7 +342,10 @@ pub(crate) fn run(
             .remaining()
             .is_some_and(|left| (left as usize) < turns.len())
         {
-            return Ok(outcome(Ending::Exhausted, rounds, turns_taken));
+            return Ok(Outcome {
+                spent: true,
+                ..outcome(Ending::Exhausted, rounds, turns_taken)
+            });
         }
         rounds += 1;
         let records = play(room, &turns, &mut journal, speaker)?;
@@ -367,6 +372,7 @@ fn outcome(ending: Ending, rounds: u32, turns: u32) -> Outcome {
         ending,
         rounds,
         turns,
+        spent: false,
     }
 }
 

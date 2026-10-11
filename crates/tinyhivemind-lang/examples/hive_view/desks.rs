@@ -167,7 +167,7 @@ pub(crate) fn run_hive(
         tracer,
         observe,
     };
-    federation.drive(speaker)?;
+    let spent = federation.drive(speaker)?;
     let answer = &federation.floors[hive.answer()];
     let ending = match answer.ended.clone() {
         Some(Ending::Unopened) | None => Ending::Exhausted,
@@ -177,11 +177,13 @@ pub(crate) fn run_hive(
         ending,
         rounds: federation.round,
         turns: federation.floors.iter().map(|floor| floor.turns).sum(),
+        spent,
     })
 }
 
 impl Federation<'_, '_, '_, '_> {
-    fn drive(&mut self, speaker: &mut dyn Speaker) -> Result<()> {
+    /// Returns whether a metered speaker's budget stopped the run.
+    fn drive(&mut self, speaker: &mut dyn Speaker) -> Result<bool> {
         let count = self.floors.len();
         let mut spent = false;
         loop {
@@ -232,7 +234,7 @@ impl Federation<'_, '_, '_, '_> {
                 self.finish(desk, ending)?;
             }
         }
-        Ok(())
+        Ok(spent)
     }
 
     fn open(&mut self, desk: usize) {

@@ -147,12 +147,16 @@ fn declared_documents_are_reported_at_the_manifest_field_naming_them() {
 fn frontmatter_and_markers_are_reported_on_their_markdown_files() {
     assert_eq!(
         located(|p| {
-            p.documents
-                .insert("roles/builder.md".into(), "---\n{\"id\":\"x\"}\n---\nB\n".into());
+            p.documents.insert(
+                "roles/builder.md".into(),
+                "---\n{\"id\":\"x\"}\n---\nB\n".into(),
+            );
             p.documents
                 .insert("seats/alice.md".into(), "---\n[]\n---\nS\n".into());
-            p.documents
-                .insert("context/notes.md".into(), "<!-- item:a -->\n<!-- item:a -->\n".into());
+            p.documents.insert(
+                "context/notes.md".into(),
+                "<!-- item:a -->\n<!-- item:a -->\n".into(),
+            );
         }),
         [
             whole("roles/builder.md", Rule::Frontmatter),
@@ -246,7 +250,11 @@ fn bounds_name_the_policy_field_or_the_constitution_cap() {
             at("hive.json", "/policies/aside", Rule::Bound),
             at("hive.json", "/policies/episode/quorum", Rule::Bound),
             at("hive.json", "/policies/episode/repetition_cap", Rule::Bound),
-            at("hive.json", "/policies/episode/weights/half_life", Rule::Bound),
+            at(
+                "hive.json",
+                "/policies/episode/weights/half_life",
+                Rule::Bound
+            ),
             at("hive.json", "/policies/referral", Rule::Bound),
             at("hive.json", "/policies/brevity", Rule::Bound),
             at("hive.json", "/policies/exchange", Rule::Bound),
@@ -280,8 +288,16 @@ fn memory_findings_name_memory_json_or_the_constitution() {
             at("memory.json", "/identities/1/id", Rule::Identity),
             at("memory.json", "/identities/1/namespace", Rule::Identity),
             at("memory.json", "/bindings/1/seat", Rule::Identity),
-            at("constitution.json", "/protected_namespaces/0", Rule::Namespace),
-            at("constitution.json", "/read_only_memories/0", Rule::Reference),
+            at(
+                "constitution.json",
+                "/protected_namespaces/0",
+                Rule::Namespace
+            ),
+            at(
+                "constitution.json",
+                "/read_only_memories/0",
+                Rule::Reference
+            ),
             at("memory.json", "/identities/0/namespace", Rule::MemoryAccess),
             at("memory.json", "/identities/1/namespace", Rule::MemoryAccess),
             at("memory.json", "/bindings/0/reads/0/at", Rule::MemoryAccess),
@@ -344,13 +360,21 @@ fn memory_identity_and_reach_findings_name_the_offending_field() {
         }),
         [
             at("memory.json", "/identities/0/namespace", Rule::MemoryAccess),
-            at("memory.json", "/identities/1/fork_parent", Rule::MemoryAccess),
+            at(
+                "memory.json",
+                "/identities/1/fork_parent",
+                Rule::MemoryAccess
+            ),
             at("memory.json", "/identities/2/fork_parent", Rule::Reference),
             at("memory.json", "/identities/3/namespace", Rule::MemoryAccess),
             at("memory.json", "/identities/4/read_only", Rule::MemoryAccess),
             at("memory.json", "/bindings/0/identity", Rule::Reference),
             at("memory.json", "/bindings/0/budget_chars", Rule::Bound),
-            at("memory.json", "/bindings/0/reads/0/inherit", Rule::MemoryAccess),
+            at(
+                "memory.json",
+                "/bindings/0/reads/0/inherit",
+                Rule::MemoryAccess
+            ),
             at("memory.json", "/bindings/0/reads/1/at", Rule::MemoryAccess),
             at("memory.json", "/bindings/0/reads/2/at", Rule::MemoryAccess),
         ]

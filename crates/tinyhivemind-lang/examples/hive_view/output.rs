@@ -87,7 +87,13 @@ pub(crate) fn print(
         return Err(error.into());
     }
     let correct = correct(&outcome, prepared.problem.as_ref());
-    let usage = live_usage(&prepared, started);
+    let usage = live_usage(&prepared, started, outcome.spent);
+    if outcome.spent {
+        let cap = live.map_or(0, |config| config.max_calls);
+        eprintln!(
+            "hive_view: stopped exhausted: the calls left under --max-calls {cap} cannot fill the next round"
+        );
+    }
     if as_frames {
         if let Some(usage) = &usage {
             writer.emit(&mut out, &Frame::Usage(usage.clone()))?;
@@ -202,7 +208,7 @@ fn human_usage(out: &mut dyn Write, usage: &UsageFrame) -> std::io::Result<()> {
 }
 
 /// The usage frame of a live run; `None` offline.
-fn live_usage(prepared: &Prepared, started: Instant) -> Option<UsageFrame> {
+fn live_usage(prepared: &Prepared, started: Instant, spent: bool) -> Option<UsageFrame> {
     let speaker = prepared.speaker.as_any()?.downcast_ref::<LiveSpeaker>()?;
     let usage = speaker.provider().usage();
     let summary = UsageFrame {
@@ -212,7 +218,7 @@ fn live_usage(prepared: &Prepared, started: Instant) -> Option<UsageFrame> {
         total_tokens: usage.total_tokens,
         cost_usd: (usage.cost_usd * 1e6).round() / 1e6,
         wall_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-        exhausted_calls: speaker.capped(),
+        exhausted_calls: spent || speaker.capped(),
     };
     let _ = std::fs::write(
         speaker.dir().join("usage.json"),

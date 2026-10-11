@@ -104,8 +104,11 @@ every round and ending; `desks.rs` still routes every referral.
 - **Budget.** `--max-calls N` (default 300, at most 2000) is a hard cap: a
   round the remaining calls cannot fill ends the run `exhausted`.
   `--max-tokens N` (default 1200) per call. A `usage` frame reports calls,
-  tokens and the cost OpenRouter returned. A 401, 402 or 403 ends the run with
-  the redacted error; any other failed call is recorded as a `note:` line.
+  tokens and the cost OpenRouter returned. An HTTP 400 to 404 (a bad request,
+  an unknown model, or an auth, payment or permission refusal) ends the run
+  with the redacted error; any other failed call (a timeout, a 429 or 5xx
+  after curl's retries) is recorded as a `note:` line. A run the cap stopped
+  says so on stderr and in `usage.exhausted_calls`.
 - **Artifacts.** `target/hive-live/<package>-seed<N>-<ms>/`: every request
   body and response, `calls.ndjson` (seat, desk, raw reply, recorded line),
   `frames.ndjson` and `usage.json`. Never the key.

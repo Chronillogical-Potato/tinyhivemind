@@ -185,8 +185,10 @@ impl Provider {
     ///
     /// # Errors
     ///
-    /// Fails — ending the run — on an authentication, payment or permission
-    /// refusal (HTTP 401, 402, 403), or when curl cannot be started.
+    /// Fails — ending the run — on a refusal no retry can fix: a malformed
+    /// request or unknown model (HTTP 400, 404), or an authentication,
+    /// payment or permission refusal (401, 402, 403); or when curl cannot be
+    /// started.
     pub(crate) fn complete(&self, system: &str, user: &str, seed: u64) -> Result<(u64, Reply)> {
         let number = self.issued.fetch_add(1, Ordering::SeqCst) + 1;
         let body = request_body(&self.model, system, user, self.max_tokens, seed);
@@ -252,7 +254,7 @@ impl Provider {
                 .take(300)
                 .collect::<String>()
             );
-            if matches!(status, 401..=403) {
+            if matches!(status, 400..=404) {
                 return Err(message.into());
             }
             return Ok((number, Reply::Failed(message)));
