@@ -61,6 +61,10 @@ from a seeded error model.
 
 ## Result
 
+> The math-swarm row below was measured on one combined floor and is
+> superseded by [Update: routed desks and live runs](#update-routed-desks-and-live-runs).
+> The single-seat and math-panel rows are unchanged.
+
 ```sh
 cargo run --release -p tinyhivemind-lang --example hive_view -- \
   crates/tinyhivemind-lang/examples/hives/math-swarm --compare --seeds 50 --table
@@ -122,3 +126,59 @@ referrals.
   panel is presented as a working configuration.
 - Add the two ablation arms in finding 3 before claiming that size, rather
   than the residue calculators, carries the swarm's result.
+
+## Update: routed desks and live runs
+
+**Date:** 2026-10-11, later the same day. The sections above are the original
+record and are kept as written; this section supersedes the math-swarm
+numbers in them.
+
+`hive_view` now runs a multi-desk package as one floor per desk: each desk has
+its own journal and episode and takes its share of the package's quorum and
+budget (for math-swarm, a quorum of 6 of 10 and 30 of the 150 turns). Desks
+reach each other only through core's referral fold, along declared links, in
+pipeline order (`conjecture`, `compute`, `prove`, `verify`, `synthesis`),
+within `max_hops: 4`; synthesis's ending is the hive's. The error model,
+ranges, problems and seeds are unchanged. Same command, release build:
+
+```text
+50 seeds, same problem per seed for every package; correct = exact answer
+
+package      seats accuracy converged deadlocked exhausted   idle  rounds   turns  ms/episode
+single-seat      1    0.640     1.000      0.000     0.000  0.000    2.00    2.00       0.009
+math-panel       5    0.580     0.720      0.000     0.280  0.000    2.30    8.62       0.044
+math-swarm      50    0.980     1.000      0.000     0.000  0.000   12.54   84.90       1.207
+```
+
+**How finding 1 changes.** The routed swarm was right on 49 of 50 seeds
+(0.98), not all 50, and still converged on every seed. It spent a mean of 85
+turns over 12.5 rounds instead of 54 over 6.66: every desk holds its own blind
+round, and the five desks decide one after another, each on a quorum of six
+of its own ten seats rather than 26 of fifty. The ordering is unchanged
+(swarm well above one seat, panel below it), and findings 2 and 3 stand as
+written. The caveat in "What this does not show", that the desk structure is
+not exercised, no longer holds offline.
+
+**Live runs.** `--live` makes every seat turn a real OpenRouter chat
+completion, with core still deciding every round and ending and the desk
+router still routing every referral. Requests carry no `tools`, `plugins` or
+web-search options, and model ids containing `online`, `search`, `sonar` or
+`web` are refused. Seed 1, `openai/gpt-oss-120b:nitro`, one run each:
+
+| Package | Problem | Outcome | Calls | Tokens | Cost | Wall |
+| --- | --- | --- | --- | --- | --- | --- |
+| math-panel | lattice-5x8 | correct | 6 | 4,453 | $0.0020 | 1.6 s |
+| math-swarm | lattice-5x8 | correct, via synthesis, 13 rounds | 58 | 46,104 | $0.0186 | 14.5 s |
+| math-swarm | digitsum-2pow50 | correct | 55 | not recorded | $0.0231 | not recorded |
+
+```sh
+OPENROUTER_API_KEY=... cargo run --release -p tinyhivemind-lang --example hive_view -- \
+  crates/tinyhivemind-lang/examples/hives/math-swarm --run --live --seed 1 \
+  --problem lattice-5x8 --max-calls 300
+```
+
+Artifacts (every request and response, `calls.ndjson`, `frames.ndjson`,
+`usage.json`) land in `hive-runs/hive-view/<package>-seed<N>-<ms>/` at the main
+checkout's root, or under `$HIVE_RUNS_DIR`. Three single-seed episodes show
+the routed pipeline working end to end with a real model; they are not an
+accuracy measurement.
