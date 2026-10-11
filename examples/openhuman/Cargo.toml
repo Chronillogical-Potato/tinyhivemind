@@ -26,6 +26,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tinyhivemind-core = { path = "../../crates/tinyhivemind-core" }
 tinyhivemind-hives = { path = "../../crates/tinyhivemind-hives" }
+# The Euler hive host loads a hive-language package from disk and lowers it.
+tinyhivemind-lang = { path = "../../crates/tinyhivemind-lang" }
+# The Euler hive's research seats search through the TinyHumans backend's
+# agent integrations (Exa search, Gemini with Google Search grounding).
+tinyhumans-sdk = { path = "../../vendor/openhuman/vendor/tinyhumans-sdk", default-features = false }
+# CortexDB behind the TinyHumans backend: the Euler hive's durable seat memory.
+tinymemory-integrations = { path = "../../vendor/openhuman/vendor/tinymemory/crates/tinymemory-integrations", default-features = false, features = ["cortex"] }
 # Supplied-agent integration; runtime construction stays in this example.
 tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman", features = ["offline"] }
 # Pure core tool bookkeeping used by the research experiments.
