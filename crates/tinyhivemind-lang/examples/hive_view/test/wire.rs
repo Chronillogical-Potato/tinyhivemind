@@ -117,3 +117,102 @@ fn compare_frames_pin_their_wire_form() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn routing_frames_pin_their_wire_form() -> Result<()> {
+    let accepted = Frame::Referral(ReferralFrame {
+        round: 10,
+        kind: "report".into(),
+        from_desk: "verify".into(),
+        to_desk: "synthesis".into(),
+        seat: "verify-01".into(),
+        target: Some("synthesis-01".into()),
+        content: "!propose #924 ^1 Verify settled on 924.\n@#synthesis".into(),
+        hops: 4,
+        accepted: true,
+        reason: None,
+        sequence: Some(2),
+    });
+    assert_eq!(
+        serde_json::to_value(&accepted)?,
+        json!({"type":"referral","round":10,"kind":"report","from_desk":"verify","to_desk":"synthesis",
+               "seat":"verify-01","target":"synthesis-01","content":"!propose #924 ^1 Verify settled on 924.\n@#synthesis",
+               "hops":4,"accepted":true,"sequence":2})
+    );
+    let refused = Frame::Referral(ReferralFrame {
+        round: 12,
+        kind: "report".into(),
+        from_desk: "synthesis".into(),
+        to_desk: "conjecture".into(),
+        seat: "synthesis-01".into(),
+        target: None,
+        content: "c".into(),
+        hops: 4,
+        accepted: false,
+        reason: Some("hop_limit_reached".into()),
+        sequence: None,
+    });
+    assert_eq!(
+        serde_json::to_value(&refused)?,
+        json!({"type":"referral","round":12,"kind":"report","from_desk":"synthesis","to_desk":"conjecture",
+               "seat":"synthesis-01","target":null,"content":"c","hops":4,"accepted":false,
+               "reason":"hop_limit_reached","sequence":null})
+    );
+    let desk_end = Frame::DeskEnd {
+        desk: "verify".into(),
+        ending: "converged".into(),
+        topic: Some("924".into()),
+        correct: Some(true),
+        rounds: 2,
+        turns: 11,
+    };
+    assert_eq!(
+        serde_json::to_value(&desk_end)?,
+        json!({"type":"desk_end","desk":"verify","ending":"converged","topic":"924","correct":true,"rounds":2,"turns":11})
+    );
+    let end = Frame::End {
+        ending: "converged".into(),
+        topic: Some("924".into()),
+        correct: Some(true),
+        rounds: 12,
+        turns: 75,
+        desk: Some("synthesis".into()),
+    };
+    assert_eq!(
+        serde_json::to_value(&end)?,
+        json!({"type":"end","ending":"converged","topic":"924","correct":true,"rounds":12,"turns":75,"desk":"synthesis"})
+    );
+    Ok(())
+}
+
+#[test]
+fn live_frames_pin_their_wire_form() -> Result<()> {
+    let start = Frame::Start {
+        package: "math-panel".into(),
+        seed: 1,
+        seats: 5,
+        problem: None,
+        live: Some(true),
+        model: Some("openai/gpt-oss-120b:nitro".into()),
+    };
+    assert_eq!(
+        serde_json::to_value(&start)?,
+        json!({"type":"start","package":"math-panel","seed":1,"seats":5,"problem":null,
+               "live":true,"model":"openai/gpt-oss-120b:nitro"})
+    );
+    let usage = Frame::Usage(UsageFrame {
+        calls: 12,
+        prompt_tokens: 9000,
+        completion_tokens: 800,
+        total_tokens: 9800,
+        cost_usd: 0.0015,
+        wall_ms: 4200,
+        exhausted_calls: false,
+    });
+    assert_eq!(
+        serde_json::to_value(&usage)?,
+        json!({"type":"usage","calls":12,"prompt_tokens":9000,"completion_tokens":800,"total_tokens":9800,
+               "cost_usd":0.0015,"wall_ms":4200,"exhausted_calls":false})
+    );
+    Ok(())
+}
