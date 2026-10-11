@@ -59,8 +59,10 @@ fn a_desk_takes_its_share_of_the_package_policy() {
 #[test]
 fn the_desks_split_the_turn_budget_without_exceeding_it() {
     let spend = |budget: u32, sizes: &[usize]| -> u32 {
-        let mut policy = EpisodePolicy::default();
-        policy.turn_budget = budget;
+        let policy = EpisodePolicy {
+            turn_budget: budget,
+            ..EpisodePolicy::default()
+        };
         desk_policies(&policy, sizes)
             .iter()
             .map(|desk| desk.turn_budget)
