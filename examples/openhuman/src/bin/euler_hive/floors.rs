@@ -68,14 +68,33 @@ pub(super) struct Row {
     pub(super) body: String,
 }
 
-/// What the current task chain on a desk is for.
+/// What a task chain on a desk is for. A chain is the run of episodes a desk
+/// spends on one piece of work: its opening episode, and one more for each
+/// answer that comes back to a question the chain asked. Its id keeps
+/// overlapping chains on one desk apart.
 #[derive(Clone, Debug)]
 pub(super) enum Mode {
     /// Work on the hive's pipeline, reached at `hop`.
-    Pipeline { hop: u32 },
+    Pipeline { hop: u32, chain: u64 },
     /// Answering a question another desk asked.
-    Answering { origin: ReferralOrigin, hop: u32 },
+    Answering {
+        origin: ReferralOrigin,
+        hop: u32,
+        chain: u64,
+    },
 }
+
+impl Mode {
+    /// The chain this work belongs to.
+    pub(super) const fn chain(&self) -> u64 {
+        match self {
+            Self::Pipeline { chain, .. } | Self::Answering { chain, .. } => *chain,
+        }
+    }
+}
+
+/// One seat's completion, kept with its chain until the chain reports.
+pub(super) type Completion = (String, String, Option<String>, Option<Verdict>);
 
 /// Work waiting for a desk to be free.
 #[derive(Clone, Debug)]
@@ -103,16 +122,18 @@ pub(super) struct Floor {
     pub(super) next_sequence: u64,
     pub(super) state: Option<DriverState>,
     pub(super) mode: Option<Mode>,
-    pub(super) resume: Option<Mode>,
+    /// The chain each seat's outstanding question belongs to, innermost last.
+    pub(super) waiting: BTreeMap<String, Vec<Mode>>,
     pub(super) queue: VecDeque<Incoming>,
     pub(super) notes: BTreeMap<String, Assignment>,
     pub(super) seen: BTreeMap<String, usize>,
     pub(super) rounds: u32,
     pub(super) episode_rounds: u32,
     pub(super) turns: u32,
-    pub(super) pending_returns: u32,
+    /// Per chain: answers (or refusals) owed to it that have not yet run.
+    pub(super) outstanding: BTreeMap<u64, u32>,
     pub(super) asks: u32,
-    pub(super) completions: Vec<(String, String, Option<String>, Option<Verdict>)>,
+    pub(super) completions: BTreeMap<u64, Vec<Completion>>,
     pub(super) opened: bool,
     pub(super) reported: bool,
     pub(super) last_candidate: Option<String>,
@@ -147,6 +168,7 @@ pub(super) struct Federation {
     pub(super) policy: ReferralPolicy,
     pub(super) routing: RoutingPolicy,
     pub(super) round: u32,
+    pub(super) next_chain: u64,
     pub(super) finished: Option<Final>,
     pub(super) referrals: Vec<ReferralFrame>,
 }
@@ -188,16 +210,16 @@ impl Federation {
                 next_sequence: 1,
                 state: None,
                 mode: None,
-                resume: None,
+                waiting: BTreeMap::new(),
                 queue: VecDeque::new(),
                 notes: BTreeMap::new(),
                 seen: BTreeMap::new(),
                 rounds: 0,
                 episode_rounds: 0,
                 turns: 0,
-                pending_returns: 0,
+                outstanding: BTreeMap::new(),
                 asks: 0,
-                completions: Vec::new(),
+                completions: BTreeMap::new(),
                 opened: false,
                 reported: false,
                 last_candidate: None,
@@ -225,6 +247,7 @@ impl Federation {
             policy: lowered.policies.referral,
             routing: lowered.policies.routing.clone(),
             round: 0,
+            next_chain: 1,
             finished: None,
             referrals: Vec::new(),
         })
@@ -255,7 +278,7 @@ impl Federation {
         let row = floor.row("host", "opening", opening);
         let assign = floor.desk.members.clone();
         floor.queue.push_back(Incoming {
-            mode: Mode::Pipeline { hop: 0 },
+            mode: Mode::Pipeline { hop: 0, chain: 0 },
             assign,
             reason: "opening",
             row,
@@ -376,7 +399,8 @@ impl Federation {
                         candidate,
                         verdict,
                     } => {
-                        floor.completions.push((
+                        let chain = floor.mode.as_ref().map_or(0, Mode::chain);
+                        floor.completions.entry(chain).or_default().push((
                             seat.clone(),
                             report.clone(),
                             candidate.clone(),
@@ -550,11 +574,12 @@ impl Floor {
                 },
             );
         }
-        if incoming.reason == "refused" {
-            self.pending_returns = self.pending_returns.saturating_sub(1);
-            if self.pending_returns == 0 {
-                self.resume = None;
-            }
+        // An answer or a refusal settles what its chain was owed only once it
+        // runs, so the chain cannot report while it is still queued.
+        if matches!(incoming.reason, "return" | "refused")
+            && let Some(owed) = self.outstanding.get_mut(&incoming.mode.chain())
+        {
+            *owed = owed.saturating_sub(1);
         }
         self.mode = Some(incoming.mode);
         self.episode_rounds = 0;
