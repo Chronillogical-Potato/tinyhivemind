@@ -16,7 +16,7 @@ npm install
 HIVE_RUNS=/path/to/harbor/jobs npm run dev      # http://<host>:8099
 ```
 
-`npm run dev` binds `0.0.0.0:8099` (`--strictPort`). `HIVE_RUNS` is a
+`npm run dev` binds `127.0.0.1:8099` (`--strictPort`). `HIVE_RUNS` is a
 colon-separated list of directories to scan for `*.jsonl` files (depth 6); the
 default is `examples/lab/runs/` plus the bundled `public/fixtures/`. There is no
 authentication, so anyone who can reach the port can read every trace under the
