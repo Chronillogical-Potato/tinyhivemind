@@ -30,3 +30,29 @@ export const runHive = (name, knobs, onEvent, signal) =>
 /** Stream a compare; `onEvent("seed"|"summary"|"done"|"error"|"status", data)`. */
 export const runCompare = (packages, seeds, onEvent, signal) =>
   openStream(`/api/compare?${query({ packages: packages.join(","), seeds })}`, onEvent, signal);
+
+const recPath = (id) => `/api/recordings/${encodeURIComponent(id)}`;
+
+/** Recorded runs on disk: `[{id, package, problem, seed, started, frames, round, desk, calls, live, active, ended, ending, ...}]`. */
+export const listRecordings = async () => (await json("/api/recordings")).recordings;
+
+/** A recording's `--json` structure (its `structure.json`, or its package's). */
+export const getRecordingStructure = (id) => json(`${recPath(id)}/structure`);
+
+/** Stream a recording's frames, then its appended ones; `onEvent("status"|"frame"|"done", data)`. */
+export const openRecording = (id, onEvent, signal) => openStream(`${recPath(id)}/frames`, onEvent, signal);
+
+/**
+ * Call `onList(recordings)` with the listing now and whenever it changes,
+ * reconnecting after a dropped stream until `signal` aborts.
+ */
+export async function watchRecordings(onList, signal) {
+  while (!signal?.aborted) {
+    try {
+      await openStream("/api/recordings/events", (event, data) => { if (event === "recordings") onList(data.recordings ?? []); }, signal);
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
