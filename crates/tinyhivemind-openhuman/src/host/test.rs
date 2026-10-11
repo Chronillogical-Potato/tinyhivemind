@@ -59,6 +59,18 @@ impl ManagementAuthorizer for Allow {
         Ok(())
     }
 }
+fn create_agent_request(
+    template: &str,
+    coordinator_id: Option<&str>,
+    config: serde_json::Value,
+) -> ManagementRequest {
+    ManagementRequest::CreateAgent {
+        template: template.into(),
+        coordinator_id: coordinator_id.map(str::to_owned),
+        config,
+        memory: None,
+    }
+}
 #[test]
 fn supplied_clones_attach_once_and_drop_services_without_cycle() {
     let _guard = RUNTIME_LOCK
@@ -164,15 +176,8 @@ fn rejects_other_runtime_and_authorizes_before_factory() {
                 Err(Error::RuntimeMismatch)
             ));
             assert!(matches!(
-                host.manage(
-                    "a",
-                    ManagementRequest::CreateAgent {
-                        template: "x".into(),
-                        memory: None,
-                        config: serde_json::json!({})
-                    }
-                )
-                .await,
+                host.manage("a", create_agent_request("x", None, serde_json::json!({})))
+                    .await,
                 Err(Error::ManagementDisabled)
             ));
             let host = host
@@ -186,16 +191,9 @@ fn rejects_other_runtime_and_authorizes_before_factory() {
                 )
                 .unwrap();
             assert!(
-                host.manage(
-                    "a",
-                    ManagementRequest::CreateAgent {
-                        template: "x".into(),
-                        memory: None,
-                        config: serde_json::json!({})
-                    }
-                )
-                .await
-                .is_err()
+                host.manage("a", create_agent_request("x", None, serde_json::json!({})))
+                    .await
+                    .is_err()
             );
             assert_eq!(host.coordinator().list_agents().unwrap().len(), 0);
             host.register_agent(runtime.agent(AgentSpec::new("a")).unwrap())
@@ -204,18 +202,18 @@ fn rejects_other_runtime_and_authorizes_before_factory() {
             let generated = host
                 .manage(
                     "a",
-                    ManagementRequest::CreateAgent {
-                        template: "configured".into(),
-                        memory: None,
-                        config: serde_json::json!({}),
-                    },
+                    create_agent_request(
+                        "configured",
+                        Some("managed-seat"),
+                        serde_json::json!({"id":"factory-setting"}),
+                    ),
                 )
                 .await
                 .unwrap();
-            assert_eq!(generated["agent_id"], "generated");
+            assert_eq!(generated["agent_id"], "managed-seat");
             assert_eq!(
                 host.coordinator().list_agents().unwrap(),
-                vec!["a", "generated"]
+                vec!["a", "managed-seat"]
             );
             let mut hive = tinyhivemind_hives::HiveInfo {
                 hive_id: "h".into(),

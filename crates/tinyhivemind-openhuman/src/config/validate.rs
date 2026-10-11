@@ -391,6 +391,9 @@ fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
     }
     let mut ids = std::collections::BTreeMap::<String, String>::new();
     for seat in &config.seats {
+        ids.insert(seat.id.clone(), seat.id.clone());
+    }
+    for seat in &config.seats {
         let agent_id = seat.resolved_agent_id(&config.runtime.deployment_id);
         if !valid_openhuman_id(&agent_id) {
             return Err(ConfigError::InvalidAgentId {
@@ -408,7 +411,9 @@ fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
                 agent_id,
             });
         }
-        if let Some(first) = ids.insert(agent_id.clone(), seat.id.clone()) {
+        if let Some(first) = ids.insert(agent_id.clone(), seat.id.clone())
+            && !(first == seat.id && agent_id == seat.id)
+        {
             return Err(ConfigError::DuplicateAgentId {
                 first,
                 second: seat.id.clone(),

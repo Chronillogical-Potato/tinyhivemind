@@ -120,6 +120,22 @@ fn deployment_agent_identities_are_valid_unique_and_not_reserved() {
     ));
 
     let mut c = minimal();
+    c.seats.push(Seat {
+        id: "bob".into(),
+        profile: "worker".into(),
+        agent_id: Some("alice".into()),
+        ..Default::default()
+    });
+    assert!(matches!(
+        c.validate(),
+        Err(ConfigError::DuplicateAgentId { .. })
+    ));
+
+    let mut c = minimal();
+    c.seats[0].agent_id = Some("alice".into());
+    assert!(c.validate().is_ok());
+
+    let mut c = minimal();
     c.seats[0].agent_id = Some("Bad Seat".into());
     assert!(matches!(
         c.validate(),

@@ -383,6 +383,7 @@ impl OpenHumanHost {
             .take()
             .ok_or_else(|| tinyhivemind_hives::Error::UnknownAgent(coordinator_id.into()))?;
         *handle = None;
+        entries.remove(coordinator_id);
         Ok(agent)
     }
     /// Bind a supplied agent to an already running host conversation.
@@ -439,13 +440,10 @@ impl OpenHumanHost {
             }
             ManagementRequest::CreateAgent {
                 template,
+                coordinator_id,
                 config,
                 memory,
             } => {
-                let coordinator_id = config
-                    .get("id")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_owned);
                 if let Some(memory) = &memory {
                     crate::language::validate_binding(memory)?;
                 }

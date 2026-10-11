@@ -168,9 +168,15 @@ async fn run_prepared_with_mcp_executable(
     config.runtime.deployment_id = if cli.share_memory_across_tasks {
         "deepswe-shared".into()
     } else {
-        format!("deepswe-{}", task.instance_id)
+        deployment_id_for_task(&task.instance_id)
     };
     config.runtime.workspace = Some(artifacts.runtime.display().to_string());
+    let memory_engine = if cli.share_memory_across_tasks {
+        config.runtime.memory_engine = "host".into();
+        Some(shared_memory_engine().await?)
+    } else {
+        None
+    };
     config.runtime.mcp[0].endpoint = mcp_executable.display().to_string();
     config.runtime.mcp[0].args = sandbox.mcp_args();
     for profile in &mut config.profiles {
@@ -192,6 +198,7 @@ async fn run_prepared_with_mcp_executable(
         config,
         BuildOptions {
             config: Some(offline_config()),
+            memory_engine,
             backend_url: Some(backend.uri()),
             provider: Some(Provider::openai_compatible(&cli.api_base, api_key).model(&cli.model)),
             ..Default::default()
@@ -342,6 +349,46 @@ async fn run_prepared_with_mcp_executable(
         anyhow::bail!("episode result is failed; see {}", cli.output.display());
     }
     Ok(())
+}
+
+fn deployment_id_for_task(instance_id: &str) -> String {
+    let mut readable = String::new();
+    for character in instance_id.chars() {
+        let normalized = character.to_ascii_lowercase();
+        if normalized.is_ascii_lowercase()
+            || normalized.is_ascii_digit()
+            || matches!(normalized, '_' | '-')
+        {
+            readable.push(normalized);
+        } else {
+            readable.push('-');
+        }
+        if readable.len() == 39 {
+            break;
+        }
+    }
+    let hash = instance_id.bytes().fold(0xcbf29ce484222325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+    });
+    format!("deepswe-{readable}-{hash:016x}")
+}
+
+#[cfg(test)]
+async fn shared_memory_engine() -> anyhow::Result<std::sync::Arc<dyn tinymemory_api::MemoryEngine>> {
+    Ok(std::sync::Arc::new(
+        tinymemory_api::conformance::reference::ReferenceEngine::new(),
+    ))
+}
+
+#[cfg(not(test))]
+async fn shared_memory_engine() -> anyhow::Result<std::sync::Arc<dyn tinymemory_api::MemoryEngine>> {
+    let config = RuntimeConfig::load_or_init().await?;
+    match openhuman_core::memory::engine::resolve(&config) {
+        openhuman_core::memory::engine::Binding::On(bound) => Ok(bound.engine),
+        openhuman_core::memory::engine::Binding::Off { .. } => {
+            anyhow::bail!("--share-memory-across-tasks requires a configured durable memory engine")
+        }
+    }
 }
 
 fn ensure_round_fits(turns: u32, round_size: usize) -> anyhow::Result<()> {

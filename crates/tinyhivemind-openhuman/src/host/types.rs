@@ -111,6 +111,9 @@ pub enum ManagementRequest {
     CreateAgent {
         /// Template reference.
         template: String,
+        /// Optional coordinator identity, separate from factory-owned settings.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        coordinator_id: Option<String>,
         /// Nonsecret host-validated settings.
         config: serde_json::Value,
         /// Portable memory contract, applied by the factory before registration.

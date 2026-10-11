@@ -7,6 +7,7 @@ fn management_request_wire_shape_keeps_host_template_and_identity_fields() {
         (
             ManagementRequest::CreateAgent {
                 template: "research".into(),
+                coordinator_id: None,
                 memory: None,
                 config: json!({"memory_ref":"private-1"}),
             },

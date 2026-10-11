@@ -72,7 +72,9 @@ The CLI requires `--task`, `--api-base`, and an absolute `--output` path;
 `--model` is optional and defaults to `openai/gpt-oss-120b:nitro`. Each task
 gets its own deployment identity by default, so configured memory remains
 task-scoped. Pass `--share-memory-across-tasks` only when configured memory
-should share the same seat namespace across tasks.
+should share the same seat namespace across tasks. That opt-in loads the
+configured durable OpenHuman memory engine and fails before deployment if one is
+unavailable; task-specific runtime workspaces remain separate.
 `OPENROUTER_API_KEY` remains host-side. The task JSON requires `instance_id`,
 absolute `repo_path`, `base_commit`, `problem_statement`, and `test_command`,
 with unknown fields rejected. An episode may commit at most 24 seat turns.

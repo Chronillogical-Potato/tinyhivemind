@@ -44,8 +44,11 @@ the later turn resumes the same input. Hosts can supply an `ApprovalContext` to 
 consent state and sequence ordering with the application.
 
 Seat memory bindings are fixed across hives. They use the stable seat id under
-`deployment:<deployment_id>` by default, or the profile/seat override. OpenHuman
-agent ids use `<deployment_id>-<seat_id>` unless explicitly configured. Hive
+`deployment:<deployment_id>` by default, or the profile/seat override. Each
+configured hive's default shared-memory root is
+`deployment:<deployment_id>/team:<hive_id>`; deployments remain isolated even
+when they use one memory engine. An explicit hive root opts into sharing.
+OpenHuman agent ids use `<deployment_id>-<seat_id>` unless explicitly configured. Hive
 `Remember` entries use a separate store rooted per hive; coordinator turns
 recall from that captured hive before invoking the native agent. `native_memory_root` encodes every logical UTF-8 root below
 `project:hivemind` using 64-byte hex chunks as `team` segments; roots over

@@ -33,9 +33,8 @@ impl Hooks {
             recalled: Mutex::new(BTreeSet::new()),
         }
     }
-}
-impl TurnHooks for Hooks {
-    fn context(&self, scope: &TurnScope) -> String {
+
+    fn context_without_extra(&self, scope: &TurnScope) -> String {
         self.permissions
             .active
             .lock()
@@ -61,6 +60,12 @@ impl TurnHooks for Hooks {
                 }
             }
         }
+        text
+    }
+}
+impl TurnHooks for Hooks {
+    fn context(&self, scope: &TurnScope) -> String {
+        let mut text = self.context_without_extra(scope);
         if let Some(extra) = &self.extra {
             text.push_str(&extra.context(scope));
         }
@@ -71,7 +76,10 @@ impl TurnHooks for Hooks {
         scope: &'a TurnScope,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = String> + Send + 'a>> {
         Box::pin(async move {
-            let mut text = self.context(scope);
+            let mut text = self.context_without_extra(scope);
+            if let Some(extra) = &self.extra {
+                text.push_str(&extra.context_async(scope).await);
+            }
             let Some(episode) = &scope.episode else {
                 return text;
             };
@@ -84,6 +92,9 @@ impl TurnHooks for Hooks {
                 episode.hive_id.clone(),
                 conversation.clone(),
             );
+            // OpenHuman exposes no compaction callback to host hooks. Recall on
+            // every turn instead, so the first turn after a compaction receives
+            // a fresh synchronous hive briefing before the native session runs.
             let moment = if self
                 .recalled
                 .lock()

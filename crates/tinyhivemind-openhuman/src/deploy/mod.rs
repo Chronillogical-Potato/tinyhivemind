@@ -200,20 +200,11 @@ impl HiveDeployment {
             .find(|seat| seat.id == seat_id)
             .ok_or_else(|| DeployError::Agent(seat_id.into()))?;
         let openhuman_id = seat.resolved_agent_id(&self.config.runtime.deployment_id);
-        let memberships: Vec<_> = self
-            .config
-            .hives
-            .iter()
-            .filter(|hive| hive.members.iter().any(|member| member.seat == seat_id))
-            .map(|hive| hive.id.clone())
-            .collect();
-        for hive in memberships {
-            self.host
-                .coordinator()
-                .leave_hive(&hive, seat_id)
-                .await
-                .map_err(|_| DeployError::Coordinator)?;
-        }
+        self.host
+            .coordinator()
+            .unregister_agent(seat_id)
+            .await
+            .map_err(|_| DeployError::Coordinator)?;
         let agent = self
             .host
             .deactivate_agent(seat_id)
@@ -245,11 +236,12 @@ impl HiveDeployment {
                 );
             let mut roots = BTreeSet::from([native_memory_root(&seat_root)?]);
             for hive in &self.config.hives {
-                roots.insert(native_memory_root(
-                    hive.memory_root
-                        .as_deref()
-                        .unwrap_or(&format!("team:{}", hive.id)),
-                )?);
+                roots.insert(native_memory_root(hive.memory_root.as_deref().unwrap_or(
+                    &format!(
+                        "deployment:{}/team:{}",
+                        self.config.runtime.deployment_id, hive.id
+                    ),
+                ))?);
             }
             for root in roots {
                 self.runtime
@@ -259,6 +251,19 @@ impl HiveDeployment {
                     .await
                     .map_err(|_| DeployError::Runtime)?;
             }
+        }
+        self.config.seats.retain(|seat| seat.id != seat_id);
+        for hive in &mut self.config.hives {
+            hive.members.retain(|member| member.seat != seat_id);
+        }
+        let mut permissions = self
+            .permissions
+            .config
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        permissions.seats.retain(|seat| seat.id != seat_id);
+        for hive in &mut permissions.hives {
+            hive.members.retain(|member| member.seat != seat_id);
         }
         Ok(())
     }
@@ -362,10 +367,12 @@ fn memory_stores(
     let mut memories = BTreeMap::new();
     if let Some(engine) = engine {
         for hive in &config.hives {
-            let logical_root = hive
-                .memory_root
-                .clone()
-                .unwrap_or_else(|| format!("team:{}", hive.id));
+            let logical_root = hive.memory_root.clone().unwrap_or_else(|| {
+                format!(
+                    "deployment:{}/team:{}",
+                    config.runtime.deployment_id, hive.id
+                )
+            });
             let root = native_memory_root(&logical_root)?;
             let memory = crate::HiveMemory::with_root(root).map_err(|_| DeployError::Runtime)?;
             memories.insert(
@@ -427,7 +434,12 @@ async fn register_hives(
             HivePolicyView {
                 episode: hive.episode,
                 division: hive.division,
-                memory_root: hive.memory_root.clone(),
+                memory_root: Some(hive.memory_root.clone().unwrap_or_else(|| {
+                    format!(
+                        "deployment:{}/team:{}",
+                        config.runtime.deployment_id, hive.id
+                    )
+                })),
             },
         );
     }

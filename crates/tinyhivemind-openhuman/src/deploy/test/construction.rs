@@ -134,7 +134,10 @@ fn builds_two_hives_and_fixed_memory_seats_then_releases_runtime() -> anyhow::Re
             deployment.host().coordinator().list_agents()?,
             ["alice", "bob"]
         );
-        assert!(deployment.memory("b").is_err());
+        assert_eq!(
+            deployment.memory("b")?.root(),
+            native_memory_root("deployment:default/team:b")?
+        );
         assert!(format!("{deployment:?}").contains("alice"));
         assert!(!format!("{:?}", deployment.factory()).contains("fixture"));
         drop(deployment);
@@ -214,6 +217,20 @@ fn retiring_a_seat_purges_its_agent_home_and_leaves_its_hives() -> anyhow::Resul
         deployment.retire_seat("alice", Purge::Both).await?;
         assert!(!deployment.seats().contains_key("alice"));
         assert!(!deployment.runtime().agent_ids().contains(&agent_id));
+        assert!(
+            !deployment
+                .host()
+                .coordinator()
+                .list_agents()?
+                .contains(&"alice".into())
+        );
+        assert!(
+            !deployment
+                .config
+                .seats
+                .iter()
+                .any(|seat| seat.id == "alice")
+        );
         assert!(!home.exists());
         assert_eq!(
             deployment

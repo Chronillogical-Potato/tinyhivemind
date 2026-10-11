@@ -122,6 +122,7 @@ impl Kind {
             ],
             Self::CreateAgent => vec![
                 ("template", "string", true),
+                ("coordinator_id", "string", false),
                 ("config", "object", true),
                 ("memory", "object", false),
             ],

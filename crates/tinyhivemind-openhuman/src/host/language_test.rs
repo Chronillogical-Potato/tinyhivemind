@@ -39,6 +39,7 @@ fn management_installs_and_verifies_the_requested_memory_before_registration() {
             let portable = binding();
             let request = || ManagementRequest::CreateAgent {
                 template: "research".into(),
+                coordinator_id: None,
                 config: serde_json::json!({}),
                 memory: Some(Box::new(portable.clone())),
             };
@@ -82,6 +83,7 @@ fn legacy_factory_refuses_binding_and_opted_in_factory_cannot_ignore_it() {
             let agent = runtime.agent(AgentSpec::new("unbound")).unwrap();
             let request = || ManagementRequest::CreateAgent {
                 template: "configured".into(),
+                coordinator_id: None,
                 config: serde_json::json!({}),
                 memory: Some(Box::new(binding())),
             };

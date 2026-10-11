@@ -201,6 +201,10 @@ fn management(kind: Kind, args: &Value) -> Result<ManagementRequest> {
         }),
         Kind::CreateAgent => ManagementRequest::CreateAgent {
             template: text("template"),
+            coordinator_id: args
+                .get("coordinator_id")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
             config: args["config"].clone(),
             memory: args
                 .get("memory")

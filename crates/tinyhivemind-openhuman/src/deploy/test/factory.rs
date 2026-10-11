@@ -125,7 +125,7 @@ fn model_management_creates_only_known_typed_profiles() -> anyhow::Result<()> {
             options.management = Some(Arc::new(AllowManagement));
             super::turns::mount(&model, super::turns::Script {
                 action: Some("hivemind_create_agent".into()),
-                arguments: Some(serde_json::json!({"template":template,"config":{"id":"dynamic","overrides":overrides}})),
+                arguments: Some(serde_json::json!({"template":template,"coordinator_id":"dynamic","config":{"id":"factory-setting","overrides":overrides}})),
                 ..Default::default()
             }).await;
             let deployment = Box::pin(HiveDeployment::build_with(

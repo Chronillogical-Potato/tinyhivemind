@@ -288,17 +288,17 @@ fn a_seat_in_two_hives_receives_only_the_active_hives_memory() -> anyhow::Result
         let script = Script::default();
         mount(&model, script.clone()).await;
         let engine = Arc::new(ReferenceEngine::new());
-        for (hive, note) in [
-            ("a", "private note for hive a"),
-            ("b", "private note for hive b"),
+        for (hive, author, note) in [
+            ("a", "bob", "private note for hive a work"),
+            ("b", "alice", "private note for hive b work"),
         ] {
-            let root = native_memory_root(&format!("team:{hive}"))?;
+            let root = native_memory_root(&format!("deployment:default/team:{hive}"))?;
             let memory = crate::HiveMemory::with_root(root).map_err(anyhow::Error::from)?;
             let store =
                 crate::HiveMemoryStore::new(engine.clone(), memory).map_err(anyhow::Error::from)?;
             store
                 .remember(&RememberRequest {
-                    seat: "alice".into(),
+                    seat: author.into(),
                     conversation: "earlier".into(),
                     through: None,
                     entries: vec![RememberEntry {
@@ -326,6 +326,13 @@ fn a_seat_in_two_hives_receives_only_the_active_hives_memory() -> anyhow::Result
             let report = deployment.host().coordinator().run_until_idle().await?;
             assert_eq!(report.failed, 0, "{report:?}");
         }
+        deployment
+            .host()
+            .coordinator()
+            .send_as_host(message("a-rejoin", "a"))
+            .await?;
+        let report = deployment.host().coordinator().run_until_idle().await?;
+        assert_eq!(report.failed, 0, "{report:?}");
         let seen = script.seen.lock().unwrap_or_else(PoisonError::into_inner);
         let a_turn = seen
             .iter()
@@ -335,6 +342,13 @@ fn a_seat_in_two_hives_receives_only_the_active_hives_memory() -> anyhow::Result
             .find(|text| text.contains("private note for hive b"));
         assert!(a_turn.is_some_and(|text| !text.contains("private note for hive b")));
         assert!(b_turn.is_some_and(|text| !text.contains("private note for hive a")));
+        assert!(
+            seen.iter()
+                .filter(|text| text.contains("private note for hive a"))
+                .count()
+                >= 2,
+            "{seen:?}"
+        );
         Ok(())
     })
 }
