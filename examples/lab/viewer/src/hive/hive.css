@@ -31,11 +31,36 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .hv-banner.converged { border-color: var(--good); box-shadow: inset 4px 0 0 var(--good); }
 .hv-banner.deadlocked, .hv-banner.exhausted { border-color: var(--bad); box-shadow: inset 4px 0 0 var(--bad); }
 .hv-banner.idle { box-shadow: inset 4px 0 0 var(--muted); }
+.hv-desk-ends { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; font-size: 12.5px; }
+.hv-desk-chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; background: var(--panel); }
+.hv-desk-chip.converged { border-color: var(--good); }
+.hv-desk-chip.deadlocked, .hv-desk-chip.exhausted, .hv-desk-chip.wrong { border-color: var(--bad); }
+.hv-desk-chip.unopened { color: var(--muted); border-style: dashed; }
+.hv-desk-chip.answer { font-weight: 700; box-shadow: inset 0 0 0 1px var(--good); }
+.hv-usage { margin: 0 0 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.hv-live label { display: inline-flex; align-items: center; gap: 4px; }
+.hv-model { width: 18em; max-width: 100%; font: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.hv-live input:disabled { opacity: .55; }
+.hv-live-note { font-size: 12.5px; flex: 1 1 220px; }
 
 /* graph */
 .hv-graph { overflow: visible; }
 .hv-desk { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
 .hv-desk.busy { stroke: var(--accent); stroke-width: 1.5; }
+.hv-desk.answer { stroke: var(--good); stroke-width: 2.5; }
+.hv-desk-badge rect { fill: var(--panel); stroke: var(--muted); stroke-width: 1; }
+.hv-desk-badge.converged rect { stroke: var(--good); }
+.hv-desk-badge.deadlocked rect, .hv-desk-badge.exhausted rect, .hv-desk-badge.wrong rect { stroke: var(--bad); }
+.hv-desk-badge.unopened rect { stroke-dasharray: 3 2; }
+.hv-desk-badge.answer rect { fill: var(--good); stroke: var(--good); }
+svg .hv-desk-badge text { font-size: 10px; font-weight: 600; }
+svg .hv-desk-badge.answer text { fill: var(--bg); }
+.hv-edge.attempt { stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 4 4; opacity: .8; }
+.hv-packet circle { stroke: var(--panel); stroke-width: 2; }
+.hv-packet.accepted circle { fill: var(--accent); }
+.hv-packet.refused circle { fill: var(--bad); }
+.hv-refusal { fill: var(--panel); stroke: var(--bad); stroke-width: 1; }
+svg .hv-refusal-text { fill: var(--bad); font-size: 10px; font-weight: 600; }
 .hv-desk-name { font-weight: 600; font-size: 12px; }
 .hv-edge { fill: none; stroke-width: 1.6; }
 .hv-edge.topology { stroke: var(--muted); }
@@ -92,6 +117,17 @@ svg .hv-committed { fill: var(--good); font-weight: 700; }
 .hv-line.own { background: var(--blind); border-left-color: var(--ink); font-weight: 600; }
 .hv-who { border: none; background: none; padding: 0; min-height: 0; font-weight: 600; color: var(--accent); cursor: pointer; }
 .hv-content { word-break: break-word; }
+.hv-tabs { display: flex; flex-wrap: wrap; gap: 4px; position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 2px 0 6px; }
+.hv-tab { font-size: 12px; padding: 2px 8px; min-height: 0; border-radius: 999px; }
+.hv-tab[aria-selected="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.hv-tab[aria-selected="true"] .muted { color: inherit; opacity: .8; }
+.hv-lines li.hv-ref { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); font-size: 12px; }
+.hv-lines li.hv-ref.refused { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 9%, transparent); }
+.hv-ref-tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); }
+.hv-ref.refused .hv-ref-tag { color: var(--bad); }
+.hv-lines li.hv-desk-end { font-size: 12px; font-weight: 600; border-left-color: var(--muted); }
+.hv-lines li.hv-desk-end.converged { border-left-color: var(--good); }
+.hv-lines li.hv-desk-end.answer { background: color-mix(in srgb, var(--good) 12%, transparent); }
 
 /* compare */
 .hv-check { display: inline-flex; align-items: center; gap: 4px; }
