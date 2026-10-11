@@ -11,8 +11,10 @@ in-memory map of relative paths to strings; this library opens no files,
 connects no clients, creates no agents, and persists nothing. The host owns
 credentials, evaluation, activation, memory contents, and lineage storage.
 Canonical manifests use JSON. Markdown carries prompts and role charters.
-The initial frontmatter accepts JSON (a YAML-compatible subset); arbitrary
-YAML, TOML and sampled families are outside this version.
+Frontmatter is optional. When present it is a JSON object between an opening
+`---\n` (the document's first four bytes) and the first `\n---\n`; a document
+that opens with `---\n` and never closes it is rejected. YAML, TOML and other
+frontmatter syntaxes are outside this version.
 
 ## Package and wire contract
 
@@ -22,17 +24,56 @@ resolve within the package. `constitution.json` pins hard constraints, turn
 and width budgets, permitted edit classes, read-only memory identities,
 protected namespace prefixes, contamination canaries, and evaluation,
 acceptance and telemetry settings. It is supplied by the host and immutable
-to every editor operation. Unknown fields and unsupported schema/version
-values fail rather than disappearing during a round trip. The `$schema` value
-`https://tinyhumans.ai/schemas/hive/v1` identifies this wire version; parsing
-does not fetch that URI.
+to every editor operation. Its `hard_constraints`, `evaluation`, `acceptance`
+and `telemetry` are opaque to this crate: it carries them, guards them against
+edits, and leaves their meaning and enforcement to the host. Unknown fields
+and unsupported schema/version values fail rather than disappearing during a
+round trip. The `$schema` value `https://tinyhumans.ai/schemas/hive/v1`
+identifies this wire version; parsing does not fetch that URI.
 
-`seats/<id>.md` contains structured frontmatter (role, template, nonsecret
-config, model, tools, MCP and skills) and a prompt body. Roles have independent
-charters in `roles/<id>.md`. Shared `context/*.md` documents use stable item
-identities, so deltas add, replace or remove one item instead of rewriting
-all accumulated context. Seat/role metadata is canonical in the manifest;
-frontmatter, when supplied, must agree with it. Declared seat prompts, role
+### Parsing a document map
+
+`parse` takes a `BTreeMap<String, String>` of relative path to contents:
+
+- Every key must be a safe relative path (no leading `/`, `\`, control
+  character, empty, `.` or `..` segment, or `:`), including keys that are then
+  dropped.
+- `hive.json`, `constitution.json` and `memory.json` are required and decoded
+  into their typed sections.
+- Every other key ending in `.md` (any case) is kept in `documents`; every
+  other file, such as `notes.txt`, is dropped.
+- A kept Markdown document no manifest entry references (a `README.md`, say)
+  is accepted and carried along. It is part of the package, so it changes the
+  content identity. A patch cannot create, remove or edit it unless it sits
+  under `seats/`, `roles/` or `context/`.
+- Beyond serde's own `deny_unknown_fields`, a second pass compares the
+  decoded value with its input and rejects unknown keys nested inside reused
+  core policy values. The one exception is `"responder_mode": "lead"` on a
+  desk: core omits the lead mode when serializing, so an explicit `lead` is
+  accepted rather than reported as unknown.
+
+The parsed package is then validated.
+
+### The whole-package form
+
+`Package` also serializes as one JSON object with four fields: `manifest`,
+`constitution`, `memory`, and `documents` (path to contents). A host may store
+or ship a package this way. `crates/tinyhivemind-openhuman/examples/live_language.rs`
+reads one (the `accepted-package.json` the self-edit example writes) with
+`serde_json` directly. That path skips `parse`'s path checks, Markdown filter
+and nested unknown-field pass, so the host must call `validate` or `lower`,
+which validates, before it uses the package.
+
+`seats/<id>.md` contains a prompt body, optionally preceded by frontmatter.
+Roles have independent charters in `roles/<id>.md`. Shared `context/*.md`
+documents use stable `<!-- item:id -->` identities, so deltas add, replace or
+remove one item instead of rewriting all accumulated context. Seat and role
+metadata is canonical in the manifest; frontmatter may restate it but must
+agree with it. Every key in a seat's frontmatter must be a field of that
+manifest seat (`id`, `label`, `role`, `prompt`, `template`, `config`, `model`,
+`tools`, `mcp`, `skills`) or one of its memory binding settings (`reads`,
+`recall_at`, `budget_chars`, `remember`, and `memory` for the bound identity),
+with an equal value. A role's frontmatter may hold only `id` and `charter`. Declared seat prompts, role
 charters and context references must use their respective package directories,
 so document purpose cannot bypass edit-class authority.
 
@@ -52,10 +93,25 @@ This is stricter than core, whose default is blind width 4 and revealed width
 1: packages must explicitly choose compatible widths. Core defaults are
 unchanged. Constitution caps apply regardless of edit class.
 
+Routing confidences and thresholds (`minimum_confidence`,
+`high_impact_minimum_confidence`, `clarification_threshold`,
+`high_impact_threshold`) are integer parts per million: `1000000` is
+certainty and `250000` is one in four. A value above `1000000` fails to
+decode.
+
 Lowering returns existing `Desk`, role-populated `RouteCandidate`, and core
 policies, plus host-neutral seat creation/configuration, coordinator settings
 and memory binding data. Goals, missions, graph links and declared shared
 context are retained for the host to install alongside those runtime values.
+Seat prompts and the role charters used as candidate descriptions are handed
+over without their frontmatter.
+
+Each seat with a memory binding lowers to a `LoweredMemoryBinding` derived
+from its identity's namespace. `agent_id` is the text after the last `:`
+and `root` is the text before the last `/`, falling back to the spec's `root`
+when there is no `/`. So `team:hive/agent:critic` yields agent `critic` under
+root `team:hive`. The OpenHuman adapter accepts only agent identities whose
+namespace is exactly `<root>/agent:<agent_id>`.
 Adapter helpers convert these to `CoordinatorOptions`,
 `ManagementRequest`, and the existing OpenHuman `MemoryBinding`. Applying a
 candidate is a host decision between turns or sessions; an in-flight turn
@@ -89,7 +145,20 @@ and `goal`. Typed manifest operations and stable Markdown item deltas carry
 preconditions, so stale proposals fail atomically. JSON Pointer operations
 must remain within their class. Guarding checks the complete candidate, not
 just operation names. Constitution, evaluation, acceptance and telemetry are
-outside editor write authority. The host must guard every application.
+outside editor write authority. So is any `evaluation`, `telemetry`, `logging`
+or `constitution` key in the manifest or in frontmatter, and any `acceptance`
+key outside a goal. The host must guard every application.
+
+`diff` computes the patch between two packages for one class at coarse
+granularity. For `manifest` and `memory` it emits one JSON Pointer operation
+per differing *top-level* field (`/manifest/seats`, `/memory/bindings`),
+carrying the whole before and after values rather than a minimal path. A
+created or removed document becomes one document operation. A changed
+context document becomes one operation per changed item. Any other changed
+document becomes one prompt-body operation, and a changed frontmatter is
+rejected as immutable. The result is guarded before it is returned, so a diff
+spanning two classes fails rather than producing a patch the class cannot
+apply.
 
 A version record contains a cryptographic content identity, parent, patch,
 class, rationale, transcript sequence references, finite objective scores,
