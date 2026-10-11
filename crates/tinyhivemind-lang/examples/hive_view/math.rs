@@ -150,8 +150,10 @@ pub(crate) fn problems(sim: &Value) -> Result<Vec<Problem>> {
 /// `C(n, k)`, exact in 128 bits (saturating if even that is exceeded, which
 /// [`Problem::fit`] then refuses).
 fn binomial(n: u128, k: u64) -> u128 {
-    let k = u128::from(k).min(n - u128::from(k).min(n));
-    (1..=k).try_fold(1_u128, |acc, i| acc.checked_mul(n - k + i).map(|v| v / i)).unwrap_or(u128::MAX)
+    let k = u128::from(k).min(n.saturating_sub(u128::from(k)));
+    (1..=k)
+        .try_fold(1_u128, |acc, i| acc.checked_mul(n - k + i).map(|v| v / i))
+        .unwrap_or(u128::MAX)
 }
 
 fn power_sum(n: u64, power: u64, modulus: u64) -> u128 {
