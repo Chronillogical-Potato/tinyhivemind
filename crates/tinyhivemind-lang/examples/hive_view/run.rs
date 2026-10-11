@@ -1,18 +1,15 @@
-//! Build a room and a speaker for a package, and print one run.
-
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::Path;
-use std::sync::Mutex;
+//! Build a plan (one room, or one floor per desk) and a speaker for a package.
 
 use tinyhivemind_core::hive::{
     EpisodePolicy, QuorumPolicy, desk::Desk, desk::ResponderMode, roster::RosterMember,
 };
-use tinyhivemind_core::telemetry::{Clock, Stamped, TraceSink, Tracer};
+use tinyhivemind_core::telemetry::Tracer;
 
 use crate::Result;
-use crate::episode::{Ending, Outcome, Room, RoundRecord, Speaker, run};
-use crate::frames::{self, Frame, ProblemFrame};
+use crate::desks::{Hive, run_hive};
+use crate::episode::{Ending, Event, Outcome, Room, Speaker, run};
+use crate::live::LiveConfig;
+use crate::live::LiveSpeaker;
 use crate::load::{Loaded, roles};
 use crate::math::{Problem, problems};
 use crate::rng::Rng;
@@ -28,18 +25,53 @@ pub(crate) struct Knobs {
     pub(crate) problem: Option<String>,
 }
 
-/// A room ready to run, its speaker, and the problem it poses, if math.
+/// What a run drives: one desk's room, or one floor per desk.
+#[derive(Clone, Debug)]
+pub(crate) enum Plan {
+    /// A package of one desk (or the single-seat baseline).
+    Room(Room),
+    /// A package of several desks, routed by referral.
+    Hive(Hive),
+}
+
+/// A plan ready to run, its speaker, and the problem it poses, if math.
 pub(crate) struct Prepared {
-    pub(crate) room: Room,
+    pub(crate) plan: Plan,
     pub(crate) speaker: Box<dyn Speaker>,
     pub(crate) problem: Option<(Problem, u64)>,
+}
+
+impl Prepared {
+    /// The package id.
+    pub(crate) fn package(&self) -> &str {
+        match &self.plan {
+            Plan::Room(room) => &room.package,
+            Plan::Hive(hive) => &hive.package,
+        }
+    }
+
+    /// Seats across every desk.
+    pub(crate) fn seats(&self) -> usize {
+        match &self.plan {
+            Plan::Room(room) => room.members.len(),
+            Plan::Hive(hive) => hive.seats(),
+        }
+    }
+
+    /// The desk whose ending is the hive's, on a run of several desks.
+    pub(crate) fn answer_desk(&self) -> Option<String> {
+        match &self.plan {
+            Plan::Room(_) => None,
+            Plan::Hive(hive) => Some(hive.rooms[hive.answer()].desk.id.clone()),
+        }
+    }
 }
 
 impl std::fmt::Debug for Prepared {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("Prepared")
-            .field("room", &self.room)
+            .field("plan", &self.plan)
             .finish_non_exhaustive()
     }
 }
@@ -91,32 +123,31 @@ fn math_opening(problem: &Problem) -> String {
     )
 }
 
-/// Prepare a package's run for these knobs.
+/// The plan for a package: its one desk, or one floor per desk. Knobs apply
+/// to the package's policy, which a hive then shares out among its desks.
 ///
 /// # Errors
 ///
-/// Fails on a malformed `sim.json` or an unknown `--problem`.
-pub(crate) fn prepare(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
-    let Some(sim) = &loaded.sim else {
-        let mut room = Room::of(&loaded.lowered, opening_for(loaded));
-        apply(&mut room.policy, knobs);
-        let speaker: Box<dyn Speaker> = match &loaded.script {
-            Some(script) => Box::new(Scripted::new(script)),
-            None => Box::new(Seeded::new(knobs.seed, room.members.len())),
-        };
-        return Ok(Prepared {
-            room,
-            speaker,
-            problem: None,
-        });
-    };
-    let config = SimConfig::from(sim)?;
-    let problem = pick(&problems(sim)?, knobs.seed, knobs.problem.as_deref())?;
-    let mut room = Room::of(&loaded.lowered, math_opening(&problem));
-    apply(&mut room.policy, knobs);
+/// Fails on a package with no desk.
+pub(crate) fn plan(loaded: &Loaded, knobs: &Knobs, opening: String) -> Result<Plan> {
+    let lowered = &loaded.lowered;
+    let mut policy = lowered.policies.episode;
+    apply(&mut policy, knobs);
+    match lowered.desks.as_slice() {
+        [] => Err(format!("{} declares no desk", lowered.id).into()),
+        [only] => Ok(Plan::Room(Room::of(lowered, only, policy, opening))),
+        _ => Ok(Plan::Hive(Hive::of(lowered, &policy, &opening))),
+    }
+}
+
+/// Every seat of a plan in desk order, with its role.
+fn seat_roles(loaded: &Loaded, plan: &Plan) -> Vec<(String, String)> {
     let role_of = roles(&loaded.lowered);
-    let seats: Vec<(String, String)> = room
-        .members
+    let members = match plan {
+        Plan::Room(room) => &room.members,
+        Plan::Hive(hive) => &hive.everyone,
+    };
+    members
         .iter()
         .map(|member| {
             (
@@ -128,12 +159,57 @@ pub(crate) fn prepare(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
                     .to_owned(),
             )
         })
-        .collect();
-    let simulation = MathSim::new(&config, &problem, knobs.seed, &seats)?;
+        .collect()
+}
+
+/// Prepare a package's run for these knobs, offline.
+///
+/// # Errors
+///
+/// Fails on a malformed `sim.json`, an unknown `--problem`, or no desk.
+pub(crate) fn prepare(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
+    prepare_with(loaded, knobs, None)
+}
+
+/// Prepare a run, live when `live` names a model and its run label.
+///
+/// A live run poses the same problem the offline one would, and lets a
+/// model play every seat; without a math simulation it is posed the
+/// package's opening.
+///
+/// # Errors
+///
+/// As [`prepare`], or as [`LiveSpeaker::new`].
+pub(crate) fn prepare_with(
+    loaded: &Loaded,
+    knobs: &Knobs,
+    live: Option<(&LiveConfig, &str)>,
+) -> Result<Prepared> {
+    let Some(sim) = &loaded.sim else {
+        let plan = plan(loaded, knobs, opening_for(loaded))?;
+        let speaker: Box<dyn Speaker> = match (live, &loaded.script) {
+            (Some((config, run)), _) => Box::new(LiveSpeaker::new(loaded, config, knobs.seed, run)?),
+            (None, Some(script)) => Box::new(Scripted::new(script)),
+            (None, None) => Box::new(Seeded::new(knobs.seed, seat_roles(loaded, &plan).len())),
+        };
+        return Ok(Prepared {
+            plan,
+            speaker,
+            problem: None,
+        });
+    };
+    let config = SimConfig::from(sim)?;
+    let problem = pick(&problems(sim)?, knobs.seed, knobs.problem.as_deref())?;
+    let plan = plan(loaded, knobs, math_opening(&problem))?;
+    let simulation = MathSim::new(&config, &problem, knobs.seed, &seat_roles(loaded, &plan))?;
     let answer = simulation.answer();
+    let speaker: Box<dyn Speaker> = match live {
+        Some((config, run)) => Box::new(LiveSpeaker::new(loaded, config, knobs.seed, run)?),
+        None => Box::new(simulation),
+    };
     Ok(Prepared {
-        room,
-        speaker: Box::new(simulation),
+        plan,
+        speaker,
         problem: Some((problem, answer)),
     })
 }
@@ -193,23 +269,26 @@ pub(crate) fn baseline(loaded: &Loaded, knobs: &Knobs) -> Result<Prepared> {
         opening: math_opening(&problem),
     };
     Ok(Prepared {
-        room,
+        plan: Plan::Room(room),
         speaker: Box::new(simulation),
         problem: Some((problem, answer)),
     })
 }
 
-/// Run a prepared room, calling `observe` per round.
+/// Run a prepared plan, calling `observe` per round, referral and desk end.
 ///
 /// # Errors
 ///
-/// As [`run`].
+/// As [`run`] and [`run_hive`].
 pub(crate) fn execute(
     prepared: &mut Prepared,
     tracer: Option<&Tracer<'_>>,
-    observe: &mut dyn FnMut(&RoundRecord),
+    observe: &mut dyn FnMut(Event<'_>),
 ) -> Result<Outcome> {
-    run(&prepared.room, prepared.speaker.as_mut(), tracer, observe)
+    match &prepared.plan {
+        Plan::Room(room) => run(room, prepared.speaker.as_mut(), tracer, observe),
+        Plan::Hive(hive) => run_hive(hive, prepared.speaker.as_mut(), tracer, observe),
+    }
 }
 
 /// Whether a math outcome decided the right answer; `None` when not math.
@@ -217,165 +296,3 @@ pub(crate) fn correct(outcome: &Outcome, problem: Option<&(Problem, u64)>) -> Op
     problem.map(|(_, answer)| outcome.ending.topic() == Some(answer.to_string().as_str()))
 }
 
-/// Print one run: human lines, or NDJSON frames.
-///
-/// # Errors
-///
-/// Fails on a run error or a trace file that cannot be created.
-pub(crate) fn print(
-    loaded: &Loaded,
-    knobs: &Knobs,
-    as_frames: bool,
-    trace: Option<&Path>,
-) -> Result<()> {
-    let mut prepared = prepare(loaded, knobs)?;
-    let truth = prepared
-        .problem
-        .as_ref()
-        .map(|(_, answer)| answer.to_string());
-    let sink = trace
-        .map(|path| File::create(path).map(|file| JsonlSink(Mutex::new(BufWriter::new(file)))))
-        .transpose()?;
-    let clock = TickClock::default();
-    let tracer = sink
-        .as_ref()
-        .map(|sink| Tracer::new(prepared.room.package.clone(), sink, &clock));
-    let stdout = std::io::stdout();
-    let mut out = stdout.lock();
-    if as_frames {
-        let start = Frame::Start {
-            package: prepared.room.package.clone(),
-            seed: knobs.seed,
-            seats: prepared.room.members.len(),
-            problem: prepared
-                .problem
-                .as_ref()
-                .map(|(problem, answer)| ProblemFrame {
-                    id: problem.id.clone(),
-                    statement: problem.statement.clone(),
-                    answer: answer.to_string(),
-                }),
-        };
-        writeln!(out, "{}", serde_json::to_string(&start)?)?;
-    } else {
-        header(&mut out, &prepared)?;
-    }
-    let mut failure: Option<std::io::Error> = None;
-    let outcome = execute(&mut prepared, tracer.as_ref(), &mut |record| {
-        let written = if as_frames {
-            serde_json::to_string(&frames::round(record, truth.as_deref()))
-                .map_err(std::io::Error::other)
-                .and_then(|line| writeln!(out, "{line}"))
-        } else {
-            human(&mut out, record)
-        };
-        if let Err(error) = written {
-            failure.get_or_insert(error);
-        }
-    })?;
-    if let Some(error) = failure {
-        return Err(error.into());
-    }
-    let correct = correct(&outcome, prepared.problem.as_ref());
-    if as_frames {
-        let end = Frame::End {
-            ending: outcome.ending.name().into(),
-            topic: outcome.ending.topic().map(str::to_owned),
-            correct,
-            rounds: outcome.rounds,
-            turns: outcome.turns,
-        };
-        writeln!(out, "{}", serde_json::to_string(&end)?)?;
-    } else {
-        ending(&mut out, &outcome, correct)?;
-    }
-    if let Some(sink) = &sink
-        && let Ok(mut writer) = sink.0.lock()
-    {
-        writer.flush()?;
-    }
-    Ok(())
-}
-
-fn header(out: &mut dyn Write, prepared: &Prepared) -> std::io::Result<()> {
-    let room = &prepared.room;
-    writeln!(
-        out,
-        "{} on desk {} — {} seats, budget {} turns, rounds of {}",
-        room.package,
-        room.desk.id,
-        room.members.len(),
-        room.policy.turn_budget,
-        room.policy.round_width
-    )?;
-    if let Some((problem, answer)) = &prepared.problem {
-        writeln!(
-            out,
-            "problem {}: {} (answer {answer})",
-            problem.id, problem.statement
-        )?;
-    }
-    writeln!(out)
-}
-
-fn human(out: &mut dyn Write, record: &RoundRecord) -> std::io::Result<()> {
-    writeln!(
-        out,
-        "round {} ({:?}, {:?})",
-        record.round, record.phase, record.visibility
-    )?;
-    for turn in &record.turns {
-        writeln!(
-            out,
-            "  {:>14}  {:<9} {:<5} saw {}/{}  {}",
-            turn.seat,
-            turn.reason,
-            format!("{:?}", record.visibility).to_lowercase(),
-            turn.saw,
-            turn.of,
-            turn.content.replace('\n', " | "),
-        )?;
-    }
-    Ok(())
-}
-
-fn ending(out: &mut dyn Write, outcome: &Outcome, correct: Option<bool>) -> std::io::Result<()> {
-    let verdict = match correct {
-        Some(true) => " (correct)",
-        Some(false) => " (not correct)",
-        None => "",
-    };
-    match &outcome.ending {
-        Ending::Converged(topic) => writeln!(out, "\n  converged on #{topic}{verdict}")?,
-        Ending::Deadlocked(topics) => writeln!(
-            out,
-            "\n  deadlocked between #{}{verdict}",
-            topics.join(" and #")
-        )?,
-        Ending::Exhausted => writeln!(out, "\n  budget exhausted, no decision{verdict}")?,
-        Ending::Idle => writeln!(out, "\n  nobody had anything to say{verdict}")?,
-    }
-    writeln!(out, "  {} rounds, {} turns", outcome.rounds, outcome.turns)
-}
-
-/// Writes each telemetry event as one JSON line, as `examples/lab` does.
-struct JsonlSink<W: Write + Send>(Mutex<W>);
-
-impl<W: Write + Send> TraceSink for JsonlSink<W> {
-    fn record(&self, event: &Stamped) {
-        if let (Ok(mut out), Ok(line)) = (self.0.lock(), serde_json::to_string(event)) {
-            // A failed trace write must not fail the run it describes.
-            let _ = writeln!(out, "{line}");
-        }
-    }
-}
-
-/// One millisecond per reading, so traces repeat exactly.
-#[derive(Debug, Default)]
-struct TickClock(std::sync::atomic::AtomicU64);
-
-impl Clock for TickClock {
-    fn now_ms(&self) -> u64 {
-        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    }
-}
