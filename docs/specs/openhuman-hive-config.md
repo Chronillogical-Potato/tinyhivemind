@@ -163,6 +163,9 @@ Expose `native_memory_root` for hosts sharing the same physical namespace.
 An explicit profile/seat memory binding overrides the deployment root and
 remains fixed for the agent's lifetime. A hive's memory root configures its
 operator-facing memory facade; joining it does not silently rebind the seat.
+When omitted, the hive store uses
+`deployment:<deployment_id>/team:<hive_id>`, which isolates deployments that
+share one memory engine. An explicit hive root can intentionally share memory.
 Configuring two seats is the supported way to obtain isolated sessions or
 different roots for the same reusable profile. The deployment binds each seat
 spec directly and does not install a host-wide hive memory wrapper. Existing
