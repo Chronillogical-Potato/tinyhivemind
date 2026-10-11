@@ -4,8 +4,7 @@ use crate::{AgentFactory, config::*, deploy::*};
 use std::sync::{Arc, PoisonError};
 struct AllowManagement;
 #[test]
-fn factory_refuses_unbounded_dynamic_budget_and_native_identity_without_mutating_catalog()
--> anyhow::Result<()> {
+fn factory_uses_deployment_identity_and_rejects_unbounded_dynamic_budget() -> anyhow::Result<()> {
     let _lock = crate::RUNTIME_LOCK
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
@@ -29,16 +28,24 @@ fn factory_refuses_unbounded_dynamic_budget_and_native_identity_without_mutating
             ..Default::default()
         };
         assert!(deployment.factory().create_seat("budget", "worker", budget).await.is_err_and(|error| matches!(error, DeployError::Config(ConfigError::UnsupportedSetting(ref setting)) if setting.contains("call_budget"))));
-        assert!(
-            deployment
-                .factory()
-                .create_seat("critic", "worker", SeatOverrides::default())
-                .await
-                .is_err_and(|error| matches!(error, DeployError::Agent(ref id) if id=="critic"))
-        );
+        let critic = deployment
+            .factory()
+            .create_seat("critic", "worker", SeatOverrides::default())
+            .await?;
+        assert_eq!(critic.id(), "default-critic");
+        drop(critic);
         assert_eq!(
             deployment.host().coordinator().list_agents()?,
             ["alice", "bob"]
+        );
+        assert!(
+            deployment
+                .factory()
+                .permissions
+                .config()
+                .seats
+                .iter()
+                .any(|seat| seat.id == "critic")
         );
         assert!(
             !deployment
@@ -47,7 +54,7 @@ fn factory_refuses_unbounded_dynamic_budget_and_native_identity_without_mutating
                 .config()
                 .seats
                 .iter()
-                .any(|seat| seat.id == "budget" || seat.id == "critic")
+                .any(|seat| seat.id == "budget")
         );
         Ok(())
     })
@@ -118,7 +125,7 @@ fn model_management_creates_only_known_typed_profiles() -> anyhow::Result<()> {
             options.management = Some(Arc::new(AllowManagement));
             super::turns::mount(&model, super::turns::Script {
                 action: Some("hivemind_create_agent".into()),
-                arguments: Some(serde_json::json!({"template":template,"config":{"id":"dynamic","overrides":overrides}})),
+                arguments: Some(serde_json::json!({"template":template,"coordinator_id":"dynamic","config":{"id":"factory-setting","overrides":overrides}})),
                 ..Default::default()
             }).await;
             let deployment = Box::pin(HiveDeployment::build_with(

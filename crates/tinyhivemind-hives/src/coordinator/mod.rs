@@ -236,6 +236,40 @@ impl Coordinator {
     pub fn list_agents(&self) -> Result<Vec<String>> {
         Ok(self.lock()?.durable.agents.keys().cloned().collect())
     }
+    /// Permanently unregister an idle agent and remove its current memberships.
+    /// Historical episodes and transcripts retain their captured identity.
+    /// # Errors
+    /// Unknown agent, active turn, unfinished episode assignment or storage failure.
+    pub async fn unregister_agent(&self, agent_id: &str) -> Result<()> {
+        self.update(|state| {
+            known_agent(state, agent_id)?;
+            if state.running.contains_key(agent_id)
+                || state.episodes.iter().any(|episode| {
+                    !episode.finished
+                        && episode.hive.members.iter().any(|member| member == agent_id)
+                })
+            {
+                return Err(Error::InvalidState(format!(
+                    "agent {agent_id} still has active work"
+                )));
+            }
+            for hive in state.hives.values_mut() {
+                hive.members.retain(|member| member != agent_id);
+            }
+            for delivery in &mut state.deliveries {
+                if delivery.agent_id == agent_id
+                    && delivery.status == crate::DeliveryStatus::Pending
+                {
+                    delivery.status = crate::DeliveryStatus::Interrupted;
+                }
+            }
+            state.agents.remove(agent_id);
+            Ok(())
+        })
+        .await?;
+        self.lock()?.runners.remove(agent_id);
+        Ok(())
+    }
     /// Join an existing hive; repeated joins are idempotent.
     /// # Errors
     /// Returns unknown hive/agent or storage errors.

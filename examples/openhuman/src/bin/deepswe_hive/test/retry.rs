@@ -260,6 +260,7 @@ fn a_new_hive_turn_does_not_inherit_a_prior_action_acceptance() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {
@@ -325,6 +326,7 @@ fn accepted_action_survives_post_tool_provider_failure_without_retry() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {
@@ -381,6 +383,7 @@ fn one_missing_seat_retries_in_a_fresh_session_and_round_commits_once() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {
@@ -465,6 +468,7 @@ fn zero_action_retry_exhaustion_is_bounded_without_a_commit() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {
@@ -507,6 +511,7 @@ fn multiple_native_actions_fail_immediately_without_retry_or_commit() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {
@@ -548,6 +553,7 @@ fn empty_provider_response_retries_only_that_seat_and_commits_once() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {
@@ -599,6 +605,7 @@ fn non_retryable_provider_auth_failure_is_immediate() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {
@@ -636,6 +643,7 @@ fn retryable_provider_exhaustion_is_bounded_without_a_commit() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {

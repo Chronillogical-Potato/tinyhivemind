@@ -12,7 +12,8 @@ use super::sandbox::{
     DockerSandbox, InspectorFailure, SandboxConfig, action_arguments, patch_with_limits,
 };
 use super::{
-    Cli, DEFAULT_MODEL, ResultDocument, ensure_round_fits, parse_cli, run, validate_output_paths,
+    Cli, DEFAULT_MODEL, ResultDocument, deployment_id_for_task, ensure_round_fits, parse_cli, run,
+    validate_output_paths,
 };
 use crate::task::Task;
 
@@ -76,6 +77,38 @@ fn cli_defaults_to_exact_gpt_oss_model() {
     )
     .expect("valid CLI");
     assert_eq!(cli.model, DEFAULT_MODEL);
+    assert!(!cli.share_memory_across_tasks);
+}
+
+#[test]
+fn shared_memory_across_tasks_requires_an_explicit_flag() {
+    let cli = parse_cli(
+        [
+            "--task",
+            "/tmp/task.json",
+            "--api-base",
+            "http://127.0.0.1",
+            "--output",
+            "/tmp/out.json",
+            "--share-memory-across-tasks",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    )
+    .expect("valid CLI");
+    assert!(cli.share_memory_across_tasks);
+}
+
+#[test]
+fn task_deployment_ids_are_safe_bounded_and_deterministic() {
+    let first = deployment_id_for_task("Task/ABC with a very long instance identifier");
+    assert_eq!(first, deployment_id_for_task("Task/ABC with a very long instance identifier"));
+    assert!(first.len() <= 64);
+    assert!(first.starts_with("deepswe-"));
+    assert!(first.bytes().all(|byte| {
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+    }));
+    assert_ne!(first, deployment_id_for_task("task/abc with a very long instance identifier"));
 }
 
 #[test]
@@ -264,6 +297,7 @@ fn ignored_secret_refusal_happens_before_docker_or_provider() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output,
+            share_memory_across_tasks: false,
         };
         let error = run(cli).await.expect_err("ignored checkout refused");
         assert!(error.to_string().contains("ignored"));

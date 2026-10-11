@@ -25,6 +25,7 @@ impl HiveConfig {
         unique("workflow", self.workflows.iter().map(|v| v.id.as_str()))?;
         self.check_references()?;
         self.check_settings()?;
+        unique_agent_ids(&self)?;
         self.check_authority()?;
         Ok(ValidatedHiveConfig(self))
     }
@@ -37,6 +38,14 @@ impl HiveConfig {
             .iter()
             .find(|p| p.id == seat.profile)
             .ok_or_else(|| ConfigError::UnknownProfile(seat.profile.clone()))
+    }
+    /// Resolve a stable seat key to the `OpenHuman` identity used at runtime.
+    #[must_use]
+    pub fn agent_id_for_seat(&self, seat_id: &str) -> Option<String> {
+        self.seats
+            .iter()
+            .find(|seat| seat.id == seat_id)
+            .map(|seat| seat.resolved_agent_id(&self.runtime.deployment_id))
     }
     /// Runtime/profile/seat/membership authority layers, in precedence order.
     ///
@@ -127,6 +136,14 @@ impl HiveConfig {
             for child in seat.overrides.subagents.iter().flatten() {
                 self.profile_ref(child)?;
             }
+        }
+        if self
+            .runtime
+            .memory_root
+            .as_deref()
+            .is_some_and(|root| root.trim().is_empty() || root.trim() == "root")
+        {
+            return Err(ConfigError::DefaultMemoryRoot("runtime".into()));
         }
         for hive in &self.hives {
             unique("member", hive.members.iter().map(|m| m.seat.as_str()))?;
@@ -221,6 +238,15 @@ impl HiveConfig {
             }
             limits(&seat.overrides.limits, &seat.id)?;
             model(&seat.overrides.model, &seat.id)?;
+            let memory_root = seat
+                .overrides
+                .memory
+                .as_ref()
+                .or(self.profile_for(seat)?.memory.as_ref())
+                .and_then(|memory| memory.root.as_deref());
+            if memory_root.is_some_and(|root| root.trim().is_empty() || root.trim() == "root") {
+                return Err(ConfigError::DefaultMemoryRoot(seat.id.clone()));
+            }
         }
         for hive in &self.hives {
             if hive.members.is_empty() {
@@ -358,6 +384,54 @@ impl HiveConfig {
         }
         Ok(())
     }
+}
+fn unique_agent_ids(config: &HiveConfig) -> Result<()> {
+    if !valid_openhuman_id(&config.runtime.deployment_id) {
+        return Err(ConfigError::InvalidId("runtime.deployment_id".into()));
+    }
+    let mut ids = std::collections::BTreeMap::<String, String>::new();
+    for seat in &config.seats {
+        ids.insert(seat.id.clone(), seat.id.clone());
+    }
+    for seat in &config.seats {
+        let agent_id = seat.resolved_agent_id(&config.runtime.deployment_id);
+        if !valid_openhuman_id(&agent_id) {
+            return Err(ConfigError::InvalidAgentId {
+                seat: seat.id.clone(),
+                agent_id,
+            });
+        }
+        let reserved = openhuman_core::agent::harness::AgentDefinitionRegistry::builtins_only()
+            .get(&agent_id)
+            .is_some()
+            || config.profiles.iter().any(|profile| profile.id == agent_id);
+        if reserved {
+            return Err(ConfigError::ReservedAgentId {
+                seat: seat.id.clone(),
+                agent_id,
+            });
+        }
+        if let Some(first) = ids.insert(agent_id.clone(), seat.id.clone())
+            && !(first == seat.id && agent_id == seat.id)
+        {
+            return Err(ConfigError::DuplicateAgentId {
+                first,
+                second: seat.id.clone(),
+                agent_id,
+            });
+        }
+    }
+    Ok(())
+}
+fn valid_openhuman_id(id: &str) -> bool {
+    let bytes = id.as_bytes();
+    bytes.len() <= 64
+        && bytes
+            .first()
+            .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        && bytes.iter().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+        })
 }
 fn unique<'a>(section: &str, ids: impl Iterator<Item = &'a str>) -> Result<()> {
     let mut seen = BTreeSet::new();

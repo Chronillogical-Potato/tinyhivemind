@@ -40,9 +40,18 @@ impl AgentRunner for SuppliedRunner {
             if timeout.is_zero() {
                 return Err(map_error(&Error::InvalidTurnTimeout));
             }
+            let started = tokio::time::Instant::now();
             let usage = Arc::new(Mutex::new(None));
             let meter = usage.clone();
-            let prompt = format!("{}\n{}", hooks.context(&scope), render(&request)?);
+            let Ok(context) = tokio::time::timeout(timeout, hooks.context_async(&scope)).await
+            else {
+                return Err(map_error(&Error::TimedOut));
+            };
+            let remaining = timeout.saturating_sub(started.elapsed());
+            if remaining.is_zero() {
+                return Err(map_error(&Error::TimedOut));
+            }
+            let prompt = format!("{context}\n{}", render(&request)?);
             let mut turn = agent.turn(prompt).meter(move |value| {
                 *meter.lock().unwrap_or_else(PoisonError::into_inner) = value;
             });
@@ -51,7 +60,7 @@ impl AgentRunner for SuppliedRunner {
                 turn = turn.tools(move |context| source(context));
             }
             turn = configure(turn, &hooks.prepare(&scope));
-            turn = hooks.configure(&scope, turn).timeout(timeout);
+            turn = hooks.configure(&scope, turn).timeout(remaining);
             if let Some(job_id) = &scope.scheduled_job_id {
                 turn = turn.origin(
                     openhuman_core::agent::turn_origin::AgentTurnOrigin::TrustedAutomation {
@@ -71,7 +80,7 @@ impl AgentRunner for SuppliedRunner {
                     // Dispatch has already awaited cleanup; use our authoritative
                     // bound without inspecting credential-bearing native text.
                     if matches!(error, openhuman_embed::CoreError::DeadlineExceeded { .. })
-                        || started.elapsed() >= timeout
+                        || started.elapsed() >= remaining
                     {
                         Error::TimedOut
                     } else {

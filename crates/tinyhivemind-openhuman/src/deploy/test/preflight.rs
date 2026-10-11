@@ -110,6 +110,20 @@ fn child_instance_only_settings_are_explicitly_refused() -> anyhow::Result<()> {
     assert!(runtime::preflight(&config, &BuildOptions::default()).is_err());
     Ok(())
 }
+
+#[test]
+fn refuses_v3_when_configured_memory_uses_seat_history() -> anyhow::Result<()> {
+    let mut config = manifest()?;
+    config.runtime.memory_engine = "memory".into();
+    let mut native = crate::offline::config();
+    native.memory.layout = openhuman_core::config::MemoryLayoutMode::V3;
+    let options = BuildOptions {
+        config: Some(native),
+        ..Default::default()
+    };
+    assert!(runtime::preflight(&config, &options).is_err());
+    Ok(())
+}
 #[test]
 fn logical_memory_roots_encode_without_collisions_and_reserve_native_agent_depth()
 -> anyhow::Result<()> {

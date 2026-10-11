@@ -30,5 +30,6 @@ mod delegation;
 mod mcp;
 mod sends;
 
+mod hook_composition;
 mod profile;
 mod timeout;

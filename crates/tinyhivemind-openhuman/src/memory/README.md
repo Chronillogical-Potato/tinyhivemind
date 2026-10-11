@@ -15,24 +15,29 @@ Registration behavior with a live runtime is tested in
 
 ## Design
 
-OpenHuman already runs a memory lifecycle around every agent turn. Before the
-model runs it recalls a context pack, including at the start of a session and
-after a compaction. After the turn commits it logs the turn. When the transcript
-is compacted it recalls what the dropped turns carried. Each agent acts as one
-memory agent id under one layout root, set per agent by
-`openhuman_embed::AgentSpec::memory(MemoryBinding::new(id).root(root))`.
+OpenHuman logs every agent's turns through one process-wide engine. Its
+automatic recall is a completed-pack prefetch with a cold-cache gap on session
+start and after compaction. Manifest deployments disable that prefetch and
+synchronously call their captured hive's `HiveMemoryStore` before each
+coordinator turn, so the first turn receives the same hive brief as later
+turns. The deployment and every hive store receive clones of the same engine
+`Arc`.
 
-This module decides those two values for a hive's seats:
+The legacy host helper decides a hive root and seat memory id. Configured
+deployments bind a stable seat memory id under a deployment root, while their
+core memory stores remain rooted per hive:
 
-- **Root.** `HiveMemory::for_hive(id)` gives `team:<id>`. `HiveMemory::with_root`
+- **Legacy host root.** `HiveMemory::for_hive(id)` gives `team:<id>`. `HiveMemory::with_root`
   accepts any root OpenHuman's `memory::scope::validate_root` accepts. Memory
   under one root is invisible to every other root, so one root per hive (or
   per run) isolates hives from each other. Blank and `root` are refused: they
   name the runtime's default root, which every unbound agent shares.
-- **Memory agent id.** A seat's seat id, unchanged. It must be 1 to 128
-  characters of `A-Za-z0-9_-`, the TinyMemory segment charset, so the engine
-  stores it as written. Every OpenHuman agent id qualifies. Ids are refused
-  rather than sanitized, because sanitizing appends a hash the host never wrote.
+- **Memory agent id.** A seat's stable id, unchanged. It follows OpenHuman's
+  lowercase, 64-character agent-id syntax. Ids are refused rather than
+  sanitized, because sanitizing appends a hash the host never wrote.
+- **Deployment root.** A configured seat defaults to the logical
+  `deployment:<deployment-id>` root. A seat/profile memory root overrides it.
+  The root changes with the deployment id, independently of the stable seat id.
 - **Recall budget.** Optional, in tokens. It maps to
   `[memory.recall] budget_tokens`. An `AgentSpec` takes only one config closure,
   and binding a spec must not replace the host's. The budget therefore goes on
@@ -105,25 +110,21 @@ failure map to `runtime::Error::Recall { source }` or
 error. Note that TinyMemory degrades a failing section to an absent one rather
 than failing the whole recall.
 
-### Why the runner does not inject a framed block
+### Coordinator-turn injection
 
-A seat bound with `HiveMemory::bind` already gets memory in its prompt on every
-turn, from OpenHuman itself. `runtime_session/memory_ingest.rs` calls
-`memory::lifecycle::hooks::pre_turn`, and `MemoryPackMiddleware` attaches the
-resulting pack to that turn's model requests. The pack is never committed to
-the transcript. A session's first turn is a turn like any other. After a
-compaction, `memory_summarizer.rs` calls `hooks::compaction`, and the next
-pre-turn also runs `start_session`. If the runner also rendered
-`RecalledSession::framed`, the seat would receive the same memory twice.
+Manifest deployments add a `TurnHooks::context_async` step before constructing
+the native turn. It recalls `SessionStart` the first time a seat enters a hive
+session and `Rejoin` on later turns, then places the returned notes in the new
+user turn. The notes are not committed as transcript rows. OpenHuman's native
+prefetch is disabled for those deployments because it cannot distinguish the
+active hive. Native seat cron jobs run outside this hook and therefore do not
+receive a hive-specific brief.
 
-The core port is for the paths OpenHuman does not run:
-
-- a host that opens seat sessions itself through
-  `initialize_session_with_recall`, outside an OpenHuman turn;
-- a host that turns per-turn recall off (`[memory.recall] enabled = false`) and
-  recalls only at the core moments;
-- structured `Remember` entries (observations, failed attempts, outcomes).
-  OpenHuman logs turns but writes no such learnings.
+Legacy hosts using `HiveMemory::bind` retain OpenHuman's native lifecycle and
+cached-pack behavior. A cold cache can still supply no pack; those hosts can
+call the core port directly for session start, rejoin or compaction. Structured
+`Remember` entries remain a core-port operation because OpenHuman logs turns
+but does not create these learnings itself.
 
 ## Operational constraints
 

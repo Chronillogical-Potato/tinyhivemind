@@ -2,32 +2,55 @@
 use super::{BuildOptions, Permissions, profile};
 use crate::{HostedTurn, SendAuthorizer, SendRequest, TurnHooks, TurnOptions, TurnScope};
 use std::{
-    sync::{Arc, PoisonError},
+    collections::{BTreeMap, BTreeSet},
+    sync::{Arc, Mutex, PoisonError},
     time::Duration,
 };
+use tinyhivemind_core::runtime::{Recall, RecallMoment, RecallRequest};
 use tinyhivemind_hives::TurnDisposition;
 pub(super) struct Hooks {
     pub permissions: Arc<Permissions>,
     pub extra: Option<Arc<dyn TurnHooks>>,
     pub call: Option<openhuman_embed::budget::CallBudget>,
+    memories: BTreeMap<String, crate::HiveMemoryStore>,
+    recalled: Mutex<BTreeSet<(String, String, String)>>,
 }
 impl Hooks {
+    #[cfg(test)]
     pub(super) fn new(permissions: Arc<Permissions>, options: &BuildOptions) -> Self {
+        Self::with_memories(permissions, options, BTreeMap::new())
+    }
+    pub(super) fn with_memories(
+        permissions: Arc<Permissions>,
+        options: &BuildOptions,
+        memories: BTreeMap<String, crate::HiveMemoryStore>,
+    ) -> Self {
         Self {
             permissions,
             extra: options.hooks.clone(),
             call: options.call_budget,
+            memories,
+            recalled: Mutex::new(BTreeSet::new()),
         }
     }
-}
-impl TurnHooks for Hooks {
-    fn context(&self, scope: &TurnScope) -> String {
+
+    fn context_without_extra(&self, scope: &TurnScope) -> String {
         self.permissions
             .active
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .insert(scope.agent_id.clone(), scope.clone());
         let config = self.permissions.config();
+        if let Some(seat) = config.seats.iter().find(|seat| seat.id == scope.agent_id) {
+            self.permissions
+                .active
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(
+                    seat.resolved_agent_id(&config.runtime.deployment_id),
+                    scope.clone(),
+                );
+        }
         let mut text = String::new();
         if let Some(member) = Permissions::member(&config, scope) {
             for id in &member.context {
@@ -37,10 +60,74 @@ impl TurnHooks for Hooks {
                 }
             }
         }
+        text
+    }
+}
+impl TurnHooks for Hooks {
+    fn context(&self, scope: &TurnScope) -> String {
+        let mut text = self.context_without_extra(scope);
         if let Some(extra) = &self.extra {
             text.push_str(&extra.context(scope));
         }
         text
+    }
+    fn context_async<'a>(
+        &'a self,
+        scope: &'a TurnScope,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = String> + Send + 'a>> {
+        Box::pin(async move {
+            let mut text = self.context_without_extra(scope);
+            if let Some(extra) = &self.extra {
+                text.push_str(&extra.context_async(scope).await);
+            }
+            let Some(episode) = &scope.episode else {
+                return text;
+            };
+            let Some(memory) = self.memories.get(&episode.hive_id) else {
+                return text;
+            };
+            let conversation = scope.session_id.clone().unwrap_or_default();
+            let key = (
+                scope.agent_id.clone(),
+                episode.hive_id.clone(),
+                conversation.clone(),
+            );
+            // OpenHuman exposes no compaction callback to host hooks. Recall on
+            // every turn instead, so the first turn after a compaction receives
+            // a fresh synchronous hive briefing before the native session runs.
+            let moment = if self
+                .recalled
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(key)
+            {
+                RecallMoment::SessionStart
+            } else {
+                RecallMoment::Rejoin
+            };
+            let request = RecallRequest {
+                seat: scope.agent_id.clone(),
+                conversation,
+                focus: Some(episode.brief.clone()),
+                moment,
+                budget_chars: 4_000,
+            };
+            if let Ok(notes) = memory.recall(&request).await
+                && !notes.is_empty()
+            {
+                text.push_str("\nHive memory briefing:\n");
+                for note in notes {
+                    text.push_str(&note.heading);
+                    text.push_str(":\n");
+                    for line in note.lines {
+                        text.push_str("- ");
+                        text.push_str(&line);
+                        text.push('\n');
+                    }
+                }
+            }
+            text
+        })
     }
     fn prepare(&self, scope: &TurnScope) -> TurnOptions {
         self.extra
@@ -115,11 +202,17 @@ impl TurnHooks for Hooks {
         scope: &TurnScope,
         usage: Option<&openhuman_core::agent::tinyagents::host::LastTurnUsage>,
     ) -> crate::Result<TurnDisposition> {
-        self.permissions
+        let config = self.permissions.config();
+        let mut active = self
+            .permissions
             .active
             .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(&scope.agent_id);
+            .unwrap_or_else(PoisonError::into_inner);
+        active.remove(&scope.agent_id);
+        if let Some(seat) = config.seats.iter().find(|seat| seat.id == scope.agent_id) {
+            active.remove(&seat.resolved_agent_id(&config.runtime.deployment_id));
+        }
+        drop(active);
         let extra = self
             .extra
             .as_ref()
@@ -154,7 +247,9 @@ impl SendAuthorizer for Hooks {
         let seat = config
             .seats
             .iter()
-            .find(|seat| seat.id == actor)
+            .find(|seat| {
+                seat.id == actor || seat.resolved_agent_id(&config.runtime.deployment_id) == actor
+            })
             .ok_or_else(|| crate::Error::SendDenied("unknown seat".into()))?;
         let active = self
             .permissions

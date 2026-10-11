@@ -6,6 +6,15 @@ use super::{
 use crate::config::{HiveConfig, WorkflowTarget};
 pub(super) fn preflight(config: &HiveConfig, options: &BuildOptions) -> DeployResult<()> {
     ports(config, options)?;
+    if config.runtime.memory_engine != "disabled"
+        && options.config.as_ref().is_some_and(|native| {
+            native.memory.layout == openhuman_core::config::MemoryLayoutMode::V3
+        })
+    {
+        return Err(unsupported(
+            "runtime memory layout v3 is incompatible with seat history",
+        ));
+    }
     seats(config, options)?;
     children(config)?;
     mcp(config)?;
@@ -71,7 +80,8 @@ fn seats(config: &HiveConfig, options: &BuildOptions) -> DeployResult<()> {
             .as_ref()
             .or(profile.memory.as_ref())
             .and_then(|memory| memory.root.clone())
-            .unwrap_or_else(|| format!("seat:{}", seat.id));
+            .or_else(|| runtime_root(config))
+            .unwrap_or_else(|| format!("deployment:{}", config.runtime.deployment_id));
         super::native_memory_root(&root)?;
         let roots: Vec<_> = config
             .runtime
@@ -107,6 +117,9 @@ fn seats(config: &HiveConfig, options: &BuildOptions) -> DeployResult<()> {
         }
     }
     Ok(())
+}
+fn runtime_root(config: &HiveConfig) -> Option<String> {
+    config.runtime.memory_root.clone()
 }
 fn children(config: &HiveConfig) -> DeployResult<()> {
     for children in config

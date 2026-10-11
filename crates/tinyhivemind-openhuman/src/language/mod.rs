@@ -58,6 +58,7 @@ pub(crate) fn validate_binding(binding: &LoweredMemoryBinding) -> Result<()> {
 pub fn management_request(seat: &LoweredSeat) -> ManagementRequest {
     ManagementRequest::CreateAgent {
         template: seat.template.clone(),
+        coordinator_id: Some(seat.id.clone()),
         config: serde_json::json!({
             "id": seat.id, "label": seat.label, "config": seat.config,
             "prompt": seat.prompt, "model": seat.model, "tools": seat.tools,

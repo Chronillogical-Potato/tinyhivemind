@@ -49,6 +49,7 @@ impl ManifestFactory {
         let mut config = self.permissions.config();
         let seat = Seat {
             id: id.into(),
+            agent_id: None,
             profile: template.into(),
             overrides,
         };

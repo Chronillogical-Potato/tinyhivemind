@@ -23,6 +23,7 @@ fn timeout_with_no_action_fails_closed_without_retry() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {
@@ -72,6 +73,7 @@ fn multiple_actions_after_provider_failure_hard_fail_without_retry() {
             api_base: format!("{}/v1", provider.uri()),
             model: DEFAULT_MODEL.into(),
             output: output.clone(),
+            share_memory_across_tasks: false,
         };
 
         let error = tokio::spawn(async move {

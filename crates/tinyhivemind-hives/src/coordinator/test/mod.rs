@@ -100,6 +100,30 @@ fn done(request: &TurnRequest) -> TurnOutcome {
 }
 
 #[tokio::test]
+async fn unregister_removes_idle_agent_and_current_memberships() {
+    let coordinator = setup().await;
+    add(&coordinator, "a", |request| {
+        Box::pin(async move { Ok(done(&request)) })
+    })
+    .await;
+    hive(&coordinator, "work", &["a"]).await;
+
+    coordinator.unregister_agent("a").await.unwrap();
+
+    assert_eq!(coordinator.list_agents().unwrap(), Vec::<String>::new());
+    assert_eq!(
+        coordinator.list_hives().unwrap()[0].members,
+        Vec::<String>::new()
+    );
+    assert!(matches!(
+        coordinator
+            .send_as_host(message("after-retirement", Destination::Agent("a".into())))
+            .await,
+        Err(crate::Error::UnknownAgent(_))
+    ));
+}
+
+#[tokio::test]
 async fn registration_checks_runtime_handle_identity_and_ids() {
     let c = setup().await;
     let runner = add(&c, "a", |request| {

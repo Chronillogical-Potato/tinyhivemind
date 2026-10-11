@@ -70,7 +70,7 @@ fn host_only_profile_and_readonly_permissions_remove_native_mutating_surfaces() 
             options,
         ))
         .await?;
-        let hosted = openhuman_core::agent::host_agents::resolve("alice")
+        let hosted = openhuman_core::agent::host_agents::resolve("default-alice")
             .ok_or_else(|| anyhow::anyhow!("missing native hosted agent"))?;
         assert!(
             matches!(hosted.definition.tools, openhuman_core::agent::harness::definition::ToolScope::Named(ref names) if names.is_empty())
@@ -138,7 +138,7 @@ fn native_definition_retains_bare_prompt_sampling_tools_skills_and_mcp_credentia
             std::fs::read_to_string(agent.skills_dir().join("fixture-skill/SKILL.md"))?,
             std::fs::read_to_string(bundle.join("SKILL.md"))?
         );
-        let hosted = openhuman_core::agent::host_agents::resolve("alice")
+        let hosted = openhuman_core::agent::host_agents::resolve("default-alice")
             .ok_or_else(|| anyhow::anyhow!("missing native hosted agent"))?;
         assert!(!hosted.context.user_skill_roots());
         let definition = hosted.definition;

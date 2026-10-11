@@ -14,6 +14,10 @@ never launches a partial round merely to consume the remainder.
 
 ## Hive memory
 
+The OpenHuman deployment identity defaults to `pe<problem>` and is independent
+of the process id used to name output artifacts. Set
+`OPENHUMAN_HIVE_DEPLOYMENT_ID` to choose a different memory and agent identity.
+
 | File | Purpose |
 | --- | --- |
 | `memory/` | Reference `WorkingMemory` adapter: `HIVE_MEMORY.md` with compaction (its own README). |

@@ -111,6 +111,9 @@ pub enum ManagementRequest {
     CreateAgent {
         /// Template reference.
         template: String,
+        /// Optional coordinator identity, separate from factory-owned settings.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        coordinator_id: Option<String>,
         /// Nonsecret host-validated settings.
         config: serde_json::Value,
         /// Portable memory contract, applied by the factory before registration.
@@ -222,6 +225,13 @@ pub trait TurnHooks: Send + Sync {
     /// Add context bound to this authoritative coordinator request.
     fn context(&self, _scope: &TurnScope) -> String {
         String::new()
+    }
+    /// Add asynchronously recalled context before the native turn is built.
+    fn context_async<'a>(
+        &'a self,
+        scope: &'a TurnScope,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = String> + Send + 'a>> {
+        Box::pin(async move { self.context(scope) })
     }
     /// Configure a native turn, adding permission hooks or model budgets.
     /// Use `turn_timeout` for deadline overrides; its bound is applied afterward.

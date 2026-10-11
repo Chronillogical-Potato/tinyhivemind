@@ -1,19 +1,11 @@
-//! Hive-shared memory for the seats of one hive.
+//! Bind seats to host-neutral memory namespaces and expose core memory ports.
 //!
-//! A hive's seats are `OpenHuman` agents. Each keeps a memory of its own — its
-//! turns are logged under its own memory agent id — while every seat of the
-//! hive reads the learnings, beliefs and peer turns stored under one shared
-//! layout root, `team:<hive-id>` by default. `OpenHuman`'s memory lifecycle
-//! does the work: it recalls a context pack before each turn (the first turn
-//! of a session and the first turn after a compaction included) and logs each
-//! turn after it commits. This module only derives and validates *where* that
-//! memory lives and applies it to the seats' `AgentSpec`s through
-//! [`openhuman_embed::MemoryBinding`].
-//!
-//! A root isolates: memory below one root is invisible to every other, so a
-//! root per hive (or per run) keeps one hive's memory out of another's.
-//! The default root is refused, because a seat bound there would share memory
-//! with every unbound agent on the runtime.
+//! [`HiveMemory`] supports hosts that bind every registered seat to one hive
+//! root. Configured deployments use a stable seat id under a deployment root
+//! for `OpenHuman`'s own conversation logging, then use one [`HiveMemoryStore`]
+//! per hive for synchronous, hive-scoped coordinator recall. Those stores and
+//! the runtime share one engine `Arc`; configured deployments disable
+//! `OpenHuman`'s process-wide recall prefetch because it has no active-hive key.
 mod convert;
 mod store;
 pub use store::HiveMemoryStore;
@@ -25,6 +17,7 @@ use std::num::NonZeroU32;
 /// Longest memory agent id, and longest hive id in a derived root: one
 /// `TinyMemory` namespace segment.
 const MAX_ID_LEN: usize = 128;
+const MAX_AGENT_ID_LEN: usize = 64;
 
 /// Where the seats of one hive keep their shared memory.
 ///
@@ -49,7 +42,7 @@ impl HiveMemory {
     /// rewritten so the root a host names is the root the engine stores.
     pub fn for_hive(hive_id: &str) -> Result<Self> {
         let root = format!("team:{hive_id}");
-        if let Err(reason) = check_id(hive_id) {
+        if let Err(reason) = check_segment(hive_id) {
             return Err(Error::InvalidMemoryRoot { root, reason });
         }
         Self::with_root(root)
@@ -109,8 +102,8 @@ impl HiveMemory {
     /// The memory agent id of `seat`: the seat id itself.
     ///
     /// # Errors
-    /// [`Error::InvalidMemoryAgentId`] when `seat` is not 1 to 128 characters
-    /// of `A-Z`, `a-z`, `0-9`, `_` or `-`. Every `OpenHuman` agent id passes.
+    /// [`Error::InvalidMemoryAgentId`] when `seat` does not match `OpenHuman`'s
+    /// lowercase, 64-character agent-id syntax.
     pub fn agent_id(&self, seat: &str) -> Result<String> {
         check_id(seat).map_err(|reason| Error::InvalidMemoryAgentId {
             agent_id: seat.to_owned(),
@@ -140,6 +133,7 @@ impl HiveMemory {
     /// Apply the hive-wide recall settings to a runtime config. Seat
     /// identities are per agent and come from [`HiveMemory::bind`].
     pub fn configure(&self, config: &mut RuntimeConfig) {
+        config.memory.layout = openhuman_core::config::MemoryLayoutMode::Legacy;
         if let Some(tokens) = self.recall_budget_tokens {
             config.memory.recall.budget_tokens = tokens.get();
         }
@@ -179,12 +173,29 @@ impl HiveMemory {
 
 /// One `TinyMemory` namespace segment id, kept verbatim by the engine.
 fn check_id(id: &str) -> std::result::Result<(), String> {
-    let valid = !id.is_empty()
+    let bytes = id.as_bytes();
+    let valid = !bytes.is_empty()
+        && bytes.len() <= MAX_AGENT_ID_LEN
+        && (bytes[0].is_ascii_lowercase() || bytes[0].is_ascii_digit())
+        && id.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_' || byte == b'-'
+        });
+    if valid {
+        Ok(())
+    } else {
+        Err(format!(
+            "must match OpenHuman's 1 to {MAX_AGENT_ID_LEN} lowercase letters, digits, `_` or `-` syntax"
+        ))
+    }
+}
+
+fn check_segment(id: &str) -> std::result::Result<(), String> {
+    if !id.is_empty()
         && id.len() <= MAX_ID_LEN
         && id
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-');
-    if valid {
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
         Ok(())
     } else {
         Err(format!(

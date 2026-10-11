@@ -130,10 +130,27 @@ Do not parse hive policies and then run every hive with global defaults.
 
 ### Memory decision
 
-Use option (a): a default per-seat root `seat:<seat-id>`, shared by that seat
-across all its hives. This follows the existing one-session identity and does
-not require an impossible per-turn `MemoryBinding` switch. It also avoids
-making membership order determine ownership of memory.
+Keep the three identities separate. `seat.id` is the stable manifest and
+coordinator key. `runtime.deployment_id` is the host-controlled lifetime key;
+the OpenHuman agent id is an explicit `seat.agent_id` override or
+`<deployment-id>-<seat-id>`. That agent id owns the OpenHuman profile,
+transcripts, cron state and MCP state. Validate the resolved id against
+OpenHuman's lowercase 64-character syntax, the built-in definition registry,
+configured profile ids, and the other resolved seat ids before boot.
+
+Each seat binds memory with `agent_id = <seat-id>` below one deployment root.
+The default logical root is `deployment:<deployment-id>`; a seat/profile root
+overrides it. Reusing the deployment id and root resumes memory and transcripts;
+changing the deployment id creates a fresh OpenHuman identity. A `MemoryBinding`
+is fixed for the lifetime of its agent, so a seat used in several hives cannot
+switch roots as membership changes.
+
+Hive-specific `Remember` entries use one memory store per hive, each scoped to
+that hive's logical root. Coordinator turns synchronously recall from the
+captured hive store before opening the native turn. OpenHuman's process-wide
+recall prefetch is disabled for configured deployments because its cache key
+has no hive dimension; conversation logging remains enabled. This prevents a
+cold first-turn cache or another hive's entries from deciding the brief.
 
 Logical roots cannot be passed verbatim to the pinned native namespace parser,
 which has no `seat` segment kind. Encode every logical UTF-8 root injectively
@@ -143,13 +160,16 @@ pass-through collisions. Reject blank roots or roots over 384 UTF-8 bytes
 before boot: at most seven root segments leave one native agent segment.
 Expose `native_memory_root` for hosts sharing the same physical namespace.
 
-An explicit profile/seat memory binding overrides that default and remains
-fixed for the agent's lifetime. A hive's memory root describes its shared
-recall namespace; joining it does not silently rebind the seat. Configuring
-two seats is the supported way to obtain isolated sessions or different
-roots for the same reusable profile. The deployment configures the binding on the seat spec and does not install
-a host-wide hive memory wrapper that would overwrite it. Existing hosts
-using `with_hive_memory` retain their established behavior.
+An explicit profile/seat memory binding overrides the deployment root and
+remains fixed for the agent's lifetime. A hive's memory root configures its
+operator-facing memory facade; joining it does not silently rebind the seat.
+When omitted, the hive store uses
+`deployment:<deployment_id>/team:<hive_id>`, which isolates deployments that
+share one memory engine. An explicit hive root can intentionally share memory.
+Configuring two seats is the supported way to obtain isolated sessions or
+different roots for the same reusable profile. The deployment binds each seat
+spec directly and does not install a host-wide hive memory wrapper. Existing
+hosts using `with_hive_memory` retain their established behavior.
 
 ### MCP and tools
 

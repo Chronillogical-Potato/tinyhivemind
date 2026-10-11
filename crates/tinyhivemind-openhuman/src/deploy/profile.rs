@@ -150,7 +150,8 @@ pub(super) fn seat(
         .as_ref()
         .or(profile.memory.as_ref())
         .and_then(|memory| memory.root.clone())
-        .unwrap_or_else(|| format!("seat:{}", seat.id));
+        .or_else(|| config.runtime.memory_root.clone())
+        .unwrap_or_else(|| format!("deployment:{}", config.runtime.deployment_id));
     let mut model = profile.model.clone();
     model.temperature = seat.overrides.model.temperature.or(model.temperature);
     model.max_tokens = seat.overrides.model.max_tokens.or(model.max_tokens);
@@ -166,7 +167,8 @@ pub(super) fn seat(
     {
         definition = definition.sandbox(openhuman_embed::SandboxModeSpec::Sandboxed);
     }
-    let mut spec = AgentSpec::new(&seat.id)
+    let agent_id = seat.resolved_agent_id(&config.runtime.deployment_id);
+    let mut spec = AgentSpec::new(&agent_id)
         .extends(&seat.profile)
         .definition(definition)
         .access(super::runtime::access(access))
@@ -208,7 +210,7 @@ pub(super) fn seat(
         definitions.push((id.clone(), self::definition(config, child)));
     }
     spec = spec.subagents(definitions);
-    let id = seat.id.clone();
+    let id = agent_id;
     Ok(spec.can_use_tool(move |context| {
         let permissions = permissions.clone();
         let id = id.clone();

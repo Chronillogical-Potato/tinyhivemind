@@ -158,13 +158,24 @@ fn all_manifests_lower_into_one_native_runtime_with_the_declared_seats_and_limit
                 );
                 for seat in &expected.seats {
                     let native = &deployment.seats()[&seat.id];
+                    let profile = expected.profile_for(seat)?;
+                    let memory_root = seat
+                        .overrides
+                        .memory
+                        .as_ref()
+                        .or(profile.memory.as_ref())
+                        .and_then(|memory| memory.root.as_deref())
+                        .or(expected.runtime.memory_root.as_deref())
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| {
+                            format!("deployment:{}", expected.runtime.deployment_id)
+                        });
                     assert_eq!(native.runtime_id(), deployment.runtime().runtime_id());
-                    assert_eq!(native.id(), seat.id);
+                    assert_eq!(native.id(), seat.resolved_agent_id(&expected.runtime.deployment_id));
                     assert_eq!(
                         native.config().memory.root.as_deref(),
-                        Some(native_memory_root(&format!("seat:{}", seat.id))?.as_str())
+                        Some(native_memory_root(&memory_root)?.as_str())
                     );
-                    let profile = expected.profile_for(seat)?;
                     if let Some(iterations) = profile.limits.iterations {
                         assert_eq!(
                             native.config().agent.max_tool_iterations_override,

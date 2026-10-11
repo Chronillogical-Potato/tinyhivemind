@@ -76,6 +76,7 @@ fn seat_request_keeps_all_factory_settings_and_memory_contract() -> Result<()> {
     };
     let ManagementRequest::CreateAgent {
         template,
+        coordinator_id,
         config,
         memory,
     } = management_request(&seat)
@@ -83,6 +84,7 @@ fn seat_request_keeps_all_factory_settings_and_memory_contract() -> Result<()> {
         return Err(Error::MemoryBindingUnsupported);
     };
     assert_eq!(template, seat.template);
+    assert_eq!(coordinator_id.as_deref(), Some(seat.id.as_str()));
     assert_eq!(config["id"], seat.id);
     assert_eq!(config["prompt"], seat.prompt);
     assert_eq!(config["model"], "model");
