@@ -102,7 +102,6 @@ fn append(file: &Mutex<File>, value: &serde_json::Value) {
     }
 }
 
-/// A timestamped run directory name: `YYYYMMDDTHHMMSSZ`.
 /// A short suffix unique across processes started in the same second: the
 /// process id and the sub-second clock.
 pub(super) fn unique_suffix() -> String {
@@ -112,6 +111,7 @@ pub(super) fn unique_suffix() -> String {
     format!("{:x}{nanos:08x}", std::process::id())
 }
 
+/// A timestamped run directory name: `YYYYMMDDTHHMMSSZ`.
 pub(super) fn timestamp() -> String {
     tinymemory_api::chrono::Utc::now()
         .format("%Y%m%dT%H%M%SZ")
