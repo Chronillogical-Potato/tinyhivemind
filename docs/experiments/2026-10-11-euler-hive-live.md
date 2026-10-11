@@ -155,10 +155,11 @@ Each fix below has a regression test in `euler_hive/test.rs`.
 Excerpts are trimmed, and every answer and data string is redacted:
 
 > **research-librarian** (PE1014): "The main problem describes the Witt design
-> S(5, 8, 24), the unique Steiner system with parameters v = 24, k = 8, t = 5."
+> …, the unique Steiner system with [the statement's] parameters."
 
-> **theory-counter** (PE1014): "Auditing the combinatorial counting … Total
-> number of blocks: b = C(24, 5) / C(8, 5) = 42504 / 56 = 759."
+> **theory-counter** (PE1014): "Auditing the combinatorial counting and
+> parameters of the Steiner system … Any two distinct blocks intersect in 0,
+> 2, or 4 elements, matching the weight properties."
 
 > **verify-rederiver** (PE1014): "Sample validation: … Filtering all
 > 3-subsets … uniquely yields [the sample's block], matching the problem
@@ -179,7 +180,4 @@ first it was starved of runs, then it was ignored. Both are now enforced by
 the host instead of asked of the model.
 
 These are single runs of one model, not a benchmark. Nothing here measures
-the hive against a single agent at matched budget. Across the runs above
-plus the runs listed in the
-[addendum](2026-10-11-euler-hive-live-addendum.md), the total spend was about
-$5.
+the hive against a single agent at matched budget.
