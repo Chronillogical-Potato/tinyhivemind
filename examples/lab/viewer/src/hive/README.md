@@ -65,3 +65,7 @@ covers them under node.
 - The recording listing is pushed (`/api/recordings/events`); the first
   listing announces nothing, later ones toast each run that newly appears
   live, except one this page started itself.
+
+`index.test.js` runs the coordinator's actual run/finally and recording
+ownership code with UI and stream boundaries stubbed. It pins completed-run
+cleanup and the race where an old stream completes after a new one starts.

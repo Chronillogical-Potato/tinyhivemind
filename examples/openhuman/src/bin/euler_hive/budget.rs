@@ -122,6 +122,16 @@ impl Budget {
         Ok(ModelCalls { budget: self, reserved: calls })
     }
 
+    /// Poll account usage within the remaining wall-clock budget. An expired
+    /// budget never starts the request; a slow request is dropped at its deadline.
+    ///
+    /// # Errors
+    ///
+    /// Returns the request's error inside `Some`, or `None` at the deadline.
+    pub(super) async fn poll_usage(&self, request: impl std::future::Future<Output = anyhow::Result<f64>>) -> Option<anyhow::Result<f64>> {
+        super::turn::within(self.turn_timeout(), request).await
+    }
+
     pub(super) fn elapsed(&self) -> Duration {
         self.started.elapsed()
     }

@@ -168,7 +168,10 @@ async function run() {
   } catch (err) {
     if (err.name !== "AbortError") controls.status(`Run failed: ${err.message}`, true);
   } finally {
-    if (runAbort === ctl) player.finish();
+    if (runAbort === ctl) {
+      player.finish();
+      runAbort = null;
+    }
   }
 }
 

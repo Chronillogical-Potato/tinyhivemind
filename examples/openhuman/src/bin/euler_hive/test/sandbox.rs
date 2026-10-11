@@ -184,3 +184,17 @@ fn model_call_reservations_settle_only_known_unused_capacity() {
     assert!(budget.reserve_model_calls(1).expect("fits").finish(2).is_err());
     assert_eq!(budget.model_calls.load(Ordering::Acquire), 1);
 }
+
+#[tokio::test]
+async fn account_polling_never_starts_after_the_wall_deadline() {
+    let budget = super::super::budget::Budget::new(super::super::budget::Limits {
+        max_wall_seconds: 0, ..super::super::budget::Limits::SMOKE
+    });
+    let called = std::sync::atomic::AtomicBool::new(false);
+    let result = budget.poll_usage(async {
+        called.store(true, std::sync::atomic::Ordering::SeqCst);
+        Ok(1.0)
+    }).await;
+    assert!(result.is_none());
+    assert!(!called.load(std::sync::atomic::Ordering::SeqCst));
+}

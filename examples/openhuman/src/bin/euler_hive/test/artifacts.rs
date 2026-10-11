@@ -120,3 +120,15 @@ async fn closing_an_exhausted_run_skips_optional_memory_waits() {
     assert!(matches!(futures::poll!(closing.as_mut()), std::task::Poll::Ready(Ok(()))),
         "finalization must not wait or read optional memory once the deadline is spent");
 }
+
+#[test]
+fn failed_initial_artifacts_prevent_opening_the_first_desk() {
+    let (_, hive) = super::support::lowered();
+    let mut federation = super::super::floors::Federation::new(&hive).expect("federation");
+    let dir = tempfile::tempdir().expect("dir");
+    let run = super::super::artifacts::RunDir::create(dir.path().join("run")).expect("run");
+    std::fs::create_dir(run.path().join("package.json")).expect("block initial artifact");
+    run.json("package.json", &serde_json::json!({"id":"test"}));
+    assert!(super::super::open_federation(&mut federation, &run).is_err());
+    assert!(federation.floors.iter().all(|floor| !floor.opened), "no seat work is authorized without the initial recording");
+}

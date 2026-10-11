@@ -178,6 +178,13 @@ fn main() -> anyhow::Result<()> {
         .block_on(async { tokio::spawn(run(parse_args()?)).await? })
 }
 
+/// Open the first desk after the recording's initial artifacts were written.
+fn open_federation(federation: &mut floors::Federation, run: &artifacts::RunDir) -> anyhow::Result<()> {
+    run.check()?;
+    federation.open("The host opened the hive on the problem above. Work it from your desk's angle, then report with hive_complete.");
+    Ok(())
+}
+
 async fn run(args: Args) -> anyhow::Result<()> {
     // Provider-side browsing would bypass the research-only search belt.
     let model = args.model.to_ascii_lowercase();
@@ -233,12 +240,13 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let http = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
         .build()?;
-    match budget::openrouter_usage(&http, &openrouter_key).await {
-        Ok(usage) => {
+    match budget.poll_usage(budget::openrouter_usage(&http, &openrouter_key)).await {
+        Some(Ok(usage)) => {
             budget.record_account(usage);
             println!("openrouter_usage: metered");
         }
-        Err(error) => println!("openrouter_usage: unavailable ({error})"),
+        Some(Err(error)) => println!("openrouter_usage: unavailable ({error})"),
+        None => println!("openrouter_usage: skipped at wall-clock deadline"),
     }
 
     // One runtime for every seat: OpenRouter inference, the real TinyHumans
@@ -395,7 +403,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
     });
 
     let mut federation = federation_seed;
-    federation.open("The host opened the hive on the problem above. Work it from your desk's angle, then report with hive_complete.");
+    open_federation(&mut federation, &run)?;
     let mut stop = None;
     loop {
         if federation.finished.is_some() || federation.undecided.is_some() {
@@ -407,7 +415,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
             break;
         }
         let width: u64 = pending.iter().map(|round| round.seats.len() as u64).sum();
-        if let Ok(usage) = budget::openrouter_usage(&http, &openrouter_key).await {
+        if let Some(Ok(usage)) = budget.poll_usage(budget::openrouter_usage(&http, &openrouter_key)).await {
             budget.record_account(usage);
         }
         if let Err(exhausted) = budget.admit_round(width) {
@@ -545,7 +553,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         // A record that can no longer be written stops the spend.
         run.check()?;
     }
-    if let Ok(usage) = budget::openrouter_usage(&http, &openrouter_key).await {
+    if let Some(Ok(usage)) = budget.poll_usage(budget::openrouter_usage(&http, &openrouter_key)).await {
         budget.record_account(usage);
     }
     report::finish(report::Closing {
