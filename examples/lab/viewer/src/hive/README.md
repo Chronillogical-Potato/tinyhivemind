@@ -12,7 +12,7 @@ covers them under node.
 | `api.js` | Fetches the listing and structures and opens the run and compare streams |
 | `stream.js` | Server-sent events over `fetch`, so a 400 shows its message and a finished stream does not reconnect |
 | `simulation.js` | Pure reducer: frames → the room after N rounds (lines tagged with their floor, transcript entries, referrals and this step's fresh ones, desk endings, usage, standings carried over, crossings, ending), plus `sawBy` |
-| `referrals.js` | Pure: the declared link a referral travelled (`edgeFor`), its wording, and the per-desk transcript filter and tabs |
+| `referrals.js` | Pure: the declared link a referral travelled (`edgeFor`), its wording, the per-desk transcript filter and tabs, and `deskPolicy` (a desk's own `episode`, else the package's) |
 | `player.js` | The replay clock: buffers frames and steps through them at 0.5× to 8×, or follows a live stream to its newest round |
 | `layout.js` | Pure geometry: desk boxes in a wrapping grid, seats in their first desk, compact nodes above 16 seats |
 | `graph.js` | The room in SVG: desks with ending badges, topology and referral edges, referral packets (accepted or refused, on a temporary edge when unlinked), seats, answer chips, speech bubbles |
@@ -43,6 +43,10 @@ covers them under node.
   Packets are moved by `requestAnimationFrame` from when each was first
   drawn, so a redraw mid-flight resumes rather than restarts (reduced motion
   draws them where they stop).
+- Quorum standings belong to the current round's floor: the panel is titled
+  with that desk and its threshold line is the desk's `desks[].episode.quorum_threshold`
+  from `--json`, falling back to the package `episode` when the binary
+  reports none.
 - In live mode the player follows the stream until the user pauses, steps
   or scrubs; `usage` is shown whenever it has arrived.
 - Speech bubbles avoid desk headers and seat nodes. In a compact hive, a

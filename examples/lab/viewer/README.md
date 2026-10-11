@@ -136,7 +136,9 @@ the player and streams one episode from
   a seat for its own. In a math package a seat turns green or red once its
   latest answer is right or wrong.
 - **Quorum standings**: support and object per topic, a dashed line at the
-  quorum threshold, and "committed" once the room records it.
+  quorum threshold, and "committed" once the room records it. In a multi-desk
+  run the panel follows the current round's desk and uses that desk's own
+  quorum (`desks[].episode`, else the package's).
 - **Transcript**: click a seat (or a name in the transcript) to highlight its
   latest turn and the lines it saw: the `saw` most recent of the `of` lines in
   front of it, counting only earlier rounds for a blind turn and only its own
@@ -188,7 +190,8 @@ The first request builds the binary once with
 share one build) and then runs `target/debug/examples/hive_view`.
 `HIVE_PACKAGES` replaces the package root. `HIVE_VIEW_BIN` replaces the binary
 and skips the build. The child's environment is the server's own. A `.mjs` runs under node, so
-`HIVE_VIEW_BIN=tools/fake-hive-view.mjs` replays the fixtures.
+`HIVE_VIEW_BIN=tools/fake-hive-view.mjs` replays the fixtures;
+`HIVE_FAKE_DELAY_MS=3000` slows its replay to live pace.
 
 ## Security
 
@@ -216,5 +219,8 @@ node tools/hive-check.mjs http://localhost:8099/ shots   # SCHEME=light for ligh
 ```
 
 `hive-check.mjs` opens the gallery, `?hive=review-board`, `?hive=math-swarm`
+(asserting five desk badges and ending rows and at least one accepted and one
+refused referral row, and shooting `math-swarm-end.png` and one desk's
+transcript tab)
 and `?compare=math-panel,math-swarm&seeds=10`, waits for each ending, replays
 a seed from the compare strip, and writes PNGs to `shots/` (git-ignored).
