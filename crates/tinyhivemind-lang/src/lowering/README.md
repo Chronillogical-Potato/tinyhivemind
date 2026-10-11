@@ -7,6 +7,6 @@ Lowering preserves memory constraints for host enforcement and never starts agen
 
 | File | Purpose |
 | --- | --- |
-| types.rs | Portable wire types and their documented fields. |
+| types.rs | `LoweredHive`, `LoweredSeat` and `LoweredMemoryBinding`. |
 | mod.rs | Public lowering API and implementation. |
 | test.rs | Complete activation snapshot preservation regression. |
