@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use tinyhivemind_core::runtime::desk::Desk;
+use tinyhivemind_core::desk::Desk;
 use tinyhivemind_lang::{LoweredHive, LoweredSeat, Package, lower, parse};
 
 /// The context document the host replaces at run time.
