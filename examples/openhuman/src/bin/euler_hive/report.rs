@@ -277,7 +277,7 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
         };
         memory.insert(
             id.clone(),
-            json!({"namespace": namespace, "host": host, "stored": stored, "recall_after_run": recall_after_run}),
+            json!({"namespace": namespace, "host": host, "stored": stored, "recall_after_run": recall_after_run, "last_recall": seat.memory.seen()}),
         );
     }
     let pool_counts = match pool {
