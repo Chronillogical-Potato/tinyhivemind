@@ -336,7 +336,10 @@ async fn drive(
                     (seat.clone(), act(&desk, seat, &reason))
                 })
                 .collect();
-            federation.commit(round.desk, at, results).await.expect("commit");
+            federation
+                .commit(round.desk, at, results)
+                .await
+                .expect("commit");
         }
         rounds += 1;
     }
@@ -372,8 +375,14 @@ async fn overlapping_questions_with_nested_asks_all_come_home_and_the_pipeline_f
     })
     .await;
     let research = &federation.floors[0];
-    assert!(research.reported, "research never reported: a return was lost");
-    let finished = federation.finished.as_ref().expect("the pipeline reaches synthesis");
+    assert!(
+        research.reported,
+        "research never reported: a return was lost"
+    );
+    let finished = federation
+        .finished
+        .as_ref()
+        .expect("the pipeline reaches synthesis");
     assert_eq!(finished.desk, "synthesis");
     let returns = federation
         .referrals
@@ -389,9 +398,11 @@ async fn a_refused_ask_gives_the_seat_its_turn_back_before_the_desk_reports() {
     let mut federation = Federation::new(&hive).expect("federation builds");
     federation.open("go");
     // research may not refer to verify: no declared link.
-    drive(&mut federation, |desk, seat, reason| match (desk, seat, reason) {
-        ("research", "research-librarian", "opening") => refer("verify"),
-        _ => complete(&format!("{seat} done")),
+    drive(&mut federation, |desk, seat, reason| {
+        match (desk, seat, reason) {
+            ("research", "research-librarian", "opening") => refer("verify"),
+            _ => complete(&format!("{seat} done")),
+        }
     })
     .await;
     let refused = federation
@@ -403,7 +414,10 @@ async fn a_refused_ask_gives_the_seat_its_turn_back_before_the_desk_reports() {
     let research = &federation.floors[0];
     assert!(research.reported);
     assert!(
-        research.journal.iter().any(|row| row.kind == "complete" && row.author == "research-librarian"),
+        research
+            .journal
+            .iter()
+            .any(|row| row.kind == "complete" && row.author == "research-librarian"),
         "the refused seat completed after its turn came back"
     );
     assert!(federation.finished.is_some());

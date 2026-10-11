@@ -231,7 +231,8 @@ impl Federation {
             .filter(|_| linked && one.kind == ReferralKind::Return)
         else {
             if let Some(asker) = self.index(&to) {
-                let notice = format!("host: the answer from #{from} could not travel back (unlinked)");
+                let notice =
+                    format!("host: the answer from #{from} could not travel back (unlinked)");
                 self.come_back(asker, &origin_asker, "refused", &notice);
             }
             return self.refuse(desk, frame, "unlinked");
@@ -251,7 +252,10 @@ impl Federation {
     /// Record that `seat`'s current chain on `desk` is owed one answer.
     fn owe(&mut self, desk: usize, seat: &str) {
         let floor = &mut self.floors[desk];
-        let mode = floor.mode.clone().unwrap_or(Mode::Pipeline { hop: 0, chain: 0 });
+        let mode = floor
+            .mode
+            .clone()
+            .unwrap_or(Mode::Pipeline { hop: 0, chain: 0 });
         *floor.outstanding.entry(mode.chain()).or_insert(0) += 1;
         floor.waiting.entry(seat.to_owned()).or_default().push(mode);
     }
@@ -261,7 +265,15 @@ impl Federation {
     fn come_back(&mut self, desk: usize, seat: &str, reason: &'static str, body: &str) -> u64 {
         let floor = &mut self.floors[desk];
         let author = if reason == "return" { seat } else { "host" };
-        let row = floor.row(author, if reason == "return" { "return" } else { "notice" }, body);
+        let row = floor.row(
+            author,
+            if reason == "return" {
+                "return"
+            } else {
+                "notice"
+            },
+            body,
+        );
         let mode = floor
             .waiting
             .get_mut(seat)
