@@ -3,3 +3,4 @@
 # Viewer toolchain output.
 /viewer/node_modules/
 /viewer/dist/
+/viewer/shots/
