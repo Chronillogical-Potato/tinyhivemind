@@ -156,9 +156,12 @@ pub(super) fn turn_artifacts(run: &RunDir, output: &TurnOutput) {
         "cost_usd": output.cost_usd,
         "error": output.error,
     }));
-    let stamp = super::artifacts::timestamp();
+    let number = run.next_turn();
     run.write(
-        &format!("turns/{stamp}-{}.md", output.seat),
+        &format!(
+            "turns/{number:04}-{}.md",
+            super::artifacts::file_component(&output.seat)
+        ),
         format!(
             "# @{} ({})\n\n## Prompt\n\n{}\n\n## Reply\n\n{}\n\n## Action\n\n```json\n{}\n```\n",
             output.seat,

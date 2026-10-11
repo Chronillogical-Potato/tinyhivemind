@@ -387,7 +387,10 @@ impl HiveTool {
             }
         };
         self.services.run.json(
-            &format!("search/{number:03}-{}.json", self.scope.seat),
+            &format!(
+                "search/{number:03}-{}.json",
+                super::artifacts::file_component(&self.scope.seat)
+            ),
             &record,
         );
         self.services.run.event(&json!({"event": "web_search", "seat": self.scope.seat, "query": query, "provider": provider, "ok": result.is_ok()}));
@@ -407,7 +410,10 @@ impl HiveTool {
             .claim_sandbox(&self.scope.desk)
             .map_err(|e| e.to_string())?;
         let number = self.services.run.next_program();
-        let stem = format!("sandbox/{number:03}-{}", self.scope.seat);
+        let stem = format!(
+            "sandbox/{number:03}-{}",
+            super::artifacts::file_component(&self.scope.seat)
+        );
         self.services.run.write(&format!("{stem}.py"), &code);
         let sandbox = self.services.sandbox.clone();
         let name = format!("euler-{}-{number:03}", self.services.run_id.to_lowercase());
