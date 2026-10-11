@@ -8,9 +8,11 @@
 //! `/tmp`, so no host path -- the run directory, the problem file, anything a
 //! seat should not read -- is reachable from inside.
 
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use wait_timeout::ChildExt;
@@ -91,29 +93,59 @@ impl PythonSandbox {
         if program.len() > MAX_PROGRAM_BYTES {
             anyhow::bail!("program exceeds {MAX_PROGRAM_BYTES} bytes");
         }
-        let stdout = tempfile::NamedTempFile::new()?;
-        let stderr = tempfile::NamedTempFile::new()?;
         let started = Instant::now();
         let mut child = Command::new(&self.docker)
             .args(docker_args(&self.image, name))
             .stdin(Stdio::piped())
-            .stdout(Stdio::from(stdout.reopen()?))
-            .stderr(Stdio::from(stderr.reopen()?))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()?;
         if let Some(mut input) = child.stdin.take() {
             input.write_all(program.as_bytes())?;
         }
+        // Output is read into bounded buffers while the program runs; one
+        // byte past the bound on either stream stops the container, so a
+        // print loop cannot fill the host's disk or memory.
+        let overflow = Arc::new(AtomicBool::new(false));
+        let readers = [
+            child
+                .stdout
+                .take()
+                .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+            child
+                .stderr
+                .take()
+                .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+        ]
+        .map(|pipe| {
+            let overflow = overflow.clone();
+            std::thread::spawn(move || {
+                pipe.map_or_else(Vec::new, |pipe| {
+                    read_bounded(pipe, MAX_OUTPUT_BYTES, &overflow)
+                })
+            })
+        });
         // The in-container `timeout` normally ends the program; this host
         // deadline catches a hung Docker CLI as well.
         let deadline = Duration::from_secs(PROGRAM_SECONDS + 15);
-        let (code, timed_out) = match child.wait_timeout(deadline)? {
-            Some(status) => (status.code(), status.code() == Some(124)),
-            None => {
+        let (code, timed_out) = loop {
+            if let Some(status) = child.wait_timeout(Duration::from_millis(200))? {
+                break (status.code(), status.code() == Some(124));
+            }
+            if overflow.load(Ordering::Acquire) || started.elapsed() >= deadline {
+                let _ = Command::new(&self.docker)
+                    .args(["kill", name])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
                 let _ = child.kill();
                 let _ = child.wait();
-                (None, true)
+                break (None, !overflow.load(Ordering::Acquire));
             }
         };
+        let [stdout, stderr] = readers.map(|reader| reader.join().unwrap_or_default());
+        let flooded = overflow.load(Ordering::Acquire);
         // `--rm` removes a container that exited; force it for a killed one.
         let _ = Command::new(&self.docker)
             .args(["rm", "--force", name])
@@ -123,8 +155,15 @@ impl PythonSandbox {
             .status();
         Ok(ProgramOutput {
             code,
-            stdout: bounded(&std::fs::read(stdout.path())?),
-            stderr: bounded(&std::fs::read(stderr.path())?),
+            stdout: bounded(&stdout),
+            stderr: if flooded {
+                format!(
+                    "{}\n[output passed {MAX_OUTPUT_BYTES} bytes; the program was stopped]",
+                    bounded(&stderr)
+                )
+            } else {
+                bounded(&stderr)
+            },
             timed_out,
             elapsed_ms: started.elapsed().as_millis(),
         })
@@ -158,6 +197,8 @@ pub(super) fn docker_args(image: &str, name: &str) -> Vec<String> {
         "ALL",
         "--security-opt",
         "no-new-privileges",
+        "--log-driver",
+        "none",
         "--user",
         "65534:65534",
         "--workdir",
@@ -176,6 +217,27 @@ pub(super) fn docker_args(image: &str, name: &str) -> Vec<String> {
     .into_iter()
     .map(str::to_owned)
     .collect()
+}
+
+/// Read `pipe` to its end, keeping at most `limit` bytes. Reading past the
+/// limit sets `overflow` (so the caller stops the program) and keeps draining
+/// without storing, so the writer never blocks on a full pipe.
+pub(super) fn read_bounded(mut pipe: impl Read, limit: usize, overflow: &AtomicBool) -> Vec<u8> {
+    let mut kept = Vec::new();
+    let mut chunk = [0_u8; 8 * 1024];
+    loop {
+        match pipe.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => {
+                let room = limit.saturating_sub(kept.len());
+                kept.extend_from_slice(&chunk[..read.min(room)]);
+                if read > room {
+                    overflow.store(true, Ordering::Release);
+                }
+            }
+        }
+    }
+    kept
 }
 
 fn bounded(bytes: &[u8]) -> String {

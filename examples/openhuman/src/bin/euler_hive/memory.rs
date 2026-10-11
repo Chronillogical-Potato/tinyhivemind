@@ -145,7 +145,9 @@ impl SeatMemory {
     }
 
     /// When this seat last recalled successfully.
-    pub(super) fn seen(&self) -> Option<tinymemory_api::chrono::DateTime<tinymemory_api::chrono::Utc>> {
+    pub(super) fn seen(
+        &self,
+    ) -> Option<tinymemory_api::chrono::DateTime<tinymemory_api::chrono::Utc>> {
         self.seen.lock().ok().and_then(|seen| *seen)
     }
 

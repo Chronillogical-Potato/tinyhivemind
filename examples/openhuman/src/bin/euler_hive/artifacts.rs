@@ -156,7 +156,9 @@ pub(super) fn contained(name: &str) -> std::io::Result<&Path> {
     {
         Ok(path)
     } else {
-        Err(std::io::Error::other(format!("{name:?} would leave the run directory")))
+        Err(std::io::Error::other(format!(
+            "{name:?} would leave the run directory"
+        )))
     }
 }
 
@@ -165,7 +167,13 @@ pub(super) fn contained(name: &str) -> std::io::Result<&Path> {
 pub(super) fn file_component(id: &str) -> String {
     let safe: String = id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if safe.is_empty() { "_".into() } else { safe }
 }

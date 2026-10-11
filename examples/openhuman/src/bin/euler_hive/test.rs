@@ -3,6 +3,7 @@
 //! broadcast router. No network, Docker, model or memory engine is touched.
 
 use std::collections::BTreeSet;
+use std::io::Read;
 use std::path::Path;
 
 use tinyhivemind_core::embed::{
@@ -421,7 +422,10 @@ async fn a_refused_ask_gives_the_seat_its_turn_back_before_the_desk_reports() {
             .any(|row| row.kind == "complete" && row.author == "research-librarian"),
         "the refused seat completed after its turn came back"
     );
-    assert!(federation.undecided.is_some(), "the pipeline reached synthesis");
+    assert!(
+        federation.undecided.is_some(),
+        "the pipeline reached synthesis"
+    );
 }
 
 #[test]
@@ -496,8 +500,14 @@ async fn each_recipient_of_concurrent_broadcasts_is_handed_its_own_senders_messa
         message: message.into(),
     };
     let results = vec![
-        ("research-librarian".to_owned(), broadcast("research-scout", "from the librarian")),
-        ("research-provenance".to_owned(), broadcast("research-librarian", "from provenance")),
+        (
+            "research-librarian".to_owned(),
+            broadcast("research-scout", "from the librarian"),
+        ),
+        (
+            "research-provenance".to_owned(),
+            broadcast("research-librarian", "from provenance"),
+        ),
         ("research-scout".to_owned(), complete("scout done")),
     ];
     assert_eq!(pending[0].seats.len(), 3);
@@ -505,21 +515,34 @@ async fn each_recipient_of_concurrent_broadcasts_is_handed_its_own_senders_messa
     let scout = federation.assignment(0, "research-scout");
     let librarian = federation.assignment(0, "research-librarian");
     assert!(
-        scout.note.starts_with("@research-librarian handed you:") && scout.note.ends_with("from the librarian"),
+        scout.note.starts_with("@research-librarian handed you:")
+            && scout.note.ends_with("from the librarian"),
         "{}",
         scout.note
     );
-    assert_eq!(librarian.note, "@research-provenance handed you: from provenance");
+    assert_eq!(
+        librarian.note,
+        "@research-provenance handed you: from provenance"
+    );
 }
 
 fn memory_for(reads: Vec<tinyhivemind_lang::MemoryReach>) -> super::memory::SeatMemory {
     let (_, hive) = lowered();
-    let mut binding = scope_binding(hive.seats[9].memory.as_ref().expect("bound"), "team:euler-hive", "r1")
-        .expect("scoped");
+    let mut binding = scope_binding(
+        hive.seats[9].memory.as_ref().expect("bound"),
+        "team:euler-hive",
+        "r1",
+    )
+    .expect("scoped");
     binding.settings.reads = reads;
     let engine: std::sync::Arc<dyn tinymemory_api::MemoryEngine> =
         std::sync::Arc::new(tinymemory_api::conformance::reference::ReferenceEngine::new());
-    super::memory::SeatMemory::new(engine, binding, Some("team:euler-hive/ws:r1/project:verified".into()), true)
+    super::memory::SeatMemory::new(
+        engine,
+        binding,
+        Some("team:euler-hive/ws:r1/project:verified".into()),
+        true,
+    )
 }
 
 #[tokio::test]
@@ -538,9 +561,15 @@ async fn a_failed_recall_leaves_the_rejoin_watermark_where_it_was() {
         budget_chars: 500,
     };
     assert!(broken.recall(&request(RecallMoment::Rejoin)).await.is_err());
-    assert!(broken.seen().is_none(), "a failed read must not advance the watermark");
+    assert!(
+        broken.seen().is_none(),
+        "a failed read must not advance the watermark"
+    );
     let working = memory_for(vec![]);
-    working.recall(&request(RecallMoment::Rejoin)).await.expect("an empty read succeeds");
+    working
+        .recall(&request(RecallMoment::Rejoin))
+        .await
+        .expect("an empty read succeeds");
     assert!(working.seen().is_some());
 }
 
@@ -552,10 +581,19 @@ async fn nobody_publishes_to_a_read_only_pool() {
     };
     let writable = memory_for(vec![]);
     assert!(writable.pool_writer());
-    writable.publish(&entry, "c").await.expect("a writable pool takes the finding");
+    writable
+        .publish(&entry, "c")
+        .await
+        .expect("a writable pool takes the finding");
     let pinned = memory_for(vec![]).read_only_pool(true);
-    assert!(!pinned.pool_writer(), "the belt no longer offers verified=true");
-    let refused = pinned.publish(&entry, "c").await.expect_err("a read-only pool refuses");
+    assert!(
+        !pinned.pool_writer(),
+        "the belt no longer offers verified=true"
+    );
+    let refused = pinned
+        .publish(&entry, "c")
+        .await
+        .expect_err("a read-only pool refuses");
     assert!(refused.to_string().contains("read-only"));
 }
 
@@ -579,7 +617,10 @@ fn a_problem_id_is_one_safe_path_component() {
 fn artifact_names_cannot_leave_the_run_directory() {
     use super::artifacts::{contained, file_component};
     assert_eq!(file_component("verify-adversary"), "verify-adversary");
-    assert_eq!(file_component("x/../../../../tmp/result"), "x_____________tmp_result");
+    assert_eq!(
+        file_component("x/../../../../tmp/result"),
+        "x_____________tmp_result"
+    );
     assert_eq!(file_component(""), "_");
     assert!(contained("turns/0001-seat.md").is_ok());
     for bad in ["../x", "/tmp/x", "turns/../../x"] {
@@ -591,7 +632,10 @@ fn artifact_names_cannot_leave_the_run_directory() {
     run.check().expect("a contained write lands");
     run.write("../escaped.md", "no");
     assert!(!dir.path().join("escaped.md").exists());
-    assert!(run.check().is_err(), "a refused write is reported, not dropped");
+    assert!(
+        run.check().is_err(),
+        "a refused write is reported, not dropped"
+    );
 }
 
 #[test]
@@ -644,7 +688,9 @@ fn concurrent_claims_never_take_the_verify_reserve() {
         .sum();
     assert_eq!(granted, 20, "compute gets exactly its two-thirds share");
     for _ in 0..10 {
-        budget.claim_sandbox("verify").expect("the reserve is intact");
+        budget
+            .claim_sandbox("verify")
+            .expect("the reserve is intact");
     }
     assert!(budget.claim_sandbox("verify").is_err());
 }
@@ -653,8 +699,15 @@ fn concurrent_claims_never_take_the_verify_reserve() {
 async fn a_memory_call_past_the_wall_clock_is_abandoned() {
     use std::time::Duration;
     let pending = std::future::pending::<()>();
-    assert!(super::turn::within(Duration::from_millis(20), pending).await.is_none());
-    assert_eq!(super::turn::within(Duration::from_secs(5), async { 7 }).await, Some(7));
+    assert!(
+        super::turn::within(Duration::from_millis(20), pending)
+            .await
+            .is_none()
+    );
+    assert_eq!(
+        super::turn::within(Duration::from_secs(5), async { 7 }).await,
+        Some(7)
+    );
 }
 
 #[tokio::test]
@@ -662,10 +715,43 @@ async fn a_synthesis_report_without_a_candidate_is_no_decision() {
     let (_, hive) = lowered();
     let mut federation = Federation::new(&hive).expect("federation builds");
     federation.open("go");
-    drive(&mut federation, |_, seat, _| complete(&format!("{seat} has no answer"))).await;
+    drive(&mut federation, |_, seat, _| {
+        complete(&format!("{seat} has no answer"))
+    })
+    .await;
     assert!(federation.finished.is_none(), "nothing was decided");
-    assert!(federation.undecided.is_some(), "synthesis reported without a candidate");
+    assert!(
+        federation.undecided.is_some(),
+        "synthesis reported without a candidate"
+    );
     assert_eq!(super::report::ending_of(false, true, None), "no_decision");
     assert_eq!(super::report::ending_of(true, false, None), "converged");
-    assert_eq!(super::report::ending_of(false, false, Some("exhausted_turns")), "exhausted_turns");
+    assert_eq!(
+        super::report::ending_of(false, false, Some("exhausted_turns")),
+        "exhausted_turns"
+    );
+}
+
+#[test]
+fn sandbox_output_is_bounded_while_it_is_read() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let flood = std::io::repeat(b'x').take(10 * super::sandbox::MAX_OUTPUT_BYTES as u64);
+    let overflow = AtomicBool::new(false);
+    let kept = super::sandbox::read_bounded(flood, super::sandbox::MAX_OUTPUT_BYTES, &overflow);
+    assert_eq!(kept.len(), super::sandbox::MAX_OUTPUT_BYTES);
+    assert!(
+        overflow.load(Ordering::Acquire),
+        "a flood stops the program"
+    );
+    let quiet = AtomicBool::new(false);
+    let kept =
+        super::sandbox::read_bounded(&b"small"[..], super::sandbox::MAX_OUTPUT_BYTES, &quiet);
+    assert_eq!(kept, b"small");
+    assert!(!quiet.load(Ordering::Acquire));
+    let args = docker_args("python:3.12-slim", "euler-test");
+    let at = args
+        .iter()
+        .position(|arg| arg == "--log-driver")
+        .expect("log driver set");
+    assert_eq!(args[at + 1], "none", "Docker keeps no copy of the output");
 }

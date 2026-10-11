@@ -246,7 +246,11 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
     }
     run.frame(&Frame::Usage(usage(budget)));
     let answer = federation.finished.as_ref();
-    let ending = ending_of(answer.is_some(), federation.undecided.is_some(), stop.as_deref());
+    let ending = ending_of(
+        answer.is_some(),
+        federation.undecided.is_some(),
+        stop.as_deref(),
+    );
     run.frame(&Frame::End {
         ending: ending.clone(),
         topic: answer.and_then(|answer| answer.candidate.clone()),

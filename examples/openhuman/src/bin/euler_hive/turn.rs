@@ -256,7 +256,8 @@ pub(super) async fn run(seat: Arc<Seat>, input: TurnInput, services: Arc<Service
     }
     output.calls = ledger.calls();
     let (_, remembered) = ledger.memory();
-    output.remembered = remembered + within(
+    output.remembered = remembered
+        + within(
             services.budget.turn_timeout(),
             remember_action(&seat, &output.action, &services),
         )
@@ -323,7 +324,10 @@ async fn one_turn(
 
 /// `future`, or `None` once `deadline` passes: the whole seat activation,
 /// memory included, stays inside the run's wall-clock limit.
-pub(super) async fn within<T>(deadline: Duration, future: impl std::future::Future<Output = T>) -> Option<T> {
+pub(super) async fn within<T>(
+    deadline: Duration,
+    future: impl std::future::Future<Output = T>,
+) -> Option<T> {
     tokio::time::timeout(deadline, future).await.ok()
 }
 

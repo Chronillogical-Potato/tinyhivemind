@@ -335,13 +335,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
         let desk = package::desk_of(&lowered, &seat.id)
             .ok_or_else(|| anyhow::anyhow!("{} sits on no desk", seat.id))?;
         let pool_writer = desk.id == "verify";
-        let seat_memory = Arc::new(memory::SeatMemory::new(
-            engine.clone(),
-            scoped,
-            pool.clone(),
-            pool_writer,
-        )
-        .read_only_pool(pool_read_only));
+        let seat_memory = Arc::new(
+            memory::SeatMemory::new(engine.clone(), scoped, pool.clone(), pool_writer)
+                .read_only_pool(pool_read_only),
+        );
         let scope = SeatScope {
             seat: seat.id.clone(),
             desk: desk.id.clone(),

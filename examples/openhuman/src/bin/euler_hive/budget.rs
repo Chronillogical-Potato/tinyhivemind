@@ -247,7 +247,9 @@ fn claim(counter: &AtomicU64, limit: u64, what: &str) -> anyhow::Result<u64> {
             (used < limit).then_some(used + 1)
         })
         .map(|used| used + 1)
-        .map_err(|_| anyhow::anyhow!("the run's {what} budget ({limit}) is spent; work with what you have"))
+        .map_err(|_| {
+            anyhow::anyhow!("the run's {what} budget ({limit}) is spent; work with what you have")
+        })
 }
 
 /// OpenRouter's usage for the calling key, in dollars.
