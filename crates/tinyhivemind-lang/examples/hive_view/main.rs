@@ -57,14 +57,13 @@ enum Mode {
 struct Args {
     dir: Option<PathBuf>,
     mode: Mode,
-    frames: bool,
+    output: output::RunOutput,
     trace: Option<PathBuf>,
     table: bool,
     seeds: u32,
     packages: Vec<String>,
     knobs: Knobs,
     live: bool,
-    record: bool,
     model: Option<String>,
     max_calls: u32,
     max_tokens: u32,
@@ -123,7 +122,7 @@ fn parse_args(words: impl IntoIterator<Item = String>) -> Result<Args> {
             "--json" => args.mode = Mode::Json,
             "--run" if args.mode != Mode::Compare => args.mode = Mode::Run,
             "--run" => {}
-            "--frames" => args.frames = true,
+            "--frames" => args.output.frames = true,
             "--table" => args.table = true,
             "--compare" => args.mode = Mode::Compare,
             "--trace" => args.trace = Some(words.next().ok_or("--trace needs a path")?.into()),
@@ -138,7 +137,7 @@ fn parse_args(words: impl IntoIterator<Item = String>) -> Result<Args> {
             }
             "--problem" => args.knobs.problem = Some(words.next().ok_or("--problem needs an id")?),
             "--live" => args.live = true,
-            "--record" => args.record = true,
+            "--record" => args.output.record = true,
             "--model" => {
                 let model = words.next().ok_or("--model needs an id")?;
                 live::provider::check_model(&model)?;
@@ -184,7 +183,7 @@ fn run_main() -> Result<()> {
     if live.is_some() && args.mode != Mode::Run {
         return Err("--live drives a run: use it with --run [--frames]".into());
     }
-    if args.record && args.mode != Mode::Run {
+    if args.output.record && args.mode != Mode::Run {
         return Err("--record keeps a run: use it with --run [--frames]".into());
     }
     if args.mode == Mode::Compare {
@@ -212,10 +211,9 @@ fn run_main() -> Result<()> {
         Mode::Run => output::print(
             &loaded,
             &args.knobs,
-            args.frames,
+            args.output,
             args.trace.as_deref(),
             live.as_ref(),
-            args.record,
         )?,
         Mode::Json => println!(
             "{}",

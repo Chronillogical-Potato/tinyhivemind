@@ -30,12 +30,12 @@ use crate::run::{Knobs, Plan, Prepared, correct, execute, prepare, prepare_with}
 pub(crate) fn print(
     loaded: &Loaded,
     knobs: &Knobs,
-    as_frames: bool,
+    output: RunOutput,
     trace: Option<&Path>,
     live: Option<&LiveConfig>,
-    record: bool,
 ) -> Result<()> {
     let started = Instant::now();
+    let as_frames = output.frames;
     let run_label = format!(
         "{}-seed{}-{}",
         loaded.lowered.id,
@@ -48,15 +48,7 @@ pub(crate) fn print(
         Some(config) => prepare_with(loaded, knobs, Some((config, &run_label)))?,
         None => prepare(loaded, knobs)?,
     };
-    let artifacts = (live.is_some() || record)
-        .then(|| crate::live::provider::artifacts_root().join(&run_label));
-    let mut writer = FrameWriter {
-        stdout: as_frames,
-        kept: artifacts
-            .as_ref()
-            .map(|dir| recording(dir, loaded))
-            .transpose()?,
-    };
+    let (artifacts, mut writer) = open_writer(loaded, output, live.is_some(), &run_label)?;
     let truth = prepared
         .problem
         .as_ref()
@@ -137,6 +129,38 @@ pub(crate) fn print(
         writer.flush()?;
     }
     Ok(())
+}
+
+/// What `--run` writes: frames or human lines on stdout, and whether an
+/// offline run is also recorded (a live run always is).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct RunOutput {
+    /// `--frames`: NDJSON frames on stdout instead of human lines.
+    pub(crate) frames: bool,
+    /// `--record`: keep the run as a recording even offline.
+    pub(crate) record: bool,
+}
+
+/// The run folder (for a live or recorded run) and the frame writer.
+fn open_writer(
+    loaded: &Loaded,
+    output: RunOutput,
+    live: bool,
+    run_label: &str,
+) -> Result<(Option<std::path::PathBuf>, FrameWriter)> {
+    let artifacts =
+        (live || output.record).then(|| crate::live::provider::artifacts_root().join(run_label));
+    let kept = artifacts
+        .as_ref()
+        .map(|dir| recording(dir, loaded))
+        .transpose()?;
+    Ok((
+        artifacts,
+        FrameWriter {
+            stdout: output.frames,
+            kept,
+        },
+    ))
 }
 
 /// Open a recording in `dir`: write the package's structure as

@@ -84,7 +84,7 @@ fn a_human_run_still_records_frames_but_prints_none() -> Result<()> {
 #[test]
 fn record_parses_as_a_flag() -> Result<()> {
     let parse = |argv: &[&str]| crate::parse_args(argv.iter().map(|arg| (*arg).to_owned()));
-    assert!(parse(&["dir", "--run", "--record"])?.record);
-    assert!(!parse(&["dir", "--run"])?.record);
+    assert!(parse(&["dir", "--run", "--record"])?.output.record);
+    assert!(!parse(&["dir", "--run"])?.output.record);
     Ok(())
 }
