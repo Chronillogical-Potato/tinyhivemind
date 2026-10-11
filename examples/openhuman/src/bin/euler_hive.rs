@@ -145,7 +145,31 @@ fn secret(name: &str) -> anyhow::Result<String> {
         .ok_or_else(|| anyhow::anyhow!("{name} is not set"))
 }
 
+/// OpenHuman's secret store takes its master key from this variable, and
+/// otherwise asks the OS keychain, which blocks a headless run for minutes.
+const MASTER_KEY: &str = "OPENHUMAN_KEYRING_MASTER_KEY";
+
+/// Re-run this process with a throwaway master key, read from the OS's
+/// random source and never written anywhere. Nothing the runtime encrypts
+/// with it outlives the run.
+fn with_ephemeral_master_key() -> anyhow::Result<Option<std::process::ExitStatus>> {
+    if std::env::var_os(MASTER_KEY).is_some() {
+        return Ok(None);
+    }
+    let mut bytes = [0_u8; 32];
+    std::io::Read::read_exact(&mut std::fs::File::open("/dev/urandom")?, &mut bytes)?;
+    let key: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    let status = std::process::Command::new(std::env::current_exe()?)
+        .args(std::env::args_os().skip(1))
+        .env(MASTER_KEY, key)
+        .status()?;
+    Ok(Some(status))
+}
+
 fn main() -> anyhow::Result<()> {
+    if let Some(status) = with_ephemeral_master_key()? {
+        std::process::exit(status.code().unwrap_or(1));
+    }
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(16 * 1024 * 1024)
