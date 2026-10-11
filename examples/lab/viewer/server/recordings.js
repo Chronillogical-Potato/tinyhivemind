@@ -15,10 +15,12 @@ export const STRUCTURE = "structure.json";
 export const LIVE_MS = 30_000;
 /**
  * A recording with no `end` frame is tailed until it has not grown for this
- * long: a live model round can take minutes, so `live` (30 s) is too short a
- * leash for the tail, while a run that crashed should not be followed forever.
+ * long: a live model turn can take as long as the Euler host's 15-minute
+ * turn timeout without writing a frame, so `live` (30 s) is too short a leash
+ * for the tail and so is anything under that timeout; a run that crashed
+ * should still not be followed forever.
  */
-export const STALE_MS = 10 * 60_000;
+export const STALE_MS = 20 * 60_000;
 const MAX_DEPTH = 5;
 const SKIP = new Set(["node_modules", ".git", "target", "dist"]);
 

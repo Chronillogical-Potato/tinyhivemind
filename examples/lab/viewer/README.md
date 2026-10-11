@@ -230,7 +230,7 @@ and problem in the player.
   problem, model, seed, round, desk, turns, tool_calls, calls, started,
   frames, size, mtime, live, active, ended, ending, correct, structure}]}`,
   newest change first. `live` is no `end` frame and a change within 30 s;
-  `active` the same within 10 minutes. Ids are `<root index>:<relative dir>`
+  `active` the same within 20 minutes. Ids are `<root index>:<relative dir>`
   and resolve only to a `frames.ndjson` inside its root (symlinks included).
 - `GET /api/recordings/events` pushes one `recordings` event with that listing
   at once and again whenever a recording appears, grows, goes quiet or ends
@@ -241,7 +241,7 @@ and problem in the player.
   ended}`), one `frame` per line already written, then, while the run is
   `active`, every line appended (polled every 500 ms; a partial last line
   waits for its newline), and `done` (`{ended}`) after the `end` frame, or
-  once the file has not grown for 10 minutes.
+  once the file has not grown for 20 minutes.
 
 The first request builds the binary once with
 `cargo build -p tinyhivemind-lang --example hive_view` (concurrent requests

@@ -78,3 +78,24 @@ fn the_same_seed_replays_the_same_frames() -> Result<()> {
     assert_eq!(transcript(7)?, transcript(7)?);
     Ok(())
 }
+
+#[test]
+fn simulation_error_weights_must_be_parts_per_million_and_not_all_zero() -> Result<()> {
+    use crate::sim::SimConfig;
+
+    let base = load(&gallery("math-panel"))?
+        .sim
+        .ok_or("math-panel carries a sim.json")?;
+    let with = |classic: u64, plus_one: u64, minus_one: u64| {
+        let mut sim = base.clone();
+        sim["errors"] = serde_json::json!({
+            "classic": classic, "plus_one": plus_one, "minus_one": minus_one
+        });
+        SimConfig::from(&sim)
+    };
+    assert!(with(500_000, 250_000, 250_000).is_ok());
+    assert!(with(u64::MAX, 1, 0).is_err(), "a sum that would overflow");
+    assert!(with(1_000_001, 0, 0).is_err(), "above one million");
+    assert!(with(0, 0, 0).is_err(), "no wrong answer to draw");
+    Ok(())
+}

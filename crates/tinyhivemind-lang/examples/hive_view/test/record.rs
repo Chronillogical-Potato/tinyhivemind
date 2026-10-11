@@ -106,3 +106,33 @@ fn run_labels_started_together_never_collide() {
     let prefix = |id: &str| run_label(id, 1).split("-seed").next().map(str::to_owned);
     assert_ne!(prefix("a/b"), prefix("a_b"));
 }
+
+#[test]
+fn a_raised_halt_ends_the_run_before_the_next_round() -> Result<()> {
+    use crate::episode::{Ending, Event};
+    use crate::halt::{Halt, install};
+    use crate::load::load;
+    use crate::run::{execute, prepare};
+
+    use super::support::{gallery, knobs};
+
+    let loaded = load(&gallery("math-panel"))?;
+    let rounds = |halting: bool| -> Result<(u32, bool, Ending)> {
+        let mut prepared = prepare(&loaded, &knobs(7))?;
+        let halt = Halt::default();
+        install(&mut prepared, halt.clone());
+        let outcome = execute(&mut prepared, None, &mut |event| {
+            if halting && matches!(event, Event::Round(_)) {
+                halt.stop();
+            }
+        })?;
+        Ok((outcome.rounds, outcome.spent, outcome.ending))
+    };
+    let (full, _, _) = rounds(false)?;
+    let (stopped, spent, ending) = rounds(true)?;
+    assert!(full > 1, "the fixture must run more than one round");
+    assert_eq!(stopped, 1);
+    assert!(spent);
+    assert_eq!(ending, Ending::Exhausted);
+    Ok(())
+}

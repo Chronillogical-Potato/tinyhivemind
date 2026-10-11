@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { recordingsApi } from "./recordings-api.js";
-import { LIVE_MS, mainCheckout, recordingRoots, resolveRecording, scanRecordings, tailFrames } from "./recordings.js";
+import { LIVE_MS, STALE_MS, mainCheckout, recordingRoots, resolveRecording, scanRecordings, tailFrames } from "./recordings.js";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "hive-rec-"));
 const line = (o) => `${JSON.stringify(o)}\n`;
@@ -59,6 +59,13 @@ test("scan finds frames.ndjson at any depth up to five and describes the run", (
   assert.equal(rec.ending, "converged");
   assert.equal(rec.live, false);
   assert.equal(rec.structure, true);
+});
+
+test("a run is followed through a model turn as long as the host's 15-minute timeout", () => {
+  const root = tmp();
+  run(root, "slow-turn", START + ROUND, { ageMs: 14 * 60_000 });
+  assert.ok(STALE_MS > 15 * 60_000, "the stale leash must outlast a full turn timeout");
+  assert.equal(scanRecordings([root])[0].active, true);
 });
 
 test("a recent run without an end frame is live; an old one or an ended one is not", () => {

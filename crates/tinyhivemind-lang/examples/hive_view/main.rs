@@ -20,6 +20,7 @@ mod compare;
 mod desks;
 mod episode;
 mod frames;
+mod halt;
 mod hive;
 mod live;
 mod load;

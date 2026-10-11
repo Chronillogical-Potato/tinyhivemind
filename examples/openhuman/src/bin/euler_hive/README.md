@@ -66,5 +66,5 @@ spend, referrals, and per-seat memory counts read back from CortexDB).
 | `frames.rs` | The viewer's frame types |
 | `artifacts.rs` | The run directory |
 | `report.rs` | `structure.json`, `--probe`, closing frames, `report.json` |
-| `test.rs` | Offline tests: package wiring, tool gating, sandbox argv, memory scoping, router, prompts |
+| `test/` | Offline tests, one module per behaviour: package wiring, sandbox and search, memory, routing and prompts, federations, artifacts |
 | `request_test.rs` | Real seats on a real runtime against a loopback model: each request carries exactly the seat's allowed tools |

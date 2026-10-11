@@ -284,6 +284,7 @@ ending it is. Core's refusal reasons are `NoReferralReason` in `snake_case`;
 | `rng.rs` | Seeded `SplitMix64` |
 | `run.rs` | Knobs, plans (one room or a hive), the single-seat baseline |
 | `output.rs` | `--run` output (human or frames), the recording, the JSONL trace sink, live usage |
+| `halt.rs` | The flag an observer raises, and the speaker wrapper that ends the run at the next round when a recording write fails |
 | `frames.rs` | The NDJSON wire types |
 | `compare.rs` | `--compare` |
 | `live/` | `--live`: the OpenRouter transport, prompts and reply parsing, the live speaker |
