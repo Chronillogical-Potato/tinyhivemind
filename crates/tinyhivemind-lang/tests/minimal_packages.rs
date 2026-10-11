@@ -9,6 +9,9 @@ use tinyhivemind_lang::{
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+/// An edit to the minimal `hive.json`, as a JSON value.
+type HiveEdit = fn(&mut serde_json::Value);
+
 /// The smallest package worth writing: one role, one seat, one desk, and
 /// nothing else spelled out.
 fn minimal() -> BTreeMap<String, String> {
@@ -174,7 +177,7 @@ fn a_defaulted_policy_still_answers_to_the_constitution() -> Result<()> {
 
 #[test]
 fn unknown_fields_are_still_rejected_where_fields_are_optional() -> Result<()> {
-    let cases: [(fn(&mut serde_json::Value), Option<&str>); 5] = [
+    let cases: [(HiveEdit, Option<&str>); 5] = [
         (|h| h["seats"][0]["lable"] = "x".into(), None),
         (|h| h["desks"][0]["x"] = 1.into(), Some("/desks/0/x")),
         (
