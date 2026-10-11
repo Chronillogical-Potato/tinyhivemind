@@ -68,3 +68,34 @@ fn a_failed_frame_append_or_flush_is_reported() {
     run.note("frames.ndjson", Err(error));
     assert!(run.check().is_err());
 }
+
+#[tokio::test]
+async fn closing_the_run_fails_when_a_closing_artifact_could_not_be_written() {
+    use std::collections::BTreeMap;
+
+    use super::super::budget::{Budget, Limits};
+    use super::super::floors::Federation;
+    use super::super::report::{Closing, finish};
+
+    let (_, hive) = super::support::lowered();
+    let federation = Federation::new(&hive).expect("federation builds");
+    let dir = tempfile::tempdir().expect("dir");
+    let run = super::super::artifacts::RunDir::create(dir.path().join("run")).expect("run dir");
+    // The recording filesystem failed at some point before the closing writes.
+    run.note("frames.ndjson", Err(std::io::Error::other("disk full")));
+    let engine = tinymemory_api::conformance::reference::ReferenceEngine::new();
+    let budget = Budget::new(Limits::SMOKE);
+    let closed = finish(Closing {
+        run: &run,
+        federation: &federation,
+        seats: &BTreeMap::new(),
+        budget: &budget,
+        engine: &engine,
+        pool: None,
+        stop: None,
+        model: "test-model",
+    })
+    .await;
+    let error = closed.expect_err("a truncated recording is not a clean exit");
+    assert!(error.to_string().contains("disk full"), "{error}");
+}

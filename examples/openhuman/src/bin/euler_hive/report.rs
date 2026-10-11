@@ -215,7 +215,8 @@ pub(super) struct Closing<'a> {
 ///
 /// # Errors
 ///
-/// Returns an engine failure while counting.
+/// Returns an engine failure while counting, or the first closing artifact
+/// that could not be written.
 pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
     let Closing {
         run,
@@ -320,6 +321,9 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
         })
         .collect();
     run.write("TRANSCRIPT.md", transcript);
+    // The closing artifacts are written after the last per-round check; a
+    // failed one must not leave a run that exits cleanly with a truncated end.
+    run.check()?;
     println!("\n== {ending} ==");
     if let Some(answer) = answer {
         println!("committed by @{} on #{}", answer.seat, answer.desk);
