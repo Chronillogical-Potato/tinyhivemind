@@ -114,8 +114,17 @@ every round and ending; `desks.rs` still routes every referral.
   it; and, built in a linked worktree, under the checkout that worktree's
   `.git` file points back to, so removing the worktree keeps it), or `$HIVE_RUNS_DIR/<package>-seed<N>-<ms>/` when
   `HIVE_RUNS_DIR` is set: every request body and response, `calls.ndjson`
-  (seat, desk, raw reply, recorded line), `frames.ndjson` and `usage.json`.
-  Never the key.
+  (seat, desk, raw reply, recorded line), `usage.json`, and the recording
+  (below). Never the key.
+
+### Recordings (`--record`)
+
+A live run, and an offline run given `--record`, is kept as a recording in
+its run folder: `structure.json` (the `--json` structure, written before the
+first frame) and `frames.ndjson` (every frame, flushed line by line as it is
+written, also in human `--run` mode). `examples/lab/viewer` lists every
+recording under `hive-runs/` and follows one that is still being written.
+Stdout is the same with or without a recording.
 
 ### No web access
 
@@ -197,6 +206,7 @@ Modes:
 - `--run` — human-readable episode lines + ending
 - `--run --frames` — NDJSON frames on stdout (one JSON object per line)
 - `--run --trace <out.jsonl>` — also write core telemetry Stamped TraceEvents as JSONL
+- `--run --record` — also keep the run as a recording (`structure.json` + `frames.ndjson`; implied by `--live`)
 - `--compare --seeds N [--packages a,b,...]` — NDJSON compare stream (math packages; always includes baseline "single-seat")
 
 Knobs: `--seed N` (u64, default 1), `--round-width N` (1..=64), `--turn-budget N`
@@ -273,7 +283,7 @@ ending it is. Core's refusal reasons are `NoReferralReason` in `snake_case`;
 | `sim.rs` | Seat behaviours for math packages |
 | `rng.rs` | Seeded `SplitMix64` |
 | `run.rs` | Knobs, plans (one room or a hive), the single-seat baseline |
-| `output.rs` | `--run` output (human or frames), the JSONL trace sink, live usage |
+| `output.rs` | `--run` output (human or frames), the recording, the JSONL trace sink, live usage |
 | `frames.rs` | The NDJSON wire types |
 | `compare.rs` | `--compare` |
 | `live/` | `--live`: the OpenRouter transport, prompts and reply parsing, the live speaker |
