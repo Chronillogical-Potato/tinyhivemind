@@ -1,0 +1,1369 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "math-swarm",
+  "name": "Math swarm",
+  "roles": [
+    {
+      "id": "conjecturer",
+      "charter": "roles/conjecturer.md"
+    },
+    {
+      "id": "computer",
+      "charter": "roles/computer.md"
+    },
+    {
+      "id": "prover",
+      "charter": "roles/prover.md"
+    },
+    {
+      "id": "verifier",
+      "charter": "roles/verifier.md"
+    },
+    {
+      "id": "synthesizer",
+      "charter": "roles/synthesizer.md"
+    }
+  ],
+  "seats": [
+    {
+      "id": "conjecture-01",
+      "label": "conjecture-01",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-01.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-02",
+      "label": "conjecture-02",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-02.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-03",
+      "label": "conjecture-03",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-03.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-04",
+      "label": "conjecture-04",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-04.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-05",
+      "label": "conjecture-05",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-05.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-06",
+      "label": "conjecture-06",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-06.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-07",
+      "label": "conjecture-07",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-07.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-08",
+      "label": "conjecture-08",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-08.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-09",
+      "label": "conjecture-09",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-09.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "conjecture-10",
+      "label": "conjecture-10",
+      "role": "conjecturer",
+      "prompt": "seats/conjecture-10.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-01",
+      "label": "compute-01",
+      "role": "computer",
+      "prompt": "seats/compute-01.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-02",
+      "label": "compute-02",
+      "role": "computer",
+      "prompt": "seats/compute-02.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-03",
+      "label": "compute-03",
+      "role": "computer",
+      "prompt": "seats/compute-03.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-04",
+      "label": "compute-04",
+      "role": "computer",
+      "prompt": "seats/compute-04.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-05",
+      "label": "compute-05",
+      "role": "computer",
+      "prompt": "seats/compute-05.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-06",
+      "label": "compute-06",
+      "role": "computer",
+      "prompt": "seats/compute-06.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-07",
+      "label": "compute-07",
+      "role": "computer",
+      "prompt": "seats/compute-07.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-08",
+      "label": "compute-08",
+      "role": "computer",
+      "prompt": "seats/compute-08.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-09",
+      "label": "compute-09",
+      "role": "computer",
+      "prompt": "seats/compute-09.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "compute-10",
+      "label": "compute-10",
+      "role": "computer",
+      "prompt": "seats/compute-10.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-01",
+      "label": "prove-01",
+      "role": "prover",
+      "prompt": "seats/prove-01.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-02",
+      "label": "prove-02",
+      "role": "prover",
+      "prompt": "seats/prove-02.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-03",
+      "label": "prove-03",
+      "role": "prover",
+      "prompt": "seats/prove-03.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-04",
+      "label": "prove-04",
+      "role": "prover",
+      "prompt": "seats/prove-04.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-05",
+      "label": "prove-05",
+      "role": "prover",
+      "prompt": "seats/prove-05.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-06",
+      "label": "prove-06",
+      "role": "prover",
+      "prompt": "seats/prove-06.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-07",
+      "label": "prove-07",
+      "role": "prover",
+      "prompt": "seats/prove-07.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-08",
+      "label": "prove-08",
+      "role": "prover",
+      "prompt": "seats/prove-08.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-09",
+      "label": "prove-09",
+      "role": "prover",
+      "prompt": "seats/prove-09.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "prove-10",
+      "label": "prove-10",
+      "role": "prover",
+      "prompt": "seats/prove-10.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-01",
+      "label": "verify-01",
+      "role": "verifier",
+      "prompt": "seats/verify-01.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-02",
+      "label": "verify-02",
+      "role": "verifier",
+      "prompt": "seats/verify-02.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-03",
+      "label": "verify-03",
+      "role": "verifier",
+      "prompt": "seats/verify-03.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-04",
+      "label": "verify-04",
+      "role": "verifier",
+      "prompt": "seats/verify-04.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-05",
+      "label": "verify-05",
+      "role": "verifier",
+      "prompt": "seats/verify-05.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-06",
+      "label": "verify-06",
+      "role": "verifier",
+      "prompt": "seats/verify-06.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-07",
+      "label": "verify-07",
+      "role": "verifier",
+      "prompt": "seats/verify-07.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-08",
+      "label": "verify-08",
+      "role": "verifier",
+      "prompt": "seats/verify-08.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-09",
+      "label": "verify-09",
+      "role": "verifier",
+      "prompt": "seats/verify-09.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "verify-10",
+      "label": "verify-10",
+      "role": "verifier",
+      "prompt": "seats/verify-10.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-01",
+      "label": "synthesis-01",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-01.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-02",
+      "label": "synthesis-02",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-02.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-03",
+      "label": "synthesis-03",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-03.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-04",
+      "label": "synthesis-04",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-04.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-05",
+      "label": "synthesis-05",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-05.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-06",
+      "label": "synthesis-06",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-06.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-07",
+      "label": "synthesis-07",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-07.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-08",
+      "label": "synthesis-08",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-08.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-09",
+      "label": "synthesis-09",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-09.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "synthesis-10",
+      "label": "synthesis-10",
+      "role": "synthesizer",
+      "prompt": "seats/synthesis-10.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    }
+  ],
+  "desks": [
+    {
+      "id": "conjecture",
+      "name": "Conjecture",
+      "description": "Heuristic guessers working from pattern and magnitude",
+      "members": [
+        "conjecture-01",
+        "conjecture-02",
+        "conjecture-03",
+        "conjecture-04",
+        "conjecture-05",
+        "conjecture-06",
+        "conjecture-07",
+        "conjecture-08",
+        "conjecture-09",
+        "conjecture-10"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "compute",
+      "name": "Compute",
+      "description": "Exact calculators, each covering one slice of the problem",
+      "members": [
+        "compute-01",
+        "compute-02",
+        "compute-03",
+        "compute-04",
+        "compute-05",
+        "compute-06",
+        "compute-07",
+        "compute-08",
+        "compute-09",
+        "compute-10"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "prove",
+      "name": "Prove",
+      "description": "Argument builders deriving the answer in full",
+      "members": [
+        "prove-01",
+        "prove-02",
+        "prove-03",
+        "prove-04",
+        "prove-05",
+        "prove-06",
+        "prove-07",
+        "prove-08",
+        "prove-09",
+        "prove-10"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "verify",
+      "name": "Verify",
+      "description": "Independent checkers who object to answers they cannot reproduce",
+      "members": [
+        "verify-01",
+        "verify-02",
+        "verify-03",
+        "verify-04",
+        "verify-05",
+        "verify-06",
+        "verify-07",
+        "verify-08",
+        "verify-09",
+        "verify-10"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "synthesis",
+      "name": "Synthesis",
+      "description": "Leads that weigh the room and record the decision",
+      "members": [
+        "synthesis-01",
+        "synthesis-02",
+        "synthesis-03",
+        "synthesis-04",
+        "synthesis-05",
+        "synthesis-06",
+        "synthesis-07",
+        "synthesis-08",
+        "synthesis-09",
+        "synthesis-10"
+      ],
+      "responder_mode": "auto"
+    }
+  ],
+  "goals": [],
+  "missions": [],
+  "topology": [
+    {
+      "from": "conjecture",
+      "to": "compute"
+    },
+    {
+      "from": "compute",
+      "to": "prove"
+    },
+    {
+      "from": "prove",
+      "to": "verify"
+    },
+    {
+      "from": "verify",
+      "to": "synthesis"
+    },
+    {
+      "from": "synthesis",
+      "to": "conjecture"
+    }
+  ],
+  "referrals": [
+    {
+      "from": "conjecture",
+      "to": "verify"
+    },
+    {
+      "from": "compute",
+      "to": "verify"
+    },
+    {
+      "from": "prove",
+      "to": "verify"
+    },
+    {
+      "from": "verify",
+      "to": "synthesis"
+    },
+    {
+      "from": "synthesis",
+      "to": "prove"
+    }
+  ],
+  "context": [],
+  "policies": {
+    "episode": {
+      "turn_budget": 150,
+      "round_width": 10,
+      "revealed_width": 10,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 26,
+        "window": 150,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 50
+      }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 4,
+      "choice_option_limit": 8
+    },
+    "approval": {
+      "enabled": false,
+      "default": "deny",
+      "rules": [],
+      "approver": {
+        "kind": "absent"
+      },
+      "allow_grants": false,
+      "max_grant_ttl": null
+    },
+    "aside": {
+      "enabled": false,
+      "max_members": 0,
+      "max_messages": 0,
+      "must_surface": false,
+      "require_thread": false
+    },
+    "referral": {
+      "enabled": true,
+      "max_hops": 3,
+      "reach": "desks",
+      "returns": true
+    },
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 600,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 10,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 10,
+      "turn_wall": 150
+    }
+  },
+  "coordinator": {
+    "round_width": 10,
+    "conduct_policy": {
+      "child_turn_wall": 10,
+      "turn_wall": 150
+    },
+    "broadcast_budget": null,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
+    }
+  }
+}

@@ -36,7 +36,7 @@ export function renderTranscript(host, state, selected, onSelect) {
   }
   if (!state.lines.length) list.append(h("li", { class: "muted" }, "Nobody has spoken yet."));
   host.replaceChildren(note, list);
+  // Scroll the panel (positioned, so it is the offset parent), never the page.
   const own = list.querySelector(".own");
-  if (own) own.scrollIntoView({ block: "nearest" });
-  else list.lastElementChild?.scrollIntoView?.({ block: "nearest" });
+  host.scrollTop = own ? own.offsetTop - 60 : host.scrollHeight;
 }

@@ -1,0 +1,286 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "research-debate",
+  "name": "Research debate",
+  "roles": [
+    {
+      "id": "moderator",
+      "charter": "roles/moderator.md"
+    },
+    {
+      "id": "advocate",
+      "charter": "roles/advocate.md"
+    },
+    {
+      "id": "skeptic",
+      "charter": "roles/skeptic.md"
+    },
+    {
+      "id": "librarian",
+      "charter": "roles/librarian.md"
+    }
+  ],
+  "seats": [
+    {
+      "id": "moderator",
+      "label": "moderator",
+      "role": "moderator",
+      "prompt": "seats/moderator.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "advocate",
+      "label": "advocate",
+      "role": "advocate",
+      "prompt": "seats/advocate.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "skeptic",
+      "label": "skeptic",
+      "role": "skeptic",
+      "prompt": "seats/skeptic.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "librarian",
+      "label": "librarian",
+      "role": "librarian",
+      "prompt": "seats/librarian.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    }
+  ],
+  "desks": [
+    {
+      "id": "debate",
+      "name": "Debate",
+      "description": "Should we cache the embedding index between runs?",
+      "members": [
+        "moderator",
+        "advocate",
+        "skeptic",
+        "librarian"
+      ],
+      "responder_mode": "auto"
+    }
+  ],
+  "goals": [
+    {
+      "id": "verdict",
+      "description": "Decide whether to cache the embedding index between runs",
+      "acceptance": [
+        "A committed topic",
+        "Each objection answered or upheld"
+      ],
+      "subgoals": [
+        "survey",
+        "critique"
+      ]
+    },
+    {
+      "id": "survey",
+      "description": "Summarize prior measurements of index caching",
+      "acceptance": [
+        "Cites at least one brief item"
+      ],
+      "subgoals": []
+    },
+    {
+      "id": "critique",
+      "description": "Name the failure modes a cache introduces",
+      "acceptance": [
+        "Staleness and invalidation both addressed"
+      ],
+      "subgoals": []
+    }
+  ],
+  "missions": [
+    {
+      "id": "decide",
+      "role": "moderator",
+      "goals": [
+        "verdict"
+      ]
+    },
+    {
+      "id": "survey-prior-work",
+      "role": "librarian",
+      "goals": [
+        "survey"
+      ]
+    },
+    {
+      "id": "stress-test",
+      "role": "skeptic",
+      "goals": [
+        "critique"
+      ]
+    }
+  ],
+  "topology": [],
+  "referrals": [],
+  "context": [
+    "context/brief.md"
+  ],
+  "policies": {
+    "episode": {
+      "turn_budget": 12,
+      "round_width": 4,
+      "revealed_width": 4,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 2,
+        "window": 30,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 20
+      }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 4,
+      "choice_option_limit": 8
+    },
+    "approval": {
+      "enabled": false,
+      "default": "deny",
+      "rules": [],
+      "approver": {
+        "kind": "absent"
+      },
+      "allow_grants": false,
+      "max_grant_ttl": null
+    },
+    "aside": {
+      "enabled": false,
+      "max_members": 0,
+      "max_messages": 0,
+      "must_surface": false,
+      "require_thread": false
+    },
+    "referral": {
+      "enabled": false,
+      "max_hops": 0,
+      "reach": "local",
+      "returns": false
+    },
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 600,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 4,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    }
+  },
+  "coordinator": {
+    "round_width": 4,
+    "conduct_policy": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    },
+    "broadcast_budget": null,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
+    }
+  }
+}

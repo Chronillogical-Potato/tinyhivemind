@@ -1,0 +1,14 @@
+{
+  "author": [
+    "!propose #merge ^1 The retry policy caps attempts at five with jittered backoff; the flaky test now passes 200/200.",
+    "!evidence ^2 Rollback is a config flag: retries.enabled=false restores the old path."
+  ],
+  "reviewer-a": [
+    "!question ^1 Does the cap also apply to idempotent reads, or only writes?",
+    "!support #merge ^2 The 200/200 run covers the failing case, and the cap applies to both paths."
+  ],
+  "reviewer-b": [
+    "!propose #revise ^1 I want a load test before this merges.",
+    "!support #merge ^5 The rollback flag answers my load concern; I withdraw the revise request."
+  ]
+}

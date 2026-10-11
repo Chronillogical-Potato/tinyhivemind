@@ -1,0 +1,33 @@
+{
+  "hard_constraints": [
+    "Never read the held-out invoices",
+    "Never edit the evaluator configuration"
+  ],
+  "max_turns": 60,
+  "max_width": 8,
+  "permitted_edits": [
+    "prompt",
+    "context",
+    "goal"
+  ],
+  "read_only_memories": [
+    "eval-ledger"
+  ],
+  "protected_namespaces": [
+    "team:self/project:heldout"
+  ],
+  "contamination_canaries": [
+    "HELDOUT-7F3A"
+  ],
+  "evaluation": {
+    "kind": "exact_match",
+    "heldout_cases": 3
+  },
+  "acceptance": {
+    "require_all_heldout": true,
+    "min_improvement": 1
+  },
+  "telemetry": {
+    "lineage": true
+  }
+}

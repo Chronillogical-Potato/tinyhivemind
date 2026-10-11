@@ -1,0 +1,324 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "incident-response",
+  "name": "Incident response",
+  "roles": [
+    {
+      "id": "incident-lead",
+      "charter": "roles/incident-lead.md"
+    },
+    {
+      "id": "triager",
+      "charter": "roles/triager.md"
+    },
+    {
+      "id": "fixer",
+      "charter": "roles/fixer.md"
+    },
+    {
+      "id": "release-reviewer",
+      "charter": "roles/release-reviewer.md"
+    }
+  ],
+  "seats": [
+    {
+      "id": "incident-lead",
+      "label": "incident-lead",
+      "role": "incident-lead",
+      "prompt": "seats/incident-lead.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "triager-logs",
+      "label": "triager-logs",
+      "role": "triager",
+      "prompt": "seats/triager-logs.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "triager-metrics",
+      "label": "triager-metrics",
+      "role": "triager",
+      "prompt": "seats/triager-metrics.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "fixer-db",
+      "label": "fixer-db",
+      "role": "fixer",
+      "prompt": "seats/fixer-db.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "fixer-net",
+      "label": "fixer-net",
+      "role": "fixer",
+      "prompt": "seats/fixer-net.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "release-reviewer",
+      "label": "release-reviewer",
+      "role": "release-reviewer",
+      "prompt": "seats/release-reviewer.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    }
+  ],
+  "desks": [
+    {
+      "id": "triage",
+      "name": "Triage",
+      "description": "Find the cause of the checkout latency spike",
+      "members": [
+        "incident-lead",
+        "triager-logs",
+        "triager-metrics"
+      ],
+      "responder_mode": "auto"
+    },
+    {
+      "id": "fixers",
+      "name": "Fixers",
+      "description": "Ship the fix triage refers, safely",
+      "members": [
+        "fixer-db",
+        "fixer-net",
+        "release-reviewer"
+      ],
+      "responder_mode": "auto"
+    }
+  ],
+  "goals": [],
+  "missions": [],
+  "topology": [
+    {
+      "from": "triage",
+      "to": "fixers"
+    }
+  ],
+  "referrals": [
+    {
+      "from": "triage",
+      "to": "fixers"
+    },
+    {
+      "from": "fixers",
+      "to": "triage"
+    }
+  ],
+  "context": [],
+  "policies": {
+    "episode": {
+      "turn_budget": 18,
+      "round_width": 3,
+      "revealed_width": 3,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 3,
+        "window": 30,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 20
+      }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 4,
+      "choice_option_limit": 8
+    },
+    "approval": {
+      "enabled": true,
+      "default": "ask",
+      "rules": [
+        {
+          "effect": "read_only",
+          "verb": null,
+          "target": null,
+          "verdict": "allow"
+        },
+        {
+          "effect": "mutating",
+          "verb": "deploy",
+          "target": {
+            "kind": "resource",
+            "root": "prod"
+          },
+          "verdict": "ask"
+        }
+      ],
+      "approver": {
+        "kind": "per_desk",
+        "default": "oncall-manager",
+        "overrides": [
+          {
+            "desk_id": "fixers",
+            "person_id": "release-manager"
+          }
+        ]
+      },
+      "allow_grants": true,
+      "max_grant_ttl": 900000
+    },
+    "aside": {
+      "enabled": true,
+      "max_members": 2,
+      "max_messages": 6,
+      "must_surface": true,
+      "require_thread": false
+    },
+    "referral": {
+      "enabled": true,
+      "max_hops": 2,
+      "reach": "desks",
+      "returns": true
+    },
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 600,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 4,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    }
+  },
+  "coordinator": {
+    "round_width": 4,
+    "conduct_policy": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    },
+    "broadcast_budget": null,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
+    }
+  }
+}
