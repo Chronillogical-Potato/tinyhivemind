@@ -179,7 +179,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// Open the first desk after the recording's initial artifacts were written.
-fn open_federation(federation: &mut floors::Federation, run: &artifacts::RunDir) -> anyhow::Result<()> {
+fn open_federation(
+    federation: &mut floors::Federation,
+    run: &artifacts::RunDir,
+) -> anyhow::Result<()> {
     run.check()?;
     federation.open("The host opened the hive on the problem above. Work it from your desk's angle, then report with hive_complete.");
     Ok(())
@@ -188,7 +191,10 @@ fn open_federation(federation: &mut floors::Federation, run: &artifacts::RunDir)
 async fn run(args: Args) -> anyhow::Result<()> {
     // Provider-side browsing would bypass the research-only search belt.
     let model = args.model.to_ascii_lowercase();
-    if ["online", "search", "sonar", "web"].iter().any(|word| model.contains(word)) {
+    if ["online", "search", "sonar", "web"]
+        .iter()
+        .any(|word| model.contains(word))
+    {
         anyhow::bail!("web-enabled model ids are refused; research uses the filtered search tool");
     }
     let openrouter_key = secret("OPENROUTER_API_KEY")?;
@@ -240,7 +246,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let http = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
         .build()?;
-    match budget.poll_usage(budget::openrouter_usage(&http, &openrouter_key)).await {
+    match budget
+        .poll_usage(budget::openrouter_usage(&http, &openrouter_key))
+        .await
+    {
         Some(Ok(usage)) => {
             budget.record_account(usage);
             println!("openrouter_usage: metered");
@@ -415,7 +424,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
             break;
         }
         let width: u64 = pending.iter().map(|round| round.seats.len() as u64).sum();
-        if let Some(Ok(usage)) = budget.poll_usage(budget::openrouter_usage(&http, &openrouter_key)).await {
+        if let Some(Ok(usage)) = budget
+            .poll_usage(budget::openrouter_usage(&http, &openrouter_key))
+            .await
+        {
             budget.record_account(usage);
         }
         if let Err(exhausted) = budget.admit_round(width) {
@@ -553,7 +565,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
         // A record that can no longer be written stops the spend.
         run.check()?;
     }
-    if let Some(Ok(usage)) = budget.poll_usage(budget::openrouter_usage(&http, &openrouter_key)).await {
+    if let Some(Ok(usage)) = budget
+        .poll_usage(budget::openrouter_usage(&http, &openrouter_key))
+        .await
+    {
         budget.record_account(usage);
     }
     report::finish(report::Closing {

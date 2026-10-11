@@ -118,8 +118,13 @@ impl Budget {
                 used.checked_add(calls)
                     .filter(|total| *total <= self.limits.max_model_calls)
             })
-            .map_err(|_| anyhow::anyhow!("the run's model calls budget cannot fit this tool loop"))?;
-        Ok(ModelCalls { budget: self, reserved: calls })
+            .map_err(|_| {
+                anyhow::anyhow!("the run's model calls budget cannot fit this tool loop")
+            })?;
+        Ok(ModelCalls {
+            budget: self,
+            reserved: calls,
+        })
     }
 
     /// Poll account usage within the remaining wall-clock budget. An expired
@@ -128,7 +133,10 @@ impl Budget {
     /// # Errors
     ///
     /// Returns the request's error inside `Some`, or `None` at the deadline.
-    pub(super) async fn poll_usage(&self, request: impl std::future::Future<Output = anyhow::Result<f64>>) -> Option<anyhow::Result<f64>> {
+    pub(super) async fn poll_usage(
+        &self,
+        request: impl std::future::Future<Output = anyhow::Result<f64>>,
+    ) -> Option<anyhow::Result<f64>> {
         super::turn::within(self.turn_timeout(), request).await
     }
 
@@ -284,7 +292,9 @@ impl ModelCalls<'_> {
     /// Returns an error without refunding capacity if `issued` exceeds the
     /// reserved number of calls.
     pub(super) fn finish(self, issued: u64) -> anyhow::Result<()> {
-        let unused = self.reserved.checked_sub(issued)
+        let unused = self
+            .reserved
+            .checked_sub(issued)
             .ok_or_else(|| anyhow::anyhow!("the tool loop exceeded its reserved model calls"))?;
         self.budget.model_calls.fetch_sub(unused, Ordering::AcqRel);
         Ok(())

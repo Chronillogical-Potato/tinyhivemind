@@ -171,7 +171,10 @@ fn all_manifests_lower_into_one_native_runtime_with_the_declared_seats_and_limit
                             format!("deployment:{}", expected.runtime.deployment_id)
                         });
                     assert_eq!(native.runtime_id(), deployment.runtime().runtime_id());
-                    assert_eq!(native.id(), seat.resolved_agent_id(&expected.runtime.deployment_id));
+                    assert_eq!(
+                        native.id(),
+                        seat.resolved_agent_id(&expected.runtime.deployment_id)
+                    );
                     assert_eq!(
                         native.config().memory.root.as_deref(),
                         Some(native_memory_root(&memory_root)?.as_str())

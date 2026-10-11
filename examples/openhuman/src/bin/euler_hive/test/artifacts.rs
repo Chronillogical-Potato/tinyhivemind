@@ -102,23 +102,37 @@ async fn closing_the_run_fails_when_a_closing_artifact_could_not_be_written() {
 
 #[tokio::test]
 async fn closing_an_exhausted_run_skips_optional_memory_waits() {
-    use std::collections::BTreeMap;
     use super::super::budget::{Budget, Limits};
     use super::super::floors::Federation;
     use super::super::report::{Closing, finish};
+    use std::collections::BTreeMap;
     let (_, hive) = super::support::lowered();
     let federation = Federation::new(&hive).expect("federation");
     let dir = tempfile::tempdir().expect("dir");
     let run = super::super::artifacts::RunDir::create(dir.path().join("run")).expect("run");
     let engine = tinymemory_api::conformance::reference::ReferenceEngine::new();
-    let budget = Budget::new(Limits { max_wall_seconds: 0, ..Limits::SMOKE });
+    let budget = Budget::new(Limits {
+        max_wall_seconds: 0,
+        ..Limits::SMOKE
+    });
     let seats = BTreeMap::new();
     let mut closing = Box::pin(finish(Closing {
-        run: &run, federation: &federation, seats: &seats, budget: &budget,
-        engine: &engine, pool: Some("not-a-namespace"), stop: Some("wall_clock".into()), model: "test",
+        run: &run,
+        federation: &federation,
+        seats: &seats,
+        budget: &budget,
+        engine: &engine,
+        pool: Some("not-a-namespace"),
+        stop: Some("wall_clock".into()),
+        model: "test",
     }));
-    assert!(matches!(futures::poll!(closing.as_mut()), std::task::Poll::Ready(Ok(()))),
-        "finalization must not wait or read optional memory once the deadline is spent");
+    assert!(
+        matches!(
+            futures::poll!(closing.as_mut()),
+            std::task::Poll::Ready(Ok(()))
+        ),
+        "finalization must not wait or read optional memory once the deadline is spent"
+    );
 }
 
 #[test]
@@ -130,5 +144,8 @@ fn failed_initial_artifacts_prevent_opening_the_first_desk() {
     std::fs::create_dir(run.path().join("package.json")).expect("block initial artifact");
     run.json("package.json", &serde_json::json!({"id":"test"}));
     assert!(super::super::open_federation(&mut federation, &run).is_err());
-    assert!(federation.floors.iter().all(|floor| !floor.opened), "no seat work is authorized without the initial recording");
+    assert!(
+        federation.floors.iter().all(|floor| !floor.opened),
+        "no seat work is authorized without the initial recording"
+    );
 }
