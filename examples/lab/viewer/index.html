@@ -121,7 +121,10 @@ details summary { cursor: pointer; padding: 4px 0; }
   </div>
 
   <div id="view-hive" role="tabpanel" aria-labelledby="tab-hive" hidden>
-    <p class="muted">Run a hive package from the gallery and watch it deliberate: who speaks each round, what they saw, and how quorum forms.</p>
+    <div id="hv-live-strip" class="hv-live-strip" aria-label="Live runs" hidden></div>
+    <div id="hv-toasts" class="hv-toasts" aria-live="polite"></div>
+    <p class="muted">Run a hive package from the gallery and watch it deliberate: who speaks each round, what they saw, and how quorum forms. Runs recorded anywhere on this machine show up below, live ones as they happen.</p>
+    <section class="card" id="hv-recordings" aria-label="Recorded runs"><h2>Recorded runs</h2><p class="muted">Loading recordings…</p></section>
     <section class="card" id="hv-gallery" aria-label="Hive packages"><p class="muted">Loading packages…</p></section>
     <div id="hv-player" hidden>
       <div class="bar"><button type="button" id="hv-back">← All packages</button><h2 id="hv-title"></h2></div>
