@@ -1,5 +1,8 @@
 // The replay clock: buffers frames as they stream in and walks a step index
-// through them at the chosen speed. DOM-free; `onChange` redraws.
+// through them at the chosen speed. DOM-free; `onChange` redraws. In follow
+// mode (a live run, where rounds arrive minutes apart) the step jumps to the
+// newest round as each frame lands, until the user pauses, steps or scrubs;
+// `latest()` resumes following. Once the stream finishes it is a normal replay.
 import { atEnd, clampStep, stateAt, timeline } from "./simulation.js";
 
 const ROUND_MS = 900;
@@ -11,6 +14,8 @@ export function createPlayer(onChange) {
   let playing = false;
   let speed = 1;
   let timer = null;
+  let following = false;
+  let streaming = false;
 
   const emit = () => onChange(api.state());
 
@@ -29,21 +34,42 @@ export function createPlayer(onChange) {
   }
 
   const api = {
-    /** Drop everything and start following a fresh stream. */
-    reset(autoplay = true) {
+    /**
+     * Drop everything. `autoplay` starts a fresh stream (played at the chosen
+     * speed); `follow` instead keeps the step on the newest round as frames land.
+     */
+    reset(autoplay = true, follow = false) {
       frames = [];
       tl = timeline(frames);
       step = 0;
-      playing = autoplay;
+      streaming = autoplay;
+      following = autoplay && follow;
+      playing = autoplay && !follow;
       schedule();
       emit();
     },
     push(frame) {
       frames.push(frame);
       tl = timeline(frames);
+      if (following) step = tl.rounds.length;
       if (!playing) emit();
     },
+    /** The stream closed (done, failed or aborted): stop following. */
+    finish() {
+      streaming = false;
+      following = false;
+      emit();
+    },
+    /** Jump to the newest round and follow the stream again. */
+    latest() {
+      playing = false;
+      clearTimeout(timer);
+      following = streaming;
+      step = tl.rounds.length;
+      emit();
+    },
     play() {
+      following = false;
       if (atEnd(tl, step)) step = 0;
       playing = true;
       emit();
@@ -51,6 +77,7 @@ export function createPlayer(onChange) {
     },
     pause() {
       playing = false;
+      following = false;
       clearTimeout(timer);
       emit();
     },
@@ -70,7 +97,7 @@ export function createPlayer(onChange) {
       schedule();
     },
     state() {
-      return { ...stateAt(tl, step), playing, speed, received: tl.rounds.length, ended: tl.end != null };
+      return { ...stateAt(tl, step), playing, speed, following, streaming, received: tl.rounds.length, ended: tl.end != null };
     },
   };
   return api;
