@@ -49,18 +49,34 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
         found.push(Error::Schema, HIVE, "/$schema".to_owned());
     }
     identities(found, HIVE, "hive", [&manifest.id], |_| "/id".into());
-    let roles = identities(found, HIVE, "role", manifest.roles.iter().map(|v| &v.id), |i| {
-        format!("/roles/{i}/id")
-    });
-    let seats = identities(found, HIVE, "seat", manifest.seats.iter().map(|v| &v.id), |i| {
-        format!("/seats/{i}/id")
-    });
-    let desks = identities(found, HIVE, "desk", manifest.desks.iter().map(|v| &v.id), |i| {
-        format!("/desks/{i}/id")
-    });
-    let goals = identities(found, HIVE, "goal", manifest.goals.iter().map(|v| &v.id), |i| {
-        format!("/goals/{i}/id")
-    });
+    let roles = identities(
+        found,
+        HIVE,
+        "role",
+        manifest.roles.iter().map(|v| &v.id),
+        |i| format!("/roles/{i}/id"),
+    );
+    let seats = identities(
+        found,
+        HIVE,
+        "seat",
+        manifest.seats.iter().map(|v| &v.id),
+        |i| format!("/seats/{i}/id"),
+    );
+    let desks = identities(
+        found,
+        HIVE,
+        "desk",
+        manifest.desks.iter().map(|v| &v.id),
+        |i| format!("/desks/{i}/id"),
+    );
+    let goals = identities(
+        found,
+        HIVE,
+        "goal",
+        manifest.goals.iter().map(|v| &v.id),
+        |i| format!("/goals/{i}/id"),
+    );
     identities(
         found,
         HIVE,
