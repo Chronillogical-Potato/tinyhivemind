@@ -241,3 +241,13 @@ async fn a_note_stored_while_a_recall_reads_is_found_by_the_next_rejoin() {
         "the note written during the first read must not fall behind the watermark: {second:?}"
     );
 }
+
+#[tokio::test]
+async fn an_expired_deadline_never_polls_a_memory_operation() {
+    let called = std::sync::atomic::AtomicBool::new(false);
+    let result = super::super::turn::within(std::time::Duration::ZERO, async {
+        called.store(true, std::sync::atomic::Ordering::SeqCst);
+    }).await;
+    assert!(result.is_none());
+    assert!(!called.load(std::sync::atomic::Ordering::SeqCst));
+}

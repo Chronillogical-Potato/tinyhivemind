@@ -104,6 +104,24 @@ impl Budget {
         }
     }
 
+    /// Reserve an entire tool loop before admitting it. Unknown/cancelled
+    /// turns retain their reservation so concurrently admitted seats cannot
+    /// spend calls that might already have reached the provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the reservation would exceed the model-call limit
+    /// or overflow the counter.
+    pub(super) fn reserve_model_calls(&self, calls: u64) -> anyhow::Result<ModelCalls<'_>> {
+        self.model_calls
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+                used.checked_add(calls)
+                    .filter(|total| *total <= self.limits.max_model_calls)
+            })
+            .map_err(|_| anyhow::anyhow!("the run's model calls budget cannot fit this tool loop"))?;
+        Ok(ModelCalls { budget: self, reserved: calls })
+    }
+
     pub(super) fn elapsed(&self) -> Duration {
         self.started.elapsed()
     }
@@ -164,7 +182,7 @@ impl Budget {
         }
     }
 
-    /// The longest one turn may run: [`TURN_TIMEOUT`], cut to what is left of
+    /// The longest one turn may run: [`super::turn::TURN_TIMEOUT`], cut to what is left of
     /// the wall-clock budget so an in-flight turn cannot outlive it.
     pub(super) fn turn_timeout(&self) -> Duration {
         let left = Duration::from_secs(self.limits.max_wall_seconds).saturating_sub(self.elapsed());
@@ -238,6 +256,28 @@ impl Budget {
             "search_usd": self.search_usd(),
             "wall_seconds": self.elapsed().as_secs_f64(),
         })
+    }
+}
+
+/// Capacity held by one admitted tool loop. Dropping without settling keeps
+/// all capacity charged, including when its future is cancelled.
+pub(super) struct ModelCalls<'a> {
+    budget: &'a Budget,
+    reserved: u64,
+}
+
+impl ModelCalls<'_> {
+    /// Refund only the calls known not to have been dispatched.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error without refunding capacity if `issued` exceeds the
+    /// reserved number of calls.
+    pub(super) fn finish(self, issued: u64) -> anyhow::Result<()> {
+        let unused = self.reserved.checked_sub(issued)
+            .ok_or_else(|| anyhow::anyhow!("the tool loop exceeded its reserved model calls"))?;
+        self.budget.model_calls.fetch_sub(unused, Ordering::AcqRel);
+        Ok(())
     }
 }
 

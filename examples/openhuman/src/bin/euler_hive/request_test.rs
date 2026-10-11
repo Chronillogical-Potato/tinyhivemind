@@ -25,6 +25,10 @@ use super::sandbox::PythonSandbox;
 use super::tools::{Action, SeatScope, Services};
 use super::turn::{Seat, TurnInput, run};
 
+// The embedding runtime is process-wide; these two tests must not open it
+// concurrently even though their providers and workspaces are isolated.
+static RUNTIME_LOCK: Mutex<()> = Mutex::new(());
+
 /// Answers every first call with `hive_complete`, records every body.
 #[derive(Clone, Default)]
 struct Scripted {
@@ -71,16 +75,17 @@ fn tool_names(body: &Value) -> BTreeSet<String> {
 
 #[test]
 fn each_request_carries_exactly_the_seats_allowed_tools() {
+    let _runtime = RUNTIME_LOCK.lock().expect("test runtime lock");
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(16 * 1024 * 1024)
         .build()
         .expect("tokio runtime")
-        .block_on(async { tokio::spawn(requests_carry_allowed_tools()).await })
+        .block_on(async { tokio::spawn(requests_carry_allowed_tools(None)).await })
         .expect("the request test completes");
 }
 
-async fn requests_carry_allowed_tools() {
+async fn requests_carry_allowed_tools(call_limit: Option<u64>) {
     let documents = package::read_package(&super::test::package_dir()).expect("package reads");
     let (_, hive) = package::load(documents, "A test problem.").expect("package lowers");
     let provider = MockServer::start().await;
@@ -124,7 +129,10 @@ async fn requests_carry_allowed_tools() {
     let services = Arc::new(Services {
         search: None,
         sandbox: PythonSandbox::from_env(),
-        budget: Arc::new(Budget::new(Limits::SMOKE)),
+        budget: Arc::new(Budget::new(Limits {
+            max_model_calls: call_limit.unwrap_or(Limits::SMOKE.max_model_calls),
+            ..Limits::SMOKE
+        })),
         run: Arc::new(RunDir::create(dir.path().join("run")).expect("run dir")),
         run_id: "offline".into(),
         literals: Vec::new(),
@@ -182,6 +190,12 @@ async fn requests_carry_allowed_tools() {
             services.clone(),
         )
         .await;
+        if call_limit.is_some() {
+            let requests = script.bodies.lock().expect("capture lock").len();
+            assert!(requests <= 1, "the one-call cap allowed {requests} provider requests");
+            assert!(output.error.is_some(), "a tool loop that cannot fit is refused");
+            return;
+        }
         assert!(output.error.is_none(), "{id}: {:?}", output.error);
         assert!(
             matches!(output.action, Action::Complete { .. }),
@@ -197,4 +211,16 @@ async fn requests_carry_allowed_tools() {
             "{id} system prompt is the seat's own"
         );
     }
+}
+
+#[test]
+fn model_call_cap_refuses_a_tool_loop_before_billed_calls() {
+    let _runtime = RUNTIME_LOCK.lock().expect("test runtime lock");
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(16 * 1024 * 1024)
+        .build()
+        .expect("tokio runtime")
+        .block_on(async { tokio::spawn(requests_carry_allowed_tools(Some(1))).await })
+        .expect("the budget test completes");
 }

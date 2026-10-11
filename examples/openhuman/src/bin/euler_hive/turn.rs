@@ -286,6 +286,12 @@ async fn one_turn(
     ledger: &Arc<TurnLedger>,
     services: &Arc<Services>,
 ) -> anyhow::Result<(String, Option<openhuman_embed::LastTurnUsage>, u64)> {
+    // OpenHuman enforces this per-agent iteration cap. Reserve its whole
+    // possible loop before launch; progress metering alone is too late when
+    // several seats are in flight. Zero is OpenHuman's default of ten.
+    let configured = seat.agent.config().agent.max_tool_iterations_override.unwrap_or(10);
+    let cap = if configured == 0 { 10 } else { configured };
+    let reservation = services.budget.reserve_model_calls(u64::try_from(cap).unwrap_or(u64::MAX))?;
     let tools = seat.tools.clone();
     let scope = seat.scope.clone();
     let turn_ledger = ledger.clone();
@@ -312,11 +318,8 @@ async fn one_turn(
         .timeout(services.budget.turn_timeout())
         .send()
         .await;
-    let calls = counter.await.unwrap_or(0);
-    services
-        .budget
-        .model_calls
-        .fetch_add(calls, std::sync::atomic::Ordering::Relaxed);
+    let calls = counter.await.map_err(|error| anyhow::anyhow!("model call metering failed: {error}"))?;
+    reservation.finish(calls)?;
     let outcome = outcome?;
     services.budget.record_turn(outcome.usage.as_ref());
     Ok((outcome.reply, outcome.usage, calls))
@@ -324,10 +327,14 @@ async fn one_turn(
 
 /// `future`, or `None` once `deadline` passes: the whole seat activation,
 /// memory included, stays inside the run's wall-clock limit.
+/// A zero duration returns `None` without polling `future`.
 pub(super) async fn within<T>(
     deadline: Duration,
     future: impl std::future::Future<Output = T>,
 ) -> Option<T> {
+    if deadline.is_zero() {
+        return None;
+    }
     tokio::time::timeout(deadline, future).await.ok()
 }
 
