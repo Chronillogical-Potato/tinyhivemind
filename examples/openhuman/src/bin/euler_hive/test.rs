@@ -60,7 +60,12 @@ fn only_research_seats_get_web_search_and_only_compute_and_verify_get_python() {
     for seat in &hive.seats {
         let belt = package::seat_tools(seat).expect("every seat's belt resolves");
         let desk = package::desk_of(&hive, &seat.id).expect("seat has a desk");
-        assert_eq!(belt.contains(&SeatTool::WebSearch), desk.id == "research", "{}", seat.id);
+        assert_eq!(
+            belt.contains(&SeatTool::WebSearch),
+            desk.id == "research",
+            "{}",
+            seat.id
+        );
         assert_eq!(
             belt.contains(&SeatTool::RunPython),
             matches!(desk.id.as_str(), "compute" | "verify"),
@@ -71,7 +76,14 @@ fn only_research_seats_get_web_search_and_only_compute_and_verify_get_python() {
             assert!(belt.contains(&speaking));
         }
         let names: BTreeSet<_> = belt.iter().map(|tool| tool.name()).collect();
-        for harness in ["shell", "file_read", "file_write", "web_fetch", "http_request", "curl"] {
+        for harness in [
+            "shell",
+            "file_read",
+            "file_write",
+            "web_fetch",
+            "http_request",
+            "curl",
+        ] {
             assert!(!names.contains(harness), "{} holds {harness}", seat.id);
         }
     }
@@ -107,7 +119,13 @@ fn the_sandbox_has_no_network_no_mounts_and_bounded_resources() {
     assert_eq!(pair("--user"), Some("65534:65534"));
     assert!(args.contains(&"--read-only".to_owned()));
     assert!(args.contains(&"--rm".to_owned()));
-    for mount in ["--mount", "-v", "--volume", "--volumes-from", "--privileged"] {
+    for mount in [
+        "--mount",
+        "-v",
+        "--volume",
+        "--volumes-from",
+        "--privileged",
+    ] {
         assert!(!args.iter().any(|arg| arg == mount), "{mount} present");
     }
     assert!(!args.iter().any(|arg| arg.contains("hive-runs")));
@@ -130,9 +148,18 @@ fn memory_is_scoped_under_the_run_and_refuses_namespaces_outside_the_root() {
     for seat in &hive.seats {
         let binding = seat.memory.as_ref().expect("bound");
         let scoped = scope_binding(binding, "team:euler-hive", "r1").expect("scoped");
-        assert_eq!(scoped.namespace, format!("team:euler-hive/ws:r1/agent:{}", seat.id));
+        assert_eq!(
+            scoped.namespace,
+            format!("team:euler-hive/ws:r1/agent:{}", seat.id)
+        );
         assert_eq!(scoped.root, "team:euler-hive/ws:r1");
-        assert!(scoped.settings.reads.iter().all(|reach| reach.at.starts_with("team:euler-hive/ws:r1/")));
+        assert!(
+            scoped
+                .settings
+                .reads
+                .iter()
+                .all(|reach| reach.at.starts_with("team:euler-hive/ws:r1/"))
+        );
         let harness = tinyhivemind_openhuman::language::memory_binding(&scoped)
             .expect("the adapter accepts a run-scoped agent binding");
         assert_eq!(harness.agent_id(), seat.id);
@@ -153,13 +180,26 @@ fn scope(desk: &str) -> SeatScope {
 #[test]
 fn tool_schemas_offer_only_colleagues_linked_desks_and_served_providers() {
     let broadcast = schema(SeatTool::Broadcast, &scope("compute"), false);
-    assert_eq!(broadcast["properties"]["to"]["enum"], serde_json::json!(["a", "b"]));
+    assert_eq!(
+        broadcast["properties"]["to"]["enum"],
+        serde_json::json!(["a", "b"])
+    );
     let refer = schema(SeatTool::Refer, &scope("compute"), false);
-    assert_eq!(refer["properties"]["desk"]["enum"], serde_json::json!(["verify"]));
+    assert_eq!(
+        refer["properties"]["desk"]["enum"],
+        serde_json::json!(["verify"])
+    );
     let search = schema(SeatTool::WebSearch, &scope("research"), false);
-    assert_eq!(search["properties"]["provider"]["enum"], serde_json::json!(Provider::SEAT_CHOICES));
-    assert!(schema(SeatTool::Remember, &scope("theory"), false)["properties"]["verified"].is_null());
-    assert!(schema(SeatTool::Remember, &scope("verify"), true)["properties"]["verified"].is_object());
+    assert_eq!(
+        search["properties"]["provider"]["enum"],
+        serde_json::json!(Provider::SEAT_CHOICES)
+    );
+    assert!(
+        schema(SeatTool::Remember, &scope("theory"), false)["properties"]["verified"].is_null()
+    );
+    assert!(
+        schema(SeatTool::Remember, &scope("verify"), true)["properties"]["verified"].is_object()
+    );
     assert!(Provider::parse(Some("exa")).is_err());
     assert!(Provider::parse(None).is_ok());
 }
@@ -170,7 +210,11 @@ fn exa_results_condense_to_numbered_sources() {
         {"title": "Witt design", "url": "https://example.org/w", "text": "a design"},
         {"title": "No url"}
     ]}));
-    assert!(found.text.starts_with("[1] Witt design\nhttps://example.org/w\na design"));
+    assert!(
+        found
+            .text
+            .starts_with("[1] Witt design\nhttps://example.org/w\na design")
+    );
     assert_eq!(found.urls, ["https://example.org/w"]);
     assert_eq!(condense_exa(&serde_json::json!({})).text, "no results");
 }
@@ -205,7 +249,10 @@ fn request(message: &str) -> RoutingRequest {
 
 #[test]
 fn the_router_follows_the_named_colleague_and_nothing_else() {
-    assert_eq!(addressed(&request("@compute-linear check this")), Some("compute-linear"));
+    assert_eq!(
+        addressed(&request("@compute-linear check this")),
+        Some("compute-linear")
+    );
     assert_eq!(addressed(&request("check this @compute-linear")), None);
     assert_eq!(addressed(&request("@nobody check")), None);
 }
@@ -214,7 +261,10 @@ fn the_router_follows_the_named_colleague_and_nothing_else() {
 fn the_federation_opens_on_the_first_desk_with_every_member_assigned() {
     let (_, hive) = lowered();
     let mut federation = Federation::new(&hive).expect("federation builds");
-    assert_eq!(federation.linked_from("verify"), ["synthesis", "compute", "theory"]);
+    assert_eq!(
+        federation.linked_from("verify"),
+        ["synthesis", "compute", "theory"]
+    );
     federation.open("go");
     let pending = federation.ready().expect("ready");
     assert_eq!(pending.len(), 1);
@@ -253,7 +303,11 @@ fn the_first_turn_carries_the_problem_and_a_rejoin_does_not() {
 
 #[test]
 fn the_system_prompt_opens_with_the_persona_and_carries_the_charter() {
-    let text = system_prompt("You are a \"tester\".\nDo it.", "Check things.", "## Protocol");
+    let text = system_prompt(
+        "You are a \"tester\".\nDo it.",
+        "Check things.",
+        "## Protocol",
+    );
     assert!(text.starts_with("You are a \"tester\"."));
     assert!(text.contains("## Your role\nCheck things."));
     assert!(text.ends_with("## Protocol"));

@@ -141,8 +141,10 @@ impl Budget {
 
     pub(super) fn record_turn(&self, usage: Option<&openhuman_embed::LastTurnUsage>) {
         let Some(usage) = usage else { return };
-        self.input_tokens.fetch_add(usage.input_tokens, Ordering::Relaxed);
-        self.output_tokens.fetch_add(usage.output_tokens, Ordering::Relaxed);
+        self.input_tokens
+            .fetch_add(usage.input_tokens, Ordering::Relaxed);
+        self.output_tokens
+            .fetch_add(usage.output_tokens, Ordering::Relaxed);
         self.reasoning_tokens
             .fetch_add(usage.reasoning_tokens, Ordering::Relaxed);
         if let (Some(cost), Ok(mut total)) = (usage.cost_usd, self.reported_usd.lock()) {
@@ -176,7 +178,11 @@ impl Budget {
 
     /// Claim one sandbox run, or say why not.
     pub(super) fn claim_sandbox(&self) -> anyhow::Result<u64> {
-        claim(&self.sandbox_runs, self.limits.max_sandbox_runs, "sandbox runs")
+        claim(
+            &self.sandbox_runs,
+            self.limits.max_sandbox_runs,
+            "sandbox runs",
+        )
     }
 
     /// Claim one web search, or say why not.

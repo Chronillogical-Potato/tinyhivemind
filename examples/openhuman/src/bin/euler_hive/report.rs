@@ -30,7 +30,15 @@ pub(super) fn structure(package: &Path, run: &RunDir) {
         return;
     };
     let output = std::process::Command::new("cargo")
-        .args(["run", "--quiet", "-p", "tinyhivemind-lang", "--example", "hive_view", "--"])
+        .args([
+            "run",
+            "--quiet",
+            "-p",
+            "tinyhivemind-lang",
+            "--example",
+            "hive_view",
+            "--",
+        ])
         .arg(package)
         .arg("--json")
         .current_dir(root)
@@ -58,8 +66,16 @@ pub(super) async fn probe(
     root: &str,
     run_id: &str,
 ) -> anyhow::Result<()> {
-    for provider in [Provider::Exa, Provider::Gemini, Provider::Parallel, Provider::Tinyfish] {
-        match search.search("Steiner system S(5,8,24) Witt design", provider).await {
+    for provider in [
+        Provider::Exa,
+        Provider::Gemini,
+        Provider::Parallel,
+        Provider::Tinyfish,
+    ] {
+        match search
+            .search("Steiner system S(5,8,24) Witt design", provider)
+            .await
+        {
             Ok(found) => {
                 println!(
                     "probe search {provider:?}: ok, {} sources, {} chars",
@@ -76,7 +92,10 @@ pub(super) async fn probe(
         "import socket\ntry:\n    socket.create_connection(('1.1.1.1', 53), 3)\n    print('network: reachable')\nexcept OSError as e:\n    print('network: blocked', type(e).__name__)\nimport os\nprint('mounted:', sorted(os.listdir('/')))\nprint(sum(range(10)))\n",
         &name,
     )?;
-    println!("probe sandbox: code={:?} stdout={:?}", output.code, output.stdout);
+    println!(
+        "probe sandbox: code={:?} stdout={:?}",
+        output.code, output.stdout
+    );
     let at = format!("{root}/ws:probe-{}/agent:probe", run_id.to_lowercase());
     let meta = tinymemory_api::MemoryMeta {
         namespace: at.parse()?,
@@ -93,7 +112,10 @@ pub(super) async fn probe(
         .await?;
     println!("probe memory store: {receipt:?}");
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-    println!("probe memory count at {at}: {:?}", count_at(engine, &at).await?);
+    println!(
+        "probe memory count at {at}: {:?}",
+        count_at(engine, &at).await?
+    );
     run.write("probe.txt", "probe complete\n");
     Ok(())
 }
@@ -248,7 +270,12 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
             let rows: String = floor
                 .journal
                 .iter()
-                .map(|row| format!("### [{}] @{} ({})\n\n{}\n\n", row.sequence, row.author, row.kind, row.body))
+                .map(|row| {
+                    format!(
+                        "### [{}] @{} ({})\n\n{}\n\n",
+                        row.sequence, row.author, row.kind, row.body
+                    )
+                })
                 .collect();
             format!("## #{} ({})\n\n{rows}", floor.desk.id, floor.desk.name)
         })
@@ -257,7 +284,10 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
     println!("\n== {ending} ==");
     if let Some(answer) = answer {
         println!("committed by @{} on #{}", answer.seat, answer.desk);
-        println!("candidate: {}", answer.candidate.as_deref().unwrap_or("(none)"));
+        println!(
+            "candidate: {}",
+            answer.candidate.as_deref().unwrap_or("(none)")
+        );
     }
     println!("{}", serde_json::to_string_pretty(&report["budget"])?);
     Ok(())

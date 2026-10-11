@@ -252,7 +252,12 @@ impl SeatMemory {
         }
     }
 
-    async fn store(&self, at: &str, entry: &RememberEntry, conversation: &str) -> anyhow::Result<()> {
+    async fn store(
+        &self,
+        at: &str,
+        entry: &RememberEntry,
+        conversation: &str,
+    ) -> anyhow::Result<()> {
         let text = entry.text.trim();
         if text.is_empty() {
             return Ok(());
@@ -282,7 +287,11 @@ impl SeatMemory {
     ///
     /// Refuses a seat that is not a pool writer, a filtered kind, or a
     /// read-only identity; otherwise returns the engine's failure.
-    pub(super) async fn publish(&self, entry: &RememberEntry, conversation: &str) -> anyhow::Result<()> {
+    pub(super) async fn publish(
+        &self,
+        entry: &RememberEntry,
+        conversation: &str,
+    ) -> anyhow::Result<()> {
         let pool = self
             .pool
             .as_deref()
@@ -309,13 +318,18 @@ impl Recall for SeatMemory {
             }
             let result = match &request.moment {
                 RecallMoment::SessionStart => {
-                    self.search(request.focus.as_deref().unwrap_or("findings")).await
+                    self.search(request.focus.as_deref().unwrap_or("findings"))
+                        .await
                 }
                 RecallMoment::Rejoin => self.since().await,
                 RecallMoment::Compaction { dropped } => {
                     let query: String = dropped.join("\n").chars().take(2_000).collect();
-                    self.search(if query.trim().is_empty() { "findings" } else { &query })
-                        .await
+                    self.search(if query.trim().is_empty() {
+                        "findings"
+                    } else {
+                        &query
+                    })
+                    .await
                 }
             };
             self.mark_seen();
@@ -391,7 +405,9 @@ pub(super) async fn count_at(
         request.cursor = cursor;
         let page = engine.list(request).await?;
         for item in &page.items {
-            *counts.entry(format!("{:?}", item.kind).to_lowercase()).or_insert(0) += 1;
+            *counts
+                .entry(format!("{:?}", item.kind).to_lowercase())
+                .or_insert(0) += 1;
         }
         match page.next_cursor {
             Some(next) => cursor = Some(next),

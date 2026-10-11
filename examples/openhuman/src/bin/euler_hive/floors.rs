@@ -34,9 +34,7 @@ use tinyhivemind_core::embed::RoutingPolicy;
 use tinyhivemind_core::hive::{
     CompletionEpisodeState, CompletionStep, apply_assignment, completion_status,
 };
-use tinyhivemind_core::referral::{
-    ReferralOrigin, ReferralPolicy,
-};
+use tinyhivemind_core::referral::{ReferralOrigin, ReferralPolicy};
 use tinyhivemind_core::roster::RosterMember;
 use tinyhivemind_core::runtime::speech::Utterance;
 use tinyhivemind_core::runtime::{Conversation, Sequence};
@@ -488,7 +486,11 @@ impl Federation {
     /// A desk's standings: every candidate reported on it, with its backers.
     pub(super) fn standings(&self, desk: usize) -> Vec<StandingFrame> {
         let floor = &self.floors[desk];
-        let committed = if floor.reported { floor.last_candidate.clone() } else { None };
+        let committed = if floor.reported {
+            floor.last_candidate.clone()
+        } else {
+            None
+        };
         floor
             .standings
             .iter()

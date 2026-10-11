@@ -52,7 +52,8 @@ impl PythonSandbox {
     pub(super) fn from_env() -> Self {
         Self {
             docker: PathBuf::from("docker"),
-            image: std::env::var("EULER_HIVE_PYTHON_IMAGE").unwrap_or_else(|_| DEFAULT_IMAGE.into()),
+            image: std::env::var("EULER_HIVE_PYTHON_IMAGE")
+                .unwrap_or_else(|_| DEFAULT_IMAGE.into()),
         }
     }
 

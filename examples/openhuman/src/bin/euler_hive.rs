@@ -118,19 +118,21 @@ fn parse_args() -> anyhow::Result<Args> {
             other => anyhow::bail!("unknown argument {other}"),
         }
     }
-    let problem = problem.ok_or_else(|| anyhow::anyhow!("--problem <statement.html> is required"))?;
+    let problem =
+        problem.ok_or_else(|| anyhow::anyhow!("--problem <statement.html> is required"))?;
     Ok(Args {
         package: package.unwrap_or_else(|| {
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../crates/tinyhivemind-lang/examples/hives/euler-hive")
         }),
         problem_id: problem_id.unwrap_or_else(|| {
-            problem
-                .parent()
-                .and_then(Path::file_name)
-                .map_or_else(|| "problem".into(), |name| name.to_string_lossy().into_owned())
+            problem.parent().and_then(Path::file_name).map_or_else(
+                || "problem".into(),
+                |name| name.to_string_lossy().into_owned(),
+            )
         }),
-        runs: runs.ok_or_else(|| anyhow::anyhow!("--runs <dir outside the repository> is required"))?,
+        runs: runs
+            .ok_or_else(|| anyhow::anyhow!("--runs <dir outside the repository> is required"))?,
         problem,
         limits,
         model,
@@ -201,7 +203,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
     println!("memory_engine: cortexdb via tinyhumans ({health:?})");
     let sandbox = sandbox::PythonSandbox::from_env();
     sandbox.preflight()?;
-    println!("sandbox: docker {} (no network, nothing mounted)", sandbox.image());
+    println!(
+        "sandbox: docker {} (no network, nothing mounted)",
+        sandbox.image()
+    );
     let search = search::WebSearch::new(
         &backend,
         tinyhumans_key.clone(),
@@ -209,7 +214,15 @@ async fn run(args: Args) -> anyhow::Result<()> {
             .unwrap_or_else(|_| search::DEFAULT_GEMINI_MODEL.into()),
     );
     if args.probe {
-        return report::probe(&search, &sandbox, engine.as_ref(), &run, &lowered.memory.root, &run_id).await;
+        return report::probe(
+            &search,
+            &sandbox,
+            engine.as_ref(),
+            &run,
+            &lowered.memory.root,
+            &run_id,
+        )
+        .await;
     }
 
     let budget = Arc::new(Budget::new(args.limits));
@@ -238,7 +251,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
                 .config(config)
                 .workspace_dir(run.path().join("openhuman"))
                 .backend_url(backend.clone())
-                .provider(Provider::openai_compatible(OPENROUTER, openrouter_key.clone()).model(&args.model))
+                .provider(
+                    Provider::openai_compatible(OPENROUTER, openrouter_key.clone())
+                        .model(&args.model),
+                )
                 .memory_engine(engine.clone())
                 .build(),
         )
@@ -250,7 +266,12 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let charters: BTreeMap<String, String> = lowered
         .candidates
         .iter()
-        .map(|candidate| (candidate.id.clone(), candidate.description.clone().unwrap_or_default()))
+        .map(|candidate| {
+            (
+                candidate.id.clone(),
+                candidate.description.clone().unwrap_or_default(),
+            )
+        })
         .collect();
     let factory = agents::SeatFactory {
         runtime: runtime.clone(),
@@ -294,7 +315,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
             binding.clone(),
         )
         .await?;
-        let lowered_binding = binding.ok_or_else(|| anyhow::anyhow!("{} has no memory", seat.id))?;
+        let lowered_binding =
+            binding.ok_or_else(|| anyhow::anyhow!("{} has no memory", seat.id))?;
         let scoped = memory::scope_binding(&lowered_binding, &lowered.memory.root, &run_id)?;
         let installed = &agent.config().memory;
         if installed.agent_id.as_deref() != Some(scoped.agent_id.as_str())
@@ -314,7 +336,12 @@ async fn run(args: Args) -> anyhow::Result<()> {
         let scope = SeatScope {
             seat: seat.id.clone(),
             desk: desk.id.clone(),
-            colleagues: desk.members.iter().filter(|m| **m != seat.id).cloned().collect(),
+            colleagues: desk
+                .members
+                .iter()
+                .filter(|m| **m != seat.id)
+                .cloned()
+                .collect(),
             linked_desks: federation_seed.linked_from(&desk.id),
             conversation: format!("euler-{run_id}"),
         };
@@ -322,10 +349,16 @@ async fn run(args: Args) -> anyhow::Result<()> {
             "seat {} on #{} tools=[{}] memory={}",
             seat.id,
             desk.id,
-            belt.iter().map(|tool| tool.name()).collect::<Vec<_>>().join(","),
+            belt.iter()
+                .map(|tool| tool.name())
+                .collect::<Vec<_>>()
+                .join(","),
             seat_memory.binding().namespace
         );
-        seats.insert(seat.id.clone(), Arc::new(turn::Seat::new(agent, belt, seat_memory, scope)));
+        seats.insert(
+            seat.id.clone(),
+            Arc::new(turn::Seat::new(agent, belt, seat_memory, scope)),
+        );
     }
     run.json("package.json", &json!({
         "id": lowered.id,
@@ -367,7 +400,12 @@ async fn run(args: Args) -> anyhow::Result<()> {
             budget.record_account(usage);
         }
         if let Err(exhausted) = budget.admit_round(width) {
-            stop = Some(format!("exhausted_{}", serde_json::to_value(&exhausted)?.as_str().unwrap_or("budget")));
+            stop = Some(format!(
+                "exhausted_{}",
+                serde_json::to_value(&exhausted)?
+                    .as_str()
+                    .unwrap_or("budget")
+            ));
             break;
         }
         budget
@@ -375,9 +413,17 @@ async fn run(args: Args) -> anyhow::Result<()> {
             .fetch_add(width, std::sync::atomic::Ordering::Relaxed);
         let budget_line = format!(
             "{} seat turns, {} sandbox runs and {} web searches remain for the whole hive.",
-            args.limits.max_turns.saturating_sub(budget.turns.load(std::sync::atomic::Ordering::Relaxed)),
-            args.limits.max_sandbox_runs.saturating_sub(budget.sandbox_runs.load(std::sync::atomic::Ordering::Relaxed)),
-            args.limits.max_searches.saturating_sub(budget.searches.load(std::sync::atomic::Ordering::Relaxed)),
+            args.limits
+                .max_turns
+                .saturating_sub(budget.turns.load(std::sync::atomic::Ordering::Relaxed)),
+            args.limits.max_sandbox_runs.saturating_sub(
+                budget
+                    .sandbox_runs
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            ),
+            args.limits
+                .max_searches
+                .saturating_sub(budget.searches.load(std::sync::atomic::Ordering::Relaxed)),
         );
         let mut launched = Vec::new();
         for round in &pending {
@@ -387,8 +433,19 @@ async fn run(args: Args) -> anyhow::Result<()> {
                 floor.desk.id,
                 floor.desk.name,
                 floor.desk.description.clone().unwrap_or_default(),
-                floor.desk.members.iter().map(|m| format!("@{m}")).collect::<Vec<_>>().join(", "),
-                federation.linked_from(&floor.desk.id).iter().map(|d| format!("#{d}")).collect::<Vec<_>>().join(", "),
+                floor
+                    .desk
+                    .members
+                    .iter()
+                    .map(|m| format!("@{m}"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                federation
+                    .linked_from(&floor.desk.id)
+                    .iter()
+                    .map(|d| format!("#{d}"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
             );
             for id in &round.seats {
                 let (rows, saw, of) = federation.delta(round.desk, id);
@@ -405,30 +462,49 @@ async fn run(args: Args) -> anyhow::Result<()> {
                     assignment: assignment.clone(),
                     budget_line: budget_line.clone(),
                 };
-                launched.push((round.desk, saw, of, assignment.reason, turn::run(seat, input, services.clone())));
+                launched.push((
+                    round.desk,
+                    saw,
+                    of,
+                    assignment.reason,
+                    turn::run(seat, input, services.clone()),
+                ));
             }
         }
-        let shapes: Vec<_> = launched.iter().map(|(desk, saw, of, reason, _)| (*desk, *saw, *of, reason.clone())).collect();
+        let shapes: Vec<_> = launched
+            .iter()
+            .map(|(desk, saw, of, reason, _)| (*desk, *saw, *of, reason.clone()))
+            .collect();
         let outputs = join_all(launched.into_iter().map(|(.., future)| future)).await;
-        let mut by_desk: BTreeMap<usize, Vec<(turn::TurnOutput, usize, usize, String)>> = BTreeMap::new();
+        let mut by_desk: BTreeMap<usize, Vec<(turn::TurnOutput, usize, usize, String)>> =
+            BTreeMap::new();
         for ((desk, saw, of, reason), output) in shapes.into_iter().zip(outputs) {
             report::turn_artifacts(&run, &output);
-            by_desk.entry(desk).or_default().push((output, saw, of, reason));
+            by_desk
+                .entry(desk)
+                .or_default()
+                .push((output, saw, of, reason));
         }
         for round in &pending {
-            let Some(outputs) = by_desk.remove(&round.desk) else { continue };
+            let Some(outputs) = by_desk.remove(&round.desk) else {
+                continue;
+            };
             let journal_at_start = outputs.first().map_or(0, |(_, _, of, _)| *of);
             let results: Vec<(String, Action)> = outputs
                 .iter()
                 .map(|(output, ..)| (output.seat.clone(), output.action.clone()))
                 .collect();
             let referrals_before = federation.referrals.len();
-            let sequences = federation.commit(round.desk, journal_at_start, results).await?;
+            let sequences = federation
+                .commit(round.desk, journal_at_start, results)
+                .await?;
             let floor = &federation.floors[round.desk];
             let turns = outputs
                 .iter()
                 .zip(sequences)
-                .map(|((output, saw, of, reason), sequence)| turn_frame(output, &floor.desk.id, reason, *saw, *of, sequence))
+                .map(|((output, saw, of, reason), sequence)| {
+                    turn_frame(output, &floor.desk.id, reason, *saw, *of, sequence)
+                })
                 .collect();
             run.frame(&Frame::Round {
                 round: federation.round,
@@ -445,7 +521,11 @@ async fn run(args: Args) -> anyhow::Result<()> {
                     frame.kind,
                     frame.from_desk,
                     frame.to_desk,
-                    if frame.accepted { "accepted".to_owned() } else { format!("refused: {}", frame.reason.clone().unwrap_or_default()) }
+                    if frame.accepted {
+                        "accepted".to_owned()
+                    } else {
+                        format!("refused: {}", frame.reason.clone().unwrap_or_default())
+                    }
                 );
                 run.frame(&Frame::Referral(frame.clone()));
             }
@@ -489,7 +569,11 @@ fn turn_frame(
     TurnFrame {
         seat: output.seat.clone(),
         desk: desk.into(),
-        reason: if output.recovered { "recovered".into() } else { reason.into() },
+        reason: if output.recovered {
+            "recovered".into()
+        } else {
+            reason.into()
+        },
         saw,
         of,
         content,
@@ -519,8 +603,8 @@ fn turn_frame(
 }
 
 #[cfg(test)]
-#[path = "euler_hive/test.rs"]
-mod test;
-#[cfg(test)]
 #[path = "euler_hive/request_test.rs"]
 mod request_test;
+#[cfg(test)]
+#[path = "euler_hive/test.rs"]
+mod test;

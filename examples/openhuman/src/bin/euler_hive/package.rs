@@ -81,8 +81,9 @@ pub(super) fn seat_tools(seat: &LoweredSeat) -> anyhow::Result<BTreeSet<SeatTool
         if seat.tools.deny.contains(name) {
             anyhow::bail!("{} both allows and denies {name}", seat.id);
         }
-        let tool = SeatTool::named(name)
-            .ok_or_else(|| anyhow::anyhow!("{} allows {name}, which this host does not serve", seat.id))?;
+        let tool = SeatTool::named(name).ok_or_else(|| {
+            anyhow::anyhow!("{} allows {name}, which this host does not serve", seat.id)
+        })?;
         belt.insert(tool);
     }
     for required in [SeatTool::Broadcast, SeatTool::Refer, SeatTool::Complete] {
@@ -168,7 +169,9 @@ pub(super) fn problem_markdown(html: &str) -> String {
             rest = "";
             break;
         };
-        let tag = rest[start + 1..start + end].trim_start_matches('/').to_ascii_lowercase();
+        let tag = rest[start + 1..start + end]
+            .trim_start_matches('/')
+            .to_ascii_lowercase();
         if tag.starts_with('p') || tag.starts_with("br") || tag.starts_with("div") {
             text.push_str("\n\n");
         }

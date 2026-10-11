@@ -52,7 +52,10 @@ impl Provider {
     pub(super) fn parse(value: Option<&str>) -> anyhow::Result<Self> {
         let value = value.unwrap_or("parallel");
         if !Self::SEAT_CHOICES.contains(&value) {
-            anyhow::bail!("unknown provider {value:?}; use one of {:?}", Self::SEAT_CHOICES);
+            anyhow::bail!(
+                "unknown provider {value:?}; use one of {:?}",
+                Self::SEAT_CHOICES
+            );
         }
         match value {
             "exa" => Ok(Self::Exa),
@@ -127,7 +130,13 @@ impl WebSearch {
                 let pages = response
                     .results
                     .iter()
-                    .map(|page| (page.title.clone(), page.url.clone(), page.excerpts.join(" … ")))
+                    .map(|page| {
+                        (
+                            page.title.clone(),
+                            page.url.clone(),
+                            page.excerpts.join(" … "),
+                        )
+                    })
                     .collect::<Vec<_>>();
                 Ok(pages_found(provider, &pages, Some(response.cost_usd)))
             }
@@ -146,7 +155,13 @@ impl WebSearch {
                 let pages = response
                     .results
                     .iter()
-                    .map(|page| (page.title.clone(), page.url.clone(), page.snippet.clone().unwrap_or_default()))
+                    .map(|page| {
+                        (
+                            page.title.clone(),
+                            page.url.clone(),
+                            page.snippet.clone().unwrap_or_default(),
+                        )
+                    })
                     .collect::<Vec<_>>();
                 Ok(pages_found(provider, &pages, Some(response.cost_usd)))
             }
@@ -235,7 +250,11 @@ pub(super) fn condense_exa(data: &Value) -> Found {
 }
 
 /// Ranked `(title, url, text)` pages as a seat reads them.
-pub(super) fn pages_found(provider: Provider, pages: &[(String, String, String)], cost_usd: Option<f64>) -> Found {
+pub(super) fn pages_found(
+    provider: Provider,
+    pages: &[(String, String, String)],
+    cost_usd: Option<f64>,
+) -> Found {
     let mut text = String::new();
     let mut urls = Vec::new();
     for (index, (title, url, body)) in pages.iter().take(EXA_RESULTS).enumerate() {

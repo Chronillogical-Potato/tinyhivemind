@@ -15,10 +15,19 @@ use super::frames::ReferralFrame;
 use super::tools::Verdict;
 
 impl Federation {
-    pub(super) fn ask(&mut self, desk: usize, seat: &str, to: &str, message: &str) -> anyhow::Result<()> {
+    pub(super) fn ask(
+        &mut self,
+        desk: usize,
+        seat: &str,
+        to: &str,
+        message: &str,
+    ) -> anyhow::Result<()> {
         let from = self.floors[desk].desk.id.clone();
         let content = format!("@#{to} {message}");
-        let sequence = self.floors[desk].journal.last().map_or(0, |row| row.sequence);
+        let sequence = self.floors[desk]
+            .journal
+            .last()
+            .map_or(0, |row| row.sequence);
         let mut frame = self.frame("forward", &from, to, seat, &content, 0);
         if self.floors[desk].asks >= ASK_CAP {
             return self.bounce(desk, frame, "width_cap");
@@ -79,7 +88,9 @@ impl Federation {
             .iter()
             .map(|(seat, report, candidate, verdict)| {
                 let tag = match (candidate, verdict) {
-                    (Some(candidate), Some(Verdict::Object)) => format!(" [objects to {candidate}]"),
+                    (Some(candidate), Some(Verdict::Object)) => {
+                        format!(" [objects to {candidate}]")
+                    }
                     (Some(candidate), _) => format!(" [candidate {candidate}]"),
                     (None, _) => String::new(),
                 };
@@ -96,7 +107,9 @@ impl Federation {
             .completions
             .iter()
             .rev()
-            .find(|(_, _, candidate, verdict)| candidate.is_some() && *verdict != Some(Verdict::Object))
+            .find(|(_, _, candidate, verdict)| {
+                candidate.is_some() && *verdict != Some(Verdict::Object)
+            })
             .and_then(|(_, _, candidate, _)| candidate.clone());
         floor.completions.clear();
         floor.episode_rounds = 0;
@@ -129,10 +142,20 @@ impl Federation {
         }
     }
 
-    fn report(&mut self, desk: usize, seat: &str, to: &str, report: &str, hop: u32) -> anyhow::Result<()> {
+    fn report(
+        &mut self,
+        desk: usize,
+        seat: &str,
+        to: &str,
+        report: &str,
+        hop: u32,
+    ) -> anyhow::Result<()> {
         let from = self.floors[desk].desk.id.clone();
         let content = format!("@#{to} {} reports:\n{report}", self.floors[desk].desk.name);
-        let sequence = self.floors[desk].journal.last().map_or(0, |row| row.sequence);
+        let sequence = self.floors[desk]
+            .journal
+            .last()
+            .map_or(0, |row| row.sequence);
         let mut frame = self.frame("report", &from, to, seat, &content, hop);
         let decision = self.decide(&from, seat, &content, sequence, hop, None)?;
         let one = match decision {
@@ -143,7 +166,10 @@ impl Federation {
         };
         frame.hops = one.child_hop;
         frame.target = Some(one.target_id.clone());
-        let Some(target) = self.index(&one.to.desk_id).filter(|_| self.linked(&from, &one.to.desk_id)) else {
+        let Some(target) = self
+            .index(&one.to.desk_id)
+            .filter(|_| self.linked(&from, &one.to.desk_id))
+        else {
             return self.refuse(desk, frame, "unlinked");
         };
         let floor = &mut self.floors[target];
@@ -169,7 +195,10 @@ impl Federation {
         hop: u32,
     ) -> anyhow::Result<()> {
         let from = self.floors[desk].desk.id.clone();
-        let sequence = self.floors[desk].journal.last().map_or(0, |row| row.sequence);
+        let sequence = self.floors[desk]
+            .journal
+            .last()
+            .map_or(0, |row| row.sequence);
         let to = origin.conversation.desk_id.clone();
         let mut frame = self.frame("return", &from, &to, seat, report, hop);
         let decision = self.decide(&from, seat, report, sequence, hop, Some(origin))?;
@@ -187,7 +216,10 @@ impl Federation {
         frame.hops = one.child_hop;
         frame.target = Some(one.target_id.clone());
         let linked = self.linked(&to, &from) || self.linked(&from, &to);
-        let Some(target) = self.index(&one.to.desk_id).filter(|_| linked && one.kind == ReferralKind::Return) else {
+        let Some(target) = self
+            .index(&one.to.desk_id)
+            .filter(|_| linked && one.kind == ReferralKind::Return)
+        else {
             return self.refuse(desk, frame, "unlinked");
         };
         let floor = &mut self.floors[target];
@@ -223,7 +255,9 @@ impl Federation {
         let mentions = mentions_in(
             content,
             None,
-            &MentionAuthor::Agent { id: author.to_owned() },
+            &MentionAuthor::Agent {
+                id: author.to_owned(),
+            },
             &roster,
             &desks,
         );
@@ -244,7 +278,15 @@ impl Federation {
         Ok(referral(self.policy, &input, &roster, &desks)?)
     }
 
-    fn frame(&self, kind: &str, from: &str, to: &str, seat: &str, content: &str, hops: u32) -> ReferralFrame {
+    fn frame(
+        &self,
+        kind: &str,
+        from: &str,
+        to: &str,
+        seat: &str,
+        content: &str,
+        hops: u32,
+    ) -> ReferralFrame {
         ReferralFrame {
             round: self.round,
             kind: kind.into(),
@@ -260,7 +302,12 @@ impl Federation {
         }
     }
 
-    fn refuse(&mut self, desk: usize, mut frame: ReferralFrame, reason: &str) -> anyhow::Result<()> {
+    fn refuse(
+        &mut self,
+        desk: usize,
+        mut frame: ReferralFrame,
+        reason: &str,
+    ) -> anyhow::Result<()> {
         frame.reason = Some(reason.into());
         let notice = format!(
             "host: the referral to #{} was refused ({reason})",
@@ -273,7 +320,12 @@ impl Federation {
 
     /// A refused ask: tell the desk, and give the asking seat its turn back
     /// before the desk may report, as if the refusal were the answer.
-    fn bounce(&mut self, desk: usize, mut frame: ReferralFrame, reason: &str) -> anyhow::Result<()> {
+    fn bounce(
+        &mut self,
+        desk: usize,
+        mut frame: ReferralFrame,
+        reason: &str,
+    ) -> anyhow::Result<()> {
         frame.reason = Some(reason.into());
         let notice = format!(
             "host: your referral to #{} was refused ({reason}); carry on with what your desk has",

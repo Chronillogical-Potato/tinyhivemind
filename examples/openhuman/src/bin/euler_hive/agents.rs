@@ -34,7 +34,12 @@ pub(super) struct SeatFactory {
 
 /// The system prompt one seat runs with. Pure, so it is pinned by test.
 pub(super) fn system_prompt(prompt: &str, charter: &str, protocol: &str) -> String {
-    format!("{}\n\n## Your role\n{}\n\n{}", prompt.trim(), charter.trim(), protocol.trim())
+    format!(
+        "{}\n\n## Your role\n{}\n\n{}",
+        prompt.trim(),
+        charter.trim(),
+        protocol.trim()
+    )
 }
 
 impl AgentFactory for SeatFactory {
@@ -62,7 +67,9 @@ impl AgentFactory for SeatFactory {
                 return Err(refuse("unknown template"));
             }
             let id = config["id"].as_str().ok_or_else(|| refuse("no seat id"))?;
-            let prompt = config["prompt"].as_str().ok_or_else(|| refuse("no prompt"))?;
+            let prompt = config["prompt"]
+                .as_str()
+                .ok_or_else(|| refuse("no prompt"))?;
             let tools: ToolAccess = serde_json::from_value(config["tools"].clone())
                 .map_err(|_| refuse("unreadable tools"))?;
             if tools.allow.is_empty() {
@@ -72,8 +79,8 @@ impl AgentFactory for SeatFactory {
             if binding.settings.reads.iter().any(|reach| reach.inherit) {
                 return Err(refuse("inherited reads are not served"));
             }
-            let scoped = scope_binding(&binding, &root, &run)
-                .map_err(|error| refuse(&error.to_string()))?;
+            let scoped =
+                scope_binding(&binding, &root, &run).map_err(|error| refuse(&error.to_string()))?;
             let charter = charters.get(id).map_or("", String::as_str);
             let iterations = config["config"]["max_iterations"].as_u64().unwrap_or(10);
             let temperature = config["config"]["temperature"].as_f64().unwrap_or(0.2);

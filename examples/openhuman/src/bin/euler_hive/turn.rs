@@ -96,11 +96,18 @@ impl Seat {
 
     /// The recall moment this turn opens with, and whether the session is new.
     fn moment(&self) -> (RecallMoment, bool, u32) {
-        let session = self.session.lock().map(|s| (s.generation, s.turns, s.compacted.clone()));
+        let session = self
+            .session
+            .lock()
+            .map(|s| (s.generation, s.turns, s.compacted.clone()));
         let (generation, turns, compacted) = session.unwrap_or((0, 0, Vec::new()));
         match (generation, turns) {
             (0, 0) => (RecallMoment::SessionStart, true, generation),
-            (_, 0) => (RecallMoment::Compaction { dropped: compacted }, true, generation),
+            (_, 0) => (
+                RecallMoment::Compaction { dropped: compacted },
+                true,
+                generation,
+            ),
             _ => (RecallMoment::Rejoin, false, generation),
         }
     }
@@ -127,14 +134,19 @@ pub(super) fn prompt(input: &TurnInput, fresh: bool, recalled: Option<&str>) -> 
     }
     for row in &input.rows {
         let body: String = row.body.chars().take(ROW_CHARS).collect();
-        out.push_str(&format!("[{}] @{} ({}): {body}\n", row.sequence, row.author, row.kind));
+        out.push_str(&format!(
+            "[{}] @{} ({}): {body}\n",
+            row.sequence, row.author, row.kind
+        ));
     }
     out.push_str("\n## Why you are running\n");
     let note: String = input.assignment.note.chars().take(ROW_CHARS).collect();
     out.push_str(&format!("{}: {note}\n\n", input.assignment.reason));
     out.push_str("## Budget left\n");
     out.push_str(&input.budget_line);
-    out.push_str("\n\nEnd this turn with exactly one of hive_complete, hive_broadcast or hive_refer.");
+    out.push_str(
+        "\n\nEnd this turn with exactly one of hive_complete, hive_broadcast or hive_refer.",
+    );
     out
 }
 
@@ -199,7 +211,8 @@ pub(super) async fn run(seat: Arc<Seat>, input: TurnInput, services: Arc<Service
                 if let Some(usage) = &usage {
                     output.input_tokens += usage.input_tokens;
                     output.output_tokens += usage.output_tokens;
-                    output.cost_usd = Some(output.cost_usd.unwrap_or(0.0) + usage.cost_usd.unwrap_or(0.0));
+                    output.cost_usd =
+                        Some(output.cost_usd.unwrap_or(0.0) + usage.cost_usd.unwrap_or(0.0));
                     if let Ok(mut s) = seat.session.lock() {
                         s.context_tokens = usage.context_tokens;
                     }
@@ -280,7 +293,9 @@ async fn one_turn(
         .agent
         .turn(message.to_owned())
         .session(session)
-        .tools(move |_| HostTurnTools::advertised(belt(&tools, &scope, &turn_ledger, &shared, &memory)))
+        .tools(move |_| {
+            HostTurnTools::advertised(belt(&tools, &scope, &turn_ledger, &shared, &memory))
+        })
         .on_progress(sender)
         .timeout(TURN_TIMEOUT)
         .send()
@@ -314,11 +329,17 @@ async fn remember_action(seat: &Seat, action: &Action, services: &Services) -> u
         ),
         Action::Broadcast { to, message } => (
             EntryKind::Note,
-            format!("handed @{to}: {}", message.chars().take(600).collect::<String>()),
+            format!(
+                "handed @{to}: {}",
+                message.chars().take(600).collect::<String>()
+            ),
         ),
         Action::Refer { desk, message } => (
             EntryKind::Note,
-            format!("asked #{desk}: {}", message.chars().take(600).collect::<String>()),
+            format!(
+                "asked #{desk}: {}",
+                message.chars().take(600).collect::<String>()
+            ),
         ),
     };
     let request = RememberRequest {

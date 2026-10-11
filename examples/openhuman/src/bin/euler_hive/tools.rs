@@ -71,7 +71,10 @@ impl TurnLedger {
     }
 
     pub(super) fn calls(&self) -> Vec<CallRecord> {
-        self.calls.lock().map(|calls| calls.clone()).unwrap_or_default()
+        self.calls
+            .lock()
+            .map(|calls| calls.clone())
+            .unwrap_or_default()
     }
 
     pub(super) fn memory(&self) -> (usize, usize) {
@@ -98,7 +101,10 @@ impl TurnLedger {
     }
 
     fn act(&self, action: Action) -> Result<(), String> {
-        let mut slot = self.action.lock().map_err(|_| "turn state poisoned".to_owned())?;
+        let mut slot = self
+            .action
+            .lock()
+            .map_err(|_| "turn state poisoned".to_owned())?;
         if slot.is_some() {
             return Err("you already took this turn's hive action; stop now".into());
         }
@@ -220,12 +226,22 @@ pub(super) fn schema(kind: SeatTool, scope: &SeatScope, pool_writer: bool) -> Va
 
 fn description(kind: SeatTool) -> &'static str {
     match kind {
-        SeatTool::WebSearch => "Search the public web (Parallel, or Gemini with Google Search grounding). Report sources; never treat a copied answer as verified.",
-        SeatTool::RunPython => "Run one Python program in a fresh sandbox: no network, no files kept, 120 s, 1 GB. Returns exit code, stdout and stderr.",
+        SeatTool::WebSearch => {
+            "Search the public web (Parallel, or Gemini with Google Search grounding). Report sources; never treat a copied answer as verified."
+        }
+        SeatTool::RunPython => {
+            "Run one Python program in a fresh sandbox: no network, no files kept, 120 s, 1 GB. Returns exit code, stdout and stderr."
+        }
         SeatTool::Broadcast => "End your turn by handing work to a colleague on your desk.",
-        SeatTool::Refer => "End your turn by referring work to another desk; its answer returns to your desk.",
-        SeatTool::Complete => "End your turn by finishing your assignment with a report for your desk.",
-        SeatTool::Remember => "Save one note to your CortexDB memory (it is recalled when you rejoin).",
+        SeatTool::Refer => {
+            "End your turn by referring work to another desk; its answer returns to your desk."
+        }
+        SeatTool::Complete => {
+            "End your turn by finishing your assignment with a report for your desk."
+        }
+        SeatTool::Remember => {
+            "Save one note to your CortexDB memory (it is recalled when you rejoin)."
+        }
         SeatTool::Recall => "Search your CortexDB memory and the hive's verified findings.",
     }
 }
@@ -253,7 +269,12 @@ impl HiveTool {
             SeatTool::RunPython => self.run_python(args).await,
             SeatTool::Broadcast => {
                 let to = text(args, "to")?;
-                if !self.scope.colleagues.iter().any(|colleague| colleague == to) {
+                if !self
+                    .scope
+                    .colleagues
+                    .iter()
+                    .any(|colleague| colleague == to)
+                {
                     return Err(format!("{to} is not a colleague on your desk"));
                 }
                 let message = text(args, "message")?;
@@ -318,7 +339,10 @@ impl HiveTool {
             .search
             .as_ref()
             .ok_or("web search is not configured for this run")?;
-        self.services.budget.claim_search().map_err(|e| e.to_string())?;
+        self.services
+            .budget
+            .claim_search()
+            .map_err(|e| e.to_string())?;
         let number = self.services.run.next_search();
         let result = search.search(query, provider).await;
         let record = match &result {
@@ -326,19 +350,30 @@ impl HiveTool {
                 self.services.budget.record_search_cost(found.cost_usd);
                 json!({"seat": self.scope.seat, "query": query, "provider": provider, "result": found})
             }
-            Err(error) => json!({"seat": self.scope.seat, "query": query, "provider": provider, "error": error.to_string()}),
+            Err(error) => {
+                json!({"seat": self.scope.seat, "query": query, "provider": provider, "error": error.to_string()})
+            }
         };
-        self.services
-            .run
-            .json(&format!("search/{number:03}-{}.json", self.scope.seat), &record);
+        self.services.run.json(
+            &format!("search/{number:03}-{}.json", self.scope.seat),
+            &record,
+        );
         self.services.run.event(&json!({"event": "web_search", "seat": self.scope.seat, "query": query, "provider": provider, "ok": result.is_ok()}));
         let found = result.map_err(|e| format!("search failed: {e}"))?;
-        Ok(format!("{}\n\nSources: {}", found.text, found.urls.join(" ")))
+        Ok(format!(
+            "{}\n\nSources: {}",
+            found.text,
+            found.urls.join(" ")
+        ))
     }
 
     async fn run_python(&self, args: &Value) -> Result<String, String> {
         let code = text(args, "code")?.to_owned();
-        let index = self.services.budget.claim_sandbox().map_err(|e| e.to_string())?;
+        let index = self
+            .services
+            .budget
+            .claim_sandbox()
+            .map_err(|e| e.to_string())?;
         let number = self.services.run.next_program();
         let stem = format!("sandbox/{number:03}-{}", self.scope.seat);
         self.services.run.write(&format!("{stem}.py"), &code);
@@ -352,7 +387,9 @@ impl HiveTool {
         self.services.run.event(&json!({"event": "run_python", "seat": self.scope.seat, "desk": self.scope.desk, "program": number, "run": index, "code": output.code, "timed_out": output.timed_out, "elapsed_ms": output.elapsed_ms}));
         Ok(format!(
             "exit code: {}{}\n--- stdout ---\n{}\n--- stderr ---\n{}",
-            output.code.map_or_else(|| "killed".into(), |code| code.to_string()),
+            output
+                .code
+                .map_or_else(|| "killed".into(), |code| code.to_string()),
             if output.timed_out { " (timed out)" } else { "" },
             clip(&output.stdout, OUTPUT_TO_MODEL),
             clip(&output.stderr, OUTPUT_TO_MODEL / 3),
@@ -371,7 +408,10 @@ impl HiveTool {
             kind,
             text: text(args, "text")?.into(),
         };
-        let verified = args.get("verified").and_then(Value::as_bool).unwrap_or(false);
+        let verified = args
+            .get("verified")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         if verified {
             self.memory
                 .publish(&entry, &self.scope.conversation)
@@ -391,8 +431,15 @@ impl HiveTool {
         if let Ok(mut n) = self.turn.remembered.lock() {
             *n += 1;
         }
-        self.services.run.event(&json!({"event": "remember", "seat": self.scope.seat, "verified": verified}));
-        Ok(if verified { "published to the verified pool" } else { "remembered" }.into())
+        self.services
+            .run
+            .event(&json!({"event": "remember", "seat": self.scope.seat, "verified": verified}));
+        Ok(if verified {
+            "published to the verified pool"
+        } else {
+            "remembered"
+        }
+        .into())
     }
 }
 
@@ -438,14 +485,24 @@ fn summarize(kind: SeatTool, args: &Value, result: &Result<String, String>) -> S
             .collect::<String>()
     };
     let outcome = match result {
-        Ok(text) => text.lines().next().unwrap_or("").chars().take(120).collect(),
+        Ok(text) => text
+            .lines()
+            .next()
+            .unwrap_or("")
+            .chars()
+            .take(120)
+            .collect(),
         Err(error) => format!("refused: {}", error.chars().take(120).collect::<String>()),
     };
     match kind {
         SeatTool::WebSearch => format!("{} [{}] -> {outcome}", field("query"), field("provider")),
         SeatTool::RunPython => format!(
             "{} lines -> {outcome}",
-            args.get("code").and_then(Value::as_str).unwrap_or("").lines().count()
+            args.get("code")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .lines()
+                .count()
         ),
         SeatTool::Broadcast => format!("@{} -> {outcome}", field("to")),
         SeatTool::Refer => format!("#{} -> {outcome}", field("desk")),

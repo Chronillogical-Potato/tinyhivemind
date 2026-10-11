@@ -81,7 +81,10 @@ fn each_request_carries_exactly_the_seats_allowed_tools() {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_nanos());
-        let key = format!("{nanos:032x}{:032x}", u128::from(std::process::id()) ^ nanos.rotate_left(64));
+        let key = format!(
+            "{nanos:032x}{:032x}",
+            u128::from(std::process::id()) ^ nanos.rotate_left(64)
+        );
         let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
             .args([
                 "--exact",
@@ -173,7 +176,10 @@ async fn requests_carry_allowed_tools() {
         .await
         .expect("factory builds the seat");
         let scoped = scope_binding(&binding, &hive.memory.root, "offline").expect("scoped");
-        assert_eq!(agent.config().memory.root.as_deref(), Some(scoped.root.as_str()));
+        assert_eq!(
+            agent.config().memory.root.as_deref(),
+            Some(scoped.root.as_str())
+        );
         let desk = package::desk_of(&hive, id).expect("desk");
         let belt = package::seat_tools(seat).expect("belt");
         let seat_memory = Arc::new(SeatMemory::new(engine.clone(), scoped, None, false));
@@ -202,12 +208,18 @@ async fn requests_carry_allowed_tools() {
         )
         .await;
         assert!(output.error.is_none(), "{id}: {:?}", output.error);
-        assert!(matches!(output.action, Action::Complete { .. }), "{id} completed");
+        assert!(
+            matches!(output.action, Action::Complete { .. }),
+            "{id} completed"
+        );
         let bodies = script.bodies.lock().expect("capture lock");
         let first = &bodies[before];
         let expected: BTreeSet<String> = belt.iter().map(|tool| tool.name().to_owned()).collect();
         assert_eq!(tool_names(first), expected, "{id} request tools");
         let system = first["messages"][0]["content"].as_str().unwrap_or("");
-        assert!(system.starts_with("You are a \""), "{id} system prompt is the seat's own");
+        assert!(
+            system.starts_with("You are a \""),
+            "{id} system prompt is the seat's own"
+        );
     }
 }
