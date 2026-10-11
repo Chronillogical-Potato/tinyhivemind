@@ -38,16 +38,24 @@ fn memory_is_scoped_under_the_run_and_refuses_namespaces_outside_the_root() {
 }
 
 fn memory_for(reads: Vec<tinyhivemind_lang::MemoryReach>) -> super::super::memory::SeatMemory {
+    let engine: std::sync::Arc<dyn tinymemory_api::MemoryEngine> =
+        std::sync::Arc::new(tinymemory_api::conformance::reference::ReferenceEngine::new());
+    memory_on(engine, 9, reads)
+}
+
+fn memory_on(
+    engine: std::sync::Arc<dyn tinymemory_api::MemoryEngine>,
+    seat: usize,
+    reads: Vec<tinyhivemind_lang::MemoryReach>,
+) -> super::super::memory::SeatMemory {
     let (_, hive) = lowered();
     let mut binding = scope_binding(
-        hive.seats[9].memory.as_ref().expect("bound"),
+        hive.seats[seat].memory.as_ref().expect("bound"),
         "team:euler-hive",
         "r1",
     )
     .expect("scoped");
     binding.settings.reads = reads;
-    let engine: std::sync::Arc<dyn tinymemory_api::MemoryEngine> =
-        std::sync::Arc::new(tinymemory_api::conformance::reference::ReferenceEngine::new());
     super::super::memory::SeatMemory::new(
         engine,
         binding,

@@ -255,9 +255,9 @@ impl SeatMemory {
         Ok(notes)
     }
 
-    fn mark_seen(&self) {
+    fn mark_seen(&self, at: tinymemory_api::chrono::DateTime<tinymemory_api::chrono::Utc>) {
         if let Ok(mut seen) = self.seen.lock() {
-            *seen = Some(tinymemory_api::chrono::Utc::now());
+            *seen = Some(at);
         }
     }
 
@@ -338,6 +338,10 @@ impl Recall for SeatMemory {
             if !self.allows(&request.moment) {
                 return Ok(Vec::new());
             }
+            // The watermark is the instant the read began: a peer's note
+            // stored while reaches are still being read is newer than it, so
+            // the next rejoin finds it instead of skipping past it.
+            let began = tinymemory_api::chrono::Utc::now();
             let result = match &request.moment {
                 RecallMoment::SessionStart => {
                     self.search(request.focus.as_deref().unwrap_or("findings"))
@@ -357,7 +361,7 @@ impl Recall for SeatMemory {
             // A failed read leaves the watermark where it was, so the next
             // rejoin still reads what this one could not.
             if result.is_ok() {
-                self.mark_seen();
+                self.mark_seen(began);
             }
             result.map_err(|error| RuntimeError::Recall {
                 source: error.into(),
