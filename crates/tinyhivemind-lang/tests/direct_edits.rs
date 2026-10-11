@@ -5,7 +5,7 @@
 //! gallery rather than a copy of it.
 use std::collections::BTreeMap;
 use tinyhivemind_lang::{
-    Diagnostic, Rule, check, check_packages, diagnose, diagnose_documents,
+    Diagnostic, Review, Rule, check, check_packages, diagnose, diagnose_documents,
     lineage::{self, Direction, ObjectiveScore, Verdict, VersionMetadata},
     parse,
     patch::{self, PatchClass},
@@ -61,8 +61,18 @@ fn edit_json(
     Ok(())
 }
 
-fn refusal(result: std::result::Result<tinyhivemind_lang::Review, Vec<Diagnostic>>) -> Result<Vec<Diagnostic>> {
+type Checked = std::result::Result<Review, Vec<Diagnostic>>;
+
+fn refusal(result: Checked) -> Result<Vec<Diagnostic>> {
     result.err().ok_or_else(|| "expected the edit to be refused".into())
+}
+
+/// The review of an accepted edit, or its diagnostics as the test failure.
+fn accepted(result: Checked) -> Result<Review> {
+    result.map_err(|diagnostics| {
+        let lines: Vec<_> = diagnostics.iter().map(ToString::to_string).collect();
+        lines.join("\n").into()
+    })
 }
 
 fn located(diagnostics: &[Diagnostic]) -> Vec<(&str, Option<&str>, Rule)> {
@@ -77,7 +87,7 @@ fn a_prompt_edit_is_accepted_as_one_prompt_change() -> Result<()> {
     let files = edited("seats/solver.md", |body| {
         format!("{body}Include canceled invoices.\n")
     });
-    let review = check(&original(), &files)?;
+    let review = accepted(check(&original(), &files))?;
     assert_eq!(review.changes.len(), 1);
     assert_eq!(review.changes[0].class, PatchClass::Prompt);
     // The recorded form is exactly what `diff` derives for the class.
@@ -150,7 +160,7 @@ fn a_multi_class_edit_reproduces_through_its_derived_patches() -> Result<()> {
             .as_array_mut()
             .map(|criteria| criteria.push("Shows every line item".into()));
     })?;
-    let review = check(&original(), &files)?;
+    let review = accepted(check(&original(), &files))?;
     let classes: Vec<_> = review.changes.iter().map(|change| change.class).collect();
     assert_eq!(
         classes,
@@ -269,6 +279,6 @@ fn check_packages_matches_check_on_the_decoded_files() -> Result<()> {
             Rule::ForbiddenClass
         )]
     );
-    assert!(check_packages(&base, &base)?.changes.is_empty());
+    assert!(accepted(check_packages(&base, &base))?.changes.is_empty());
     Ok(())
 }
