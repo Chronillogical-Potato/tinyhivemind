@@ -177,3 +177,23 @@ fn the_loader_refuses_a_symlinked_package_file() -> Result<()> {
     assert!(error.is_some_and(|error| error.contains("symbolic link")));
     Ok(())
 }
+
+#[test]
+fn the_problem_bank_refuses_computations_beyond_its_work_limits() {
+    for (kind, args) in [
+        ("primes", serde_json::json!([100_001])),
+        ("multiples", serde_json::json!([1_000_001, 3, 5])),
+        ("sqdiff", serde_json::json!([10_001])),
+        ("modsum", serde_json::json!([1_001, 1_000, 7])),
+        ("modsum", serde_json::json!([1_000_001, 0, 7])),
+    ] {
+        let sim = serde_json::json!({"problems": [
+            {"id": "too-much-work", "kind": kind, "args": args, "statement": "s"}
+        ]});
+        let error = problems(&sim).err().map(|error| error.to_string());
+        assert!(
+            error.is_some_and(|error| error.contains("work limit")),
+            "{kind} {args}"
+        );
+    }
+}

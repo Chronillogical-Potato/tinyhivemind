@@ -289,3 +289,8 @@ ending it is. Core's refusal reasons are `NoReferralReason` in `snake_case`;
 | `compare.rs` | `--compare` |
 | `live/` | `--live`: the OpenRouter transport, prompts and reply parsing, the live speaker |
 | `test/` | Offline tests, including the pinned wire form |
+
+Custom math problems are bounded before computation: `primes` accepts limits
+through 100,000, `multiples` through 1,000,000, `sqdiff` through 10,000, and
+`modsum` accepts at most 1,000,000 units of `n * max(power, 1)` work. Larger
+operands are refused during package validation, including gallery listings.

@@ -28,7 +28,7 @@ impl Problem {
     ///
     /// Fails for an unknown `kind`, the wrong number of arguments, a zero
     /// argument the computation cannot take, or an answer that does not fit
-    /// in 64 bits.
+    /// in 64 bits, or operands exceeding the simulation work limits.
     pub(crate) fn answer(&self) -> Result<u64> {
         match (self.kind.as_str(), self.args.as_slice()) {
             ("lattice", [right, up]) => {
@@ -42,23 +42,31 @@ impl Problem {
             }
             ("modsum", [n, power, modulus]) => {
                 self.nonzero(*n, "modsum length")?;
+                self.work(n.saturating_mul((*power).max(1)), 1_000_000)?;
                 self.fit(power_sum(*n, *power, *modulus))
             }
             ("digitsum", [base, exponent]) => {
                 self.nonzero(*exponent, "digitsum exponent")?;
                 Ok(digit_sum(self.power(*base, *exponent)?))
             }
-            ("multiples", [limit, a, b]) => self.fit(
-                (1..*limit)
-                    .filter(|k| k % a == 0 || k % b == 0)
-                    .map(u128::from)
-                    .sum(),
-            ),
+            ("multiples", [limit, a, b]) => {
+                self.work(*limit, 1_000_000)?;
+                self.fit(
+                    (1..*limit)
+                        .filter(|k| k % a == 0 || k % b == 0)
+                        .map(u128::from)
+                        .sum(),
+                )
+            }
             ("sqdiff", [n]) => {
                 self.nonzero(*n, "sqdiff n")?;
+                self.work(*n, 10_000)?;
                 self.fit(square_difference(*n))
             }
-            ("primes", [limit]) => Ok(primes_below(*limit)),
+            ("primes", [limit]) => {
+                self.work(*limit, 100_000)?;
+                Ok(primes_below(*limit))
+            }
             _ => Err(format!("problem {} has an unknown kind or arity", self.id).into()),
         }
     }
@@ -103,6 +111,13 @@ impl Problem {
         } else {
             mistake
         })
+    }
+
+    fn work(&self, steps: u64, limit: u64) -> Result<()> {
+        if steps > limit {
+            return Err(format!("problem {} exceeds the work limit ({limit})", self.id).into());
+        }
+        Ok(())
     }
 
     fn nonzero(&self, value: u64, what: &str) -> Result<()> {
