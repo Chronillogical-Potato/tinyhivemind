@@ -155,30 +155,37 @@ async function recording() {
 }
 await recording();
 
-// Follow a live run started outside this page.
-if (process.env.FOLLOW_LIVE) {
+// Follow a live run started outside this page: the newest Live now item
+// (of FOLLOW_PACKAGE, when set) that was not live when the page opened.
+async function followLive() {
   await open("?view=hive");
-  const seen = await waitFor("!!document.querySelector('#hv-live-strip .hv-live-go')", Number(process.env.FOLLOW_WAIT_MS ?? 120000));
-  console.log(seen ? "ok" : "FAIL", "live run in the strip", await evaluate("document.getElementById('hv-live-strip').textContent"));
-  if (!seen) failures++;
-  else {
-    await shot("live-strip.png");
-    // Nothing was open, so the page may already follow it; click to be sure.
-    await evaluate("document.querySelector('#hv-live-strip .hv-live-go').click()");
-    await waitFor("!document.getElementById('hv-player').hidden", 15000);
-    const first = await waitFor("document.querySelectorAll('.hv-line').length > 0", 600000);
-    const r1 = await evaluate("document.querySelector('.hv-where').textContent");
-    await waitFor(`document.querySelector('.hv-where').textContent !== ${JSON.stringify(r1)}`, 600000);
-    const r2 = JSON.parse(await evaluate("JSON.stringify({ where: document.querySelector('.hv-where').textContent, live: !document.getElementById('hv-live-badge').hidden, status: document.querySelector('#hv-player [role=status]').textContent })"));
-    console.log(first && r2.where !== r1 ? "ok" : "FAIL", "live follow advances", r1, "->", JSON.stringify(r2));
-    if (!first || r2.where === r1) failures++;
-    await shot("live-mid.png");
-    const ended = await waitFor("!!document.getElementById('hv-ending')", Number(process.env.FOLLOW_END_MS ?? 1800000));
-    console.log(ended ? "ok" : "FAIL", "live run ended", await evaluate("document.getElementById('hv-ending')?.textContent ?? ''"));
-    if (!ended) failures++;
-    await shot("live-end.png");
-  }
+  await waitFor("document.getElementById('hv-recordings').querySelector('.hv-rec') != null", 15000);
+  const pkg = JSON.stringify(process.env.FOLLOW_PACKAGE ?? "");
+  const before = await evaluate("JSON.stringify([...document.querySelectorAll('#hv-live-strip .hv-live-item')].map((n) => n.dataset.id))");
+  console.log("waiting for a live run", process.env.FOLLOW_PACKAGE ?? "(any)");
+  const pick = `[...document.querySelectorAll('#hv-live-strip .hv-live-item')].find((n) => !${before}.includes(n.dataset.id) && n.textContent.includes(${pkg}))`;
+  const seen = await waitFor(`!!${pick}`, Number(process.env.FOLLOW_WAIT_MS ?? 180000));
+  console.log(seen ? "ok" : "FAIL", "live run in the strip", await evaluate(`${pick}?.textContent ?? ''`));
+  if (!seen) return failures++;
+  await shot("live-strip.png");
+  // With nothing open the page already follows a run that just started; click to be sure.
+  await evaluate(`(() => { const n = ${pick}; if (n && document.getElementById('hv-player').hidden) n.querySelector('.hv-live-go').click(); })()`);
+  await waitFor("!document.getElementById('hv-player').hidden", 15000);
+  await waitFor("document.querySelectorAll('.hv-line').length > 0", 600000);
+  const r1 = await evaluate("document.querySelector('.hv-where').textContent");
+  const live = await evaluate("!document.getElementById('hv-live-badge').hidden");
+  const moved = await waitFor(`document.querySelector('.hv-where').textContent !== ${JSON.stringify(r1)}`, 600000);
+  const r2 = await evaluate("document.querySelector('.hv-where').textContent");
+  console.log(moved && live ? "ok" : "FAIL", "live follow advances", JSON.stringify({ from: r1, to: r2, liveBadge: live, url: await evaluate("location.search") }));
+  if (!moved || !live) failures++;
+  await shot("live-mid.png");
+  const ended = await waitFor("!!document.getElementById('hv-ending')", Number(process.env.FOLLOW_END_MS ?? 1800000));
+  console.log(ended ? "ok" : "FAIL", "live run ended", await evaluate("document.getElementById('hv-ending')?.textContent ?? ''"),
+    await evaluate("document.querySelector('#hv-player [role=status]').textContent"));
+  if (!ended) failures++;
+  await shot("live-end.png");
 }
+if (process.env.FOLLOW_LIVE) await followLive();
 
 await open("?compare=math-panel,math-swarm&seeds=10");
 const done = await waitFor("/^Done/.test(document.getElementById('hv-compare-status')?.textContent ?? '')");
