@@ -30,7 +30,11 @@
           "file_read"
         ],
         "deny": [
-          "shell"
+          "shell",
+          "web_search",
+          "web_fetch",
+          "browser",
+          "http"
         ]
       },
       "mcp": [],
@@ -52,7 +56,11 @@
           "file_read"
         ],
         "deny": [
-          "shell"
+          "shell",
+          "web_search",
+          "web_fetch",
+          "browser",
+          "http"
         ]
       },
       "mcp": [],
@@ -74,7 +82,11 @@
           "file_read"
         ],
         "deny": [
-          "shell"
+          "shell",
+          "web_search",
+          "web_fetch",
+          "browser",
+          "http"
         ]
       },
       "mcp": [],
