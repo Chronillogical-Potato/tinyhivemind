@@ -204,3 +204,23 @@ test("the api lists recordings, serves structure (or a package's), and streams f
   assert.match(res.body, /event: done\ndata: \{"ended":true\}/);
   assert.equal(await api.handle("/recordings/0%3Aown", {}, response()), false);
 });
+
+test("the events stream sends the listing at once and again when a recording appears or grows", async () => {
+  const root = tmp();
+  const file = run(root, "a", START);
+  const api = recordingsApi({ roots: [root], watchMs: 10 });
+  const res = response();
+  await api.handle("/recordings/events", {}, res);
+  const events = () => res.body.split("\n\n").filter((b) => b.startsWith("event: recordings"));
+  assert.equal(events().length, 1);
+  assert.match(events()[0], /"path":"a"/);
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(events().length, 1, "nothing changed, nothing sent");
+  run(root, "b", START);
+  await waitUntil(() => events().length === 2);
+  assert.match(events()[1], /"path":"b"/);
+  fs.appendFileSync(file, ROUND);
+  await waitUntil(() => events().length === 3);
+  res.emit("close");
+  api.close();
+});
