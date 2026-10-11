@@ -262,11 +262,12 @@ shell, `<name>` must be a package from the listing (anything else is a 404,
 0..2^32, round width 1..64, turn budget 1..2000, seeds 1..200) or the request
 is a 400. A problem id must be short and alphanumeric. The child is killed
 when the client disconnects. A live run spends money on the server's
-OpenRouter key, so anyone who can reach the port can spend it, up to 300
-calls a run. The key reaches `hive_view` only through the environment it
+OpenRouter key. Paid execution is restricted to a loopback client using a
+localhost or loopback Host header and a matching Origin when supplied;
+cross-site browser requests are rejected. Each run allows up to 300 calls. The key reaches `hive_view` only through the environment it
 inherits, never argv, a response or a log; model ids naming `online`, `search`,
-`sonar` or `web` are refused so a live run cannot browse. Bind to localhost, or keep the port off untrusted
-networks.
+`sonar` or `web` are refused so a live run cannot browse. The default listener
+binds to `127.0.0.1`; trace and recording reads still have no authentication.
 
 ## Checks
 
