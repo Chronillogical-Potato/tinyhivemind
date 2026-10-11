@@ -1514,7 +1514,7 @@
     },
     "referral": {
       "enabled": true,
-      "max_hops": 3,
+      "max_hops": 4,
       "reach": "desks",
       "returns": true
     },
