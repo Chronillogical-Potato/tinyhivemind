@@ -95,7 +95,14 @@ function drawEdges(g, structure, lay, crossings, fresh) {
 const firstSeen = new WeakMap();
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/**
+ * Draw this step's packets; returns `[{el, offset}]`, animations to start
+ * once the SVG is in the document. Inline SVG shares the page's clock, so a
+ * `begin` written as an attribute would be relative to page load; starting
+ * each one with `beginElementAt(offset)` makes it relative to now instead.
+ */
 function drawPackets(g, structure, lay, state) {
+  const starts = [];
   const now = typeof performance === "object" ? performance.now() : Date.now();
   let seen = state.start ? firstSeen.get(state.start) : null;
   if (state.start && !seen) firstSeen.set(state.start, (seen = new Map()));
@@ -115,13 +122,15 @@ function drawPackets(g, structure, lay, state) {
     const elapsed = still ? 3600 : (now - first) / 1000;
     const group = s("g", { class: `hv-packet ${ref.accepted ? "accepted" : "refused"}` });
     // Hidden until its turn in the stagger, so it never sits at the origin.
-    const begin = `${(i * STAGGER_S - elapsed).toFixed(3)}s`;
+    const offset = i * STAGGER_S - elapsed;
     const dot = s("circle", { r: ref.accepted ? 6 : 5.5, visibility: "hidden" });
-    dot.append(s("set", { attributeName: "visibility", to: "visible", begin, fill: "freeze" }));
-    dot.append(s("animateMotion", {
-      dur: `${PACKET_S}s`, begin, fill: "freeze", path: curve.d,
+    const show = s("set", { attributeName: "visibility", to: "visible", begin: "indefinite", fill: "freeze" });
+    const move = s("animateMotion", {
+      dur: `${PACKET_S}s`, begin: "indefinite", fill: "freeze", path: curve.d,
       ...(ref.accepted ? {} : { keyPoints: "0;0.55;0.42", keyTimes: "0;0.7;1", calcMode: "linear" }),
-    }));
+    });
+    dot.append(show, move);
+    starts.push({ el: show, offset }, { el: move, offset });
     group.append(dot);
     group.append(s("title", {}, `${describeReferral(ref)}${ref.content ? `\n${ref.content}` : ""}`));
     if (!ref.accepted) {
@@ -133,6 +142,7 @@ function drawPackets(g, structure, lay, state) {
     }
     g.append(group);
   });
+  return starts;
 }
 
 function deskBadge(g, desk, end, answer) {
@@ -289,8 +299,9 @@ export function renderGraph(host, structure, state, ui) {
   drawDesks(g, structure, lay, state);
   drawEdges(g, structure, lay, state.crossings, state.fresh ?? []);
   drawSeats(g, structure, lay, state, ui, onHover);
-  drawPackets(g, structure, lay, state);
+  const starts = drawPackets(g, structure, lay, state);
   svg.append(g, bubbles);
   onHover(null);
   host.replaceChildren(svg, legend(structure, structure.sim?.kind === "math", (structure.desks ?? []).length > 1));
+  for (const { el, offset } of starts) el.beginElementAt?.(offset);
 }
