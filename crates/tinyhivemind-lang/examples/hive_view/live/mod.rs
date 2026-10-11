@@ -8,7 +8,7 @@
 //! reproducible up to what the model says. `--max-calls` is a hard cap: a
 //! round the remaining calls cannot fill ends the run exhausted.
 //!
-//! Every call is logged to `target/hive-live/<run>/calls.ndjson` (seat,
+//! Every call is logged to `hive-runs/hive-view/<run>/calls.ndjson` (seat,
 //! desk, the request file, the raw reply, the recorded line), next to each
 //! request body and response. The key is never written.
 

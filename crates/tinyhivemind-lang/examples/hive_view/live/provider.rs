@@ -4,7 +4,8 @@
 //! from `OPENROUTER_API_KEY`, checked to be safe inside a curl config line,
 //! and handed to curl as a `--config -` header on **stdin**, so it never
 //! appears in argv (and so in `ps`), in a request file, or in a log. Every
-//! request body and response is kept under `target/hive-live/<run>/`.
+//! request body and response is kept under `hive-runs/hive-view/<run>/` at the
+//! workspace root (or `$HIVE_RUNS_DIR/<run>/`).
 //!
 //! Web access is denied by construction: [`request_body`] builds the only
 //! body this module sends, and it carries no `tools`, `tool_choice`,
@@ -133,12 +134,25 @@ pub(crate) struct Provider {
     usage: Mutex<Usage>,
 }
 
-/// `target/hive-live/` under the workspace this example was built in.
+/// The environment variable that overrides where live runs are kept.
+pub(crate) const RUNS_DIR_ENV: &str = "HIVE_RUNS_DIR";
+
+/// Where live run directories go: `$HIVE_RUNS_DIR` when it is set and not
+/// empty, else `hive-runs/hive-view/` under the workspace this example was
+/// built in. Not under `target/`, which `cargo clean` wipes; the root
+/// `.gitignore` keeps `/hive-runs/` out of git.
 pub(crate) fn artifacts_root() -> PathBuf {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    std::fs::canonicalize(&workspace)
-        .unwrap_or(workspace)
-        .join("target/hive-live")
+    let workspace = std::fs::canonicalize(&workspace).unwrap_or(workspace);
+    artifacts_root_in(&workspace, std::env::var_os(RUNS_DIR_ENV))
+}
+
+/// [`artifacts_root`] for a given workspace and `HIVE_RUNS_DIR` value.
+pub(crate) fn artifacts_root_in(workspace: &Path, runs_dir: Option<std::ffi::OsString>) -> PathBuf {
+    match runs_dir {
+        Some(dir) if !dir.is_empty() => PathBuf::from(dir),
+        _ => workspace.join("hive-runs/hive-view"),
+    }
 }
 
 impl Provider {
