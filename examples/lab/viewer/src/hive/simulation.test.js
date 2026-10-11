@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { multiDeskFrames } from "../../tools/fake-frames.mjs";
 import { deskCounts, deskTabs, describeReferral, edgeFor, entryOnDesk, reasonText } from "./referrals.js";
+import { createPlayer } from "./player.js";
 import { atEnd, clampStep, crossings, sawBy, stateAt, stepBy, timeline } from "./simulation.js";
 import { sseParser } from "./stream.js";
 
@@ -214,4 +215,31 @@ test("a single-desk stream with round.desk is unchanged apart from the floor", (
   assert.equal(out.at(-1).desk, undefined);
   const tl = timeline(out);
   assert.equal(stateAt(tl, tl.rounds.length).ending.topic, "ship");
+});
+
+test("a followed live stream stays on the newest round until the user steps back", () => {
+  let last = null;
+  const player = createPlayer((st) => { last = st; });
+  player.reset(true, true);
+  const all = swarmFrames({ live: true });
+  for (const f of all.slice(0, 6)) player.push(f);
+  assert.equal(last.following, true);
+  assert.equal(last.playing, false);
+  assert.equal(last.step, last.received);
+  player.step(-1);
+  assert.equal(last.following, false);
+  const held = last.step;
+  player.push(all[6]);
+  assert.equal(player.state().step, held, "a scrubbed-back player is not dragged forward");
+  player.latest();
+  assert.equal(last.following, true);
+  assert.equal(last.step, last.received);
+  for (const f of all.slice(7)) player.push(f);
+  assert.ok(player.state().ending, "following lands on the ending");
+  player.finish();
+  assert.equal(last.following, false);
+  assert.equal(last.streaming, false);
+  player.latest();
+  assert.equal(last.following, false, "nothing to follow once the stream closed");
+  player.pause();
 });
