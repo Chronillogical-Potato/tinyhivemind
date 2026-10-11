@@ -11,6 +11,7 @@ use tinyhivemind_core::hive::{EpisodePolicy, HiveTurn, SessionMessage};
 
 use crate::Result;
 use crate::episode::Speaker;
+use crate::run::Prepared;
 
 /// A flag a run's observer raises to stop the run at its next round.
 #[derive(Clone, Debug, Default)]
@@ -29,10 +30,18 @@ pub(crate) struct Halting {
     halt: Halt,
 }
 
-impl Halting {
-    /// Wrap `inner` so `halt` can stop it.
-    pub(crate) fn new(inner: Box<dyn Speaker>, halt: Halt) -> Self {
-        Self { inner, halt }
+/// Put `halt` in charge of `prepared`'s speaker.
+pub(crate) fn install(prepared: &mut Prepared, halt: Halt) {
+    let inner = std::mem::replace(&mut prepared.speaker, Box::new(Silent));
+    prepared.speaker = Box::new(Halting { inner, halt });
+}
+
+/// The placeholder in a [`Prepared`] for the instant its speaker is wrapped.
+struct Silent;
+
+impl Speaker for Silent {
+    fn speak(&mut self, _: &HiveTurn, _: &[SessionMessage], _: &EpisodePolicy) -> String {
+        crate::script::QUIET.to_owned()
     }
 }
 

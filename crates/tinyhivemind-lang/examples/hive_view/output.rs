@@ -13,6 +13,7 @@ use crate::Result;
 use crate::desks::{DeskEnd, ReferralRecord};
 use crate::episode::{Ending, Event, Outcome, RoundRecord};
 use crate::frames::{self, Frame, ProblemFrame, UsageFrame};
+use crate::halt::{self, Halt};
 use crate::live::{LiveConfig, LiveSpeaker};
 use crate::load::Loaded;
 use crate::run::{Knobs, Plan, Prepared, correct, execute, prepare, prepare_with};
@@ -63,7 +64,7 @@ pub(crate) fn print(
     let several = matches!(prepared.plan, Plan::Hive(_));
     let mut failure: Option<std::io::Error> = None;
     let halt = Halt::default();
-    prepared.speaker = prepared.speaker.halting(halt.clone());
+    halt::install(&mut prepared, halt.clone());
     let outcome = execute(&mut prepared, tracer.as_ref(), &mut |event| {
         let written = write_event(
             &mut writer,
@@ -74,6 +75,8 @@ pub(crate) fn print(
             truth.as_deref(),
         );
         if let Err(error) = written {
+            // The recording is truncated: no further round is worth paying for.
+            halt.stop();
             failure.get_or_insert(error);
         }
     })?;
