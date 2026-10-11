@@ -126,3 +126,17 @@ fn the_federation_opens_on_the_first_desk_with_every_member_assigned() {
     let assignment: Assignment = federation.assignment(0, &hive.desks[0].members[0]);
     assert_eq!(assignment.reason, "opening");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_package_file_is_refused_not_followed() {
+    let dir = tempfile::tempdir().expect("dir");
+    let outside = dir.path().join("outside.txt");
+    std::fs::write(&outside, "not part of the package").expect("outside file");
+    let package = dir.path().join("package");
+    std::fs::create_dir_all(&package).expect("package dir");
+    std::fs::write(package.join("hive.json"), "{}").expect("hive.json");
+    std::os::unix::fs::symlink(&outside, package.join("README.md")).expect("symlink");
+    let error = package::read_package(&package).expect_err("the link is refused");
+    assert!(error.to_string().contains("symbolic link"), "{error}");
+}

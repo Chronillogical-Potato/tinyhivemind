@@ -98,7 +98,8 @@ pub(super) fn seat_tools(seat: &LoweredSeat) -> anyhow::Result<BTreeSet<SeatTool
 ///
 /// # Errors
 ///
-/// Fails when `dir` is unreadable or holds a non-UTF-8 file.
+/// Fails when `dir` is unreadable, holds a non-UTF-8 file, or holds a
+/// symbolic link.
 pub(super) fn read_package(dir: &Path) -> anyhow::Result<BTreeMap<String, String>> {
     let mut documents = BTreeMap::new();
     walk(dir, dir, &mut documents)?;
@@ -114,6 +115,14 @@ fn walk(root: &Path, dir: &Path, into: &mut BTreeMap<String, String>) -> anyhow:
         .collect::<std::io::Result<_>>()?;
     entries.sort();
     for path in entries {
+        // A link could point anywhere on disk, and the package's files become
+        // model prompts: refuse rather than follow it.
+        if std::fs::symlink_metadata(&path)?.file_type().is_symlink() {
+            anyhow::bail!(
+                "{} is a symbolic link; package files must be regular files",
+                path.display()
+            );
+        }
         if path.is_dir() {
             walk(root, &path, into)?;
             continue;
