@@ -210,6 +210,10 @@ impl Speaker for LiveSpeaker {
             .join("\n"))
     }
 
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
     fn remaining(&self) -> Option<u32> {
         let issued = u32::try_from(self.provider.issued()).unwrap_or(u32::MAX);
         Some(self.max_calls.saturating_sub(issued))

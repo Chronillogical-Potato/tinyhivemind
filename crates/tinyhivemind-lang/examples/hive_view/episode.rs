@@ -135,6 +135,11 @@ pub(crate) trait Speaker {
     fn remaining(&self) -> Option<u32> {
         None
     }
+
+    /// This speaker as `Any`, for a report that needs its concrete type.
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
 }
 
 /// One turn as it happened.
