@@ -4,7 +4,7 @@
 //! cargo run -p tinyhivemind-lang --example hive_view -- <package-dir>            # text tree
 //! cargo run -p tinyhivemind-lang --example hive_view -- <package-dir> --mermaid  # flowchart
 //! cargo run -p tinyhivemind-lang --example hive_view -- <package-dir> --json     # structure
-//! cargo run -p tinyhivemind-lang --example hive_view -- <package-dir> --run [--frames] [--trace out.jsonl]
+//! cargo run -p tinyhivemind-lang --example hive_view -- <package-dir> --run [--frames] [--trace out.jsonl] [--record]
 //! cargo run -p tinyhivemind-lang --example hive_view -- <math-package> --compare --seeds 50 [--table]
 //! OPENROUTER_API_KEY=... cargo run -p tinyhivemind-lang --example hive_view -- <package-dir> --run --frames --live [--model <id>] [--max-calls N]
 //! ```

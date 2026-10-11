@@ -6,6 +6,7 @@ mod args;
 mod compare;
 mod live;
 mod packages;
+mod record;
 mod routing;
 mod runs;
 mod support;
