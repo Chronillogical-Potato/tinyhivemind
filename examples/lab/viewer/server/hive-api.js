@@ -11,6 +11,21 @@ import {
 
 const KEEPALIVE_MS = 15000;
 
+/** Paid execution accepts only local clients using this listener's own origin. */
+function trustedLocal(req) {
+  const address = req.socket?.remoteAddress;
+  if (address !== "127.0.0.1" && address !== "::1" && address !== "::ffff:127.0.0.1") return false;
+  try {
+    const local = new URL(`http://${req.headers?.host}`);
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(local.hostname)) return false;
+    const origin = req.headers?.origin;
+    if (origin && new URL(origin).origin !== local.origin) return false;
+    return req.headers?.["sec-fetch-site"] !== "cross-site";
+  } catch {
+    return false;
+  }
+}
+
 function send(res, status, body) {
   res.statusCode = status;
   res.setHeader("Content-Type", typeof body === "string" ? "text/plain; charset=utf-8" : "application/json");
@@ -98,6 +113,7 @@ export function hiveApi({ repo, env = process.env, log = () => {} }) {
       if (problem && !validProblem(problem)) return send(res, 400, "bad problem id"), true;
       const live = parseLive(query, env);
       if (!live.ok) return send(res, 400, live.error), true;
+      if (live.value && !trustedLocal(req)) return send(res, 403, "paid runs require a local, same-origin client"), true;
       // Every run started here is recorded, so it is listed (and followable)
       // on every open page and is still there after a reload.
       streamTo(res, runArgs(pkg.dir, knobs.value, problem, live.value, true), () => "frame", { maxMs: live.value ? LIVE_TIMEOUT_MS : 0 });

@@ -289,3 +289,7 @@ tool-call, memory, seat-counter and fold badges (`recording.png`). With
 `hive_view <math-swarm> --run --live --max-calls 80` from a terminal), follows
 it, checks the player advances, and shoots `live-strip.png`, `live-mid.png`
 and `live-end.png`.
+
+Paid live runs require a loopback client, a localhost or loopback Host header,
+and a matching Origin when supplied. Cross-site browser requests are refused
+before spawning a run. The dev and preview listeners bind to `127.0.0.1` by default.

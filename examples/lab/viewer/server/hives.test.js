@@ -252,7 +252,7 @@ test("the run route refuses live without a key and bad live knobs with a 400", a
   const run = async (env, qs) => {
     const api = hiveApi({ repo: here, env: { HIVE_VIEW_BIN: FAKE, HIVE_PACKAGES: root, ...env } });
     const res = fakeRes();
-    await api.handle("/hives/review-board/run", new URLSearchParams(qs), {}, res);
+    await api.handle("/hives/review-board/run", new URLSearchParams(qs), LOCAL_REQUEST, res);
     return res.ended;
   };
   assert.equal((await run({}, "live=1")).statusCode, 400);
@@ -262,4 +262,27 @@ test("the run route refuses live without a key and bad live knobs with a 400", a
   assert.equal(ok.statusCode, 200);
   assert.match(ok.body, /"type":"usage"/);
   assert.match(ok.body, /event: done/);
+});
+
+const LOCAL_REQUEST = { socket: { remoteAddress: "127.0.0.1" }, headers: { host: "localhost:8099" } };
+
+test("paid runs refuse remote clients and cross-origin local requests before spawning", async () => {
+  const root = gallery("review-board");
+  const api = hiveApi({ repo: here, env: { HIVE_VIEW_BIN: FAKE, HIVE_PACKAGES: root, ...KEYED } });
+  for (const req of [
+    {},
+    { ...LOCAL_REQUEST, socket: { remoteAddress: "192.0.2.1" } },
+    { ...LOCAL_REQUEST, headers: { host: "attacker.example:8099" } },
+    { ...LOCAL_REQUEST, headers: { host: "localhost:8099", origin: "https://attacker.example" } },
+    { ...LOCAL_REQUEST, headers: { host: "localhost:8099", "sec-fetch-site": "cross-site" } },
+  ]) {
+    const res = fakeRes();
+    await api.handle("/hives/review-board/run", new URLSearchParams("live=1&max_calls=5"), req, res);
+    assert.equal((await res.ended).statusCode, 403);
+    assert.ok(!res.body.includes('"type":"usage"'));
+  }
+  const res = fakeRes();
+  await api.handle("/hives/review-board/run", new URLSearchParams("live=1&max_calls=5"), LOCAL_REQUEST, res);
+  assert.equal((await res.ended).statusCode, 200);
+  assert.match(res.body, /"type":"usage"/);
 });
