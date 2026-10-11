@@ -1,23 +1,40 @@
 // The hive as plain SVG: desks are boxes, seats are nodes clustered in their
 // home desk, topology links are solid arrows and referral links dashed ones.
 // The current round's seats glow (dashed ring = blind round, solid = full),
-// and an edge the conversation just crossed animates. Speech bubbles sit in
-// their own layer so hovering a seat redraws only them.
+// and an edge the conversation just crossed animates. A referral that arrived
+// on this step is a packet travelling its real desk-to-desk link: an accepted
+// one reaches the target desk, a refused one stops short and bounces back
+// (red, with the reason), on a temporary dashed edge if no link exists. Each
+// desk that has ended carries a badge. Speech bubbles sit in their own layer
+// so hovering a seat redraws only them.
 import { clip, h, s, svgRoot, wrap } from "./dom.js";
 import { exitPoint, glyph, layout } from "./layout.js";
+import { describeReferral, edgeFor, reasonText } from "./referrals.js";
 
 const MARGIN = { compact: 10, roomy: 70 };
+const PACKET_S = 1.4; // seconds a packet takes along its edge
+const STAGGER_S = 0.35; // between packets of one step
+const ENDING_WORD = { converged: "converged", deadlocked: "deadlocked", exhausted: "exhausted", idle: "idle", unopened: "unopened" };
 
 function roleColor(structure) {
   const roles = (structure.roles ?? []).map((r) => r.id);
   return (role) => `var(--s${Math.max(0, roles.indexOf(role)) % 8})`;
 }
 
-function edgeList(structure, crossings) {
+function edgeList(structure, crossings, fresh) {
   const edges = [
     ...(structure.topology ?? []).map((e) => ({ ...e, kind: "topology" })),
     ...(structure.referrals ?? []).map((e) => ({ ...e, kind: "referral" })),
   ];
+  // An accepted referral lights the declared link it travelled.
+  for (const ref of fresh) {
+    const link = ref.accepted ? edgeFor(structure, ref.from_desk, ref.to_desk) : null;
+    const hit = link && edges.find((e) => e.kind === link.kind && e.from === link.from && e.to === link.to);
+    if (hit) {
+      hit.live = true;
+      hit.liveFrom = ref.from_desk;
+    }
+  }
   for (const c of crossings) {
     const hit = edges.filter((e) => (e.from === c.from && e.to === c.to) || (e.from === c.to && e.to === c.from));
     if (hit.length) {
@@ -37,12 +54,18 @@ function edgePath(a, b, kind) {
   const bend = (kind === "topology" ? 1 : -1) * Math.max(16, len * 0.16);
   const mx = (ca.x + cb.x) / 2 + nx * bend, my = (ca.y + cb.y) / 2 + ny * bend;
   const p = exitPoint(a, mx, my), q = exitPoint(b, mx, my);
-  return { d: `M${p.x},${p.y} Q${mx},${my} ${q.x},${q.y}`, mx, my };
+  return { d: `M${p.x},${p.y} Q${mx},${my} ${q.x},${q.y}`, mx, my, p, q };
+}
+
+/** The point at parameter `t` of the quadratic edge `{p, mx, my, q}`. */
+function pointOn({ p, mx, my, q }, t) {
+  const u = 1 - t;
+  return { x: u * u * p.x + 2 * u * t * mx + t * t * q.x, y: u * u * p.y + 2 * u * t * my + t * t * q.y };
 }
 
 function arrowDefs() {
   const defs = s("defs");
-  for (const [id, color] of [["topology", "var(--muted)"], ["referral", "var(--accent)"], ["handoff", "var(--accent)"]]) {
+  for (const [id, color] of [["topology", "var(--muted)"], ["referral", "var(--accent)"], ["handoff", "var(--accent)"], ["refused", "var(--bad)"]]) {
     const m = s("marker", { id: `hv-arrow-${id}`, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 9, markerHeight: 9, markerUnits: "userSpaceOnUse", orient: "auto-start-reverse" });
     m.append(s("path", { d: "M0,0 L10,5 L0,10 z", fill: color }));
     defs.append(m);
@@ -50,8 +73,8 @@ function arrowDefs() {
   return defs;
 }
 
-function drawEdges(g, structure, lay, crossings) {
-  for (const e of edgeList(structure, crossings)) {
+function drawEdges(g, structure, lay, crossings, fresh) {
+  for (const e of edgeList(structure, crossings, fresh)) {
     const a = lay.desks.get(e.from), b = lay.desks.get(e.to);
     if (!a || !b || a === b) continue;
     const { d } = edgePath(a, b, e.kind);
@@ -67,15 +90,77 @@ function drawEdges(g, structure, lay, crossings) {
   }
 }
 
+// When each packet was first drawn, per run (keyed by its start frame), so a
+// redraw mid-flight resumes the animation instead of restarting it.
+const firstSeen = new WeakMap();
+const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function drawPackets(g, structure, lay, state) {
+  const now = typeof performance === "object" ? performance.now() : Date.now();
+  let seen = state.start ? firstSeen.get(state.start) : null;
+  if (state.start && !seen) firstSeen.set(state.start, (seen = new Map()));
+  const still = reducedMotion();
+  state.fresh.forEach((ref, i) => {
+    const a = lay.desks.get(ref.from_desk), b = lay.desks.get(ref.to_desk);
+    if (!a || !b || a === b) return;
+    const link = edgeFor(structure, ref.from_desk, ref.to_desk);
+    const curve = edgePath(a, b, link?.kind ?? "handoff");
+    if (!link) {
+      const attempt = s("path", { d: curve.d, class: "hv-edge attempt", "marker-end": "url(#hv-arrow-refused)" });
+      attempt.append(s("title", {}, `no declared link: ${ref.from_desk} → ${ref.to_desk}`));
+      g.append(attempt);
+    }
+    const first = seen?.get(ref.id) ?? now;
+    seen?.set(ref.id, first);
+    const elapsed = still ? 3600 : (now - first) / 1000;
+    const group = s("g", { class: `hv-packet ${ref.accepted ? "accepted" : "refused"}` });
+    const dot = s("circle", { r: ref.accepted ? 6 : 5.5 });
+    dot.append(s("animateMotion", {
+      dur: `${PACKET_S}s`, begin: `${(i * STAGGER_S - elapsed).toFixed(3)}s`, fill: "freeze", path: curve.d,
+      ...(ref.accepted ? {} : { keyPoints: "0;0.55;0.42", keyTimes: "0;0.7;1", calcMode: "linear" }),
+    }));
+    // Before its turn in the stagger a packet waits at its source.
+    dot.setAttribute("transform", "translate(0,0)");
+    group.append(dot);
+    group.append(s("title", {}, `${describeReferral(ref)}${ref.content ? `\n${ref.content}` : ""}`));
+    if (!ref.accepted) {
+      const at = pointOn(curve, 0.45);
+      const text = clip(reasonText(ref.reason), 28);
+      const w = text.length * 6 + 14;
+      group.append(s("rect", { x: at.x - w / 2, y: at.y + 9, width: w, height: 15, rx: 7, class: "hv-refusal" }));
+      group.append(s("text", { x: at.x, y: at.y + 20, "text-anchor": "middle", class: "hv-refusal-text" }, text));
+    }
+    g.append(group);
+  });
+}
+
+function deskBadge(g, desk, end, answer) {
+  const word = ENDING_WORD[end.ending] ?? end.ending;
+  const text = clip(`${answer ? "answer · " : ""}${word}${end.topic != null ? ` · ${end.topic}` : ""}`, 30);
+  const w = text.length * 6 + 14;
+  const tone = end.correct === true ? " right" : end.correct === false ? " wrong" : "";
+  const badge = s("g", { class: `hv-desk-badge ${end.ending}${tone}${answer ? " answer" : ""}` });
+  badge.append(s("rect", { x: desk.x + desk.w - w - 8, y: desk.y - 8, width: w, height: 16, rx: 8 }));
+  badge.append(s("text", { x: desk.x + desk.w - w / 2 - 8, y: desk.y + 4, "text-anchor": "middle" }, text));
+  badge.append(s("title", {}, `${desk.name}: ${word}${end.topic != null ? ` on ${end.topic}` : ""} after ${end.rounds ?? "?"} rounds and ${end.turns ?? "?"} turns${
+    end.correct == null ? "" : end.correct ? " (correct)" : " (wrong)"}${answer ? "; this desk's ending is the hive's answer" : ""}`));
+  g.append(badge);
+}
+
 function drawDesks(g, structure, lay, state) {
   const meta = new Map((structure.desks ?? []).map((d) => [d.id, d]));
   const busy = new Set([...state.active.values()].map((t) => t.desk));
+  if (state.round?.desk) busy.add(state.round.desk);
+  const answerDesk = state.ending?.desk ?? null;
   for (const desk of lay.desks.values()) {
     const m = meta.get(desk.id);
-    g.append(s("rect", { x: desk.x, y: desk.y, width: desk.w, height: desk.h, rx: 8, class: `hv-desk${busy.has(desk.id) ? " busy" : ""}` }));
+    const cls = `hv-desk${busy.has(desk.id) ? " busy" : ""}${desk.id === answerDesk ? " answer" : ""}`;
+    g.append(s("rect", { x: desk.x, y: desk.y, width: desk.w, height: desk.h, rx: 8, class: cls }));
     const count = m?.members?.length ?? 0;
     g.append(s("text", { x: desk.x + 10, y: desk.y + 16, class: "hv-desk-name" }, clip(desk.name, 22)));
     g.append(s("text", { x: desk.x + desk.w - 10, y: desk.y + 16, "text-anchor": "end", class: "dim" }, `${count} · ${m?.responder_mode ?? ""}`));
+    const end = state.deskEnds?.get(desk.id);
+    if (end) deskBadge(g, desk, end, desk.id === answerDesk);
   }
 }
 
@@ -141,7 +226,7 @@ function drawBubbles(layer, lay, state, ui, hover, top, bottom) {
   layer.replaceChildren();
   // Desk headers and seats are obstacles, so a bubble never hides a desk's
   // name or a node; only a hovered or selected seat's bubble may overlap.
-  const placed = [...lay.desks.values()].map((d) => ({ x: d.x, y: d.y, w: d.w, h: 22 }));
+  const placed = [...lay.desks.values()].map((d) => ({ x: d.x, y: d.y - 10, w: d.w, h: 32 }));
   const below = lay.size.compact ? 0 : 16; // room for a roomy node's label
   for (const p of lay.seats.values()) placed.push({ x: p.x - lay.size.r - 4, y: p.y - lay.size.r, w: lay.size.r * 2 + 8, h: lay.size.r * 2 + below });
   const overlaps = (b) => placed.some((p) => b.x < p.x + p.w + 4 && p.x < b.x + b.w + 4 && b.y < p.y + p.h + 4 && p.y < b.y + b.h + 4);
@@ -172,7 +257,7 @@ function drawBubbles(layer, lay, state, ui, hover, top, bottom) {
   }
 }
 
-function legend(structure, isMath) {
+function legend(structure, isMath, multi) {
   const color = roleColor(structure);
   const item = (sw, label) => h("span", {}, sw, label);
   const dot = (style) => h("i", { class: "sw", style });
@@ -180,6 +265,8 @@ function legend(structure, isMath) {
     ...(structure.roles ?? []).map((r) => item(dot(`border:2px solid ${color(r.id)};border-radius:50%`), r.id)),
     item(h("i", { class: "hv-key solid" }), "topology"),
     item(h("i", { class: "hv-key dashed" }), "referral"),
+    multi ? item(dot("background:var(--accent);border-radius:50%"), "referral packet") : null,
+    multi ? item(dot("background:var(--bad);border-radius:50%"), "refused referral") : null,
     item(dot("background:var(--full);border-radius:50%"), "speaking (full)"),
     item(dot("background:var(--blind);border:1px dashed var(--accent);border-radius:50%"), "speaking (blind)"),
     isMath ? item(dot("background:var(--good);border-radius:50%"), "correct answer") : null,
@@ -199,9 +286,10 @@ export function renderGraph(host, structure, state, ui) {
   const bubbles = s("g", { transform: `translate(0,${m})` });
   const onHover = (id) => drawBubbles(bubbles, lay, state, ui, id, -m + 2, lay.height + m - 2);
   drawDesks(g, structure, lay, state);
-  drawEdges(g, structure, lay, state.crossings);
+  drawEdges(g, structure, lay, state.crossings, state.fresh ?? []);
   drawSeats(g, structure, lay, state, ui, onHover);
+  drawPackets(g, structure, lay, state);
   svg.append(g, bubbles);
   onHover(null);
-  host.replaceChildren(svg, legend(structure, structure.sim?.kind === "math"));
+  host.replaceChildren(svg, legend(structure, structure.sim?.kind === "math", (structure.desks ?? []).length > 1));
 }
