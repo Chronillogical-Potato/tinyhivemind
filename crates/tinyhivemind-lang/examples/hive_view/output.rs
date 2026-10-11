@@ -71,25 +71,14 @@ pub(crate) fn print(
     let several = matches!(prepared.plan, Plan::Hive(_));
     let mut failure: Option<std::io::Error> = None;
     let outcome = execute(&mut prepared, tracer.as_ref(), &mut |event| {
-        let written = if as_frames {
-            match event {
-                Event::Round(record) => {
-                    writer.emit(&mut out, &frames::round(record, truth.as_deref()))
-                }
-                Event::Referral(record) => writer.emit(&mut out, &frames::referral(record)),
-                Event::DeskEnd(end) if several => {
-                    writer.emit(&mut out, &frames::desk_end(end, truth.as_deref()))
-                }
-                Event::DeskEnd(_) => Ok(()),
-            }
-        } else {
-            match event {
-                Event::Round(record) => human(&mut out, record),
-                Event::Referral(record) => human_referral(&mut out, record),
-                Event::DeskEnd(end) if several => human_desk_end(&mut out, end),
-                Event::DeskEnd(_) => Ok(()),
-            }
-        };
+        let written = write_event(
+            &mut writer,
+            &mut out,
+            event,
+            as_frames,
+            several,
+            truth.as_deref(),
+        );
         if let Err(error) = written {
             failure.get_or_insert(error);
         }
@@ -152,6 +141,27 @@ impl FrameWriter {
             writeln!(kept, "{json}")?;
         }
         Ok(())
+    }
+}
+
+/// One event as a frame or a human line. A one-desk run reports no desk
+/// endings: its `end` is its desk's.
+fn write_event(
+    writer: &mut FrameWriter,
+    out: &mut dyn Write,
+    event: Event<'_>,
+    as_frames: bool,
+    several: bool,
+    truth: Option<&str>,
+) -> std::io::Result<()> {
+    match (event, as_frames) {
+        (Event::Round(record), true) => writer.emit(out, &frames::round(record, truth)),
+        (Event::Referral(record), true) => writer.emit(out, &frames::referral(record)),
+        (Event::DeskEnd(end), true) if several => writer.emit(out, &frames::desk_end(end, truth)),
+        (Event::Round(record), false) => human(out, record),
+        (Event::Referral(record), false) => human_referral(out, record),
+        (Event::DeskEnd(end), false) if several => human_desk_end(out, end),
+        (Event::DeskEnd(_), _) => Ok(()),
     }
 }
 
