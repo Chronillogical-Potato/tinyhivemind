@@ -45,7 +45,10 @@ fn a_protected_frontmatter_key_is_reported_on_its_markdown_file() {
     }));
     assert_eq!(
         located(&diagnostics),
-        [("README.md", None, Rule::Immutable)]
+        [
+            ("README.md", None, Rule::Immutable),
+            ("README.md", None, Rule::Unowned),
+        ]
     );
     assert!(diagnostics[0].message.ends_with("(frontmatter /evaluation)"));
 }
@@ -120,12 +123,8 @@ fn a_canary_is_located_in_json_values_keys_and_markdown() {
         located(&diagnostics),
         [
             ("hive.json", Some("/goals/0/description"), Rule::Contamination),
-            ("hive.json", Some("/goals/0/description"), Rule::ForbiddenClass),
             ("roles/writer.md", None, Rule::Contamination),
         ]
-        .into_iter()
-        .filter(|(_, _, rule)| *rule != Rule::ForbiddenClass)
-        .collect::<Vec<_>>()
     );
     let keyed = refused(check_edit(|p| {
         p.manifest.seats[0].config = json!({"CANARY-1": true});
@@ -234,6 +233,7 @@ fn identity_fields_no_class_owns_are_unowned() {
         [
             ("hive.json", Some("/id"), Rule::Unowned),
             ("hive.json", Some("/version"), Rule::Schema),
+            ("hive.json", Some("/version"), Rule::Unowned),
         ]
     );
     assert!(diagnostics[0].message.starts_with("no edit class owns id"));
