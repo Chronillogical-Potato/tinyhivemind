@@ -255,9 +255,16 @@ pub(super) async fn finish(closing: Closing<'_>) -> anyhow::Result<()> {
             Ok(counts) => json!(counts),
             Err(error) => json!({"error": error.to_string()}),
         };
+        // Read the binding's reaches once more, after indexing has settled:
+        // what a seat joining now would recall.
+        let host = seat.memory.ledger.snapshot();
+        let recall_after_run = match seat.memory.search("verified findings and outcomes").await {
+            Ok(notes) => json!(notes.iter().map(|note| note.lines.len()).sum::<usize>()),
+            Err(error) => json!({"error": error.to_string()}),
+        };
         memory.insert(
             id.clone(),
-            json!({"namespace": namespace, "host": seat.memory.ledger.snapshot(), "stored": stored}),
+            json!({"namespace": namespace, "host": host, "stored": stored, "recall_after_run": recall_after_run}),
         );
     }
     let pool_counts = match pool {
