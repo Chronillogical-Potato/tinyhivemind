@@ -62,6 +62,8 @@ pub(crate) fn print(
     }
     let several = matches!(prepared.plan, Plan::Hive(_));
     let mut failure: Option<std::io::Error> = None;
+    let halt = Halt::default();
+    prepared.speaker = prepared.speaker.halting(halt.clone());
     let outcome = execute(&mut prepared, tracer.as_ref(), &mut |event| {
         let written = write_event(
             &mut writer,
