@@ -58,7 +58,7 @@ fn a_refused_edit_prints_one_line_per_finding() {
         );
     edited.insert("hive.json".into(), hive);
     let (diagnostics, classes) = findings(&original, Some(&edited));
-    assert!(classes.is_empty());
+    assert_eq!(classes, []);
     let text = render(&diagnostics, &classes, false).expect("renders");
     assert_eq!(
         text,
@@ -88,11 +88,11 @@ fn an_accepted_edit_names_the_classes_it_changed() {
         ),
     );
     let (diagnostics, classes) = findings(&original, Some(&edited));
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics, []);
     assert_eq!(
         render(&diagnostics, &classes, false).expect("renders"),
         "ok: changes prompt\n"
     );
     let (diagnostics, _) = findings(&edited, None);
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics, []);
 }
