@@ -623,7 +623,6 @@ fn offline_config() -> RuntimeConfig {
     // whichever is current.
     config.agent.tool_dispatcher = "auto".into();
     config.local_ai.runtime_enabled = false;
-    config.runtime_python.enabled = false;
     // No memory engine answers a scripted run: skip the per-turn recall pack
     // and the per-turn conversation log.
     config.memory.recall.enabled = false;
