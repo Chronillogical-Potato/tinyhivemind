@@ -14,8 +14,25 @@
 //! | `seats/*.md` | [`Package::documents`] | one prompt per seat, with optional JSON frontmatter |
 //! | `context/*.md` | [`Package::documents`] | shared documents split into stable `<!-- item:id -->` items |
 //!
+//! # Editing a hive
+//!
+//! An orchestrator or editor agent changes a hive by editing its files
+//! directly, the way a programmer edits source. The host then calls
+//! [`check()`] with the original and edited document maps, and the crate acts
+//! as the compiler: it runs every language rule and every constitution rule,
+//! and either returns *every* violation as a located [`Diagnostic`]
+//! (`hive.json:/policies/episode/turn_budget: forbidden_class: ...`) or a
+//! [`Review`] holding the edit split into one [`patch::Patch`] per touched
+//! edit class. Those patches are the recorded form the host keeps in
+//! [`lineage`]; nobody has to author one. The `hive_check` example is the
+//! same check as a command an agent runs after editing.
+//!
 //! # Entry points
 //!
+//! - [`check()`] and [`check_packages`] check a direct edit against the
+//!   original and the constitution, collecting every finding.
+//! - [`diagnose`] and [`diagnose_documents`] collect every validation or
+//!   parse finding of one package, located by file and JSON Pointer.
 //! - [`parse`] decodes a caller-supplied document map into a [`Package`] and
 //!   validates it.
 //! - [`validate`] checks references, paths, policy bounds against the
@@ -25,7 +42,8 @@
 //! - [`lower`] turns a valid package into a [`LoweredHive`]: core desks,
 //!   routing candidates, and per-seat factory inputs the host activates.
 //! - [`patch::apply`], [`patch::guard`] and [`patch::diff`] apply, check and
-//!   compute a classified editor proposal against an immutable constitution.
+//!   compute the recorded form of an edit, a classified [`patch::Patch`].
+//!   Memory learning operations, which are not files, are proposed this way.
 //! - [`lineage::content_id`], [`lineage::record`], [`lineage::accepted_head`]
 //!   and [`lineage::pareto_frontier`] address evaluated designs by content and
 //!   fold an archive of them.
@@ -116,6 +134,56 @@
 //! assert_eq!(hive.seats[0].prompt, "Cite a line for every finding.\n");
 //! assert_eq!(hive.desks[0].members, ["reviewer"]);
 //! # Ok::<(), tinyhivemind_lang::Error>(())
+//! ```
+//!
+//! # Example: checking a direct edit
+//!
+//! ```
+//! use std::collections::BTreeMap;
+//! use tinyhivemind_lang::{Package, Role, Rule, Seat, check, patch::PatchClass};
+//!
+//! let mut package = Package::default();
+//! package.constitution.permitted_edits = vec![PatchClass::Prompt];
+//! package.manifest.roles.push(Role { id: "writer".into(), charter: "roles/writer.md".into() });
+//! package.manifest.seats.push(Seat {
+//!     id: "writer".into(),
+//!     label: "Writer".into(),
+//!     role: "writer".into(),
+//!     prompt: "seats/writer.md".into(),
+//!     template: "default".into(),
+//!     ..Seat::default()
+//! });
+//! let mut original = BTreeMap::from([
+//!     ("roles/writer.md".to_owned(), "Write clearly.\n".to_owned()),
+//!     ("seats/writer.md".to_owned(), "Draft the summary.\n".to_owned()),
+//! ]);
+//! original.insert("hive.json".into(), serde_json::to_string_pretty(&package.manifest)?);
+//! original.insert("constitution.json".into(), serde_json::to_string_pretty(&package.constitution)?);
+//! original.insert("memory.json".into(), serde_json::to_string_pretty(&package.memory)?);
+//!
+//! // The editor rewrites the seat prompt file. The check accepts it as one
+//! // prompt-class change.
+//! let mut edited = original.clone();
+//! edited.insert("seats/writer.md".into(), "Draft the summary and cite sources.\n".into());
+//! let review = check(&original, &edited).expect("a permitted prompt edit");
+//! assert_eq!(review.changes.len(), 1);
+//! assert_eq!(review.changes[0].class, PatchClass::Prompt);
+//!
+//! // Raising its own turn cap in the constitution is refused, located at the
+//! // field it changed.
+//! let mut tampered = original.clone();
+//! tampered.insert(
+//!     "constitution.json".into(),
+//!     original["constitution.json"].replace("\"max_turns\": 60", "\"max_turns\": 600"),
+//! );
+//! let diagnostics = check(&original, &tampered).expect_err("the constitution is immutable");
+//! assert_eq!(diagnostics[0].rule, Rule::Immutable);
+//! assert_eq!(diagnostics[0].file, "constitution.json");
+//! assert_eq!(
+//!     diagnostics[0].to_string(),
+//!     "constitution.json:/max_turns: immutable: the constitution is host-owned and no edit may change it"
+//! );
+//! # Ok::<(), serde_json::Error>(())
 //! ```
 pub mod check;
 pub mod diagnostic;
