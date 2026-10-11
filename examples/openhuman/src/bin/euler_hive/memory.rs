@@ -102,6 +102,9 @@ pub(super) struct SeatMemory {
     binding: LoweredMemoryBinding,
     pool: Option<String>,
     pool_writer: bool,
+    /// Whether the pool's own identity is read-only (declared, or pinned by
+    /// the constitution): then nobody publishes to it.
+    pool_read_only: bool,
     /// When this seat last recalled: a rejoin reads only what came after.
     seen: std::sync::Mutex<Option<tinymemory_api::chrono::DateTime<tinymemory_api::chrono::Utc>>>,
     /// What every write and recall did, for the report.
@@ -122,6 +125,7 @@ impl SeatMemory {
             binding,
             pool,
             pool_writer,
+            pool_read_only: false,
             seen: std::sync::Mutex::new(None),
             ledger: MemoryLedger::default(),
         }
@@ -132,9 +136,22 @@ impl SeatMemory {
         &self.binding
     }
 
+    /// Mark the destination pool read-only, as its identity (or the
+    /// constitution) declares.
+    #[must_use]
+    pub(super) fn read_only_pool(mut self, read_only: bool) -> Self {
+        self.pool_read_only = read_only;
+        self
+    }
+
+    /// When this seat last recalled successfully.
+    pub(super) fn seen(&self) -> Option<tinymemory_api::chrono::DateTime<tinymemory_api::chrono::Utc>> {
+        self.seen.lock().ok().and_then(|seen| *seen)
+    }
+
     /// Whether this seat may publish to the verified pool.
     pub(super) fn pool_writer(&self) -> bool {
-        self.pool_writer && self.pool.is_some()
+        self.pool_writer && self.pool.is_some() && !self.pool_read_only
     }
 
     fn allows(&self, moment: &RecallMoment) -> bool {
@@ -297,6 +314,9 @@ impl SeatMemory {
             .as_deref()
             .filter(|_| self.pool_writer)
             .ok_or_else(|| anyhow::anyhow!("only the verify desk may write the verified pool"))?;
+        if self.pool_read_only {
+            anyhow::bail!("the verified pool is read-only");
+        }
         if self.binding.identity.read_only {
             anyhow::bail!("this seat's memory is read-only");
         }
@@ -332,7 +352,11 @@ impl Recall for SeatMemory {
                     .await
                 }
             };
-            self.mark_seen();
+            // A failed read leaves the watermark where it was, so the next
+            // rejoin still reads what this one could not.
+            if result.is_ok() {
+                self.mark_seen();
+            }
             result.map_err(|error| RuntimeError::Recall {
                 source: error.into(),
             })
