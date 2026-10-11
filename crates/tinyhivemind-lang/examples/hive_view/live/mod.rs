@@ -1,4 +1,4 @@
-//! `--live`: every seat turn is a real model call through OpenRouter.
+//! `--live`: every seat turn is a real model call through `OpenRouter`.
 //!
 //! [`LiveSpeaker`] is a [`Speaker`] like the simulation, so core still
 //! decides every round and every ending, and `desks.rs` still routes every
@@ -34,7 +34,7 @@ use provider::{Provider, Reply};
 /// What `--live` was asked for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LiveConfig {
-    /// OpenRouter model id.
+    /// `OpenRouter` model id.
     pub(crate) model: String,
     /// Hard cap on calls for the whole run.
     pub(crate) max_calls: u32,

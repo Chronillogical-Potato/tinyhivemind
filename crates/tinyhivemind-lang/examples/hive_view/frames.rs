@@ -101,7 +101,7 @@ pub(crate) struct UsageFrame {
     pub(crate) prompt_tokens: u64,
     pub(crate) completion_tokens: u64,
     pub(crate) total_tokens: u64,
-    /// As OpenRouter reported it per call, summed; `0.0` if it reported none.
+    /// As `OpenRouter` reported it per call, summed; `0.0` if it reported none.
     pub(crate) cost_usd: f64,
     pub(crate) wall_ms: u64,
     /// Whether `--max-calls` stopped the run.

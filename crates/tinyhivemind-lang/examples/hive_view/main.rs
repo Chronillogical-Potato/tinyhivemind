@@ -12,7 +12,7 @@
 //! Knobs: `--seed N`, `--round-width N`, `--turn-budget N`, `--problem <id>`.
 //! Offline, the episode is model-free: seats speak from a script, a seeded
 //! default script, or the math simulation in `sim.json`. With `--live` every
-//! seat turn is an OpenRouter call. Either way core's `hive::step` decides
+//! seat turn is an `OpenRouter` call. Either way core's `hive::step` decides
 //! every round and the ending, and a package of several desks runs one floor
 //! per desk, linked only by referral. See `README.md` beside this file.
 

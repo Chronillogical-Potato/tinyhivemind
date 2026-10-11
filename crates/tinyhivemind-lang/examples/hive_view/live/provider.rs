@@ -1,4 +1,4 @@
-//! The OpenRouter transport: one chat completion per call, through `curl`.
+//! The `OpenRouter` transport: one chat completion per call, through `curl`.
 //!
 //! The pattern is `examples/live_self_edit.rs`'s, tightened: the key is read
 //! from `OPENROUTER_API_KEY`, checked to be safe inside a curl config line,
@@ -40,7 +40,7 @@ pub(crate) const FORBIDDEN_KEYS: [&str; 5] = [
 /// Refuse a model id that is malformed or would reach the web.
 ///
 /// The id must be `vendor/name[:variant]` in a conservative charset. An
-/// `:online` variant (OpenRouter's web-search suffix), and any id naming a
+/// `:online` variant (`OpenRouter`'s web-search suffix), and any id naming a
 /// search model (`online`, `search`, `sonar`, `web`), is refused before a
 /// single call is made.
 ///
@@ -91,7 +91,7 @@ pub(crate) fn request_body(
     })
 }
 
-/// Tokens and cost, as OpenRouter reports them.
+/// Tokens and cost, as `OpenRouter` reports them.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct Usage {
     pub(crate) calls: u64,
