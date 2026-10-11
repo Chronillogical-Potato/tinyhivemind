@@ -66,6 +66,6 @@ a measurement: it establishes nothing about folding and two things about how a
 turn can fail without anybody noticing.
 
 The harnesses that produce these numbers are documented in
-[`../../crates/tinyhivemind-hive/examples/bench/README.md`](../../crates/tinyhivemind-hive/examples/bench/README.md)
-; the historical `crosstalk` harness has been retired. The headline benchmark report lives on the wiki's
+[`../../crates/tinyhivemind-core/examples/bench/README.md`](../../crates/tinyhivemind-core/examples/bench/README.md);
+the historical `crosstalk` harness has been retired. The headline benchmark report lives on the wiki's
 [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) page.

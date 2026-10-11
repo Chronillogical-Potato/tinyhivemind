@@ -25,7 +25,7 @@ constructive function. The distinction is load-bearing. A sematectonic trace is
 self-validating, because the artifact is the evidence; a marker is cheap, and
 can be stale or wrong.
 
-`tinyhivemind-hive` implements sign-based stigmergy only. A `!support #topic`
+The `hive` module of `tinyhivemind-core` implements sign-based stigmergy only. A `!support #topic`
 is a marker. Nothing in the trace grammar points at the state of the work, and
 the [live hidden-profile experiment](../experiments/2026-09-01-live-hidden-profile.md)
 records exactly the failure that predicts: markers accumulated on a decoy while
@@ -327,7 +327,7 @@ is `p = 1`. Real rooms share a brief.
 what everyone already knows and fail to surface uniquely-held information, so a
 group can systematically choose worse than its own members' pooled information
 would support. This is the literature for what
-[`checkout-503`](../../crates/tinyhivemind-hive/examples/bench/scenarios) is,
+[`checkout-503`](../../crates/tinyhivemind-core/examples/bench/scenarios) is,
 and it should be named on the wiki.
 
 **The superorganism, honestly.** Boomsma & Gawne, *Biological Reviews* 93:28–54
@@ -352,7 +352,7 @@ Five of these are one equation under different names.
 
 So the minimal substrate is: a **conserved pool** of attention, a
 **quality-weighted deposit**, a **decay**, a **bilinear inhibition**, and a
-**nonlinear threshold**. `tinyhivemind-hive` has decay, inhibition, and a
+**nonlinear threshold**. The `hive` module has decay, inhibition, and a
 threshold. It has no conserved pool, and its deposits are weighted by kind
 rather than by quality — which is the same sentence, twice, as the two ADRs this
 research produced.

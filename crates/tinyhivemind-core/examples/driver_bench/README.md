@@ -1,4 +1,4 @@
-# `bench`
+# `driver_bench`
 
 What the completion driver's policy costs, measured rather than asserted, with
 no model and no credential.
@@ -9,8 +9,8 @@ no model and no credential.
 | `sim.rs` | a stochastic room whose turns land at different times, and a router that returns well-formed evaluations so real acceptance runs |
 
 ```sh
-cargo run --release -p tinyhivemind-openhuman --example bench
-cargo run --release -p tinyhivemind-openhuman --example bench -- --episodes 2000 --members 8
+cargo run --release -p tinyhivemind-core --example driver_bench
+cargo run --release -p tinyhivemind-core --example driver_bench -- --episodes 2000 --members 8
 ```
 
 Every arm runs the same seeded rooms through the same `CompletionDriver`, so a
