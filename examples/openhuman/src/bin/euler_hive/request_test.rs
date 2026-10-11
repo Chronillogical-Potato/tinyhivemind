@@ -99,7 +99,8 @@ fn each_request_carries_exactly_the_seats_allowed_tools() {
         .thread_stack_size(16 * 1024 * 1024)
         .build()
         .expect("tokio runtime")
-        .block_on(requests_carry_allowed_tools());
+        .block_on(async { tokio::spawn(requests_carry_allowed_tools()).await })
+        .expect("the request test completes");
 }
 
 async fn requests_carry_allowed_tools() {
