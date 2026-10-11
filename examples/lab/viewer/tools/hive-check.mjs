@@ -1,6 +1,9 @@
 // Checks the Hive and Compare tabs end to end through a running headless
 // Chromium (see probe.mjs): opens each scenario, presses Run, waits for the
 // ending banner (or the compare's "Done"), and saves a full-page screenshot.
+// For math-swarm it also checks desk routing (a badge and an ending row per
+// desk, accepted and refused referral rows), shoots the end of the run and
+// one desk's transcript tab.
 // Exits non-zero if a scenario times out or the page throws.
 // Usage:
 //   chrome --headless=new --remote-debugging-port=9333 --user-data-dir=<dir> &
@@ -91,6 +94,26 @@ await shot("gallery.png");
 
 await hive("review-board");
 await hive("math-swarm", async () => {
+  // Desks route: the stream must have carried referrals (accepted and refused) and one ending per desk.
+  const routed = JSON.parse(await evaluate(`JSON.stringify({ badges: document.querySelectorAll('.hv-desk-badge').length,
+    desks: document.querySelectorAll('.hv-desk').length, accepted: document.querySelectorAll('.hv-ref.accepted').length,
+    refused: document.querySelectorAll('.hv-ref.refused').length, deskEnds: document.querySelectorAll('.hv-desk-end').length,
+    answer: document.querySelectorAll('.hv-desk.answer').length, standings: document.getElementById('h-standings')?.textContent })`));
+  const ok = routed.badges === routed.desks && routed.desks === 5 && routed.deskEnds === 5 && routed.accepted >= 1 && routed.refused >= 1 && routed.answer === 1;
+  console.log(ok ? "ok" : "FAIL", "math-swarm routing", JSON.stringify(routed));
+  if (!ok) failures++;
+  await shot("math-swarm-end.png");
+  // One desk's transcript tab: only that desk's turns, referrals and ending.
+  const desk = await evaluate("(() => { const t = document.querySelector('.hv-tab[data-desk=verify]') ?? document.querySelectorAll('.hv-tab')[1]; t?.click(); return t?.dataset.desk ?? null; })()");
+  await sleep(200);
+  const tab = JSON.parse(await evaluate(`JSON.stringify({ selected: document.querySelector('.hv-tab[aria-selected=true]')?.dataset.desk,
+    rows: document.querySelectorAll('#hv-transcript li.hv-line, #hv-transcript li.hv-ref').length,
+    others: [...document.querySelectorAll('#hv-transcript li.hv-round')].filter((r) => !r.textContent.includes(${JSON.stringify(` · ${desk}`)})).length })`));
+  const tabOk = desk && tab.selected === desk && tab.rows > 0 && tab.others === 0;
+  console.log(tabOk ? "ok" : "FAIL", `math-swarm ${desk} tab`, JSON.stringify(tab));
+  if (!tabOk) failures++;
+  await shot(`math-swarm-${desk ?? "desk"}-tab.png`);
+  await evaluate("document.querySelector('.hv-tab[data-desk=\"\"]')?.click()");
   // Step back to the middle and select a seat, so the shot shows a bubble and the transcript highlight.
   await evaluate("(() => { const r = document.querySelector('.hv-scrub'); r.value = String(Math.ceil(Number(r.max) / 2)); r.dispatchEvent(new Event('input')); })()");
   await sleep(200);
