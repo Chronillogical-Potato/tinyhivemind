@@ -105,9 +105,7 @@ impl SimConfig {
             minus_one,
         } = config.errors;
         let weights = [classic, plus_one, minus_one];
-        if weights.iter().any(|weight| *weight > PPM)
-            || weights.iter().sum::<u64>() == 0
-        {
+        if weights.iter().any(|weight| *weight > PPM) || weights.iter().sum::<u64>() == 0 {
             return Err(
                 "sim.json errors must be parts per million, at most one million each, not all zero"
                     .into(),
