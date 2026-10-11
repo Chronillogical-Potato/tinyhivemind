@@ -12,11 +12,17 @@ nested inside core policy values, which serde alone would accept. The one
 exception is `"responder_mode": "lead"` on a desk: core omits the lead mode
 when it serializes, so an explicit `lead` is accepted.
 
+`diagnose_documents` runs the same steps without stopping: every unsafe
+path, every canonical file that is missing or fails to decode (with serde's
+line and column), an unknown nested field at its JSON Pointer, and every
+validation finding once the three files decode. `parse` returns its first
+finding.
+
 | File | Purpose |
 | --- | --- |
-| `mod.rs` | `parse`, JSON decoding, and the nested unknown-field check shared with `patch` |
+| `mod.rs` | `parse`, `diagnose_documents`, JSON decoding, and the nested unknown-field check shared with `patch` |
 | `types.rs` | `Package`, `Manifest` and its sections, `Policies`, and coordinator settings |
+| `test.rs` | Collected parse findings and their agreement with `parse` |
 
-There is no `test.rs` here: parsing is exercised alongside validation in
-[`../validation/test.rs`](../validation/test.rs), which builds packages through
-`parse` and checks both its decoding and its validation failures.
+Parsing regressions also run alongside validation in
+[`../validation/test/rules.rs`](../validation/test/rules.rs).

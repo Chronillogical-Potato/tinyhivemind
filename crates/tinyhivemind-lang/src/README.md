@@ -2,17 +2,24 @@
 
 All operations consume caller-owned values. No module opens storage or starts
 an agent. `lib.rs` carries the crate overview and runnable example, and
-re-exports the module surface: `parse`, `validate`, `validate_path`,
-`validate_namespace`, `lower`, and every wire type. `patch` and `lineage`
+re-exports the module surface: `check`, `check_packages`, `Review`,
+`diagnose`, `diagnose_documents`, `Diagnostic`, `Rule`, `parse`, `validate`,
+`validate_path`, `validate_namespace`, `lower`, and every wire type.
+
+Editors change a hive by editing its files; `check` is the compiler that
+reports every violation of the language and the constitution as a located
+`Diagnostic`, or returns the edit's per-class patches for lineage. `patch` and `lineage`
 keep their own `Error` and `Result`, so they are used through their module
 paths.
 
 | Module | Purpose |
 | --- | --- |
-| `document` | `Package` and `Manifest` wire types, and `parse` over a caller-supplied document map. Its tests live in `validation/test.rs`. |
+| `check` | `check` and `check_packages`: direct edits checked against the original and the constitution, every finding collected; `Review` on success. |
+| `diagnostic` | `Diagnostic` and `Rule`, and the collector every rule reports into. |
+| `document` | `Package` and `Manifest` wire types, `parse` and `diagnose_documents` over a caller-supplied document map. |
 | `memory` | `Constitution` and `MemorySpec`: caps, protected namespaces, identities, lifecycles, reaches and recall settings. |
-| `validation` | `validate`, `validate_path`, `validate_namespace`: references, paths, frontmatter agreement, goal acyclicity, policy bounds and memory access. |
+| `validation` | `validate`, `diagnose`, `validate_path`, `validate_namespace`: references, paths, frontmatter agreement, goal acyclicity, policy bounds and memory access. |
 | `lowering` | `lower`: core desks, routing candidates and host seat creation inputs. |
 | `error` | The package-level `Error` returned by parsing, validation and lowering. |
-| `patch` | Classified editor proposals: `apply`, `guard`, and `diff`. |
+| `patch` | The recorded form of an edit: `apply`, `guard`, and `diff`; learning operations. |
 | `lineage` | Content identities, evaluated records, `accepted_head` and `pareto_frontier`. |
