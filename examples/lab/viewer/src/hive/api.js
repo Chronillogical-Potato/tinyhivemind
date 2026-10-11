@@ -8,15 +8,22 @@ async function json(url) {
   return res.json();
 }
 
-/** `[{name, id, title, seats, desks, summary, kind, error?}]`. */
-export const listHives = async () => (await json("/api/hives")).packages;
+/**
+ * `{ packages: [{name, id, title, seats, desks, summary, kind, error?}],
+ * live: {available, model} }`: whether the server can run live (it holds an
+ * OPENROUTER_API_KEY; the key itself never leaves it) and its default model.
+ */
+export async function listHives() {
+  const body = await json("/api/hives");
+  return { packages: body.packages, live: { available: body.live_available === true, model: body.live_model_default ?? null } };
+}
 
 /** The `--json` structure of one package. */
 export const getHive = (name) => json(`/api/hives/${encodeURIComponent(name)}`);
 
 const query = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v != null && v !== "")).toString();
 
-/** Stream one run; `onEvent("frame"|"done"|"error"|"status", data)`. */
+/** Stream one run (`knobs` may carry `live`, `model`, `max_calls`); `onEvent("frame"|"done"|"error"|"status", data)`. */
 export const runHive = (name, knobs, onEvent, signal) =>
   openStream(`/api/hives/${encodeURIComponent(name)}/run?${query(knobs)}`, onEvent, signal);
 

@@ -3,7 +3,7 @@
 // lives in the sibling modules; this file only decides what to draw when.
 import "./hive.css";
 import { getHive, listHives, runCompare, runHive } from "./api.js";
-import { endingBanner } from "./banner.js";
+import { deskEndings, endingBanner, usageLine } from "./banner.js";
 import { renderCompare } from "./compare.js";
 import { createControls } from "./controls.js";
 import { h } from "./dom.js";
@@ -23,6 +23,7 @@ let listing = null; // the one in-flight or settled listing request
 const structures = new Map();
 let current = null; // { name, structure }
 let selected = null;
+let deskFilter = null; // transcript tab: null = All, else a desk id
 let runAbort = null;
 let compareAbort = null;
 let compareState = { seeds: [], summary: null, requested: DEFAULT_COMPARE, done: false };
@@ -55,7 +56,10 @@ function writeUrl() {
 
 function ensureListing() {
   listing ??= listHives().then(
-    (list) => (packages = list),
+    ({ packages: list, live }) => {
+      controls.setLive(live);
+      return (packages = list);
+    },
     (err) => {
       packages = [];
       $("hv-gallery").replaceChildren(h("p", { class: "err" }, `No hive API here (${err.message}). Run the viewer with npm run dev.`));
@@ -74,6 +78,7 @@ const controls = createControls({
   step: (by) => player.step(by),
   seek: (n) => { player.pause(); player.seek(n); },
   speed: (x) => player.setSpeed(x),
+  latest: () => player.latest(),
 });
 
 function showHive() {
@@ -95,6 +100,7 @@ async function openHive(name, knobs, autorun) {
   runAbort?.abort();
   current = { name, structure: structures.get(name) };
   selected = null;
+  deskFilter = null;
   const st = current.structure;
   controls.setPackages(packages ?? [], name);
   controls.setStructure(st);
@@ -117,19 +123,33 @@ async function run() {
   runAbort = ctl;
   selected = null;
   writeUrl();
-  player.reset(true);
-  controls.status("Starting… the first run builds hive_view, which can take a minute.");
-  const k = controls.knobs();
+  // Live knobs never go in the URL, so a reload cannot start a billed run.
+  const live = controls.liveKnobs();
+  const isLive = live.live === "1";
+  player.reset(true, isLive);
+  controls.status(isLive
+    ? `Starting a live run on ${live.model}… each round waits on real model calls, so this takes minutes; rounds appear as they finish.`
+    : "Starting… the first run builds hive_view, which can take a minute.");
+  const k = { ...controls.knobs(), ...live };
   try {
     await runHive(current.name, k, (event, data) => {
-      if (event === "frame") player.push(data);
-      else if (event === "error") controls.status(`Run failed: ${data.message}${data.stderr ? `\n${data.stderr}` : ""}`, true);
+      if (event === "frame") {
+        player.push(data);
+        if (isLive && data?.type === "round") controls.status(`Live: round ${data.round}${data.desk ? ` on ${data.desk}` : ""} arrived.`);
+      } else if (event === "error") controls.status(`Run failed: ${data.message}${data.stderr ? `\n${data.stderr}` : ""}`, true);
       else if (event === "done") controls.status(`Episode streamed: ${player.state().received} rounds.`);
-      else if (event === "status") controls.status("Running…");
+      else if (event === "status") controls.status(isLive ? "Running live… waiting on the first round." : "Running…");
     }, ctl.signal);
   } catch (err) {
     if (err.name !== "AbortError") controls.status(`Run failed: ${err.message}`, true);
+  } finally {
+    if (runAbort === ctl) player.finish();
   }
+}
+
+function filterDesk(desk) {
+  deskFilter = desk;
+  draw(player.state());
 }
 
 function select(seat) {
@@ -141,13 +161,12 @@ function draw(state) {
   if (!current) return;
   const st = current.structure;
   controls.update(state);
-  const banner = endingBanner(state);
-  $("hv-banner").replaceChildren(...(banner ? [banner] : []));
+  $("hv-banner").replaceChildren(...[endingBanner(state), deskEndings(state), usageLine(state.usage)].filter(Boolean));
   const p = state.problem;
   $("hv-problem-text").textContent = p ? `Problem ${p.id}: ${p.statement}` : "";
   renderGraph($("hv-graph"), st, state, { selected, onSelect: select });
   renderStandings($("hv-standings"), state.standings, st.episode?.quorum_threshold ?? 0, p?.answer ?? null);
-  renderTranscript($("hv-transcript"), state, selected, select);
+  renderTranscript($("hv-transcript"), state, selected, select, { structure: st, desk: deskFilter, onDesk: filterDesk });
 }
 
 // ---------- compare ----------
