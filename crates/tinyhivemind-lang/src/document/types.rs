@@ -205,31 +205,47 @@ pub struct Link {
     /// Identity of the desk the edge enters; must name a declared desk.
     pub to: String,
 }
-/// Policies in the portable hive wire format.
+/// The core policy values a hive runs under, each in its core wire form.
+///
+/// Validation bounds them against the [`Constitution`]; a failing bound is
+/// reported as [`crate::Error::Bound`] naming the field. The default is a
+/// valid sequential configuration: `round_width` 1 everywhere, routing
+/// thresholds at zero, and approval disabled with a deny default.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policies {
-    /// Declared episode.
+    /// Deliberation episode policy. `turn_budget` must be nonzero and at most
+    /// `max_turns`; `round_width` nonzero and at most `revealed_width`, which
+    /// is at most `max_width`; `dominance_cap` at most 100; `repetition_cap`,
+    /// the quorum `threshold` and `window`, and the weights' `half_life`
+    /// nonzero.
     pub episode: EpisodePolicy,
-    /// Declared routing.
+    /// Semantic routing policy. Its four probabilities are integer parts per
+    /// million, at most `1000000`; `round_width` is nonzero and at most
+    /// `max_width`; `choice_option_limit` is nonzero.
     pub routing: RoutingPolicy,
-    /// Declared approval.
+    /// Approval policy for typed actions; carried without extra bounds.
     pub approval: ApprovalPolicy,
-    /// Declared aside.
+    /// Private aside policy; when enabled, `max_members` and `max_messages`
+    /// must be nonzero.
     pub aside: AsidePolicy,
-    /// Declared referral.
+    /// Cross-desk referral policy; when enabled, `max_hops` must be nonzero.
     pub referral: ReferralPolicy,
-    /// Declared digest.
+    /// Transcript digest policy; `input_limit` and `budget_chars` must be
+    /// nonzero.
     pub digest: DigestPolicy,
-    /// Declared brevity.
+    /// Message brevity policy; `message_chars` and `window` must be nonzero.
     pub brevity: BrevityPolicy,
-    /// Declared directory.
+    /// Expertise directory policy; `half_life` must be nonzero.
     pub directory: DirectoryPolicy,
-    /// Declared exchange.
+    /// Peer exchange policy; when enabled, `contact_cap` and `round_cap` must
+    /// be nonzero.
     pub exchange: ExchangePolicy,
-    /// Declared division.
+    /// Task division policy; `round_width` must be nonzero and at most
+    /// `max_width`.
     pub division: DivisionPolicy,
-    /// Declared conduct.
+    /// Conducted episode turn walls; `child_turn_wall` must be nonzero and at
+    /// most `turn_wall`, which is at most `max_turns`.
     pub conduct: ConductPolicy,
 }
 impl Default for Policies {
@@ -267,17 +283,24 @@ impl Default for Policies {
         }
     }
 }
-/// `CoordinatorSettings` in the portable hive wire format.
+/// Host-neutral settings for a coordinator that schedules the hive's turns.
+///
+/// This crate only validates and carries them; a host maps them onto its own
+/// coordinator (the OpenHuman adapter's `coordinator_options` copies them
+/// field for field).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CoordinatorSettings {
-    /// Declared round width.
+    /// Most turns the coordinator runs concurrently; nonzero and at most the
+    /// constitution's `max_width`.
     pub round_width: usize,
-    /// Declared conduct policy.
+    /// Turn walls for conducted episodes, bounded like
+    /// [`Policies::conduct`].
     pub conduct_policy: ConductPolicy,
-    /// Declared broadcast budget.
+    /// Broadcasts allowed per assignment; `None` keeps the host driver's
+    /// default, and `Some(0)` is rejected.
     pub broadcast_budget: Option<u32>,
-    /// Declared retention.
+    /// How many settled records the coordinator keeps.
     pub retention: RetentionSettings,
 }
 impl Default for CoordinatorSettings {
@@ -290,16 +313,16 @@ impl Default for CoordinatorSettings {
         }
     }
 }
-/// `RetentionSettings` in the portable hive wire format.
+/// Bounds on the records a coordinator retains; `None` means unbounded.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct RetentionSettings {
-    /// Declared settled episodes.
+    /// Most recent finished episodes to keep.
     pub settled_episodes: Option<usize>,
-    /// Declared delivered.
+    /// Most recent acknowledged deliveries to keep.
     pub delivered: Option<usize>,
-    /// Declared interrupted.
+    /// Most recent interruption records to keep.
     pub interrupted: Option<usize>,
-    /// Declared pending per agent.
+    /// Most undelivered direct messages one agent may hold at once.
     pub pending_per_agent: Option<usize>,
 }
