@@ -1,6 +1,6 @@
 //! A `hive.json` may omit every section with a safe default, and the
-//! canonical files the repository already ships still decode and re-serialize
-//! byte for byte.
+//! canonical files the repository already ships still decode into exactly
+//! what they spell out.
 use std::{collections::BTreeMap, fs, path::Path};
 use tinyhivemind_lang::{
     Constitution, CoordinatorSettings, Manifest, MemorySpec, Policies, Rule, diagnose_documents,
@@ -141,14 +141,24 @@ fn a_defaulted_policy_still_answers_to_the_constitution() -> Result<()> {
             Rule::Bound
         )]
     );
-    // A tighter constitution than the defaults assume is enforced too.
+    // A constitution tighter than the defaults assume is enforced too: the
+    // default conduct turn walls of 60 exceed a cap of 30 turns.
     documents = minimal();
     documents.insert("constitution.json".into(), r#"{"max_turns": 30}"#.into());
-    assert!(
-        findings(&documents)
-            .iter()
-            .any(|(_, pointer, rule)| *rule == Rule::Bound
-                && pointer.as_deref() == Some("/policies/conduct/turn_wall"))
+    assert_eq!(
+        findings(&documents),
+        [
+            (
+                "hive.json".into(),
+                Some("/policies/conduct".into()),
+                Rule::Bound
+            ),
+            (
+                "hive.json".into(),
+                Some("/coordinator/conduct_policy".into()),
+                Rule::Bound
+            ),
+        ]
     );
     Ok(())
 }
@@ -222,7 +232,7 @@ fn required_fields_stay_required() -> Result<()> {
 }
 
 #[test]
-fn shipped_canonical_files_round_trip_byte_for_byte() -> Result<()> {
+fn shipped_canonical_files_reserialize_to_exactly_their_contents() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut checked = 0;
     for parent in ["tests/fixtures", "examples/hives"] {
@@ -241,10 +251,18 @@ fn shipped_canonical_files_round_trip_byte_for_byte() -> Result<()> {
     Ok(())
 }
 
+/// The decoded file re-serializes to the same JSON value: no field dropped,
+/// none added by a default. Bytes can differ only in the key order of opaque
+/// objects such as a seat's `config`, which `serde_json` writes sorted.
 fn same<T: serde::de::DeserializeOwned + serde::Serialize>(path: &Path) -> Result<()> {
     let source = fs::read_to_string(path)?;
     let decoded: T = serde_json::from_str(&source)?;
-    let written = serde_json::to_string_pretty(&decoded)? + "\n";
-    assert_eq!(written, source, "{} round-trips", path.display());
+    let input: serde_json::Value = serde_json::from_str(&source)?;
+    assert_eq!(
+        serde_json::to_value(&decoded)?,
+        input,
+        "{} round-trips",
+        path.display()
+    );
     Ok(())
 }
