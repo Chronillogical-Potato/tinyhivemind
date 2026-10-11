@@ -32,6 +32,7 @@ let recordings = null; // the pushed listing, once it arrives
 let showAllRecordings = false;
 let recAbort = null;
 let runStartedAt = 0;
+let opening = null; // a package being opened (its structure is loading): no auto-follow then
 let selected = null;
 let deskFilter = null; // transcript tab: null = All, else a desk id
 let runAbort = null;
@@ -104,14 +105,19 @@ function showHive() {
 }
 
 async function openHive(name, knobs, autorun) {
+  opening = name;
+  recAbort?.abort();
   try {
     if (!structures.has(name)) structures.set(name, await getHive(name));
   } catch (err) {
+    opening = null;
     current = null;
     showHive();
     $("hv-gallery").prepend(h("p", { class: "err" }, `Could not open ${name}: ${err.message}`));
     return;
   }
+  if (opening !== name) return; // something else was opened meanwhile
+  opening = null;
   runAbort?.abort();
   recAbort?.abort();
   current = { name, structure: structures.get(name), recording: null };
@@ -215,7 +221,7 @@ function onRecordings(list) {
   if (current?.recording) controls.setRecordings(list, current.recording);
   for (const rec of fresh) toast($("hv-toasts"), rec, () => followRecording(rec.id));
   // Nothing open on the Hive tab: follow the newest run that just started.
-  if (fresh.length && document.body.dataset.view === "hive" && !current) followRecording(fresh[0].id);
+  if (fresh.length && document.body.dataset.view === "hive" && !current && !opening && !recAbort) followRecording(fresh[0].id);
 }
 
 /**
@@ -226,19 +232,20 @@ function onRecordings(list) {
 async function openRecordingView(id, { fromStart = false } = {}) {
   runAbort?.abort();
   recAbort?.abort();
+  opening = null;
   const ctl = new AbortController();
   recAbort = ctl;
   let structure;
   try {
     structure = await getRecordingStructure(id);
   } catch (err) {
-    if (recAbort !== ctl) return;
+    if (ctl.signal.aborted) return;
     current = null;
     showHive();
     $("hv-recordings").prepend(h("p", { class: "err" }, `Could not open recording ${id}: ${err.message}`));
     return;
   }
-  if (recAbort !== ctl) return;
+  if (ctl.signal.aborted) return;
   const rec = recordings?.find((r) => r.id === id);
   current = { name: rec?.package ?? structure.id ?? id, structure, recording: id };
   selected = null;
@@ -262,7 +269,7 @@ async function openRecordingView(id, { fromStart = false } = {}) {
   let following = false;
   const flush = () => {
     pending = false;
-    if (recAbort !== ctl || !buffer.length) return;
+    if (ctl.signal.aborted || !buffer.length) return;
     const batch = buffer;
     buffer = [];
     player.pushMany(batch);
@@ -273,7 +280,7 @@ async function openRecordingView(id, { fromStart = false } = {}) {
   };
   try {
     await openRecording(id, (event, data) => {
-      if (recAbort !== ctl) return;
+      if (ctl.signal.aborted) return;
       if (event === "status") {
         const open = !!data.active && !data.ended;
         following = open && !fromStart;
@@ -292,9 +299,9 @@ async function openRecordingView(id, { fromStart = false } = {}) {
       }
     }, ctl.signal);
   } catch (err) {
-    if (err.name !== "AbortError" && recAbort === ctl) controls.status(`Recording failed: ${err.message}`, true);
+    if (err.name !== "AbortError" && !ctl.signal.aborted) controls.status(`Recording failed: ${err.message}`, true);
   } finally {
-    if (recAbort === ctl) {
+    if (!ctl.signal.aborted) {
       flush();
       player.finish();
       controls.setRecordingLive(false);
