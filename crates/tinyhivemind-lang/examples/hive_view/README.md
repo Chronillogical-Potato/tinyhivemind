@@ -257,7 +257,8 @@ ending it is. Core's refusal reasons are `NoReferralReason` in `snake_case`;
 | `render.rs` | Text tree and mermaid flowchart |
 | `structure.rs` | The `--json` structure |
 | `episode.rs` | One desk's room, the `Speaker` trait, and the `hive::step` loop |
-| `desks.rs` | One floor per desk and the referrals between them |
+| `hive.rs` | A package of several desks: one room per desk, each desk's share of the policy, the declared links |
+| `desks.rs` | The pass scheduler that runs one floor per desk and routes referrals between them |
 | `script.rs` | `script.json` replay and the seeded default script |
 | `math.rs` | The problem bank and its exact answers and classic mistakes |
 | `sim.rs` | Seat behaviours for math packages |
