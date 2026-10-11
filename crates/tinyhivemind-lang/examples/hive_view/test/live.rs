@@ -12,7 +12,7 @@ use tinyhivemind_core::hive::{
 use crate::episode::{message, speech};
 use crate::live::prompt::{self, Brief, Parsed, parse};
 use crate::live::provider::{
-    DEFAULT_MODEL, FORBIDDEN_KEYS, check_model, redact_user, request_body,
+    DEFAULT_MODEL, FORBIDDEN_KEYS, artifacts_root_in, check_model, redact_user, request_body,
 };
 
 #[test]
@@ -186,4 +186,20 @@ fn an_error_body_has_its_account_id_redacted() {
         r#"{"error":{"message":"bad","code":400},"user_id":"[redacted]"}"#
     );
     assert_eq!(redact_user("plain"), "plain");
+}
+
+#[test]
+fn live_artifacts_live_outside_target_unless_hive_runs_dir_says_otherwise() {
+    let workspace = std::path::Path::new("/repo");
+    let default = artifacts_root_in(workspace, None);
+    assert_eq!(default, workspace.join("hive-runs/hive-view"));
+    assert!(!default.starts_with(workspace.join("target")));
+    assert_eq!(
+        artifacts_root_in(workspace, Some("".into())),
+        workspace.join("hive-runs/hive-view")
+    );
+    assert_eq!(
+        artifacts_root_in(workspace, Some("/elsewhere/runs".into())),
+        std::path::PathBuf::from("/elsewhere/runs")
+    );
 }
