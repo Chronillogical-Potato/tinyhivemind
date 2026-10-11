@@ -14,8 +14,9 @@ Run the mock and feature tests with the normal workspace suite:
 cargo test --all-features
 ```
 
-Two deterministic fuzz-style integration suites also run as part of that
-command. `fuzz_invariants.rs` in the core and hive crates generate hundreds of
+Deterministic fuzz-style integration suites also run as part of that
+command. `fuzz_invariants.rs`, `hive_fuzz_invariants.rs` and
+`driver_fuzz_invariants.rs` under `crates/tinyhivemind-core/tests/` generate hundreds of
 Unicode- and punctuation-heavy inputs and assert parser bounds, byte offsets,
 determinism, trace ordering, and quorum idempotence. They are deliberately
 seeded so a failure is reproducible in CI; coverage-guided fuzzing can replay
@@ -54,17 +55,17 @@ placed in the process argument list.
 
 ## Hive deliberation suite
 
-`crates/tinyhivemind-hive` carries its own in-memory host under
-`tests/support/hive_harness.rs`: it owns the journal, runs the one turn each
-step authorizes, appends it, and commits the returned state. `hive_episode.rs`
-drives that host through convergence, budget exhaustion, a blind opening round,
+The core crate's `hive` module is tested through its own in-memory host under
+`crates/tinyhivemind-core/tests/migrated_hive/support/hive_harness.rs`: it owns the journal, runs the one turn each
+step authorizes, appends it, and commits the returned state.
+`hive_hive_episode.rs` (which includes `migrated_hive/hive_episode.rs`) drives that host through convergence, budget exhaustion, a blind opening round,
 a tie that only cross-inhibition breaks, and the watermark that stops an episode
 inheriting the votes of the conversation before it.
 
 The bundled example prints a readable episode trace and needs no model:
 
 ```sh
-cargo run -p tinyhivemind-hive --example hive
+cargo run -p tinyhivemind-core --example hive
 ```
 
 The benchmark's statistics live in an example file, so `cargo test` never runs
@@ -75,9 +76,9 @@ exercise the expertise and delegation paths the ordinary `--episodes 25` line
 never reaches:
 
 ```sh
-cargo run -p tinyhivemind-hive --example bench -- --specialists 2 --cost-tiers --episodes 25
-cargo run -p tinyhivemind-hive --example bench -- --hidden-profile --episodes 25
-cargo run -p tinyhivemind-hive --example bench -- --stats-check
+cargo run -p tinyhivemind-core --example bench -- --specialists 2 --cost-tiers --blind-evidence --episodes 25
+cargo run -p tinyhivemind-core --example bench -- --hidden-profile --blind-evidence --episodes 25
+cargo run -p tinyhivemind-core --example bench -- --stats-check
 ```
 
 Those three are smoke tests rather than assertions about accuracy: a benchmark
@@ -91,7 +92,7 @@ The live episode mirrors the OpenRouter suite above and is gated the same way:
 TINYHIVEMIND_LIVE_OPENROUTER=1 \
 OPENROUTER_API_KEY='<key>' \
 OPENROUTER_MODEL='<provider/model>' \
-cargo test -p tinyhivemind-hive --features e2e --test openrouter_hive_live -- --nocapture
+cargo test -p tinyhivemind-core --features e2e --test hive_openrouter_hive_live -- --nocapture
 ```
 
 It asserts **structure, not quality**: that real models emit parseable traces,
@@ -100,13 +101,13 @@ budget by one of its four terminal steps, and that attribution survives. It does
 not assert that the room reached a good answer, and it could not — a matched
 token-budget baseline would be needed to make any such claim.
 
-The `bench` example (`crates/tinyhivemind-hive/examples/bench/`) carries a
+The `bench` example (`crates/tinyhivemind-core/examples/bench/`) carries a
 second, unasserted live path of its own: `--agent-cmd` drives a real scenario
 through an agent CLI, and `--api-base` drives the same seats directly over
 HTTP against an OpenAI- or Anthropic-shaped chat endpoint, both through
 `curl` with the whole request — including the API key — sent over its stdin
 rather than as a process argument. Nothing here runs in CI; it is documented
-in `crates/tinyhivemind-hive/examples/bench/LIVE.md`, alongside the harness
+in `crates/tinyhivemind-core/examples/bench/LIVE.md`, alongside the harness
 command lines for the CLI and HTTP paths and the environment variables each
 needs.
 
