@@ -1,0 +1,8 @@
+# OpenHuman's secret store asks the OS keychain for its master key, which on
+# macOS pops a keychain prompt (and on a headless box blocks for minutes) every
+# time a test, example or hive run boots an embed runtime. Every process cargo
+# launches here uses the file backend instead, which never touches the
+# keychain. `force = false` lets an explicit setting in the shell win, and
+# `euler_hive` pins its own encrypted store with a throwaway key per run.
+[env]
+OPENHUMAN_KEYRING_BACKEND = { value = "file", force = false }

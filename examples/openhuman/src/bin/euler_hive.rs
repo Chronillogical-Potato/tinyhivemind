@@ -151,11 +151,18 @@ fn secret(name: &str) -> anyhow::Result<String> {
 /// otherwise asks the OS keychain, which blocks a headless run for minutes.
 const MASTER_KEY: &str = "OPENHUMAN_KEYRING_MASTER_KEY";
 
+/// Which secret store OpenHuman uses. A run pins the encrypted file store, so
+/// neither an inherited `os` nor the plain `file` store reaches it.
+const KEYRING_BACKEND: &str = "OPENHUMAN_KEYRING_BACKEND";
+const ENCRYPTED_FILE: &str = "encrypted_file";
+
 /// Re-run this process with a throwaway master key, read from the OS's
-/// random source and never written anywhere. Nothing the runtime encrypts
-/// with it outlives the run.
+/// random source and never written anywhere, and the encrypted file store
+/// pinned. The OS keychain is never asked, and nothing the runtime encrypts
+/// with the key outlives the run.
 fn with_ephemeral_master_key() -> anyhow::Result<Option<std::process::ExitStatus>> {
-    if std::env::var_os(MASTER_KEY).is_some() {
+    let pinned = std::env::var(KEYRING_BACKEND).is_ok_and(|value| value == ENCRYPTED_FILE);
+    if pinned && std::env::var_os(MASTER_KEY).is_some() {
         return Ok(None);
     }
     let mut bytes = [0_u8; 32];
@@ -164,6 +171,7 @@ fn with_ephemeral_master_key() -> anyhow::Result<Option<std::process::ExitStatus
     let status = std::process::Command::new(std::env::current_exe()?)
         .args(std::env::args_os().skip(1))
         .env(MASTER_KEY, key)
+        .env(KEYRING_BACKEND, ENCRYPTED_FILE)
         .status()?;
     Ok(Some(status))
 }
