@@ -1,2 +1,261 @@
 //! Offline tests for the Euler hive host: package wiring, the per-seat tool
-//! gate, the sandbox's confinement, run-scoped memory and the router.
+//! gate, the sandbox's confinement, run-scoped memory, the prompt and the
+//! broadcast router. No network, Docker, model or memory engine is touched.
+
+use std::collections::BTreeSet;
+use std::path::Path;
+
+use tinyhivemind_core::embed::{
+    ConversationKind, ConversationRef, RouteCandidate, RoutingPolicy, RoutingRequest,
+    RoutingSource,
+};
+
+use super::agents::system_prompt;
+use super::floors::{Assignment, Federation, Row};
+use super::memory::{run_scoped, scope_binding};
+use super::package::{self, SeatTool};
+use super::router::addressed;
+use super::sandbox::docker_args;
+use super::search::{Provider, condense_exa};
+use super::tools::{SeatScope, schema};
+use super::turn::{TurnInput, prompt};
+
+fn package_dir() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../crates/tinyhivemind-lang/examples/hives/euler-hive")
+}
+
+fn lowered() -> (tinyhivemind_lang::Package, tinyhivemind_lang::LoweredHive) {
+    let documents = package::read_package(&package_dir()).expect("package reads");
+    package::load(documents, "Find the answer to a test problem.").expect("package lowers")
+}
+
+#[test]
+fn the_host_injects_the_problem_into_the_placeholder() {
+    let (package, hive) = lowered();
+    let problem = &hive.context[package::PROBLEM_DOCUMENT];
+    assert!(problem.contains("Find the answer to a test problem."));
+    assert!(!problem.contains("placeholder"));
+    assert_eq!(package.manifest.id, "euler-hive");
+}
+
+#[test]
+fn a_package_without_the_problem_document_is_refused() {
+    let mut documents = package::read_package(&package_dir()).expect("package reads");
+    documents.remove(package::PROBLEM_DOCUMENT);
+    assert!(package::load(documents, "x").is_err());
+}
+
+#[test]
+fn problem_markdown_keeps_paragraphs_and_tex_and_drops_tags() {
+    let html = "<p>A club has $7$ members&nbsp;named <b>A</b>.</p><p>Find &lt;it&gt;.</p>";
+    assert_eq!(
+        package::problem_markdown(html),
+        "A club has $7$ members named A.\n\nFind <it>."
+    );
+}
+
+#[test]
+fn only_research_seats_get_web_search_and_only_compute_and_verify_get_python() {
+    let (_, hive) = lowered();
+    for seat in &hive.seats {
+        let belt = package::seat_tools(seat).expect("every seat's belt resolves");
+        let desk = package::desk_of(&hive, &seat.id).expect("seat has a desk");
+        assert_eq!(belt.contains(&SeatTool::WebSearch), desk.id == "research", "{}", seat.id);
+        assert_eq!(
+            belt.contains(&SeatTool::RunPython),
+            matches!(desk.id.as_str(), "compute" | "verify"),
+            "{}",
+            seat.id
+        );
+        for speaking in [SeatTool::Broadcast, SeatTool::Refer, SeatTool::Complete] {
+            assert!(belt.contains(&speaking));
+        }
+        let names: BTreeSet<_> = belt.iter().map(|tool| tool.name()).collect();
+        for harness in ["shell", "file_read", "file_write", "web_fetch", "http_request", "curl"] {
+            assert!(!names.contains(harness), "{} holds {harness}", seat.id);
+        }
+    }
+}
+
+#[test]
+fn a_seat_allowing_an_unserved_or_denied_tool_is_refused() {
+    let (_, hive) = lowered();
+    let mut seat = hive.seats[0].clone();
+    seat.tools.allow.push("shell".into());
+    assert!(package::seat_tools(&seat).is_err());
+    let mut seat = hive.seats[0].clone();
+    seat.tools.deny.push("hive_complete".into());
+    assert!(package::seat_tools(&seat).is_err());
+    let mut seat = hive.seats[0].clone();
+    seat.tools.allow.retain(|tool| tool != "hive_complete");
+    assert!(package::seat_tools(&seat).is_err());
+}
+
+#[test]
+fn the_sandbox_has_no_network_no_mounts_and_bounded_resources() {
+    let args = docker_args("python:3.12-slim", "euler-test");
+    let pair = |flag: &str| {
+        args.iter()
+            .position(|arg| arg == flag)
+            .map(|index| args[index + 1].as_str())
+    };
+    assert_eq!(pair("--network"), Some("none"));
+    assert_eq!(pair("--memory"), Some("1g"));
+    assert_eq!(pair("--pids-limit"), Some("128"));
+    assert_eq!(pair("--cap-drop"), Some("ALL"));
+    assert_eq!(pair("--security-opt"), Some("no-new-privileges"));
+    assert_eq!(pair("--user"), Some("65534:65534"));
+    assert!(args.contains(&"--read-only".to_owned()));
+    assert!(args.contains(&"--rm".to_owned()));
+    for mount in ["--mount", "-v", "--volume", "--volumes-from", "--privileged"] {
+        assert!(!args.iter().any(|arg| arg == mount), "{mount} present");
+    }
+    assert!(!args.iter().any(|arg| arg.contains("hive-runs")));
+    let tail: Vec<_> = args.iter().rev().take(3).collect();
+    assert_eq!(tail, ["-", "-I", "python3"]);
+}
+
+#[test]
+fn memory_is_scoped_under_the_run_and_refuses_namespaces_outside_the_root() {
+    assert_eq!(
+        run_scoped("team:euler-hive/agent:x", "team:euler-hive", "r1").expect("scoped"),
+        "team:euler-hive/ws:r1/agent:x"
+    );
+    assert_eq!(
+        run_scoped("team:euler-hive", "team:euler-hive", "r1").expect("scoped"),
+        "team:euler-hive/ws:r1"
+    );
+    assert!(run_scoped("team:other/agent:x", "team:euler-hive", "r1").is_err());
+    let (_, hive) = lowered();
+    for seat in &hive.seats {
+        let binding = seat.memory.as_ref().expect("bound");
+        let scoped = scope_binding(binding, "team:euler-hive", "r1").expect("scoped");
+        assert_eq!(scoped.namespace, format!("team:euler-hive/ws:r1/agent:{}", seat.id));
+        assert_eq!(scoped.root, "team:euler-hive/ws:r1");
+        assert!(scoped.settings.reads.iter().all(|reach| reach.at.starts_with("team:euler-hive/ws:r1/")));
+        let harness = tinyhivemind_openhuman::language::memory_binding(&scoped)
+            .expect("the adapter accepts a run-scoped agent binding");
+        assert_eq!(harness.agent_id(), seat.id);
+        assert_eq!(harness.root_namespace(), Some("team:euler-hive/ws:r1"));
+    }
+}
+
+fn scope(desk: &str) -> SeatScope {
+    SeatScope {
+        seat: "s".into(),
+        desk: desk.into(),
+        colleagues: vec!["a".into(), "b".into()],
+        linked_desks: vec!["verify".into()],
+        conversation: "c".into(),
+    }
+}
+
+#[test]
+fn tool_schemas_offer_only_colleagues_linked_desks_and_served_providers() {
+    let broadcast = schema(SeatTool::Broadcast, &scope("compute"), false);
+    assert_eq!(broadcast["properties"]["to"]["enum"], serde_json::json!(["a", "b"]));
+    let refer = schema(SeatTool::Refer, &scope("compute"), false);
+    assert_eq!(refer["properties"]["desk"]["enum"], serde_json::json!(["verify"]));
+    let search = schema(SeatTool::WebSearch, &scope("research"), false);
+    assert_eq!(search["properties"]["provider"]["enum"], serde_json::json!(Provider::SEAT_CHOICES));
+    assert!(schema(SeatTool::Remember, &scope("theory"), false)["properties"]["verified"].is_null());
+    assert!(schema(SeatTool::Remember, &scope("verify"), true)["properties"]["verified"].is_object());
+    assert!(Provider::parse(Some("exa")).is_err());
+    assert!(Provider::parse(None).is_ok());
+}
+
+#[test]
+fn exa_results_condense_to_numbered_sources() {
+    let found = condense_exa(&serde_json::json!({"results": [
+        {"title": "Witt design", "url": "https://example.org/w", "text": "a design"},
+        {"title": "No url"}
+    ]}));
+    assert!(found.text.starts_with("[1] Witt design\nhttps://example.org/w\na design"));
+    assert_eq!(found.urls, ["https://example.org/w"]);
+    assert_eq!(condense_exa(&serde_json::json!({})).text, "no results");
+}
+
+fn request(message: &str) -> RoutingRequest {
+    let candidate = |id: &str| RouteCandidate {
+        id: id.into(),
+        label: id.into(),
+        role: None,
+        description: None,
+        capabilities: vec![],
+        learned_topics: vec![],
+        available: true,
+    };
+    RoutingRequest {
+        message: message.into(),
+        source: RoutingSource::AgentBroadcast {
+            author_id: "x".into(),
+        },
+        conversation: ConversationRef {
+            id: "compute".into(),
+            kind: ConversationKind::Desk,
+            thread_root: None,
+        },
+        desk_purpose: None,
+        thread_context: vec![],
+        candidates: vec![candidate("compute-linear"), candidate("compute-minimalist")],
+        roster_version: 1,
+        policy: RoutingPolicy::default(),
+    }
+}
+
+#[test]
+fn the_router_follows_the_named_colleague_and_nothing_else() {
+    assert_eq!(addressed(&request("@compute-linear check this")), Some("compute-linear"));
+    assert_eq!(addressed(&request("check this @compute-linear")), None);
+    assert_eq!(addressed(&request("@nobody check")), None);
+}
+
+#[test]
+fn the_federation_opens_on_the_first_desk_with_every_member_assigned() {
+    let (_, hive) = lowered();
+    let mut federation = Federation::new(&hive).expect("federation builds");
+    assert_eq!(federation.linked_from("verify"), ["synthesis", "compute", "theory"]);
+    federation.open("go");
+    let pending = federation.ready().expect("ready");
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].desk, 0);
+    assert!(pending[0].blind);
+    assert_eq!(pending[0].seats, hive.desks[0].members);
+    let assignment: Assignment = federation.assignment(0, &hive.desks[0].members[0]);
+    assert_eq!(assignment.reason, "opening");
+}
+
+#[test]
+fn the_first_turn_carries_the_problem_and_a_rejoin_does_not() {
+    let input = TurnInput {
+        problem: "THE PROBLEM".into(),
+        desk_line: "#verify".into(),
+        rows: vec![Row {
+            sequence: 3,
+            author: "compute-linear".into(),
+            kind: "report",
+            body: "candidate X".into(),
+        }],
+        assignment: Assignment {
+            reason: "report".into(),
+            note: "check X".into(),
+        },
+        budget_line: "5 turns".into(),
+    };
+    let first = prompt(&input, true, Some("## Hive memory\n- note"));
+    assert!(first.starts_with("## The problem\nTHE PROBLEM"));
+    assert!(first.contains("## Hive memory\n- note"));
+    assert!(first.contains("[3] @compute-linear (report): candidate X"));
+    let later = prompt(&input, false, None);
+    assert!(!later.contains("THE PROBLEM"));
+    assert!(later.ends_with("hive_complete, hive_broadcast or hive_refer."));
+}
+
+#[test]
+fn the_system_prompt_opens_with_the_persona_and_carries_the_charter() {
+    let text = system_prompt("You are a \"tester\".\nDo it.", "Check things.", "## Protocol");
+    assert!(text.starts_with("You are a \"tester\"."));
+    assert!(text.contains("## Your role\nCheck things."));
+    assert!(text.ends_with("## Protocol"));
+}
