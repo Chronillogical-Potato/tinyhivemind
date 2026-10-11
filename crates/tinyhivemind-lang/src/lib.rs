@@ -117,6 +117,8 @@
 //! assert_eq!(hive.desks[0].members, ["reviewer"]);
 //! # Ok::<(), tinyhivemind_lang::Error>(())
 //! ```
+pub mod check;
+pub mod diagnostic;
 pub mod document;
 pub mod error;
 pub mod lineage;
@@ -124,8 +126,10 @@ pub mod lowering;
 pub mod memory;
 pub mod patch;
 pub mod validation;
+pub use check::{Review, check, check_packages};
+pub use diagnostic::{Diagnostic, Rule};
 pub use document::*;
 pub use error::{Error, Result};
 pub use lowering::{LoweredHive, LoweredMemoryBinding, LoweredSeat, lower};
 pub use memory::*;
-pub use validation::{validate, validate_namespace, validate_path};
+pub use validation::{diagnose, validate, validate_namespace, validate_path};
