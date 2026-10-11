@@ -81,3 +81,28 @@ fn record_parses_as_a_flag() -> Result<()> {
     assert!(!parse(&["dir", "--run"])?.output.record);
     Ok(())
 }
+
+#[test]
+fn a_run_label_is_one_safe_path_component() {
+    use crate::output::run_label;
+    for id in ["../../etc", "a/b", "/abs/path", "..", "x\\y"] {
+        let label = run_label(id, 1);
+        assert!(!label.contains('/') && !label.contains('\\'), "{label}");
+        assert_eq!(
+            std::path::Path::new(&label).components().count(),
+            1,
+            "{label}"
+        );
+        assert!(!label.starts_with('.'), "{label}");
+    }
+}
+
+#[test]
+fn run_labels_started_together_never_collide() {
+    use crate::output::run_label;
+    let labels: std::collections::BTreeSet<String> =
+        (0..1000).map(|_| run_label("pkg", 1)).collect();
+    assert_eq!(labels.len(), 1000);
+    let prefix = |id: &str| run_label(id, 1).split("-seed").next().map(str::to_owned);
+    assert_ne!(prefix("a/b"), prefix("a_b"));
+}

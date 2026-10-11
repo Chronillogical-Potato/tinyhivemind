@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use tinyhivemind_core::telemetry::{Clock, Stamped, TraceSink, Tracer};
@@ -36,14 +37,7 @@ pub(crate) fn print(
 ) -> Result<()> {
     let started = Instant::now();
     let as_frames = output.frames;
-    let run_label = format!(
-        "{}-seed{}-{}",
-        loaded.lowered.id,
-        knobs.seed,
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_millis())
-    );
+    let run_label = run_label(&loaded.lowered.id, knobs.seed);
     let mut prepared = match live {
         Some(config) => prepare_with(loaded, knobs, Some((config, &run_label)))?,
         None => prepare(loaded, knobs)?,
@@ -129,6 +123,36 @@ pub(crate) fn print(
         writer.flush()?;
     }
     Ok(())
+}
+
+/// A run folder name for package `id` at `seed`: the id encoded to one safe
+/// path component (so `a/../b` cannot leave `hive-runs/hive-view`), then the
+/// start time, process id and a per-process counter, so two runs starting in
+/// the same millisecond, in one process or two, never share a folder.
+pub(crate) fn run_label(id: &str, seed: u64) -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let safe: String = id
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    // Distinct ids that encode alike (`a/b`, `a_b`) stay distinct by a hash.
+    let hash = id.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+    });
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_millis());
+    format!(
+        "{safe}-{hash:08x}-seed{seed}-{millis}-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    )
 }
 
 /// What `--run` writes: frames or human lines on stdout, and whether an
