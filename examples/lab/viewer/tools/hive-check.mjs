@@ -7,7 +7,8 @@
 // opens through ?recording=<id> and must show its tool-call and memory badges,
 // seat counters and a folded long turn. With FOLLOW_LIVE=1 it also waits for a
 // live run started elsewhere (e.g. `hive_view ... --run --live`) to appear in
-// the Live now strip, follows it, and shoots it mid-run and at its ending.
+// the Live now strip (FOLLOW_PACKAGE narrows it; ONLY_FOLLOW=1 skips the
+// rest), follows it, and shoots it mid-run and at its ending.
 // Exits non-zero if a scenario times out or the page throws.
 // Usage:
 //   chrome --headless=new --remote-debugging-port=9333 --user-data-dir=<dir> &
@@ -89,6 +90,12 @@ await send("Page.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
 // SCHEME=light|dark forces the colour scheme; unset follows the browser.
 if (process.env.SCHEME) await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: process.env.SCHEME }] });
+// ONLY_FOLLOW=1 runs just the live-follow scenario.
+if (process.env.ONLY_FOLLOW) {
+  await followLive();
+  ws.close();
+  process.exit(failures ? 1 : 0);
+}
 
 await open("?view=hive");
 const cards = await waitFor("document.querySelectorAll('.hv-card').length > 0", 60000);
