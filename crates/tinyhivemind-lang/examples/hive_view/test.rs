@@ -156,7 +156,7 @@ fn a_math_swarm_episode_ends_within_its_turn_budget() -> Result<()> {
         let budget = prepared.room.policy.turn_budget;
         let mut widest = 0;
         let outcome = execute(&mut prepared, None, &mut |round| {
-            widest = widest.max(round.turns.len())
+            widest = widest.max(round.turns.len());
         })?;
         assert!(
             outcome.turns <= budget,
