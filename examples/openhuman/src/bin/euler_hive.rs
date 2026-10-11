@@ -189,9 +189,14 @@ async fn run(args: Args) -> anyhow::Result<()> {
     }
 
     let budget = Arc::new(Budget::new(args.limits));
-    let http = reqwest::Client::new();
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()?;
     match budget::openrouter_usage(&http, &openrouter_key).await {
-        Ok(usage) => budget.record_account(usage),
+        Ok(usage) => {
+            budget.record_account(usage);
+            println!("openrouter_usage: metered");
+        }
         Err(error) => println!("openrouter_usage: unavailable ({error})"),
     }
 
@@ -216,6 +221,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         .await?,
     );
 
+    println!("runtime: built");
     let federation_seed = floors::Federation::new(&lowered)?;
     let charters: BTreeMap<String, String> = lowered
         .candidates
