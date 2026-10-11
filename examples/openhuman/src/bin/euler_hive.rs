@@ -540,6 +540,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
             }
         }
         run.frame(&Frame::Usage(report::usage(&budget)));
+        // A record that can no longer be written stops the spend.
+        run.check()?;
     }
     if let Ok(usage) = budget::openrouter_usage(&http, &openrouter_key).await {
         budget.record_account(usage);
