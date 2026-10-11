@@ -1,6 +1,8 @@
 # Seat prompts
 
-One prompt per seat. A seat names its role in `hive.json`.
+One prompt per seat. A seat names its role in `hive.json`. Each prompt opens
+with a persona (`You are a "<persona>".`) and a sentence on how it thinks,
+which a `--live` model plays; the offline simulation ignores it.
 
 | File | Role |
 | --- | --- |

@@ -16,5 +16,11 @@ part of the language; each one's `README.md` opens with what it demonstrates.
 | `math-swarm/` | 50 | 5 | Fifty seats in five linked desks on the same problems, rounds of ten |
 
 `sim.json` and `script.json` are neither canonical nor Markdown, so `parse`
-drops them: they belong to the example, not to the package. The `README.md`
+drops them: they belong to the example, not to the package.
+
+No seat in any package may reach the web: every seat's `tools.deny` lists
+`web_search`, `web_fetch`, `browser` and `http`, and no `allow` list names
+one. `tests/gallery_packages.rs` asserts it for every package. A package of
+several desks runs one floor per desk in `hive_view`, linked only by referral
+along its declared topology and referrals. The `README.md`
 files are accepted as unreferenced Markdown documents.
