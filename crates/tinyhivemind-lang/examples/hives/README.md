@@ -18,9 +18,11 @@ part of the language; each one's `README.md` opens with what it demonstrates.
 `sim.json` and `script.json` are neither canonical nor Markdown, so `parse`
 drops them: they belong to the example, not to the package.
 
-No seat in any package may reach the web: every seat's `tools.deny` lists
-`web_search`, `web_fetch`, `browser` and `http`, and no `allow` list names
-one. `tests/gallery_packages.rs` asserts it for every package. A package of
+No seat may reach the web: every seat's `tools.deny` lists `web_search`,
+`web_fetch`, `browser` and `http`, and no `allow` list names one. The one
+exception is `euler-hive`, whose research-desk seats opt in to `web_search`
+(and only that) to search the literature. `tests/gallery_packages.rs` reads
+every package directory and asserts both. A package of
 several desks runs one floor per desk in `hive_view`, linked only by referral
 along its declared topology and referrals. The `README.md`
 files are accepted as unreferenced Markdown documents.
