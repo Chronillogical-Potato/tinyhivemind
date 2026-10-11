@@ -170,6 +170,8 @@ pub(super) struct Federation {
     pub(super) round: u32,
     pub(super) next_chain: u64,
     pub(super) finished: Option<Final>,
+    /// The last desk's report when it backed no candidate.
+    pub(super) undecided: Option<Final>,
     pub(super) referrals: Vec<ReferralFrame>,
 }
 
@@ -249,6 +251,7 @@ impl Federation {
             round: 0,
             next_chain: 1,
             finished: None,
+            undecided: None,
             referrals: Vec::new(),
         })
     }

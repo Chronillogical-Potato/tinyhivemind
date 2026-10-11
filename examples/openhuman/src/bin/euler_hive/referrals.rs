@@ -122,12 +122,20 @@ impl Federation {
             Mode::Pipeline { hop, .. } => {
                 self.floors[desk].reported = true;
                 if desk + 1 == self.floors.len() {
-                    self.finished = Some(Final {
+                    // The hive decided only when synthesis backed a concrete
+                    // candidate; a report that names none (or only objects)
+                    // ends the run without a decision.
+                    let ending = Final {
                         desk: from,
                         seat: last,
                         candidate,
                         report,
-                    });
+                    };
+                    if ending.candidate.is_some() {
+                        self.finished = Some(ending);
+                    } else {
+                        self.undecided = Some(ending);
+                    }
                     return Ok(());
                 }
                 let outgoing: Vec<String> = self
