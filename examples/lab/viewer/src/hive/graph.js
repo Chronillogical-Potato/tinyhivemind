@@ -123,14 +123,21 @@ function drawPackets(g, structure, lay, state) {
     const group = s("g", { class: `hv-packet ${ref.accepted ? "accepted" : "refused"}` });
     // Hidden until its turn in the stagger, so it never sits at the origin.
     const offset = i * STAGGER_S - elapsed;
-    const dot = s("circle", { r: ref.accepted ? 6 : 5.5, visibility: "hidden" });
-    const show = s("set", { attributeName: "visibility", to: "visible", begin: "indefinite", fill: "freeze" });
-    const move = s("animateMotion", {
-      dur: `${PACKET_S}s`, begin: "indefinite", fill: "freeze", path: curve.d,
-      ...(ref.accepted ? {} : { keyPoints: "0;0.55;0.42", keyTimes: "0;0.7;1", calcMode: "linear" }),
-    });
-    dot.append(show, move);
-    starts.push({ el: show, offset }, { el: move, offset });
+    let dot;
+    if (offset + PACKET_S <= 0) {
+      // Already landed (a redraw after the flight, or reduced motion): draw it where it stopped.
+      const at = ref.accepted ? curve.q : pointOn(curve, 0.42);
+      dot = s("circle", { r: ref.accepted ? 6 : 5.5, cx: at.x, cy: at.y });
+    } else {
+      dot = s("circle", { r: ref.accepted ? 6 : 5.5, visibility: "hidden" });
+      const show = s("set", { attributeName: "visibility", to: "visible", begin: "indefinite", fill: "freeze" });
+      const move = s("animateMotion", {
+        dur: `${PACKET_S}s`, begin: "indefinite", fill: "freeze", path: curve.d,
+        ...(ref.accepted ? {} : { keyPoints: "0;0.55;0.42", keyTimes: "0;0.7;1", calcMode: "linear" }),
+      });
+      dot.append(show, move);
+      starts.push({ el: show, offset }, { el: move, offset });
+    }
     group.append(dot);
     group.append(s("title", {}, `${describeReferral(ref)}${ref.content ? `\n${ref.content}` : ""}`));
     if (!ref.accepted) {
