@@ -187,6 +187,9 @@ impl Provider {
     pub(crate) fn complete(&self, system: &str, user: &str, seed: u64) -> Result<(u64, Reply)> {
         let number = self.issued.fetch_add(1, Ordering::SeqCst) + 1;
         let body = request_body(&self.model, system, user, self.max_tokens, seed);
+        if let Some(key) = FORBIDDEN_KEYS.iter().find(|key| body.get(**key).is_some()) {
+            return Err(format!("refusing to send a request carrying {key}").into());
+        }
         let request = self.dir.join(format!("call-{number:04}.request.json"));
         std::fs::write(&request, serde_json::to_vec_pretty(&body)?)?;
         let mut child = Command::new("curl")

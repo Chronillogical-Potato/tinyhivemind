@@ -74,7 +74,7 @@ fn result(package: &str, mut prepared: Prepared) -> Result<(SeedResult, Duration
     Ok((
         SeedResult {
             package: package.to_owned(),
-            seats: prepared.room.members.len(),
+            seats: prepared.seats(),
             ending: outcome.ending.name().to_owned(),
             correct,
             rounds: outcome.rounds,
