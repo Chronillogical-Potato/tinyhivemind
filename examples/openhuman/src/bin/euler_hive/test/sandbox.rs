@@ -1,23 +1,9 @@
 //! The sandbox argv and output bound, the spend budget, and search refusals.
 
-use std::collections::BTreeSet;
 use std::io::Read;
-use std::path::Path;
 
-use tinyhivemind_core::embed::{
-    ConversationKind, ConversationRef, RouteCandidate, RoutingRequest, RoutingSource,
-};
-
-use super::super::agents::system_prompt;
-use super::super::floors::{Assignment, Federation, Row};
-use super::super::memory::{run_scoped, scope_binding};
-use super::super::package::{self, SeatTool};
-use super::super::router::addressed;
 use super::super::sandbox::docker_args;
-use super::super::search::{Provider, condense_exa};
-use super::super::tools::{SeatScope, schema};
-use super::super::turn::{TurnInput, prompt};
-use super::support::*;
+use super::super::search::condense_exa;
 
 #[test]
 fn the_sandbox_has_no_network_no_mounts_and_bounded_resources() {
@@ -144,15 +130,22 @@ fn sandbox_output_is_bounded_while_it_is_read() {
     use std::sync::atomic::{AtomicBool, Ordering};
     let flood = std::io::repeat(b'x').take(10 * super::super::sandbox::MAX_OUTPUT_BYTES as u64);
     let overflow = AtomicBool::new(false);
-    let kept = super::super::sandbox::read_bounded(flood, super::super::sandbox::MAX_OUTPUT_BYTES, &overflow);
+    let kept = super::super::sandbox::read_bounded(
+        flood,
+        super::super::sandbox::MAX_OUTPUT_BYTES,
+        &overflow,
+    );
     assert_eq!(kept.len(), super::super::sandbox::MAX_OUTPUT_BYTES);
     assert!(
         overflow.load(Ordering::Acquire),
         "a flood stops the program"
     );
     let quiet = AtomicBool::new(false);
-    let kept =
-        super::super::sandbox::read_bounded(&b"small"[..], super::super::sandbox::MAX_OUTPUT_BYTES, &quiet);
+    let kept = super::super::sandbox::read_bounded(
+        &b"small"[..],
+        super::super::sandbox::MAX_OUTPUT_BYTES,
+        &quiet,
+    );
     assert_eq!(kept, b"small");
     assert!(!quiet.load(Ordering::Acquire));
     let args = docker_args("python:3.12-slim", "euler-test");

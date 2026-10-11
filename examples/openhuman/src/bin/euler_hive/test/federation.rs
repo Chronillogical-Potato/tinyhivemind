@@ -1,22 +1,6 @@
 //! Offline federations: asks, referrals, verification and synthesis.
 
-use std::collections::BTreeSet;
-use std::io::Read;
-use std::path::Path;
-
-use tinyhivemind_core::embed::{
-    ConversationKind, ConversationRef, RouteCandidate, RoutingRequest, RoutingSource,
-};
-
-use super::super::agents::system_prompt;
-use super::super::floors::{Assignment, Federation, Row};
-use super::super::memory::{run_scoped, scope_binding};
-use super::super::package::{self, SeatTool};
-use super::super::router::addressed;
-use super::super::sandbox::docker_args;
-use super::super::search::{Provider, condense_exa};
-use super::super::tools::{SeatScope, schema};
-use super::super::turn::{TurnInput, prompt};
+use super::super::floors::Federation;
 use super::support::*;
 
 #[tokio::test]
@@ -120,8 +104,14 @@ async fn a_synthesis_report_without_a_candidate_is_no_decision() {
         federation.undecided.is_some(),
         "synthesis reported without a candidate"
     );
-    assert_eq!(super::super::report::ending_of(false, true, None), "no_decision");
-    assert_eq!(super::super::report::ending_of(true, false, None), "converged");
+    assert_eq!(
+        super::super::report::ending_of(false, true, None),
+        "no_decision"
+    );
+    assert_eq!(
+        super::super::report::ending_of(true, false, None),
+        "converged"
+    );
     assert_eq!(
         super::super::report::ending_of(false, false, Some("exhausted_turns")),
         "exhausted_turns"

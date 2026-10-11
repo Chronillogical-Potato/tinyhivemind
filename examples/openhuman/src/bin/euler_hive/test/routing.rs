@@ -1,21 +1,12 @@
 //! The broadcast router, the first-turn prompt and the system prompt.
 
-use std::collections::BTreeSet;
-use std::io::Read;
-use std::path::Path;
-
 use tinyhivemind_core::embed::{
     ConversationKind, ConversationRef, RouteCandidate, RoutingRequest, RoutingSource,
 };
 
 use super::super::agents::system_prompt;
 use super::super::floors::{Assignment, Federation, Row};
-use super::super::memory::{run_scoped, scope_binding};
-use super::super::package::{self, SeatTool};
 use super::super::router::addressed;
-use super::super::sandbox::docker_args;
-use super::super::search::{Provider, condense_exa};
-use super::super::tools::{SeatScope, schema};
 use super::super::turn::{TurnInput, prompt};
 use super::support::*;
 

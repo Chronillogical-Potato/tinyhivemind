@@ -1,22 +1,10 @@
 //! Fixtures shared by the test modules.
 
-use std::collections::BTreeSet;
-use std::io::Read;
 use std::path::Path;
 
-use tinyhivemind_core::embed::{
-    ConversationKind, ConversationRef, RouteCandidate, RoutingRequest, RoutingSource,
-};
-
-use super::super::agents::system_prompt;
-use super::super::floors::{Assignment, Federation, Row};
-use super::super::memory::{run_scoped, scope_binding};
-use super::super::package::{self, SeatTool};
-use super::super::router::addressed;
-use super::super::sandbox::docker_args;
-use super::super::search::{Provider, condense_exa};
-use super::super::tools::{SeatScope, schema};
-use super::super::turn::{TurnInput, prompt};
+use super::super::floors::Federation;
+use super::super::package::{self};
+use super::super::tools::SeatScope;
 
 pub(crate) fn package_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -86,7 +74,10 @@ pub(super) fn refer(desk: &str) -> super::super::tools::Action {
     }
 }
 
-pub(super) fn propose(candidate: &str, verdict: Option<super::super::tools::Verdict>) -> super::super::tools::Action {
+pub(super) fn propose(
+    candidate: &str,
+    verdict: Option<super::super::tools::Verdict>,
+) -> super::super::tools::Action {
     super::super::tools::Action::Complete {
         report: "worked".into(),
         candidate: Some(candidate.into()),
