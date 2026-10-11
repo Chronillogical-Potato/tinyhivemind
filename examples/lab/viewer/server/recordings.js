@@ -138,7 +138,8 @@ export function scanRecordings(roots, now = Date.now()) {
 }
 
 /**
- * Resolve a recording id to `{ dir, frames, structure }` inside its root, or
+ * Resolve a recording id to `{ rootIndex, root, dir, frames, structure }`
+ * (`structure` null when absent) inside its root, or
  * null: for a malformed id, an unknown root, a path that escapes the root
  * (also through a symlink), or a directory without `frames.ndjson`.
  */
@@ -156,7 +157,7 @@ export function resolveRecording(roots, id) {
     return null;
   }
   const structure = path.join(dir, STRUCTURE);
-  return { dir, frames, structure: fs.existsSync(structure) ? structure : null };
+  return { rootIndex: Number(m[1]), root, dir, frames, structure: fs.existsSync(structure) ? structure : null };
 }
 
 /**

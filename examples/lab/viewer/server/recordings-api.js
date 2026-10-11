@@ -36,16 +36,16 @@ export function recordingsApi({ roots, packageStructure = async () => null, inte
     return all.filter((_, i) => keep[i]);
   }
 
-  function frames(rec, req, res) {
+  function frames(found, res) {
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive", "X-Accel-Buffering": "no" });
     res.flushHeaders?.();
-    const info = describeRecording(Number(rec.id.split(":")[0]), roots[Number(rec.id.split(":")[0])], rec.frames);
+    const info = describeRecording(found.rootIndex, found.root, found.frames);
     res.write(sse("status", { live: info.live, ended: info.ended }));
     let closed = false;
     const keepalive = setInterval(() => { if (!closed) res.write(": keepalive\n\n"); }, KEEPALIVE_MS);
     // A run that is neither ended nor live crashed or was killed: send what
     // it wrote and stop, rather than tail a file that will never grow.
-    const tail = tailFrames(rec.frames, {
+    const tail = tailFrames(found.frames, {
       intervalMs,
       follow: info.live,
       onLine: (line) => { if (!closed) res.write(sse("frame", line)); },
@@ -79,7 +79,7 @@ export function recordingsApi({ roots, packageStructure = async () => null, inte
     const found = resolveRecording(roots, id);
     if (!found) return send(res, 404, "no such recording"), true;
     if (m[2] === "frames") {
-      frames({ id, frames: found.frames }, req, res);
+      frames(found, res);
       return true;
     }
     if (found.structure) {
@@ -90,7 +90,7 @@ export function recordingsApi({ roots, packageStructure = async () => null, inte
       }
       return true;
     }
-    const rec = describeRecording(Number(id.split(":")[0]), roots[Number(id.split(":")[0])], found.frames);
+    const rec = describeRecording(found.rootIndex, found.root, found.frames);
     const st = await packageStructure(rec.package).catch(() => null);
     if (!st) return send(res, 404, `no structure.json and no package named ${rec.package}`), true;
     send(res, 200, st);
