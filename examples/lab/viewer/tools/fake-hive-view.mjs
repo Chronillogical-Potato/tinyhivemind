@@ -26,7 +26,7 @@ const read = (file) => {
   if (!fs.existsSync(full)) fail(`no fixture for ${name}: ${file}`);
   return fs.readFileSync(full, "utf8");
 };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, Number(process.env.HIVE_FAKE_DELAY_MS) || ms)); // HIVE_FAKE_DELAY_MS slows a replay to live pace
 
 if (flag("--json")) {
   // Like the routing binary, each desk reports the policy its own floor runs under.
