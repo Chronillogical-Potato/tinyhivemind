@@ -102,6 +102,8 @@ pub(super) struct SeatMemory {
     binding: LoweredMemoryBinding,
     pool: Option<String>,
     pool_writer: bool,
+    /// When this seat last recalled: a rejoin reads only what came after.
+    seen: std::sync::Mutex<Option<tinymemory_api::chrono::DateTime<tinymemory_api::chrono::Utc>>>,
     /// What every write and recall did, for the report.
     pub(super) ledger: MemoryLedger,
 }
@@ -120,6 +122,7 @@ impl SeatMemory {
             binding,
             pool,
             pool_writer,
+            seen: std::sync::Mutex::new(None),
             ledger: MemoryLedger::default(),
         }
     }
@@ -188,10 +191,14 @@ impl SeatMemory {
         Ok(notes)
     }
 
-    /// Everything this run wrote at one reach since the seat last looked,
+    /// What other seats wrote at each reach since this seat last looked,
     /// newest first: the rejoin read.
-    async fn since(&self, query: &str) -> anyhow::Result<Vec<BriefingNote>> {
+    async fn since(&self) -> anyhow::Result<Vec<BriefingNote>> {
         self.ledger.recalls.fetch_add(1, Ordering::Relaxed);
+        let after = *self
+            .seen
+            .lock()
+            .map_err(|_| anyhow::anyhow!("memory clock poisoned"))?;
         let mut notes = Vec::new();
         for reach in &self.binding.settings.reads {
             let filter = MetaFilter {
@@ -201,11 +208,15 @@ impl SeatMemory {
                     descendants: reach.descendants,
                 }),
                 kinds: vec![ItemKind::Learning],
+                observed_after: after,
                 ..MetaFilter::default()
             };
             let page = self.engine.list(ListRequest::new(filter, 50)).await?;
-            let mut hits = page.items;
-            // Another seat's notes at a shared reach; one's own at its own.
+            let mut hits: Vec<_> = page
+                .items
+                .into_iter()
+                .filter(|hit| hit.meta.agent_id.as_deref() != Some(self.binding.agent_id.as_str()))
+                .collect();
             hits.sort_by(|a, b| b.meta.observed_at.cmp(&a.meta.observed_at));
             let lines: Vec<String> = hits
                 .into_iter()
@@ -222,8 +233,13 @@ impl SeatMemory {
                 });
             }
         }
-        let _ = query;
         Ok(notes)
+    }
+
+    fn mark_seen(&self) {
+        if let Ok(mut seen) = self.seen.lock() {
+            *seen = Some(tinymemory_api::chrono::Utc::now());
+        }
     }
 
     fn heading(&self, at: &str) -> String {
@@ -295,13 +311,14 @@ impl Recall for SeatMemory {
                 RecallMoment::SessionStart => {
                     self.search(request.focus.as_deref().unwrap_or("findings")).await
                 }
-                RecallMoment::Rejoin => self.since(request.focus.as_deref().unwrap_or("")).await,
+                RecallMoment::Rejoin => self.since().await,
                 RecallMoment::Compaction { dropped } => {
                     let query: String = dropped.join("\n").chars().take(2_000).collect();
                     self.search(if query.trim().is_empty() { "findings" } else { &query })
                         .await
                 }
             };
+            self.mark_seen();
             result.map_err(|error| RuntimeError::Recall {
                 source: error.into(),
             })
