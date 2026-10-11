@@ -4,6 +4,7 @@
 //! path, every canonical file that is missing or does not decode, and, once
 //! all three decode, every validation finding. [`parse`] returns the first;
 //! [`diagnose_documents`] returns them all.
+mod defaults;
 mod types;
 use crate::{
     Diagnostic, Error, Result,
