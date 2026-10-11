@@ -114,13 +114,14 @@ function drawPackets(g, structure, lay, state) {
     seen?.set(ref.id, first);
     const elapsed = still ? 3600 : (now - first) / 1000;
     const group = s("g", { class: `hv-packet ${ref.accepted ? "accepted" : "refused"}` });
-    const dot = s("circle", { r: ref.accepted ? 6 : 5.5 });
+    // Hidden until its turn in the stagger, so it never sits at the origin.
+    const begin = `${(i * STAGGER_S - elapsed).toFixed(3)}s`;
+    const dot = s("circle", { r: ref.accepted ? 6 : 5.5, visibility: "hidden" });
+    dot.append(s("set", { attributeName: "visibility", to: "visible", begin, fill: "freeze" }));
     dot.append(s("animateMotion", {
-      dur: `${PACKET_S}s`, begin: `${(i * STAGGER_S - elapsed).toFixed(3)}s`, fill: "freeze", path: curve.d,
+      dur: `${PACKET_S}s`, begin, fill: "freeze", path: curve.d,
       ...(ref.accepted ? {} : { keyPoints: "0;0.55;0.42", keyTimes: "0;0.7;1", calcMode: "linear" }),
     }));
-    // Before its turn in the stagger a packet waits at its source.
-    dot.setAttribute("transform", "translate(0,0)");
     group.append(dot);
     group.append(s("title", {}, `${describeReferral(ref)}${ref.content ? `\n${ref.content}` : ""}`));
     if (!ref.accepted) {
