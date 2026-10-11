@@ -6,8 +6,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use tinyhivemind_core::embed::{
-    ConversationKind, ConversationRef, RouteCandidate, RoutingPolicy, RoutingRequest,
-    RoutingSource,
+    ConversationKind, ConversationRef, RouteCandidate, RoutingRequest, RoutingSource,
 };
 
 use super::agents::system_prompt;
@@ -200,7 +199,7 @@ fn request(message: &str) -> RoutingRequest {
         thread_context: vec![],
         candidates: vec![candidate("compute-linear"), candidate("compute-minimalist")],
         roster_version: 1,
-        policy: RoutingPolicy::default(),
+        policy: lowered().1.policies.routing,
     }
 }
 
