@@ -542,71 +542,79 @@ impl Federation<'_, '_, '_, '_> {
         Ok(())
     }
 
+    /// Core's referral decision for one line, and the desk it was meant
+    /// for; `None` when the line addresses no other desk and answers nothing.
+    fn decide(&self, desk: usize, line: &Line<'_>) -> Result<Option<(ReferralDecision, String)>> {
+        let hive = self.hive;
+        let from = &hive.rooms[desk].desk.id;
+        let roster = Roster::new(&hive.everyone, &[], &[]);
+        let desk_set = DeskSet::new(&hive.desks, &[], &[], &[], &[]);
+        let mentions = mentions_in(
+            line.content,
+            None,
+            &MentionAuthor::Agent {
+                id: line.author.to_owned(),
+            },
+            &roster,
+            &desk_set,
+        );
+        let intended = mentions
+            .iter()
+            .filter(|mention| !mention.quiet)
+            .find_map(|mention| match &mention.target {
+                MentionTarget::Desk { id } => Some(id.clone()),
+                MentionTarget::Agent { id } => hive
+                    .desks
+                    .iter()
+                    .find(|candidate| candidate.members.contains(id))
+                    .map(|home| home.id.clone())
+                    .filter(|home| home != from),
+                MentionTarget::Person { .. } | MentionTarget::Everyone => None,
+            })
+            .or_else(|| {
+                line.origin
+                    .as_ref()
+                    .map(|origin| origin.conversation.desk_id.clone())
+            });
+        let Some(intended) = intended else {
+            return Ok(None);
+        };
+        let input = ReferralInput {
+            key: DispatchKey {
+                trigger_sequence: line.sequence,
+            },
+            conversation: DispatchConversation {
+                desk_id: from.clone(),
+                thread_root: None,
+            },
+            author_id: line.author.to_owned(),
+            content: line.content.to_owned(),
+            mentions,
+            hop: line.hop,
+            origin: line.origin.clone(),
+        };
+        Ok(Some((
+            referral(hive.referral, &input, &roster, &desk_set)?,
+            intended,
+        )))
+    }
+
     /// Ask core whether a line owes one referral, check it against the
     /// package's links, and land it.
     fn route(&mut self, desk: usize, line: Line<'_>) -> Result<()> {
+        let Some((decision, intended)) = self.decide(desk, &line)? else {
+            return Ok(());
+        };
         let Line {
             author,
             content,
-            sequence,
             hop,
             origin,
             sent,
+            ..
         } = line;
         let hive = self.hive;
         let from = hive.rooms[desk].desk.id.clone();
-        let (decision, intended) = {
-            let roster = Roster::new(&hive.everyone, &[], &[]);
-            let desk_set = DeskSet::new(&hive.desks, &[], &[], &[], &[]);
-            let mentions = mentions_in(
-                content,
-                None,
-                &MentionAuthor::Agent {
-                    id: author.to_owned(),
-                },
-                &roster,
-                &desk_set,
-            );
-            let intended = mentions
-                .iter()
-                .filter(|mention| !mention.quiet)
-                .find_map(|mention| match &mention.target {
-                    MentionTarget::Desk { id } => Some(id.clone()),
-                    MentionTarget::Agent { id } => hive
-                        .desks
-                        .iter()
-                        .find(|candidate| candidate.members.contains(id))
-                        .map(|home| home.id.clone())
-                        .filter(|home| *home != from),
-                    MentionTarget::Person { .. } | MentionTarget::Everyone => None,
-                })
-                .or_else(|| {
-                    origin
-                        .as_ref()
-                        .map(|origin| origin.conversation.desk_id.clone())
-                });
-            let Some(intended) = intended else {
-                return Ok(());
-            };
-            let input = ReferralInput {
-                key: DispatchKey {
-                    trigger_sequence: sequence,
-                },
-                conversation: DispatchConversation {
-                    desk_id: from.clone(),
-                    thread_root: None,
-                },
-                author_id: author.to_owned(),
-                content: content.to_owned(),
-                mentions,
-                hop,
-                origin: origin.clone(),
-            };
-            (
-                referral(hive.referral, &input, &roster, &desk_set)?,
-                intended,
-            )
-        };
         let mut record = ReferralRecord {
             round: self.round,
             kind: match sent {
@@ -639,8 +647,11 @@ impl Federation<'_, '_, '_, '_> {
         record.to_desk.clone_from(&one.to.desk_id);
         record.target = Some(one.target_id.clone());
         record.hops = one.child_hop;
-        if one.kind == ReferralKind::Return {
-            record.kind = "return";
+        if sent == Sent::Line {
+            record.kind = match one.kind {
+                ReferralKind::Forward => "forward",
+                ReferralKind::Return => "return",
+            };
         }
         let linked = match one.kind {
             ReferralKind::Forward => hive.linked(&from, &one.to.desk_id),
