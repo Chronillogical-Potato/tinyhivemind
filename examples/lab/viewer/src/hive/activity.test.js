@@ -27,9 +27,9 @@ test("seat activity sums every turn of a seat and skips quiet seats", () => {
 });
 
 test("live and finished split the listing, and only new live runs are announced", () => {
-  const list = [{ id: "a", live: true }, { id: "b", active: true }, { id: "c", ended: true }, { id: "d" }];
+  const list = [{ id: "a", live: true, frames: 0 }, { id: "b", active: true, frames: 3 }, { id: "c", ended: true }, { id: "d" }, { id: "q", active: true, frames: 0 }];
   assert.deepEqual(liveNow(list).map((r) => r.id), ["a", "b"]);
-  assert.deepEqual(finished(list).map((r) => r.id), ["c", "d"]);
+  assert.deepEqual(finished(list).map((r) => r.id), ["c", "d", "q"], "an empty folder that went quiet is not in progress");
   assert.deepEqual(newlyLive(null, list), [], "the first listing announces nothing");
   assert.deepEqual(newlyLive([{ id: "a" }], [...list, { id: "e", live: true }]).map((r) => r.id), ["b", "e"]);
 });

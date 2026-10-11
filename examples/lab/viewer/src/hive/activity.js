@@ -42,11 +42,16 @@ export function seatActivity(lines) {
   return out;
 }
 
-/** Recordings still being written (newest first): live, or active and not ended. */
-export const liveNow = (list) => list.filter((r) => !r.ended && (r.live || r.active));
+/**
+ * Recordings still being written (newest first): changed in the last 30 s,
+ * or quiet for a while (a live round can take minutes) with frames already
+ * in it. An empty folder that went quiet is not a run in progress.
+ */
+const inProgress = (r) => !r.ended && (r.live || (r.active && r.frames > 0));
+export const liveNow = (list) => list.filter(inProgress);
 
 /** Every other recording: ended, or stopped without an end frame. */
-export const finished = (list) => list.filter((r) => r.ended || !(r.live || r.active));
+export const finished = (list) => list.filter((r) => !inProgress(r));
 
 /** Live recordings in `next` that were not in `prev` (null on the first listing: nothing is new then). */
 export function newlyLive(prev, next) {
