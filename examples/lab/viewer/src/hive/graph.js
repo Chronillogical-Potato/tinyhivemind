@@ -142,7 +142,8 @@ function drawBubbles(layer, lay, state, ui, hover, top, bottom) {
   // Desk headers and seats are obstacles, so a bubble never hides a desk's
   // name or a node; only a hovered or selected seat's bubble may overlap.
   const placed = [...lay.desks.values()].map((d) => ({ x: d.x, y: d.y, w: d.w, h: 22 }));
-  if (lay.size.compact) for (const p of lay.seats.values()) placed.push({ x: p.x - lay.size.r, y: p.y - lay.size.r, w: lay.size.r * 2, h: lay.size.r * 2 });
+  const below = lay.size.compact ? 0 : 16; // room for a roomy node's label
+  for (const p of lay.seats.values()) placed.push({ x: p.x - lay.size.r - 4, y: p.y - lay.size.r, w: lay.size.r * 2 + 8, h: lay.size.r * 2 + below });
   const overlaps = (b) => placed.some((p) => b.x < p.x + p.w + 4 && p.x < b.x + b.w + 4 && b.y < p.y + p.h + 4 && p.y < b.y + b.h + 4);
   for (const id of bubbleSeats(state, ui, hover, lay.size.compact)) {
     const at = lay.seats.get(id);
@@ -154,7 +155,8 @@ function drawBubbles(layer, lay, state, ui, hover, top, bottom) {
     const bh = 20 + text.length * 14;
     const x = Math.max(2, Math.min(lay.width - w - 2, at.x - w / 2));
     const gap = lay.size.r + 8;
-    const tries = [-gap - bh, gap, -gap - bh * 2 - 6, gap + bh + 6, -gap - bh * 3 - 12, gap + bh * 2 + 12].map((dy) => ({ x, y: at.y + dy, w, h: bh }));
+    const deskTop = lay.desks.get(at.desk).y - at.y - bh - 6;
+    const tries = [deskTop, -gap - bh, gap, -gap - bh * 2 - 6, gap + bh + 6, -gap - bh * 3 - 12, gap + bh * 2 + 12].map((dy) => ({ x, y: at.y + dy, w, h: bh }));
     const fits = (b) => b.y >= top && b.y + b.h <= bottom;
     const spot = tries.find((b) => fits(b) && !overlaps(b)) ?? (id === hover || id === ui.selected || !lay.size.compact ? tries.find(fits) : null);
     if (!spot) continue;
