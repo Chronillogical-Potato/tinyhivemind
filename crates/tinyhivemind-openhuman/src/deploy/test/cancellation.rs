@@ -34,7 +34,7 @@ impl tinytools::Tool for SlowTool {
         let output = openhuman_embed::process::command_output(
             &mut command,
             Vec::new(),
-            Duration::from_secs(7200),
+            Duration::from_hours(2),
         )
         .await?;
         Ok(tinytools::ToolResult::success(String::from_utf8_lossy(
@@ -109,7 +109,7 @@ fn expired_turn_reaps_a_registered_command_before_returning() -> anyhow::Result<
                         .await?;
                     let coordinator = deployment.host().coordinator().clone();
                     let task = tokio::spawn(async move { coordinator.run_until_idle().await });
-                    let pid = tokio::time::timeout(Duration::from_secs(60), async {
+                    let pid = tokio::time::timeout(Duration::from_mins(1), async {
                         loop {
                             if let Ok(pid) = std::fs::read_to_string(&marker)
                                 && !pid.is_empty()

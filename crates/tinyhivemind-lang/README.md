@@ -11,12 +11,19 @@ activation, and `lower` to obtain existing core desks and routing candidates
 with declared roles. Lowered seat configuration preserves memory constraints;
 the host must enforce those when registering a runner.
 
+Editors change a hive by editing its files. Call `check` with the original
+and edited files: like a compiler, it reports every violation of the language
+and the immutable constitution as a located diagnostic, or returns the edit as
+one patch per edit class for lineage. The `hive_check` example runs the same
+check from the command line. See the
+[checking specification](../../docs/specs/hive-language-checking.md).
+
 The immutable constitution pins evaluator settings and hard caps. The host
-must use guarded patch application before activating an editor proposal.
+must check every edit, or guard every patch it applies, before activation.
 Accepted and rejected evaluated candidates remain host-owned lineage records.
 
 | Directory | Purpose |
 | --- | --- |
 | src | Typed wire definitions, validation, lowering, edits and lineage. |
 | tests | Checked-in package fixtures and public API integration evidence. |
-| examples | Deterministic host-driven self-edit demonstration. |
+| examples | Self-edit demonstrations, the `hive_check` command, the `hives/` package gallery, and the `hive_view` viewer. |

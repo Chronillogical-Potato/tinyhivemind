@@ -4,7 +4,9 @@
 
 
 - **Status:** Implemented
-- **Owner:** `crates/tinyhivemind-core`, with one port in `crates/tinyhivemind`
+- **Owner:** `crates/tinyhivemind-core` (`src/approval/`). The waiting port this
+  spec placed in the former `crates/tinyhivemind` runtime crate was retired by
+  ADR 0027.
 - **Reading:** [`../research/grok-bots/README.md`](../research/grok-bots/README.md)
 - **Decisions:** [ADR 0008](../adr/0008-an-approval-decision-is-total.md),
   [ADR 0009](../adr/0009-a-refusal-renders-what-the-caller-already-holds.md)
@@ -342,7 +344,8 @@ lets a permissive rule placed first hide a restrictive one placed later.
 `approve` decides. Nothing in this crate waits for a person, because waiting is
 IO and this crate does none.
 
-The waiting belongs behind **one new port in `crates/tinyhivemind`**, sibling
+The waiting belongs behind **one new port in the runtime layer** (then
+`crates/tinyhivemind`, now core's `runtime` module; the port was later retired), sibling
 to `MentionTurnQueue` and `ReferralQueue`, not in the host directly:
 
 ```rust
@@ -446,7 +449,8 @@ that table and those tests when it lands.
 - **No clock, no storage, no host type, no callback, no async, no new
   dependency, in `crates/tinyhivemind-core::approve`.** `now` and `epoch` are
   arguments; grants, refusals and audit rows are host-owned. The necessarily
-  async `ApprovalGate` port lives in `crates/tinyhivemind` instead, per the
+  async `ApprovalGate` port lived in the former `crates/tinyhivemind` runtime
+  crate instead (since retired), per the
   pure-fold/waiting split in [`AGENTS.md`](../../AGENTS.md).
 
 ## Acceptance criteria

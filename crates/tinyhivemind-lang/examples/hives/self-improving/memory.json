@@ -1,0 +1,47 @@
+{
+  "root": "team:self",
+  "identities": [
+    {
+      "id": "solver-notes",
+      "namespace": "team:self/agent:solver",
+      "kind": "agent",
+      "lifecycle": "hive",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "eval-ledger",
+      "namespace": "team:self/project:ledger",
+      "kind": "pool",
+      "lifecycle": "hive",
+      "read_only": true,
+      "fork_parent": null
+    }
+  ],
+  "bindings": [
+    {
+      "seat": "solver",
+      "identity": "solver-notes",
+      "reads": [
+        {
+          "at": "team:self/agent:solver",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:self/project:ledger",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start"
+      ],
+      "budget_chars": 2000,
+      "remember": [
+        "outcome",
+        "failed_attempt"
+      ]
+    }
+  ]
+}

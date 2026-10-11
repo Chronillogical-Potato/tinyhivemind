@@ -1,0 +1,237 @@
+{
+  "$schema": "https://tinyhumans.ai/schemas/hive/v1",
+  "version": 1,
+  "id": "self-improving",
+  "name": "Self-improving solver",
+  "roles": [
+    {
+      "id": "solver",
+      "charter": "roles/solver.md"
+    },
+    {
+      "id": "critic",
+      "charter": "roles/critic.md"
+    },
+    {
+      "id": "editor",
+      "charter": "roles/editor.md"
+    }
+  ],
+  "seats": [
+    {
+      "id": "solver",
+      "label": "solver",
+      "role": "solver",
+      "prompt": "seats/solver.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell",
+          "web_search",
+          "web_fetch",
+          "browser",
+          "http"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "critic",
+      "label": "critic",
+      "role": "critic",
+      "prompt": "seats/critic.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell",
+          "web_search",
+          "web_fetch",
+          "browser",
+          "http"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    },
+    {
+      "id": "editor",
+      "label": "editor",
+      "role": "editor",
+      "prompt": "seats/editor.md",
+      "template": "hive-view",
+      "config": {
+        "max_iterations": 8,
+        "temperature": 0.0
+      },
+      "model": null,
+      "tools": {
+        "allow": [
+          "file_read"
+        ],
+        "deny": [
+          "shell",
+          "web_search",
+          "web_fetch",
+          "browser",
+          "http"
+        ]
+      },
+      "mcp": [],
+      "skills": []
+    }
+  ],
+  "desks": [
+    {
+      "id": "workbench",
+      "name": "Workbench",
+      "description": "Sum the invoice amounts exactly",
+      "members": [
+        "solver",
+        "critic",
+        "editor"
+      ],
+      "responder_mode": "auto"
+    }
+  ],
+  "goals": [
+    {
+      "id": "exact-total",
+      "description": "Return the exact invoice total",
+      "acceptance": [
+        "Matches the held-out total exactly"
+      ],
+      "subgoals": []
+    }
+  ],
+  "missions": [
+    {
+      "id": "solve",
+      "role": "solver",
+      "goals": [
+        "exact-total"
+      ]
+    }
+  ],
+  "topology": [],
+  "referrals": [],
+  "context": [
+    "context/playbook.md"
+  ],
+  "policies": {
+    "episode": {
+      "turn_budget": 9,
+      "round_width": 3,
+      "revealed_width": 3,
+      "blind_round": true,
+      "dominance_cap": 50,
+      "repetition_cap": 3,
+      "distance": "sequence",
+      "quorum": {
+        "threshold": 2,
+        "window": 30,
+        "require_grounded": true
+      },
+      "weights": {
+        "recency": 5,
+        "importance": 30,
+        "relevance": 20,
+        "half_life": 20
+      }
+    },
+    "routing": {
+      "minimum_confidence": 0,
+      "high_impact_minimum_confidence": 0,
+      "clarification_threshold": 1000000,
+      "high_impact_threshold": 1000000,
+      "round_width": 4,
+      "choice_option_limit": 8
+    },
+    "approval": {
+      "enabled": false,
+      "default": "deny",
+      "rules": [],
+      "approver": {
+        "kind": "absent"
+      },
+      "allow_grants": false,
+      "max_grant_ttl": null
+    },
+    "aside": {
+      "enabled": false,
+      "max_members": 0,
+      "max_messages": 0,
+      "must_surface": false,
+      "require_thread": false
+    },
+    "referral": {
+      "enabled": false,
+      "max_hops": 0,
+      "reach": "local",
+      "returns": false
+    },
+    "digest": {
+      "keep_live": 30,
+      "fold_after": 20,
+      "fold_after_chars": 400000,
+      "input_limit": 60,
+      "budget_chars": 4000
+    },
+    "brevity": {
+      "message_chars": 600,
+      "window": 30
+    },
+    "directory": {
+      "half_life": 20,
+      "specialisation": 30,
+      "credibility": 20,
+      "prior": 10,
+      "discredit": 20,
+      "window": 30,
+      "floor": 1000
+    },
+    "exchange": {
+      "enabled": false,
+      "contact_cap": 0,
+      "round_cap": 0
+    },
+    "division": {
+      "round_width": 4,
+      "follow_directory": true
+    },
+    "conduct": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    }
+  },
+  "coordinator": {
+    "round_width": 4,
+    "conduct_policy": {
+      "child_turn_wall": 6,
+      "turn_wall": 60
+    },
+    "broadcast_budget": null,
+    "retention": {
+      "settled_episodes": null,
+      "delivered": null,
+      "interrupted": null,
+      "pending_per_agent": null
+    }
+  }
+}

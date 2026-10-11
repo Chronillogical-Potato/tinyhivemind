@@ -1,5 +1,9 @@
 # Implement the hive mind
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted a separate
+> `tinyhivemind-hive` crate, since folded into core's `hive` module.
+
 Linked specification: [`../specs/hive-mind.md`](../specs/hive-mind.md)
 
 ## Goal
@@ -14,7 +18,7 @@ a journal, an async dependency, or fan-out.
    [`../adr/0002-hive-episodes-are-sequential.md`](../adr/0002-hive-episodes-are-sequential.md),
    which fixes the sequential-episode decision and the no-new-port claim before
    any code is written.
-2. Create `crates/tinyhivemind-hive/` with its manifest, `lib.rs` and
+2. Create the deliberation crate (now `crates/tinyhivemind-core/src/hive/`) with its manifest, `lib.rs` and
    `error/mod.rs`; wire it into `[workspace.dependencies]` and add it to
    `pure_crates` in `.github/scripts/assert-pure.sh`. Close that script's
    own long-standing gap by giving `tinyhivemind` the narrower exempt list its
@@ -44,7 +48,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo build --all-targets --all-features
 cargo test --all-features
-cargo run -p tinyhivemind-hive --example hive
+cargo run -p tinyhivemind-core --example hive
 .github/scripts/assert-pure.sh
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 cargo test --doc

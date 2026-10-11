@@ -11,6 +11,7 @@ repository's dependency-purity check.
 | Example | Purpose | Run |
 | --- | --- | --- |
 | [`hives/`](hives/README.md) | Offline reviewer handoff and one continuing agent session across three hives. | `cargo run --manifest-path examples/hives/Cargo.toml --bin one_hive` |
+| [`lab/`](lab/README.md) | Trace sinks, six offline knob binaries driving every public core setting, the SWE hive, and a trace viewer. | `cargo run --manifest-path examples/lab/Cargo.toml --bin memory_hive` |
 | [`openhuman/`](openhuman/README.md) | Run a basic offline OpenHuman hive, the integration proofs, or the live DeepSWE binaries. | `cargo run --manifest-path examples/openhuman/Cargo.toml --bin basic_hive` |
 
 Each directory is its own Cargo workspace. That boundary is load-bearing:

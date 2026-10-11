@@ -155,8 +155,7 @@ option — never straight at the option:
 Every member computes an urge from the salience field and its own affinity, and
 whoever bids highest takes the floor. A member whose urge never clears its
 threshold does not bid at all. This is the response-threshold model of division
-of labour, and it is also
-[Pandemonium](https://en.wikipedia.org/wiki/Pandemonium_architecture)'s
+of labour, and it is also [Pandemonium](https://en.wikipedia.org/wiki/Pandemonium_architecture)'s
 decision demon, which is the same idea arrived at from the AI side.
 
 ```text
@@ -168,8 +167,7 @@ auditor  --                        <- threshold never cleared, does not bid
 floor = planner
 ```
 
-Every one of those is
-[fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) integer
+Every one of those is [fixed-point](https://en.wikipedia.org/wiki/Fixed-point_arithmetic) integer
 arithmetic. Every payload derives `Eq`, and every episode replays byte for byte
 from the same transcript.
 
@@ -364,7 +362,8 @@ commits the round's state after all authorized turns are appended.
 
 `tinyhivemind-lang` makes a hive’s definition editable data: roles, goals,
 seats, memory bindings and policies, with guarded patches and an evaluated
-lineage. Read the [language specification](docs/specs/hive-language.md).
+lineage. A package is a `hive.json`, Markdown prompts, and a constitution no self-edit may
+touch. Read the [language specification](docs/specs/hive-language.md), or start from the [gallery](crates/tinyhivemind-lang/examples/hives).
 
 `tinyhivemind-tools` renders native `tinytools::ToolSpec` definitions and
 records episode calls. `tinyhivemind-hives` coordinates durable messages and
@@ -452,11 +451,10 @@ the library asks the host to reinitialize instead of silently skipping history.
 No. The host owns the agent lifecycle, model calls, queueing, storage, and
 authorization. The core mention fold resolves a direct addressee; the host can
 use that decision to schedule one turn. The optional embedding layer can
-recommend a primary and bounded specialist set; the `hive` module can
-select a round inside a
-bounded deliberation. The host decides whether to run those turns, what models
-to use, what long-term memory or search to provide, and how to persist the
-result. A workspace such as Buzz could host these mechanics, but it is a
+recommend a primary and bounded specialist set; the `hive` module can select a
+round inside a bounded deliberation. The host decides whether to run those
+turns, what models to use, what long-term memory or search to provide, and how
+to persist the result. A workspace such as Buzz could host these mechanics, but it is a
 separate system with its own routing and context policy.
 
 ## Use it
@@ -467,7 +465,7 @@ git submodule add https://github.com/tinyhumansai/tinyhivemind.git vendor/tinyhi
 
 ```toml
 [dependencies]
-tinyhivemind = { path = "vendor/tinyhivemind/crates/tinyhivemind" }
+tinyhivemind-core = { path = "vendor/tinyhivemind/crates/tinyhivemind-core" }
 ```
 
 ```sh
@@ -486,6 +484,7 @@ That prints one deliberation episode turn by turn—the fastest way to see the m
 | [Cross-desk referral](https://github.com/tinyhumansai/tinyhivemind/wiki/Cross-desk-referral) | asking another channel a question, and getting the answer back |
 | [Hive episodes](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-episodes) | salience, quorum, cross-inhibition, and the attention market |
 | [Trace grammar](https://github.com/tinyhumansai/tinyhivemind/wiki/Trace-grammar) | what a marker deposits, and what real models get wrong |
+| [Hive language](https://github.com/tinyhumansai/tinyhivemind/wiki/Hive-language) | a hive as a portable package, its guarded edits, and the gallery |
 | [Episode policy](https://github.com/tinyhumansai/tinyhivemind/wiki/Episode-policy) | every setting, and how to tune it to the size of a desk |
 | [Benchmarks](https://github.com/tinyhumansai/tinyhivemind/wiki/Benchmarks) | the full report, including what it does not show |
 | [Host integration](https://github.com/tinyhumansai/tinyhivemind/wiki/Host-integration) | the ports, and what your application owes the library |

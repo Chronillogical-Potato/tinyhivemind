@@ -1,5 +1,10 @@
 # Implement Jev-first routing
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted separate
+> `tinyhivemind-embed` and `tinyhivemind-typesafe` crates, since folded into
+> core's `embed` and `typesafe` modules.
+
 **Status:** Implemented locally
 **Specification:** [`../specs/jev-first-routing.md`](../specs/jev-first-routing.md)
 
@@ -13,17 +18,17 @@ hive without changing core/hive purity or adopting host types.
 
 1. Add conversation wire tests, then define `ConversationKind`,
    `ConversationRef`, and distinct outbound message routes in
-   `crates/tinyhivemind-embed/src/conversation.rs`.
+   `crates/tinyhivemind-core/src/embed/conversation.rs`.
 2. Add eligibility, fallback, DM-bypass, escalation, and invitation tests in
-   `crates/tinyhivemind-embed/src/routing/test.rs`; implement the stable routing
+   `crates/tinyhivemind-core/src/embed/routing/test.rs`; implement the stable routing
    payloads and pure acceptance/composition beside them.
 3. Pin current System One request/response JSON in
-   `crates/tinyhivemind-typesafe/src/test.rs`; implement exact wire types and
+   `crates/tinyhivemind-core/src/typesafe/test.rs`; implement exact wire types and
    the executor-neutral `SystemOneTransport` in `wire.rs`.
 4. Test one-call ordinary routing and bounded large-desk hierarchy; implement
    `JevRouter` question construction and fixed-point conversion in `router.rs`.
 5. Add the 1,000-agent/100-desk mixed-surface proof in
-   `crates/tinyhivemind-embed/tests/routing_scale.rs`.
+   `crates/tinyhivemind-core/tests/migrated_embed/routing_scale.rs`.
 6. Add the conversation, routing, and OpenCompany compatibility specs plus
    ADRs 0017 and 0018. Update crate/source indexes and the purity guard.
 7. Run formatting, strict Clippy, build, tests, purity, rustdoc, doctests, and

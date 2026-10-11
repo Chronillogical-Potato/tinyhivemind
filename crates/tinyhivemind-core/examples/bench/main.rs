@@ -19,7 +19,7 @@
 //! the right answer is to pool what its members separately believe. Four arms
 //! decide the same rooms from the same private evaluations:
 //!
-//! - `ladder` — the responder ladder in `tinyhivemind` selects one responder and
+//! - `ladder` — the responder ladder in `tinyhivemind-core` selects one responder and
 //!   that agent answers alone. One turn. This is today's behaviour.
 //! - `vote` — the honest matched-budget control: independent answers decided by
 //!   plurality, with nobody seeing anybody. It is given the whole budget, which

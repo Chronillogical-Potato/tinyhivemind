@@ -1,5 +1,9 @@
 # Fold the room by size, and give a joining seat the account
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted the former
+> `crates/tinyhivemind` runtime crate.
+
 **Status:** Landed. Task 2's audience filter lives in the host's character
 count rather than in the library, because the count itself is host state; the
 pinned-message obligation the summarizer now carries was added to the spec
@@ -18,7 +22,7 @@ No new port, no tokenizer, no change to what a fold may cover.
 
 ## Test-first tasks
 
-1. Add failing tests in `crates/tinyhivemind/src/digest/test.rs` for the size
+1. Add failing tests in `crates/tinyhivemind-core/src/runtime/digest/test.rs` for the size
    trigger before the field exists: a channel of 24 rows under `keep_live: 30,
    fold_after: 20` that today plans `Current` and must plan `Fold` once its
    desk-visible content exceeds `fold_after_chars`; a channel of 40 short rows
@@ -48,12 +52,12 @@ No new port, no tokenizer, no change to what a fold may cover.
    safety net working as intended, not a fixture regression.
 
 5. Add a failing test that a seat with no prior turns is composed a prompt
-   containing the account, in `crates/tinyhivemind/tests/`, using a stub
+   containing the account, in `crates/tinyhivemind-core/tests/`, using a stub
    digester. This is acceptance criterion 4 and is the one the example currently
    satisfies by construction rather than by contract.
 
 6. Update the doc comment on `DigestPolicy`, the `digest` module docs, and
-   `crates/tinyhivemind/src/digest/README.md` to state the character proxy and
+   `crates/tinyhivemind-core/src/runtime/digest/README.md` to state the character proxy and
    its ratio in one place, and note that the trigger measures message content
    and not the composed prompt.
 

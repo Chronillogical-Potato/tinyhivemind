@@ -4,7 +4,7 @@
 //! hives using the existing core conductor. The host supplies [`AgentRunner`]
 //! handles; they never enter [`StoredState`]. [`Storage`] is a replaceable
 //! async port that commits a bounded state row plus append-only transcript
-//! rows, with [`MemoryStorage`] and a default-feature SQLite implementation
+//! rows, with [`MemoryStorage`] and a default-feature `SQLite` implementation
 //! provided.
 //!
 //! ```

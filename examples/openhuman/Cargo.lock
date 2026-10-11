@@ -3510,9 +3510,12 @@ dependencies = [
  "tempfile",
  "tinyhivemind-core",
  "tinyhivemind-hives",
+ "tinyhivemind-lang",
  "tinyhivemind-openhuman",
  "tinyhivemind-tools",
+ "tinyhumans-sdk",
  "tinymemory-api",
+ "tinymemory-integrations",
  "tinytools",
  "tokio",
  "wait-timeout",
@@ -3526,6 +3529,21 @@ dependencies = [
  "serde_json",
  "tinyhivemind-core",
  "tinytools",
+]
+
+[[package]]
+name = "tinyhumans-sdk"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "futures",
+ "percent-encoding",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "url",
 ]
 
 [[package]]

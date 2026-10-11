@@ -19,13 +19,14 @@ sees of the shared transcript.
 Three rules decide what belongs here:
 
 1. **The host owns storage.** The core mechanics open no database, file, or
-   socket. `crates/tinyhivemind-core` is a pure algebra; `crates/tinyhivemind` owns
-   *ports* a host implements. In particular there is no second
+   socket. `crates/tinyhivemind-core` is a pure algebra, and its `runtime`
+   module owns the *ports* a host implements. In particular there is no second
    append-only journal: messages are addressed by sequence number across
    surfaces the host owns, so a second log could not be made consistent with the
    first.
-2. **Keep host types at the adapter boundary.** The core, runtime, hive,
-   embed, and TypeSafe crates do not name types from a consuming application.
+2. **Keep host types at the adapter boundary.** The core crate (including its
+   `runtime`, `hive`, `embed`, `typesafe`, and `driver` modules) and
+   `tinyhivemind-lang` do not name types from a consuming application.
    They accept snapshots, borrowed views, or narrow ports. The
    `tinyhivemind-openhuman` adapter explicitly names OpenHuman types and keeps
    that dependency out of the pure crates.

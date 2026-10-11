@@ -1,0 +1,576 @@
+{
+ "id": "math-swarm",
+ "name": "Math swarm",
+ "summary": "Fifty seats across five desks attack one problem; verify refers settled answers to synthesis.",
+ "roles": [
+  {
+   "id": "conjecturer",
+   "charter": "The conjecturer seat."
+  },
+  {
+   "id": "computer",
+   "charter": "The computer seat."
+  },
+  {
+   "id": "verifier",
+   "charter": "The verifier seat."
+  },
+  {
+   "id": "critic",
+   "charter": "The critic seat."
+  },
+  {
+   "id": "synthesizer",
+   "charter": "The synthesizer seat."
+  }
+ ],
+ "seats": [
+  {
+   "id": "conjecture-01",
+   "label": "conjecture-01",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-02",
+   "label": "conjecture-02",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-03",
+   "label": "conjecture-03",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-04",
+   "label": "conjecture-04",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-05",
+   "label": "conjecture-05",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-06",
+   "label": "conjecture-06",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-07",
+   "label": "conjecture-07",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-08",
+   "label": "conjecture-08",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-09",
+   "label": "conjecture-09",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "conjecture-10",
+   "label": "conjecture-10",
+   "role": "conjecturer",
+   "desks": [
+    "conjecture"
+   ]
+  },
+  {
+   "id": "compute-01",
+   "label": "compute-01",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-02",
+   "label": "compute-02",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-03",
+   "label": "compute-03",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-04",
+   "label": "compute-04",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-05",
+   "label": "compute-05",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-06",
+   "label": "compute-06",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-07",
+   "label": "compute-07",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-08",
+   "label": "compute-08",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-09",
+   "label": "compute-09",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "compute-10",
+   "label": "compute-10",
+   "role": "computer",
+   "desks": [
+    "compute"
+   ]
+  },
+  {
+   "id": "verify-01",
+   "label": "verify-01",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-02",
+   "label": "verify-02",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-03",
+   "label": "verify-03",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-04",
+   "label": "verify-04",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-05",
+   "label": "verify-05",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-06",
+   "label": "verify-06",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-07",
+   "label": "verify-07",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-08",
+   "label": "verify-08",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-09",
+   "label": "verify-09",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "verify-10",
+   "label": "verify-10",
+   "role": "verifier",
+   "desks": [
+    "verify"
+   ]
+  },
+  {
+   "id": "critique-01",
+   "label": "critique-01",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-02",
+   "label": "critique-02",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-03",
+   "label": "critique-03",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-04",
+   "label": "critique-04",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-05",
+   "label": "critique-05",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-06",
+   "label": "critique-06",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-07",
+   "label": "critique-07",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-08",
+   "label": "critique-08",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-09",
+   "label": "critique-09",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "critique-10",
+   "label": "critique-10",
+   "role": "critic",
+   "desks": [
+    "critique"
+   ]
+  },
+  {
+   "id": "synthesis-01",
+   "label": "synthesis-01",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-02",
+   "label": "synthesis-02",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-03",
+   "label": "synthesis-03",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-04",
+   "label": "synthesis-04",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-05",
+   "label": "synthesis-05",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-06",
+   "label": "synthesis-06",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-07",
+   "label": "synthesis-07",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-08",
+   "label": "synthesis-08",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-09",
+   "label": "synthesis-09",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  },
+  {
+   "id": "synthesis-10",
+   "label": "synthesis-10",
+   "role": "synthesizer",
+   "desks": [
+    "synthesis"
+   ]
+  }
+ ],
+ "desks": [
+  {
+   "id": "conjecture",
+   "name": "Conjecture",
+   "description": "conjecture desk",
+   "members": [
+    "conjecture-01",
+    "conjecture-02",
+    "conjecture-03",
+    "conjecture-04",
+    "conjecture-05",
+    "conjecture-06",
+    "conjecture-07",
+    "conjecture-08",
+    "conjecture-09",
+    "conjecture-10"
+   ],
+   "responder_mode": "auto"
+  },
+  {
+   "id": "compute",
+   "name": "Compute",
+   "description": "compute desk",
+   "members": [
+    "compute-01",
+    "compute-02",
+    "compute-03",
+    "compute-04",
+    "compute-05",
+    "compute-06",
+    "compute-07",
+    "compute-08",
+    "compute-09",
+    "compute-10"
+   ],
+   "responder_mode": "auto"
+  },
+  {
+   "id": "verify",
+   "name": "Verify",
+   "description": "verify desk",
+   "members": [
+    "verify-01",
+    "verify-02",
+    "verify-03",
+    "verify-04",
+    "verify-05",
+    "verify-06",
+    "verify-07",
+    "verify-08",
+    "verify-09",
+    "verify-10"
+   ],
+   "responder_mode": "auto"
+  },
+  {
+   "id": "critique",
+   "name": "Critique",
+   "description": "critique desk",
+   "members": [
+    "critique-01",
+    "critique-02",
+    "critique-03",
+    "critique-04",
+    "critique-05",
+    "critique-06",
+    "critique-07",
+    "critique-08",
+    "critique-09",
+    "critique-10"
+   ],
+   "responder_mode": "auto"
+  },
+  {
+   "id": "synthesis",
+   "name": "Synthesis",
+   "description": "synthesis desk",
+   "members": [
+    "synthesis-01",
+    "synthesis-02",
+    "synthesis-03",
+    "synthesis-04",
+    "synthesis-05",
+    "synthesis-06",
+    "synthesis-07",
+    "synthesis-08",
+    "synthesis-09",
+    "synthesis-10"
+   ],
+   "responder_mode": "auto"
+  }
+ ],
+ "topology": [
+  {
+   "from": "conjecture",
+   "to": "compute"
+  },
+  {
+   "from": "compute",
+   "to": "verify"
+  },
+  {
+   "from": "critique",
+   "to": "verify"
+  },
+  {
+   "from": "verify",
+   "to": "synthesis"
+  }
+ ],
+ "referrals": [
+  {
+   "from": "verify",
+   "to": "synthesis"
+  },
+  {
+   "from": "compute",
+   "to": "conjecture"
+  }
+ ],
+ "goals": [
+  {
+   "id": "solve",
+   "description": "Agree on the answer",
+   "subgoals": []
+  }
+ ],
+ "episode": {
+  "turn_budget": 120,
+  "round_width": 10,
+  "revealed_width": 10,
+  "blind_round": true,
+  "quorum_threshold": 6
+ },
+ "sim": {
+  "kind": "math",
+  "problems": [
+   {
+    "id": "lattice-6x6",
+    "statement": "How many monotone lattice paths cross a 6x6 grid?"
+   },
+   {
+    "id": "handshakes-12",
+    "statement": "Twelve people each shake hands once with everyone else. How many handshakes?"
+   }
+  ]
+ }
+}

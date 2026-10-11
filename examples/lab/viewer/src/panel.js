@@ -51,7 +51,11 @@ export function initPanel(api) {
 
   const byId = (id) => catalog.find((r) => r.id === id);
 
+  // The Hive and Compare tabs own the URL while they are showing.
+  const away = () => (document.body.dataset.view ?? "runs") !== "runs";
+
   function syncUrl() {
+    if (away()) return;
     const q = new URLSearchParams();
     for (const id of loaded.keys()) q.append("run", id);
     history.replaceState(null, "", q.toString() ? `?${q}` : location.pathname);
@@ -187,6 +191,10 @@ export function initPanel(api) {
     syncUrl();
     render();
   }
+
+  window.addEventListener("viewchange", (e) => {
+    if (e.detail === "runs") syncUrl();
+  });
 
   refreshCatalog()
     .then(restore)

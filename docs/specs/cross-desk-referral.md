@@ -133,7 +133,8 @@ to the asker, because it was appended to the conversation the asker is reading.
 
 ### The runtime edge
 
-`crates/tinyhivemind` adds a `ReferralQueue` port with one method,
+The former `crates/tinyhivemind` runtime crate added a `ReferralQueue` port
+(since retired; the pure decision now lives in `crates/tinyhivemind-core/src/referral/`) with one method,
 `enqueue_once(Referral)`, and `dispatch_referral`, mirroring `MentionTurnQueue`
 and `dispatch_mention` exactly: a pure `None` decision calls the queue zero
 times, a `One` decision calls it exactly once, expected refusals come back as

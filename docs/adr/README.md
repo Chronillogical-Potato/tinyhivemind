@@ -57,7 +57,8 @@ link any earlier ADR it amends.
 | [0030](0030-a-host-memory-port-feeds-seat-sessions.md) | A host memory port feeds seat sessions | Accepted — supersedes recall.md's no-port and no-index non-goals for host-owned memory |
 | [0031](0031-expose-host-seams-over-async-incremental-storage.md) | Expose host seams over async, incremental storage | Accepted |
 
-| [0032](0032-hive-language-owns-the-wire-format.md) | The hive language owns a host-neutral wire format | Accepted — supersedes the package count in 0028 |
+| [0032](0032-hive-language-owns-the-wire-format.md) | The hive language owns a host-neutral wire format | Accepted — supersedes the package count in 0028; editing superseded in part by 0033 |
+| [0033](0033-editors-write-files-and-the-crate-checks-them.md) | Editors write files; the crate checks them | Accepted — supersedes patch authoring in 0032 |
 
 ## Reading order
 

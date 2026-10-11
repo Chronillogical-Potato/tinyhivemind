@@ -214,7 +214,7 @@ fn retiring_a_seat_purges_its_agent_home_and_leaves_its_hives() -> anyhow::Resul
         );
         assert!(deployment.runtime().agent_ids().contains(&agent_id));
         let mut deployment = deployment;
-        deployment.retire_seat("alice", Purge::Both).await?;
+        Box::pin(deployment.retire_seat("alice", Purge::Both)).await?;
         assert!(!deployment.seats().contains_key("alice"));
         assert!(!deployment.runtime().agent_ids().contains(&agent_id));
         assert!(

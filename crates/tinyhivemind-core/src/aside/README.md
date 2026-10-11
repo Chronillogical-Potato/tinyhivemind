@@ -29,7 +29,7 @@ imposes no ceiling on members or messages, and `must_surface` and
 Two rules give the mechanism its shape and neither is enforced here, because
 neither is a decision this fold could make:
 
-- **A redaction is a row, not an absence.** `tinyhivemind`'s projection elides
+- **A redaction is a row, not an absence.** The runtime's projection elides
   content and keeps the row, so a reader outside an audience still sees that
   the exchange happened, who wrote it and to whom. That is what makes an aside
   auditable rather than a covert channel.

@@ -109,7 +109,7 @@ Every arm decides the same rooms from the same private evaluations.
 
 | arm | what it is |
 | --- | --- |
-| `ladder` | Today's behaviour: `responder_plan` in `tinyhivemind` selects one responder off the real ladder and that agent answers alone. One deliberation turn — but two model calls when the ladder takes the `Select` rung, since the router has to be asked who answers before anybody does, and the two are sequential. |
+| `ladder` | Today's behaviour: `responder_plan` in `tinyhivemind-core` selects one responder off the real ladder and that agent answers alone. One deliberation turn — but two model calls when the ladder takes the `Select` rung, since the router has to be asked who answers before anybody does, and the two are sequential. |
 | `vote` | The honest matched-budget control — independent answers decided by plurality, nobody seeing anybody. It is given the *whole* budget, more turns than the deliberation actually spends. |
 | `hive` | A deliberation episode at `EpisodePolicy::DEFAULT`. |
 | `hive+` | The same, at the tuned policy: a majority quorum that is never unanimity, and three turns of budget per member. |

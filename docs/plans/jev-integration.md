@@ -1,5 +1,9 @@
 # Implement typed System One decisions
 
+> **Path note.** Paths and commands below are updated to the consolidated
+> `crates/tinyhivemind-core` layout; this plan originally targeted the former
+> `crates/tinyhivemind` and `tinyhivemind-hive` crates.
+
 Linked specification: [`../specs/jev-integration.md`](../specs/jev-integration.md).
 
 ## Goal and constraints
@@ -15,7 +19,8 @@ remains the deterministic compatibility path.
 1. **Approval algebra and runtime gate — complete.**
    - Add failure and wire tests in
      `crates/tinyhivemind-core/src/approval/test.rs` and
-     `crates/tinyhivemind/src/approval/test.rs`.
+     the former runtime crate's approval gate tests (the gate was later
+     retired).
    - Implement the total fold under `tinyhivemind-core/src/approval/` and the
      async host port under `tinyhivemind/src/approval/`; export them from each
      crate root and align their module READMEs.
@@ -28,7 +33,7 @@ remains the deterministic compatibility path.
 
 3. **Probability-weighted quorum — complete.**
    - Add source-binding, admission, freshness, duplicate, composition, public
-     API, and episode-wire tests under `tinyhivemind-hive/src/quorum/test/` and
+     API, and episode-wire tests under `crates/tinyhivemind-core/src/hive/quorum/test/` and
      the hive integration suites.
    - Implement `DecisionEvaluation`, `standings_with_evaluations`, and
      `step_with_evaluations` in the hive quorum and episode modules without
@@ -36,7 +41,7 @@ remains the deterministic compatibility path.
 
 4. **Native Jev adapter — complete.**
    - Pin `tinyjevclient` as an example-only dev dependency in `Cargo.toml` and
-     `crates/tinyhivemind-hive/Cargo.toml`; keep normal/build trees pure.
+     `crates/tinyhivemind-core/Cargo.toml`; keep normal/build trees pure.
    - Add routing Choice, stance Choice, evidence Score, violation Noul, label
      validation, and approval narrowing in `examples/bench/jev.rs`, with tests.
 
@@ -63,7 +68,7 @@ cargo test --all-features
 .github/scripts/assert-pure.sh
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 cargo test --doc
-cargo run -p tinyhivemind-hive --example bench -- --stats-check
+cargo run -p tinyhivemind-core --example bench -- --stats-check
 ```
 
 ## Completion checklist

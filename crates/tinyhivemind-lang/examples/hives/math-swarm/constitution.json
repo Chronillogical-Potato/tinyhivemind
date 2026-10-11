@@ -1,0 +1,12 @@
+{
+  "hard_constraints": [],
+  "max_turns": 200,
+  "max_width": 10,
+  "permitted_edits": [],
+  "read_only_memories": [],
+  "protected_namespaces": [],
+  "contamination_canaries": [],
+  "evaluation": null,
+  "acceptance": null,
+  "telemetry": null
+}

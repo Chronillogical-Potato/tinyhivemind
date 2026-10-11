@@ -145,7 +145,7 @@ fn native_definition_retains_bare_prompt_sampling_tools_skills_and_mcp_credentia
         assert!(
             matches!(definition.system_prompt, openhuman_core::agent::harness::definition::PromptSource::Verbatim(ref prompt) if prompt == "Seat prompt\nProfile context\nSeat context")
         );
-        assert_eq!(definition.temperature, 0.2);
+        assert_eq!(definition.temperature.to_bits(), 0.2_f64.to_bits());
         assert_eq!(definition.max_iterations, 2);
         assert!(
             matches!(definition.tools, openhuman_core::agent::harness::definition::ToolScope::Named(ref names) if names.contains(&"file_read".into()))

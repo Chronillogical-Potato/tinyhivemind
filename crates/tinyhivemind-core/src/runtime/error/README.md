@@ -4,7 +4,7 @@ The crate-wide `Error` and `Result<T>`.
 
 ## Why it exists
 
-Every fallible public function in `tinyhivemind` returns the same `Result<T>`,
+Every fallible public function in core's `runtime` module returns the same `Result<T>`,
 so a host writes one match arm, not one per module. The enum names the ways a
 *host* implementation of a port can violate its contract, including bad
 pages and stale cursors. It also reports an overflowing present set, a digest

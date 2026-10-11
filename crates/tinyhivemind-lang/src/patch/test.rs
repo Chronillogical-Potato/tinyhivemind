@@ -101,6 +101,17 @@ fn prompt_and_context_diff_apply_preserve_neighbors_and_preamble() {
 }
 
 #[test]
+fn appended_context_items_keep_document_order() {
+    let original = package();
+    let mut proposed = original.clone();
+    let notes = proposed.documents.get_mut("context/notes.md").unwrap();
+    notes.push_str("<!-- item:z -->\nLast\n<!-- item:b -->\nEarlier id\n");
+    let proposal = diff(&original, &proposed, PatchClass::Context).unwrap();
+    assert_eq!(proposal.operations.len(), 2);
+    assert_eq!(apply(&original, &proposal).unwrap().candidate, proposed);
+}
+
+#[test]
 fn policy_json_diff_round_trips_and_stale_edits_are_atomic() {
     let original = package();
     let mut proposed = original.clone();

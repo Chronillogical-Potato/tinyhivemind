@@ -1,0 +1,140 @@
+{
+  "root": "team:guild",
+  "identities": [
+    {
+      "id": "archivist-notes",
+      "namespace": "team:guild/agent:archivist",
+      "kind": "agent",
+      "lifecycle": "hive",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "scribe-notes",
+      "namespace": "team:guild/agent:scribe",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "lore",
+      "namespace": "team:guild/project:lore",
+      "kind": "pool",
+      "lifecycle": "hive",
+      "read_only": false,
+      "fork_parent": null
+    },
+    {
+      "id": "charter",
+      "namespace": "team:guild/project:charter",
+      "kind": "pool",
+      "lifecycle": "hive",
+      "read_only": true,
+      "fork_parent": null
+    },
+    {
+      "id": "scout-a-notes",
+      "namespace": "team:guild/project:lore/agent:scout-a",
+      "kind": "agent",
+      "lifecycle": "run",
+      "read_only": false,
+      "fork_parent": "lore"
+    }
+  ],
+  "bindings": [
+    {
+      "seat": "archivist",
+      "identity": "archivist-notes",
+      "reads": [
+        {
+          "at": "team:guild/agent:archivist",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:guild/project:lore",
+          "inherit": false,
+          "descendants": true
+        },
+        {
+          "at": "team:guild/project:charter",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin",
+        "compaction"
+      ],
+      "budget_chars": 4000,
+      "remember": [
+        "observation",
+        "outcome",
+        "note"
+      ]
+    },
+    {
+      "seat": "scribe",
+      "identity": "scribe-notes",
+      "reads": [
+        {
+          "at": "team:guild/agent:scribe",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "session_start",
+        "rejoin"
+      ],
+      "budget_chars": 2000,
+      "remember": [
+        "note"
+      ]
+    },
+    {
+      "seat": "scout-a",
+      "identity": "scout-a-notes",
+      "reads": [
+        {
+          "at": "team:guild/project:lore",
+          "inherit": false,
+          "descendants": true
+        }
+      ],
+      "recall_at": [
+        "session_start"
+      ],
+      "budget_chars": 1500,
+      "remember": [
+        "observation",
+        "failed_attempt"
+      ]
+    },
+    {
+      "seat": "scout-b",
+      "identity": "lore",
+      "reads": [
+        {
+          "at": "team:guild/project:lore",
+          "inherit": false,
+          "descendants": false
+        },
+        {
+          "at": "team:guild/project:charter",
+          "inherit": false,
+          "descendants": false
+        }
+      ],
+      "recall_at": [
+        "rejoin"
+      ],
+      "budget_chars": 1000,
+      "remember": [
+        "observation"
+      ]
+    }
+  ]
+}

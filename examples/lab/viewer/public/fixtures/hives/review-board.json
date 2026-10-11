@@ -1,0 +1,102 @@
+{
+ "id": "review-board",
+ "name": "Review board",
+ "summary": "Three reviewers and a lead decide whether a change ships. A blind first round keeps the reviewers independent.",
+ "roles": [
+  {
+   "id": "lead",
+   "charter": "Chairs the review and records the decision."
+  },
+  {
+   "id": "reviewer",
+   "charter": "Reviews one aspect of the change."
+  }
+ ],
+ "seats": [
+  {
+   "id": "lead",
+   "label": "lead",
+   "role": "lead",
+   "desks": [
+    "board"
+   ]
+  },
+  {
+   "id": "security",
+   "label": "security",
+   "role": "reviewer",
+   "desks": [
+    "board"
+   ]
+  },
+  {
+   "id": "perf",
+   "label": "perf",
+   "role": "reviewer",
+   "desks": [
+    "board",
+    "bench"
+   ]
+  },
+  {
+   "id": "style",
+   "label": "style",
+   "role": "reviewer",
+   "desks": [
+    "bench"
+   ]
+  }
+ ],
+ "desks": [
+  {
+   "id": "board",
+   "name": "Board",
+   "description": "Where the decision is made.",
+   "members": [
+    "lead",
+    "security",
+    "perf"
+   ],
+   "responder_mode": "lead"
+  },
+  {
+   "id": "bench",
+   "name": "Bench",
+   "description": "Measures and lints.",
+   "members": [
+    "perf",
+    "style"
+   ],
+   "responder_mode": "auto"
+  }
+ ],
+ "topology": [
+  {
+   "from": "bench",
+   "to": "board"
+  }
+ ],
+ "referrals": [
+  {
+   "from": "board",
+   "to": "bench"
+  }
+ ],
+ "goals": [
+  {
+   "id": "ship",
+   "description": "Decide whether the change ships",
+   "subgoals": []
+  }
+ ],
+ "episode": {
+  "turn_budget": 12,
+  "round_width": 3,
+  "revealed_width": 3,
+  "blind_round": true,
+  "quorum_threshold": 3
+ },
+ "sim": {
+  "kind": "script"
+ }
+}

@@ -5,10 +5,11 @@
   "type": "module",
   "description": "Vite app that browses hive-lab run traces served straight from disk.",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 8099 --strictPort",
+    "dev": "vite --host 127.0.0.1 --port 8099 --strictPort",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 8099 --strictPort",
-    "test": "node --test server/scan.test.js src/marks.test.js"
+    "preview": "vite preview --host 127.0.0.1 --port 8099 --strictPort",
+    "test": "node --test server/scan.test.js server/hives.test.js server/recordings.test.js src/marks.test.js src/hive/simulation.test.js src/hive/compare.test.js src/hive/activity.test.js src/hive/player.test.js",
+    "hive-check": "node tools/hive-check.mjs"
   },
   "devDependencies": {
     "vite": "^7.0.0"

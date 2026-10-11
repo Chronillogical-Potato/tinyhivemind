@@ -338,5 +338,5 @@ rule in `AGENTS.md:4` only.
 | Semantic recall fenced by a compaction generation counter | — | Generation-fenced retrieval |
 | Roster/directory rendering for the prompt (`renderBotDirectory`) | Yes — roster records | — |
 | Group handoff refusing to return a stage to its sender | Partly — cross-desk referral is one bounded child turn | An explicit "do not hand back" edge rule |
-| Deliberation: traces, salience, quorum, cross-inhibition, attention market | Yes — `tinyhivemind-hive` | — (Rakazo has no deliberation mechanism at all; a group is N independent bots) |
+| Deliberation: traces, salience, quorum, cross-inhibition, attention market | Yes — core's `hive` module | — (Rakazo has no deliberation mechanism at all; a group is N independent bots) |
 | Enforced purity boundary in CI | Yes — `assert-pure.sh` | — (Rakazo's `packages/core` has leaked `dotenv`, `croner`, plotting) |

@@ -3,6 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-10-10
 - **Supersedes:** [ADR 0028](0028-three-crate-workspace.md) package count
+- **Superseded in part by:** [ADR 0033](0033-editors-write-files-and-the-crate-checks-them.md),
+  which replaces patch authoring with direct file edits that the crate checks
 
 ## Decision
 

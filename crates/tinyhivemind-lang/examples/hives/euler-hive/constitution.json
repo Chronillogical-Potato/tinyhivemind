@@ -1,0 +1,15 @@
+{
+  "hard_constraints": [
+    "no seat but a research seat may reach the web",
+    "no seat may read the host filesystem"
+  ],
+  "max_turns": 80,
+  "max_width": 3,
+  "permitted_edits": [],
+  "read_only_memories": [],
+  "protected_namespaces": [],
+  "contamination_canaries": [],
+  "evaluation": null,
+  "acceptance": null,
+  "telemetry": null
+}

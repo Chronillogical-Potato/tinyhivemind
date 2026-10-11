@@ -1,0 +1,140 @@
+{
+  "kind": "math",
+  "problems": [
+    {
+      "id": "lattice-6x6",
+      "kind": "lattice",
+      "args": [
+        6,
+        6
+      ],
+      "statement": "How many shortest lattice paths run from (0,0) to (6,6) using unit steps right and up?"
+    },
+    {
+      "id": "lattice-5x8",
+      "kind": "lattice",
+      "args": [
+        5,
+        8
+      ],
+      "statement": "How many shortest lattice paths run from (0,0) to (5,8) using unit steps right and up?"
+    },
+    {
+      "id": "modsum-squares",
+      "kind": "modsum",
+      "args": [
+        100,
+        2,
+        97
+      ],
+      "statement": "What is 1^2 + 2^2 + ... + 100^2 modulo 97?"
+    },
+    {
+      "id": "modsum-cubes",
+      "kind": "modsum",
+      "args": [
+        50,
+        3,
+        101
+      ],
+      "statement": "What is 1^3 + 2^3 + ... + 50^3 modulo 101?"
+    },
+    {
+      "id": "digitsum-2pow50",
+      "kind": "digitsum",
+      "args": [
+        2,
+        50
+      ],
+      "statement": "What is the sum of the decimal digits of 2^50?"
+    },
+    {
+      "id": "multiples-3-5",
+      "kind": "multiples",
+      "args": [
+        1000,
+        3,
+        5
+      ],
+      "statement": "What is the sum of all natural numbers below 1000 that are multiples of 3 or 5?"
+    },
+    {
+      "id": "sqdiff-20",
+      "kind": "sqdiff",
+      "args": [
+        20
+      ],
+      "statement": "What is (1 + 2 + ... + 20)^2 minus (1^2 + 2^2 + ... + 20^2)?"
+    },
+    {
+      "id": "primes-200",
+      "kind": "primes",
+      "args": [
+        200
+      ],
+      "statement": "How many primes are there below 200?"
+    }
+  ],
+  "errors": {
+    "classic": 500000,
+    "plus_one": 250000,
+    "minus_one": 250000
+  },
+  "roles": {
+    "conjecturer": {
+      "behaviour": "guess",
+      "accuracy": [
+        250000,
+        450000
+      ]
+    },
+    "computer": {
+      "behaviour": "slice",
+      "accuracy": [
+        300000,
+        600000
+      ]
+    },
+    "prover": {
+      "behaviour": "solve",
+      "accuracy": [
+        450000,
+        750000
+      ]
+    },
+    "verifier": {
+      "behaviour": "check",
+      "accuracy": [
+        500000,
+        800000
+      ]
+    },
+    "synthesizer": {
+      "behaviour": "lead",
+      "accuracy": [
+        450000,
+        750000
+      ]
+    }
+  },
+  "slices": [
+    3,
+    4,
+    5,
+    7,
+    8,
+    9,
+    11,
+    13,
+    16,
+    25
+  ],
+  "baseline": {
+    "role": "solver",
+    "behaviour": "solve",
+    "accuracy": [
+      450000,
+      750000
+    ]
+  }
+}

@@ -206,7 +206,7 @@ and an approval gate that is a compliance convention repeated at every layer
 because the authors evidently don't trust it to hold once. Nothing here folds
 over a transcript; nothing is order-independent, decays, or accumulates a
 score across turns the way `standings`, `salience`, or `directory` do in
-`crates/tinyhivemind-hive`. The "thirteen agents" figure is really thirteen
+`crates/tinyhivemind-core/src/hive/`. The "thirteen agents" figure is really thirteen
 context windows sharing one static routing table — closer to a shell script
 with LLM-shaped steps than to a deliberation protocol.
 

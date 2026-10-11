@@ -1,4 +1,4 @@
-//! Version-two SQLite storage: one state row plus an append-only transcript
+//! Version-two `SQLite` storage: one state row plus an append-only transcript
 //! table, both written in one immediate transaction.
 use super::{Commit, Storage, StorageFuture, StoredState, TranscriptRow, validate};
 use crate::{Error, Message, Result, SendMessage};
@@ -6,9 +6,9 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 use std::{collections::BTreeMap, path::Path, sync::Mutex};
 
 const SCHEMA_VERSION: i64 = 2;
-/// SQLite-backed durable storage, enabled by the default `sqlite` feature.
+/// `SQLite`-backed durable storage, enabled by the default `sqlite` feature.
 ///
-/// Its operations are synchronous SQLite calls inside the returned futures:
+/// Its operations are synchronous `SQLite` calls inside the returned futures:
 /// short local transactions, run on whichever executor polls them.
 #[derive(Debug)]
 pub struct SqliteStorage {
@@ -18,7 +18,7 @@ impl SqliteStorage {
     /// Open or initialize a version-two database, migrating a version-one
     /// whole-snapshot database by moving its transcript into rows.
     /// # Errors
-    /// Returns SQLite errors or rejects an unsupported schema version.
+    /// Returns `SQLite` errors or rejects an unsupported schema version.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let mut connection = Connection::open(path)?;
         connection.execute_batch(
