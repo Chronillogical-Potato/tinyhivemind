@@ -31,7 +31,7 @@ tinyhivemind-openhuman = { path = "../../crates/tinyhivemind-openhuman", feature
 # Pure core tool bookkeeping used by the research experiments.
 tinyhivemind-tools = { path = "../../crates/tinyhivemind-tools" }
 # The DeepSWE opt-in resolves the same durable engine for hive recall and OpenHuman.
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "f30b9bbb7319a6a7c2fb1aaa3670281f1dc4a9ba" }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "7973cac089afaad1068f14e4ded6f4a1724f79e3" }
 # Diagnostic only: OpenHuman sanitises a hosted-agent failure into a fixed
 # string, so the underlying reason is only visible through its own logging.
 env_logger = "0.11"
@@ -42,7 +42,7 @@ wait-timeout = "0.2"
 wiremock = "0.6"
 
 [dev-dependencies]
-tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "f30b9bbb7319a6a7c2fb1aaa3670281f1dc4a9ba", features = ["conformance"] }
+tinymemory-api = { git = "https://github.com/tinyhumansai/tinymemory", rev = "7973cac089afaad1068f14e4ded6f4a1724f79e3", features = ["conformance"] }
 
 # `tinyhivemind-openhuman` above is a member of the root workspace and inherits
 # its harness dependencies from there, which name git sources (see the root
