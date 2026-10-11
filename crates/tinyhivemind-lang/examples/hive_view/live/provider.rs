@@ -135,10 +135,10 @@ pub(crate) struct Provider {
 
 /// `target/hive-live/` under the workspace this example was built in.
 pub(crate) fn artifacts_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/hive-live")
-        .components()
-        .collect()
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    std::fs::canonicalize(&workspace)
+        .unwrap_or(workspace)
+        .join("target/hive-live")
 }
 
 impl Provider {
