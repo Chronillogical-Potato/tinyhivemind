@@ -31,7 +31,7 @@ export function hiveApi({ repo, env = process.env, log = () => {} }) {
   }
 
   // Forward each stdout line of `args` as `event`, then `done`, or `error` with the stderr tail.
-  function streamTo(req, res, args, eventFor) {
+  function streamTo(res, args, eventFor) {
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
     res.write(sse("status", { state: "starting" }));
     let closed = false;
@@ -44,7 +44,9 @@ export function hiveApi({ repo, env = process.env, log = () => {} }) {
       }
       if (!closed) res.write(sse(eventFor(parsed), line));
     });
-    req.on("close", () => {
+    // `res` closes when the client goes away (or after we end it); either way
+    // the child has nothing left to say to anyone.
+    res.on("close", () => {
       closed = true;
       run.kill();
     });
@@ -83,7 +85,7 @@ export function hiveApi({ repo, env = process.env, log = () => {} }) {
       if (!knobs.ok) return send(res, 400, knobs.error), true;
       const problem = query.get("problem") || null;
       if (problem && !validProblem(problem)) return send(res, 400, "bad problem id"), true;
-      streamTo(req, res, runArgs(pkg.dir, knobs.value, problem), () => "frame");
+      streamTo(res, runArgs(pkg.dir, knobs.value, problem), () => "frame");
       return true;
     }
     if (pathname === "/compare") {
@@ -94,7 +96,7 @@ export function hiveApi({ repo, env = process.env, log = () => {} }) {
       const knobs = parseKnobs(query, ["seeds"]);
       if (!knobs.ok) return send(res, 400, knobs.error), true;
       const args = compareArgs(pkgs.map((p) => p.dir), names, knobs.value.seeds ?? 20);
-      streamTo(req, res, args, (o) => (o.type === "summary" ? "summary" : "seed"));
+      streamTo(res, args, (o) => (o.type === "summary" ? "summary" : "seed"));
       return true;
     }
     return false;
