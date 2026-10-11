@@ -158,7 +158,7 @@ async fn run(input: String, output: String) -> Result<()> {
     )
     .await?;
     let host = OpenHumanHost::new(runtime.runtime_id().into(), coordinator.clone())?
-        .with_turn_timeout(Duration::from_secs(180))?
+        .with_turn_timeout(Duration::from_mins(3))?
         .with_management(Arc::new(Factory(Arc::new(runtime))), Arc::new(AllowHost))?;
     for seat in &lowered.seats {
         host.manage("host", language::management_request(seat))
