@@ -77,12 +77,14 @@ impl AgentFactory for SeatFactory {
             let charter = charters.get(id).map_or("", String::as_str);
             let iterations = config["config"]["max_iterations"].as_u64().unwrap_or(10);
             let temperature = config["config"]["temperature"].as_f64().unwrap_or(0.2);
+            // The seat's prompt is the whole system prompt: no orchestrator
+            // identity, workspace or tool sections are composed around it.
             let definition = AgentDefinitionSpec::new()
+                .bare_prompt(system_prompt(prompt, charter, &protocol))
                 .tools(ToolScopeSpec::HostOnly)
                 .max_iterations(usize::try_from(iterations).unwrap_or(10))
                 .temperature(temperature);
             let spec = AgentSpec::new(id)
-                .system_prompt(system_prompt(prompt, charter, &protocol))
                 .definition(definition)
                 .memory(language::memory_binding(&scoped)?);
             Ok(runtime.agent(spec)?)
