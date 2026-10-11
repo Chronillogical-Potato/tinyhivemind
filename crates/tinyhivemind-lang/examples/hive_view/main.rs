@@ -77,8 +77,8 @@ fn parse_args(words: impl IntoIterator<Item = String>) -> Result<Args> {
         },
         ..Args::default()
     };
-    let mut argv = words.into_iter();
-    while let Some(arg) = argv.next() {
+    let mut words = words.into_iter();
+    while let Some(arg) = words.next() {
         match arg.as_str() {
             "--mermaid" => args.mode = Mode::Mermaid,
             "--json" => args.mode = Mode::Json,
@@ -87,18 +87,19 @@ fn parse_args(words: impl IntoIterator<Item = String>) -> Result<Args> {
             "--frames" => args.frames = true,
             "--table" => args.table = true,
             "--compare" => args.mode = Mode::Compare,
-            "--trace" => args.trace = Some(argv.next().ok_or("--trace needs a path")?.into()),
-            "--seeds" => args.seeds = u32::try_from(bounded(&arg, argv.next(), 1, 10_000)?)?,
-            "--seed" => args.knobs.seed = bounded(&arg, argv.next(), 0, u64::MAX)?,
+            "--trace" => args.trace = Some(words.next().ok_or("--trace needs a path")?.into()),
+            "--seeds" => args.seeds = u32::try_from(bounded(&arg, words.next(), 1, 10_000)?)?,
+            "--seed" => args.knobs.seed = bounded(&arg, words.next(), 0, u64::MAX)?,
             "--round-width" => {
-                args.knobs.round_width = Some(u32::try_from(bounded(&arg, argv.next(), 1, 64)?)?);
+                args.knobs.round_width = Some(u32::try_from(bounded(&arg, words.next(), 1, 64)?)?);
             }
             "--turn-budget" => {
-                args.knobs.turn_budget = Some(u32::try_from(bounded(&arg, argv.next(), 1, 2000)?)?);
+                args.knobs.turn_budget =
+                    Some(u32::try_from(bounded(&arg, words.next(), 1, 2000)?)?);
             }
-            "--problem" => args.knobs.problem = Some(argv.next().ok_or("--problem needs an id")?),
+            "--problem" => args.knobs.problem = Some(words.next().ok_or("--problem needs an id")?),
             "--packages" => {
-                let list = argv
+                let list = words
                     .next()
                     .ok_or("--packages needs a comma-separated list")?;
                 args.packages = list
