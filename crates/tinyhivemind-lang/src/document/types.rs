@@ -44,7 +44,13 @@ pub struct Package {
 }
 /// The typed hive definition decoded from `hive.json`.
 ///
-/// Every field is required on the wire.
+/// Only `$schema`, `version`, `id`, `name` and `seats` are required on the
+/// wire. Every list section defaults to empty, and `policies` and
+/// `coordinator` are overlaid on [`Policies::default`] and
+/// [`CoordinatorSettings::default`]: a JSON object merges key by key into the
+/// default (recursively), and any other value replaces it, so a manifest names
+/// only the settings it changes. Serialization always writes every field, so
+/// a stored manifest is complete.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
@@ -61,30 +67,41 @@ pub struct Manifest {
     /// Human-readable hive name, carried unchanged into lowering.
     pub name: String,
     /// The roles seats and missions refer to, each with its own charter.
+    #[serde(default)]
     pub roles: Vec<Role>,
     /// The agents the host creates, one per seat.
     pub seats: Vec<Seat>,
     /// Core desk values; every member must name a declared seat, at most once.
+    ///
+    /// A desk's `description` may be omitted and defaults to `None`.
+    #[serde(default, deserialize_with = "super::defaults::desks")]
     pub desks: Vec<Desk>,
     /// Goals, which may decompose into subgoals; the decomposition must be
     /// acyclic.
+    #[serde(default)]
     pub goals: Vec<Goal>,
     /// Missions assigning goals to roles.
+    #[serde(default)]
     pub missions: Vec<Mission>,
     /// Directed parent-to-child desk hierarchy; both ends must name declared
     /// desks, and cycles are permitted.
+    #[serde(default)]
     pub topology: Vec<Link>,
     /// Directed channels along which one desk may refer work to another; both
     /// ends must name declared desks.
+    #[serde(default)]
     pub referrals: Vec<Link>,
     /// Paths of shared context documents. Each must start with `context/`,
     /// end in `.md`, be present in [`Package::documents`], and carry
     /// well-formed, unique `<!-- item:id -->` markers.
+    #[serde(default)]
     pub context: Vec<String>,
     /// Core policy values the host installs on activation, bounded by the
     /// constitution.
+    #[serde(default, deserialize_with = "super::defaults::policies")]
     pub policies: Policies,
     /// Scheduling settings for a host coordinator.
+    #[serde(default, deserialize_with = "super::defaults::coordinator")]
     pub coordinator: CoordinatorSettings,
 }
 impl Default for Manifest {
@@ -123,13 +140,18 @@ pub struct Role {
     pub charter: String,
 }
 /// One seat: an agent the host creates and places on desks.
+///
+/// On the wire only `id`, `role`, `prompt` and `template` are required:
+/// `label` defaults to the seat's `id`, `config` to `{}`, `model` to `null`,
+/// and `tools`, `mcp` and `skills` to empty. Unknown fields are rejected.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "super::defaults::SeatWire")]
 pub struct Seat {
     /// The seat's identity, unique among seats; desk members, memory bindings
     /// and routing candidates refer to it.
     pub id: String,
-    /// Display label, also used as the routing candidate label.
+    /// Display label, also used as the routing candidate label; defaults to
+    /// the seat's `id` when omitted.
     pub label: String,
     /// Identity of the [`Role`] this seat fills; must name a declared role.
     pub role: String,
@@ -146,7 +168,8 @@ pub struct Seat {
     /// Name of the host factory template that creates the agent; must be
     /// non-blank. Never a credential.
     pub template: String,
-    /// Opaque, nonsecret factory configuration passed through to the host.
+    /// Opaque, nonsecret factory configuration passed through to the host;
+    /// `{}` when omitted.
     pub config: Value,
     /// Model the host should run the seat on; `None` leaves it to the host.
     pub model: Option<String>,
@@ -159,8 +182,10 @@ pub struct Seat {
     pub skills: Vec<String>,
 }
 /// A seat's tool access, enforced by the host; this crate only carries it.
+///
+/// Both lists default to empty when omitted, as does the whole value.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct ToolAccess {
     /// Tool names the seat may call.
     pub allow: Vec<String>,
@@ -177,10 +202,13 @@ pub struct Goal {
     pub description: String,
     /// Acceptance criteria, opaque to this crate and judged by the host.
     /// Unlike `acceptance` elsewhere in a package, these are editable by a
-    /// [`crate::patch::PatchClass::Goal`] proposal.
+    /// [`crate::patch::PatchClass::Goal`] proposal. Empty when omitted.
+    #[serde(default)]
     pub acceptance: Vec<String>,
     /// Identities of child goals; each must name a declared goal, and the
     /// whole decomposition must be acyclic ([`crate::Error::GoalCycle`]).
+    /// Empty when omitted.
+    #[serde(default)]
     pub subgoals: Vec<String>,
 }
 /// One mission: an obligation assigning goals to a role.
@@ -287,9 +315,10 @@ impl Default for Policies {
 ///
 /// This crate only validates and carries them; a host maps them onto its own
 /// coordinator (the `OpenHuman` adapter's `coordinator_options` copies them
-/// field for field).
+/// field for field). Any omitted field takes its value from
+/// [`CoordinatorSettings::default`].
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct CoordinatorSettings {
     /// Most turns the coordinator runs concurrently; nonzero and at most the
     /// constitution's `max_width`.
@@ -313,9 +342,10 @@ impl Default for CoordinatorSettings {
         }
     }
 }
-/// Bounds on the records a coordinator retains; `None` means unbounded.
+/// Bounds on the records a coordinator retains; `None` means unbounded, and
+/// is the value of any omitted field.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct RetentionSettings {
     /// Most recent finished episodes to keep.
     pub settled_episodes: Option<usize>,
