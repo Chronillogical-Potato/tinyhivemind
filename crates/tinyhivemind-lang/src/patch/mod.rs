@@ -1,13 +1,20 @@
 //! Atomic editor proposals, stable Markdown deltas, and immutable host guards.
 
+mod derive;
 mod items;
 mod types;
 use crate::Package;
 use serde_json::Value;
+pub(crate) use derive::{CLASSES, fields, lifecycle, modification, owner, replay_items};
 pub use types::{AppliedPatch, Error, Operation, Patch, PatchClass, Result};
 
 pub(crate) fn validate_context(source: &str) -> Result<()> {
     items::items(source).map(|_| ())
+}
+
+/// The byte offset of a document's body, after any frontmatter.
+pub(crate) fn body_offset(document: &str) -> usize {
+    items::body_offset(document)
 }
 
 fn boundary(class: PatchClass, op: &Operation) -> bool {
@@ -60,7 +67,9 @@ fn boundary(class: PatchClass, op: &Operation) -> bool {
     }
 }
 
-fn protected(value: &Value) -> std::collections::BTreeMap<String, Value> {
+/// Every protected key's JSON Pointer and value: `evaluation`, `telemetry`,
+/// `logging` and `constitution` anywhere, and `acceptance` outside `goals`.
+pub(crate) fn protected(value: &Value) -> std::collections::BTreeMap<String, Value> {
     fn visit(
         value: &Value,
         path: &str,
@@ -377,84 +386,23 @@ pub fn guard(original: &Package, proposed: &Package, patch: &Patch) -> Result<()
 pub fn diff(original: &Package, proposed: &Package, class: PatchClass) -> Result<Patch> {
     let old = serde_json::to_value(original)?;
     let new = serde_json::to_value(proposed)?;
-    let mut operations = Vec::new();
-    for root in ["manifest", "memory"] {
-        let old_fields = old[root]
-            .as_object()
-            .ok_or_else(|| Error::Pointer(root.into()))?;
-        let new_fields = new[root]
-            .as_object()
-            .ok_or_else(|| Error::Pointer(root.into()))?;
-        let keys: std::collections::BTreeSet<_> =
-            old_fields.keys().chain(new_fields.keys()).collect();
-        for key in keys {
-            if old_fields.get(key) != new_fields.get(key) {
-                operations.push(Operation::Json {
-                    pointer: format!("/{root}/{key}"),
-                    before: old_fields.get(key).cloned(),
-                    after: new_fields.get(key).cloned(),
-                });
-            }
-        }
-    }
+    let mut operations = derive::fields(&old, &new, "manifest");
+    operations.extend(derive::fields(&old, &new, "memory"));
     let paths: std::collections::BTreeSet<_> = original
         .documents
         .keys()
         .chain(proposed.documents.keys())
         .collect();
-    for path in paths {
-        if original.documents.contains_key(path) != proposed.documents.contains_key(path) {
-            operations.push(Operation::Document {
-                path: path.clone(),
-                before: original.documents.get(path).cloned(),
-                after: proposed.documents.get(path).cloned(),
-            });
-        }
-    }
+    operations.extend(paths.into_iter().filter_map(|path| {
+        derive::lifecycle(
+            path,
+            original.documents.get(path),
+            proposed.documents.get(path),
+        )
+    }));
     for (path, before) in &original.documents {
-        let Some(after) = proposed.documents.get(path) else {
-            continue;
-        };
-        if before == after {
-            continue;
-        }
-        if path.starts_with("context/") {
-            let old_items = items::items(before)?;
-            let new_items = items::items(after)?;
-            let keys: std::collections::BTreeSet<_> = old_items
-                .iter()
-                .chain(&new_items)
-                .map(|(id, _, _, _)| id)
-                .collect();
-            for id in keys {
-                let before = old_items
-                    .iter()
-                    .find(|(key, _, _, _)| key == id)
-                    .map(|(_, _, _, body)| body.clone());
-                let after = new_items
-                    .iter()
-                    .find(|(key, _, _, _)| key == id)
-                    .map(|(_, _, _, body)| body.clone());
-                if before != after {
-                    operations.push(Operation::Context {
-                        path: path.clone(),
-                        item: id.clone(),
-                        before,
-                        after,
-                    });
-                }
-            }
-        } else {
-            let old_offset = items::body_offset(before);
-            let new_offset = items::body_offset(after);
-            if before[..old_offset] != after[..new_offset] {
-                return Err(Error::Immutable);
-            }
-            operations.push(Operation::Prompt {
-                path: path.clone(),
-                before: before[old_offset..].into(),
-                after: after[new_offset..].into(),
-            });
+        if let Some(after) = proposed.documents.get(path) {
+            operations.extend(derive::modification(path, before, after)?);
         }
     }
     let patch = Patch { class, operations };
