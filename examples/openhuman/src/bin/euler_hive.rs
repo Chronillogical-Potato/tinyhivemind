@@ -179,6 +179,11 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run(args: Args) -> anyhow::Result<()> {
+    // Provider-side browsing would bypass the research-only search belt.
+    let model = args.model.to_ascii_lowercase();
+    if ["online", "search", "sonar", "web"].iter().any(|word| model.contains(word)) {
+        anyhow::bail!("web-enabled model ids are refused; research uses the filtered search tool");
+    }
     let openrouter_key = secret("OPENROUTER_API_KEY")?;
     let tinyhumans_key = secret("TINYHUMANS_API_KEY")?;
     let backend =

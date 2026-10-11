@@ -168,7 +168,7 @@ pub(super) fn desk_of<'a>(hive: &'a LoweredHive, seat: &str) -> Option<&'a Desk>
 }
 
 /// Convert a minimal problem page to Markdown: paragraphs kept, tags dropped,
-/// entities decoded, TeX left as written.
+/// entities decoded, superscripts/subscripts made explicit, TeX left as written.
 pub(super) fn problem_markdown(html: &str) -> String {
     let mut text = String::with_capacity(html.len());
     let mut rest = html;
@@ -178,11 +178,15 @@ pub(super) fn problem_markdown(html: &str) -> String {
             rest = "";
             break;
         };
-        let tag = rest[start + 1..start + end]
-            .trim_start_matches('/')
-            .to_ascii_lowercase();
-        if tag.starts_with('p') || tag.starts_with("br") || tag.starts_with("div") {
-            text.push_str("\n\n");
+        let raw = rest[start + 1..start + end].trim();
+        let closing = raw.starts_with('/');
+        let tag = raw.trim_start_matches('/').split_whitespace().next()
+            .unwrap_or("").trim_end_matches('/').to_ascii_lowercase();
+        match tag.as_str() {
+            "sup" => text.push_str(if closing { ")" } else { "^(" }),
+            "sub" => text.push_str(if closing { ")" } else { "_(" }),
+            "p" | "br" | "div" => text.push_str("\n\n"),
+            _ => {}
         }
         rest = &rest[start + end + 1..];
     }
