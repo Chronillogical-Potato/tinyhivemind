@@ -165,7 +165,7 @@ fn a_disabled_policy_refuses_every_report_and_desks_decide_alone() -> Result<()>
     let mut loaded = load(&gallery("math-swarm"))?;
     loaded.lowered.policies.referral.enabled = false;
     let (seen, _) = watch(&loaded, 2)?;
-    assert!(!seen.referrals.is_empty());
+    assert_ne!((seen.referrals).len(), 0);
     assert!(
         seen.referrals
             .iter()
@@ -179,7 +179,7 @@ fn a_disabled_policy_refuses_every_report_and_desks_decide_alone() -> Result<()>
 fn a_one_desk_package_routes_nothing_and_reports_its_own_desk() -> Result<()> {
     let loaded = load(&gallery("math-panel"))?;
     let (seen, _) = watch(&loaded, 4)?;
-    assert!(seen.referrals.is_empty());
+    assert_eq!((seen.referrals).len(), 0);
     assert_eq!(seen.ends.len(), 0);
     assert!(seen.rounds.iter().all(|round| round.desk == "panel"
         && round.desk_round == round.round
@@ -307,7 +307,7 @@ fn an_ask_to_an_unlinked_desk_is_refused() -> Result<()> {
     assert!(!refused.accepted);
     assert_eq!(refused.reason.as_deref(), Some("unlinked"));
     assert_eq!(refused.to_desk, "synthesis");
-    assert!(speaker.answered.is_empty());
+    assert_eq!((speaker.answered).len(), 0);
     Ok(())
 }
 

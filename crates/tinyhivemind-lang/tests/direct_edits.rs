@@ -298,6 +298,6 @@ fn check_packages_matches_check_on_the_decoded_files() -> Result<()> {
             Rule::ForbiddenClass
         )]
     );
-    assert!(accepted(check_packages(&base, &base))?.changes.is_empty());
+    assert_eq!((accepted(check_packages(&base, &base))?.changes).len(), 0);
     Ok(())
 }

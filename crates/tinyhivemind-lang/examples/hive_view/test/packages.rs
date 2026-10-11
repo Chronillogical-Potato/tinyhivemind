@@ -57,7 +57,7 @@ fn the_mermaid_view_has_an_edge_for_every_topology_link() -> Result<()> {
     let loaded = load(&gallery("incident-response"))?;
     let chart = mermaid(&loaded.lowered);
     assert!(chart.starts_with("flowchart LR\n"));
-    assert!(!loaded.lowered.topology.is_empty());
+    assert_ne!((loaded.lowered.topology).len(), 0);
     for link in &loaded.lowered.topology {
         let edge = format!("  {} --> {}\n", node(&link.from), node(&link.to));
         assert!(chart.contains(&edge), "missing {edge:?} in\n{chart}");

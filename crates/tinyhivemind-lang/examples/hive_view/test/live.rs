@@ -108,7 +108,10 @@ fn a_reply_without_a_valid_trace_line_is_recorded_as_a_note_that_cannot_vote() {
     assert!(!parsed.valid);
     assert!(parsed.content.starts_with("note: vote"));
     let row = speech(3, "seat", &parsed.content);
-    assert!(tinyhivemind_core::hive::trace::read(std::slice::from_ref(&row)).is_empty());
+    assert_eq!(
+        (tinyhivemind_core::hive::trace::read(std::slice::from_ref(&row))).len(),
+        0
+    );
     assert_eq!(parse("").content, "note: (empty reply)");
 }
 

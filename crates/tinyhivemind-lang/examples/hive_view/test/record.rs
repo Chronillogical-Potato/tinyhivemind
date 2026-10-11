@@ -68,7 +68,7 @@ fn a_human_run_still_records_frames_but_prints_none() -> Result<()> {
     };
     let mut out = Vec::new();
     writer.emit(&mut out, &end())?;
-    assert!(out.is_empty());
+    assert_eq!((out).len(), 0);
     let kept = String::from_utf8(probe.written.borrow().clone())?;
     assert_eq!(kept.lines().count(), 1);
     Ok(())
