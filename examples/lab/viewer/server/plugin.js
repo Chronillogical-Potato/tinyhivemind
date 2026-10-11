@@ -1,9 +1,12 @@
 // Vite plugin: `/api/runs` lists traces, `/api/runs/<id>` returns one as text,
 // and `/api/events` is a server-sent-event stream that fires when the set of
 // traces (or any trace's size) changes, so a run in progress shows up live.
+// `/api/hives` and `/api/compare` run hive packages; see hive-api.js.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { hiveApi } from "./hive-api.js";
+import { repoRoot } from "./hives.js";
 import { resolveId, rootsFromEnv, scan } from "./scan.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -26,11 +29,18 @@ export function runsPlugin() {
       }, POLL_MS);
       server.httpServer?.on("close", () => clearInterval(timer));
       server.config.logger.info(`  runs: ${roots.length ? roots.join(", ") : "(none; set HIVE_RUNS)"}`);
+      const hives = hiveApi({ repo: repoRoot(here), log: (m) => server.config.logger.info(`  hives: ${m}`) });
+      server.config.logger.info(`  hives: ${hives.root}`);
 
       server.middlewares.use("/api", (req, res, next) => {
         const url = new URL(req.url, "http://x");
         res.setHeader("Cache-Control", "no-store");
-        if (url.pathname === "/runs") {
+        if (url.pathname === "/hives" || url.pathname.startsWith("/hives/") || url.pathname === "/compare") {
+          hives.handle(url.pathname, url.searchParams, req, res).catch((err) => {
+            if (!res.headersSent) res.statusCode = 500;
+            res.end(String(err.message));
+          });
+        } else if (url.pathname === "/runs") {
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify({ roots, runs: scan(roots) }));
         } else if (url.pathname.startsWith("/runs/")) {
