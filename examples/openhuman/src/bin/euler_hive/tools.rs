@@ -120,6 +120,8 @@ pub(super) struct Services {
     pub(super) budget: Arc<Budget>,
     pub(super) run: Arc<RunDir>,
     pub(super) run_id: String,
+    /// The statement's literal data, which no search may quote.
+    pub(super) literals: Vec<String>,
 }
 
 /// Who a belt belongs to and where its speaking tools may point.
@@ -332,6 +334,12 @@ impl HiveTool {
 
     async fn web_search(&self, args: &Value) -> Result<String, String> {
         let query = text(args, "query")?;
+        if let Some(refusal) = super::search::refused_query(query, &self.services.literals) {
+            self.services.run.event(
+                &json!({"event": "web_search_refused", "seat": self.scope.seat, "query": query}),
+            );
+            return Err(refusal);
+        }
         let provider = Provider::parse(args.get("provider").and_then(Value::as_str))
             .map_err(|e| e.to_string())?;
         let search = self

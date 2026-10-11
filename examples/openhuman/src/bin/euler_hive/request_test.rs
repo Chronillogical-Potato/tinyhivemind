@@ -153,6 +153,7 @@ async fn requests_carry_allowed_tools() {
         budget: Arc::new(Budget::new(Limits::SMOKE)),
         run: Arc::new(RunDir::create(dir.path().join("run")).expect("run dir")),
         run_id: "offline".into(),
+        literals: Vec::new(),
     });
     for id in ["theory-designer", "research-librarian", "verify-adversary"] {
         let seat = hive.seats.iter().find(|seat| seat.id == id).expect("seat");

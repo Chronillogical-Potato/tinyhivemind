@@ -301,6 +301,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         budget: budget.clone(),
         run: run.clone(),
         run_id: run_id.clone(),
+        literals: search::statement_literals(&statement),
     });
     let mut seats: BTreeMap<String, Arc<turn::Seat>> = BTreeMap::new();
     for seat in &lowered.seats {

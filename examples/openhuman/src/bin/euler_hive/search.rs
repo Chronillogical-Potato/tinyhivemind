@@ -290,3 +290,48 @@ fn grounding_urls(metadata: &Value) -> Vec<String> {
         })
         .unwrap_or_default()
 }
+
+/// Phrases that look a problem up rather than its mathematics.
+const LOOKUP_PHRASES: [&str; 4] = [
+    "project euler",
+    "projecteuler",
+    "euler problem",
+    "problem 10",
+];
+
+/// The literal data a statement gives: numbers of five or more digits and
+/// upper-case words of five or more letters. A query quoting any of them is
+/// hunting for the problem itself, not its theory.
+pub(super) fn statement_literals(statement: &str) -> Vec<String> {
+    let mut literals: Vec<String> = statement
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '.'))
+        .map(|token| token.trim_matches('.'))
+        .filter(|token| {
+            let digits = token.chars().filter(char::is_ascii_digit).count();
+            let upper = !token.is_empty() && token.chars().all(|c| c.is_ascii_uppercase());
+            (digits >= 5 && token.chars().all(|c| c.is_ascii_digit() || c == '.'))
+                || (upper && token.len() >= 5)
+        })
+        .map(str::to_owned)
+        .collect();
+    literals.sort();
+    literals.dedup();
+    literals
+}
+
+/// Why `query` is refused, if it quotes the statement's data or names the
+/// problem's source rather than asking about mathematics.
+pub(super) fn refused_query(query: &str, literals: &[String]) -> Option<String> {
+    let lower = query.to_lowercase();
+    if let Some(phrase) = LOOKUP_PHRASES.iter().find(|phrase| lower.contains(*phrase)) {
+        return Some(format!(
+            "queries may not look the problem up (\"{phrase}\"); search for the mathematics"
+        ));
+    }
+    literals
+        .iter()
+        .find(|literal| query.contains(literal.as_str()))
+        .map(|_| {
+            "queries may not quote the problem's own data; search for the mathematics".to_owned()
+        })
+}
