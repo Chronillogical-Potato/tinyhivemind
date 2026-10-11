@@ -5,6 +5,8 @@
 
 # Live hive_view run artifacts (requests, replies, frames, usage). Kept out
 # of target/ so `cargo clean` does not wipe them; override with HIVE_RUNS_DIR.
+# The euler_hive example writes its runs (problem statements, transcripts,
+# sandbox programs, answers, oracles) here too; none of it may be committed.
 /hive-runs/
 **/*.rs.bk
 *.pdb
