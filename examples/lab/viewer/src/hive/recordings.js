@@ -45,7 +45,7 @@ export function renderRecordings(host, list, onOpen, showAll, onShowAll) {
         h("button", { type: "button", class: "hv-rec", "data-id": r.id, onclick: () => onOpen(r.id), title: r.path },
           r.ended ? null : h("span", { class: `hv-badge-live${r.live ? "" : " quiet"}` }, r.live ? "LIVE" : going ? "QUIET" : "STOPPED"),
           h("strong", {}, ` ${r.package}`),
-          h("span", { class: "muted" }, ` ${recordingLabel(r).split(" · ").slice(1).join(" · ")} · ${state} · ${new Date(r.started).toLocaleString()}`)));
+          h("span", { class: "muted" }, ` ${recordingLabel(r).split(" · ").slice(1).join(" · ")} · ${state} · ${r.model ?? "offline"} · ${new Date(r.started).toLocaleString()}`)));
     })),
     ordered.length > rows.length ? h("button", { type: "button", onclick: onShowAll }, `Show all ${ordered.length}`) : null);
 }
