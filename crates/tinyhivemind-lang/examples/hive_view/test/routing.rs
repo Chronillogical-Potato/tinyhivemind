@@ -139,7 +139,12 @@ fn a_report_past_max_hops_is_refused_by_core() -> Result<()> {
         if referral.accepted {
             assert_eq!(referral.hops, 1, "{referral:?}");
         } else {
-            assert_eq!(referral.reason.as_deref(), Some("hop_limit_reached"));
+            // Feedback to a desk that already ended is refused by this host.
+            let reason = referral.reason.as_deref();
+            assert!(
+                matches!(reason, Some("hop_limit_reached" | "desk_closed")),
+                "{referral:?}"
+            );
         }
     }
     let from = |desk: &str| -> Vec<bool> {
