@@ -226,7 +226,7 @@ fn unparseable_json_names_its_file_and_line() -> Result<()> {
 fn an_unowned_change_is_reported_rather_than_accepted() -> Result<()> {
     let mut files = edited("README.md", |readme| format!("{readme}\nEdited.\n"));
     edit_json(&mut files, "hive.json", |hive| {
-        hive["name"] = "Renamed".into()
+        hive["name"] = "Renamed".into();
     })?;
     files.insert("notes.txt".into(), "scratch\n".into());
     let diagnostics = refusal(check(&original(), &files))?;
