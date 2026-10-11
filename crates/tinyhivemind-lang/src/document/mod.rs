@@ -106,11 +106,40 @@ fn decode<T: serde::de::DeserializeOwned + serde::Serialize>(
     // The wire types serialize infallibly; were one ever to fail, a null
     // output simply skips the unknown-field comparison.
     let output = serde_json::to_value(&decoded).unwrap_or(serde_json::Value::Null);
+    if let Some(pointer) = positional(&input, &output) {
+        let pointer = Some(pointer).filter(|pointer| !pointer.is_empty());
+        found.push(json("expected a JSON object".into()), path, pointer);
+        return None;
+    }
     if let Some(pointer) = unknown_field(&input, &output) {
         found.push(json("unknown nested schema field".into()), path, pointer);
         return None;
     }
     Some(decoded)
+}
+
+/// The JSON Pointer of the first array the typed output holds as an object.
+///
+/// serde decodes a struct from a JSON array of its fields in order, and a
+/// struct whose fields all have defaults from an empty one, so without this
+/// pass `"tools": []` or a `constitution.json` of `[]` would quietly decode
+/// as the defaults. Every section of the language is written as an object.
+fn positional(input: &serde_json::Value, output: &serde_json::Value) -> Option<String> {
+    match (input, output) {
+        (serde_json::Value::Array(_), serde_json::Value::Object(_)) => Some(String::new()),
+        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
+            a.iter().find_map(|(key, value)| {
+                let tail = positional(value, b.get(key)?)?;
+                Some(format!("/{}{tail}", escape(key)))
+            })
+        }
+        (serde_json::Value::Array(a), serde_json::Value::Array(b)) => a
+            .iter()
+            .zip(b)
+            .enumerate()
+            .find_map(|(i, (a, b))| positional(a, b).map(|tail| format!("/{i}{tail}"))),
+        _ => None,
+    }
 }
 
 pub(crate) fn has_unknown_fields(input: &serde_json::Value, output: &serde_json::Value) -> bool {
