@@ -91,19 +91,43 @@ function drawEdges(g, structure, lay, crossings, fresh) {
 }
 
 // When each packet was first drawn, per run (keyed by its start frame), so a
-// redraw mid-flight resumes the animation instead of restarting it.
+// redraw mid-flight resumes the flight instead of restarting it.
 const firstSeen = new WeakMap();
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const clock = () => (typeof performance === "object" ? performance.now() : Date.now());
+let frame = null; // the one running animation loop; a redraw replaces it
 
-/**
- * Draw this step's packets; returns `[{el, offset}]`, animations to start
- * once the SVG is in the document. Inline SVG shares the page's clock, so a
- * `begin` written as an attribute would be relative to page load; starting
- * each one with `beginElementAt(offset)` makes it relative to now instead.
- */
+/** Where along its edge (curve parameter 0..1) a packet is after `p` of its flight. */
+function flight(p, accepted) {
+  const q = Math.max(0, Math.min(1, p));
+  if (accepted) return q;
+  return q < 0.7 ? (0.55 * q) / 0.7 : 0.55 - (0.13 * (q - 0.7)) / 0.3; // stop short, bounce back
+}
+
+/** Move every packet to where it is now; keep going while any is in flight. */
+function fly(packets) {
+  if (typeof cancelAnimationFrame === "function" && frame != null) cancelAnimationFrame(frame);
+  frame = null;
+  const step = () => {
+    const now = clock();
+    let flying = false;
+    for (const pk of packets) {
+      const p = (now - pk.start) / (PACKET_S * 1000);
+      pk.dot.setAttribute("visibility", p < 0 ? "hidden" : "visible");
+      const at = pointOn(pk.curve, flight(p, pk.accepted));
+      pk.dot.setAttribute("cx", at.x.toFixed(1));
+      pk.dot.setAttribute("cy", at.y.toFixed(1));
+      if (p < 1) flying = true;
+    }
+    if (flying && typeof requestAnimationFrame === "function") frame = requestAnimationFrame(step);
+  };
+  step();
+}
+
+/** Draw this step's packets; returns them for `fly`. */
 function drawPackets(g, structure, lay, state) {
-  const starts = [];
-  const now = typeof performance === "object" ? performance.now() : Date.now();
+  const packets = [];
+  const now = clock();
   let seen = state.start ? firstSeen.get(state.start) : null;
   if (state.start && !seen) firstSeen.set(state.start, (seen = new Map()));
   const still = reducedMotion();
@@ -119,26 +143,10 @@ function drawPackets(g, structure, lay, state) {
     }
     const first = seen?.get(ref.id) ?? now;
     seen?.set(ref.id, first);
-    const elapsed = still ? 3600 : (now - first) / 1000;
     const group = s("g", { class: `hv-packet ${ref.accepted ? "accepted" : "refused"}` });
-    // Hidden until its turn in the stagger, so it never sits at the origin.
-    const offset = i * STAGGER_S - elapsed;
-    let dot;
-    if (offset + PACKET_S <= 0) {
-      // Already landed (a redraw after the flight, or reduced motion): draw it where it stopped.
-      const at = ref.accepted ? curve.q : pointOn(curve, 0.42);
-      dot = s("circle", { r: ref.accepted ? 6 : 5.5, cx: at.x, cy: at.y });
-    } else {
-      dot = s("circle", { r: ref.accepted ? 6 : 5.5, visibility: "hidden" });
-      const show = s("set", { attributeName: "visibility", to: "visible", begin: "indefinite", fill: "freeze" });
-      const move = s("animateMotion", {
-        dur: `${PACKET_S}s`, begin: "indefinite", fill: "freeze", path: curve.d,
-        ...(ref.accepted ? {} : { keyPoints: "0;0.55;0.42", keyTimes: "0;0.7;1", calcMode: "linear" }),
-      });
-      dot.append(show, move);
-      starts.push({ el: show, offset }, { el: move, offset });
-    }
+    const dot = s("circle", { r: ref.accepted ? 6 : 5.5, visibility: "hidden" });
     group.append(dot);
+    packets.push({ dot, curve, accepted: !!ref.accepted, start: still ? -Infinity : first + i * STAGGER_S * 1000 });
     group.append(s("title", {}, `${describeReferral(ref)}${ref.content ? `\n${ref.content}` : ""}`));
     if (!ref.accepted) {
       const at = pointOn(curve, 0.45);
@@ -149,7 +157,7 @@ function drawPackets(g, structure, lay, state) {
     }
     g.append(group);
   });
-  return starts;
+  return packets;
 }
 
 function deskBadge(g, desk, end, answer) {
@@ -306,9 +314,9 @@ export function renderGraph(host, structure, state, ui) {
   drawDesks(g, structure, lay, state);
   drawEdges(g, structure, lay, state.crossings, state.fresh ?? []);
   drawSeats(g, structure, lay, state, ui, onHover);
-  const starts = drawPackets(g, structure, lay, state);
+  const packets = drawPackets(g, structure, lay, state);
   svg.append(g, bubbles);
   onHover(null);
   host.replaceChildren(svg, legend(structure, structure.sim?.kind === "math", (structure.desks ?? []).length > 1));
-  for (const { el, offset } of starts) el.beginElementAt?.(offset);
+  fly(packets);
 }
