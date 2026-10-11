@@ -77,6 +77,13 @@ pub(super) fn memory(package: &Package, seats: &BTreeSet<&str>, found: &mut Find
             format!("/read_only_memories/{i}"),
         );
     }
+    declared(package, &ids, found);
+    bound_seats(package, seats, &ids, found);
+}
+
+/// Each identity's namespace, kind, fork parent and read-only pin.
+fn declared(package: &Package, ids: &BTreeSet<&str>, found: &mut Findings) {
+    let spec = &package.memory;
     for (i, identity) in spec.identities.iter().enumerate() {
         let at = format!("/identities/{i}/namespace");
         let namespace = &identity.namespace;
@@ -101,7 +108,7 @@ pub(super) fn memory(package: &Package, seats: &BTreeSet<&str>, found: &mut Find
         }
         if let Some(parent) = &identity.fork_parent {
             let at = format!("/identities/{i}/fork_parent");
-            if found.check(reference("memory", parent, &ids), MEMORY, at.clone())
+            if found.check(reference("memory", parent, ids), MEMORY, at.clone())
                 && let Some(declared) = spec.identities.iter().find(|v| &v.id == parent)
                 && !namespace.starts_with(&format!("{}/", declared.namespace))
             {
@@ -121,6 +128,16 @@ pub(super) fn memory(package: &Package, seats: &BTreeSet<&str>, found: &mut Find
             );
         }
     }
+}
+
+/// Each binding's seat, identity, budget and read reaches.
+fn bound_seats(
+    package: &Package,
+    seats: &BTreeSet<&str>,
+    ids: &BTreeSet<&str>,
+    found: &mut Findings,
+) {
+    let spec = &package.memory;
     for (i, binding) in spec.bindings.iter().enumerate() {
         found.check(
             reference("seat", &binding.seat, seats),
@@ -128,7 +145,7 @@ pub(super) fn memory(package: &Package, seats: &BTreeSet<&str>, found: &mut Find
             format!("/bindings/{i}/seat"),
         );
         found.check(
-            reference("memory", &binding.identity, &ids),
+            reference("memory", &binding.identity, ids),
             MEMORY,
             format!("/bindings/{i}/identity"),
         );

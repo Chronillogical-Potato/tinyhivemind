@@ -68,6 +68,15 @@ pub(super) fn bounds(package: &Package, found: &mut Findings) {
         HIVE,
         "/policies/episode/dominance_cap",
     );
+    rounds(package, found);
+    policies(package, found);
+}
+
+/// Division, routing, coordinator and conduct widths and walls.
+fn rounds(package: &Package, found: &mut Findings) {
+    let p = &package.manifest.policies;
+    let c = &package.constitution;
+    let settings = &package.manifest.coordinator;
     bound(
         found,
         "division.round_width",
@@ -127,6 +136,11 @@ pub(super) fn bounds(package: &Package, found: &mut Findings) {
         HIVE,
         "/coordinator/broadcast_budget",
     );
+}
+
+/// The remaining policies' nonzero budgets and enabled-feature caps.
+fn policies(package: &Package, found: &mut Findings) {
+    let p = &package.manifest.policies;
     bound(
         found,
         "digest",

@@ -39,32 +39,38 @@ pub fn check(
     let base = valid_original(diagnose_documents(original))?;
     let (edit, mut out) = diagnose_documents(edited);
     rules::outside_package(original, edited, &mut out);
-    let operations = match &edit {
-        Some(edit) => compare(&base, edit, &mut out),
-        None => {
-            // The edit did not decode, so only the raw files can be read:
-            // the constitution as JSON, and every other file for canaries.
-            if let Some(value) = edited
-                .get(CONSTITUTION)
-                .and_then(|source| serde_json::from_str(source).ok())
-            {
-                rules::constitution(&rules::wire(&base.constitution), &value, &mut out);
-            }
-            let files = edited
-                .iter()
-                .filter(|(path, _)| path.as_str() != CONSTITUTION)
-                .map(|(path, source)| {
-                    let content = serde_json::from_str(source)
-                        .ok()
-                        .filter(|_| path.ends_with(".json"))
-                        .map_or(rules::Content::Text(source), rules::Content::Json);
-                    (path.as_str(), content)
-                });
-            rules::canaries(&base, files, &mut out);
-            vec![]
-        }
+    let operations = if let Some(edit) = &edit {
+        compare(&base, edit, &mut out)
+    } else {
+        undecoded(&base, edited, &mut out);
+        vec![]
     };
-    finish(&base, edit, out, operations)
+    finish(&base, edit, out, &operations)
+}
+
+/// The edit did not decode, so only its raw files can be read: the
+/// constitution as JSON, and every other file for canaries.
+fn undecoded(base: &Package, edited: &BTreeMap<String, String>, out: &mut Vec<Diagnostic>) {
+    if let Some(value) = edited
+        .get(CONSTITUTION)
+        .and_then(|source| serde_json::from_str(source).ok())
+    {
+        rules::constitution(&rules::wire(&base.constitution), &value, out);
+    }
+    let files = edited
+        .iter()
+        .filter(|(path, _)| path.as_str() != CONSTITUTION)
+        .map(|(path, source)| {
+            let json = std::path::Path::new(path)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json"));
+            let content = serde_json::from_str(source)
+                .ok()
+                .filter(|_| json)
+                .map_or(rules::Content::Text(source), rules::Content::Json);
+            (path.as_str(), content)
+        });
+    rules::canaries(base, files, out);
 }
 
 /// Check an edited package against the original it was made from.
@@ -78,7 +84,7 @@ pub fn check_packages(original: &Package, edited: &Package) -> Result<Review, Ve
     let base = valid_original((Some(original.clone()), diagnose(original)))?;
     let mut out = diagnose(edited);
     let operations = compare(&base, edited, &mut out);
-    finish(&base, Some(edited.clone()), out, operations)
+    finish(&base, Some(edited.clone()), out, &operations)
 }
 
 /// The original package, or its findings recast as [`Rule::Original`].
@@ -123,7 +129,7 @@ fn finish(
     base: &Package,
     edit: Option<Package>,
     out: Vec<Diagnostic>,
-    operations: Vec<(PatchClass, Operation)>,
+    operations: &[(PatchClass, Operation)],
 ) -> Result<Review, Vec<Diagnostic>> {
     let mut seen = BTreeSet::new();
     let mut out: Vec<_> = out
@@ -132,7 +138,7 @@ fn finish(
         .collect();
     out.sort_by(|a, b| (&a.file, &a.pointer).cmp(&(&b.file, &b.pointer)));
     match edit {
-        Some(edit) if out.is_empty() => review(base, edit, &operations),
+        Some(edit) if out.is_empty() => review(base, edit, operations),
         _ => Err(out),
     }
 }

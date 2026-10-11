@@ -87,6 +87,16 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
     for path in package.documents.keys() {
         found.check(validate_path(path), path, None);
     }
+    roster(package, found, &roles, &seats);
+    plan(package, found, &roles, &goals);
+    wiring(package, found, &desks);
+    bounds::bounds(package, found);
+    memory::memory(package, &seats, found);
+}
+
+/// Roles, seats and desk membership.
+fn roster(package: &Package, found: &mut Findings, roles: &BTreeSet<&str>, seats: &BTreeSet<&str>) {
+    let manifest = &package.manifest;
     for (i, role) in manifest.roles.iter().enumerate() {
         let at = format!("/roles/{i}/charter");
         if declared_document(package, found, &role.charter, "roles/", &at) {
@@ -95,7 +105,7 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
     }
     for (i, seat) in manifest.seats.iter().enumerate() {
         found.check(
-            reference("role", &seat.role, &roles),
+            reference("role", &seat.role, roles),
             HIVE,
             format!("/seats/{i}/role"),
         );
@@ -121,16 +131,21 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
         });
         for (k, member) in desk.members.iter().enumerate() {
             found.check(
-                reference("seat", member, &seats),
+                reference("seat", member, seats),
                 HIVE,
                 format!("/desks/{d}/members/{k}"),
             );
         }
     }
+}
+
+/// Goal decomposition and missions.
+fn plan(package: &Package, found: &mut Findings, roles: &BTreeSet<&str>, goals: &BTreeSet<&str>) {
+    let manifest = &package.manifest;
     for (g, goal) in manifest.goals.iter().enumerate() {
         for (k, child) in goal.subgoals.iter().enumerate() {
             found.check(
-                reference("goal", child, &goals),
+                reference("goal", child, goals),
                 HIVE,
                 format!("/goals/{g}/subgoals/{k}"),
             );
@@ -146,18 +161,23 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
     }
     for (m, mission) in manifest.missions.iter().enumerate() {
         found.check(
-            reference("role", &mission.role, &roles),
+            reference("role", &mission.role, roles),
             HIVE,
             format!("/missions/{m}/role"),
         );
         for (k, goal) in mission.goals.iter().enumerate() {
             found.check(
-                reference("goal", goal, &goals),
+                reference("goal", goal, goals),
                 HIVE,
                 format!("/missions/{m}/goals/{k}"),
             );
         }
     }
+}
+
+/// Desk links and shared context documents.
+fn wiring(package: &Package, found: &mut Findings, desks: &BTreeSet<&str>) {
+    let manifest = &package.manifest;
     for (section, links) in [
         ("topology", &manifest.topology),
         ("referrals", &manifest.referrals),
@@ -165,7 +185,7 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
         for (i, link) in links.iter().enumerate() {
             for (end, desk) in [("from", &link.from), ("to", &link.to)] {
                 found.check(
-                    reference("desk", desk, &desks),
+                    reference("desk", desk, desks),
                     HIVE,
                     format!("/{section}/{i}/{end}"),
                 );
@@ -183,8 +203,6 @@ pub(crate) fn rules(package: &Package, found: &mut Findings) {
             );
         }
     }
-    bounds::bounds(package, found);
-    memory::memory(package, &seats, found);
 }
 
 /// Check identities for blanks and repeats; return the distinct ones seen.
