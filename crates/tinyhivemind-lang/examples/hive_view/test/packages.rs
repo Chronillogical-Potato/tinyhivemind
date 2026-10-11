@@ -125,3 +125,35 @@ fn the_problem_bank_rejects_zero_divisors_instead_of_panicking() {
         assert!(error.is_some_and(|error| error.contains("zero")), "{kind}");
     }
 }
+
+#[test]
+fn the_problem_bank_rejects_zero_and_overflowing_arguments_instead_of_panicking() {
+    for (kind, args) in [
+        ("lattice", serde_json::json!([0, 5])),
+        ("lattice", serde_json::json!([5, 0])),
+        ("lattice", serde_json::json!([100, 100])),
+        ("modsum", serde_json::json!([0, 2, 7])),
+        ("digitsum", serde_json::json!([2, 0])),
+        ("digitsum", serde_json::json!([2, 64])),
+        ("digitsum", serde_json::json!([10, 4_294_967_296_u64])),
+        ("sqdiff", serde_json::json!([0])),
+    ] {
+        let sim = serde_json::json!({"problems": [
+            {"id": "bad", "kind": kind, "args": args, "statement": "s"}
+        ]});
+        let rejected = std::panic::catch_unwind(|| problems(&sim).is_err());
+        assert_eq!(rejected.ok(), Some(true), "{kind} {args}");
+    }
+}
+
+#[test]
+fn the_problem_bank_still_computes_large_but_fitting_answers() -> Result<()> {
+    let sim = serde_json::json!({"problems": [
+        {"id": "wide", "kind": "lattice", "args": [33, 33], "statement": "s"},
+        {"id": "pow", "kind": "digitsum", "args": [2, 63], "statement": "s"}
+    ]});
+    let bank = problems(&sim)?;
+    assert_eq!(bank[0].answer()?, 7_219_428_434_016_265_740);
+    assert_eq!(bank[1].answer()?, 2 * 9 + 2 + 3 + 3 + 7 + 2 + 0 + 3 + 6 + 8 + 5 + 4 + 7 + 7 + 5 + 8 + 0 + 8 - 2 * 9 - 2 + 0);
+    Ok(())
+}
