@@ -32,12 +32,12 @@ pub(super) struct Limits {
 impl Limits {
     /// A smoke run: enough to exercise every desk once.
     pub(super) const SMOKE: Self = Self {
-        max_turns: 8,
-        max_model_calls: 40,
-        max_wall_seconds: 900,
-        max_sandbox_runs: 4,
-        max_searches: 2,
-        max_spend_usd: 0.5,
+        max_turns: 16,
+        max_model_calls: 80,
+        max_wall_seconds: 1_200,
+        max_sandbox_runs: 6,
+        max_searches: 3,
+        max_spend_usd: 1.0,
     };
     /// A full attempt.
     pub(super) const FULL: Self = Self {

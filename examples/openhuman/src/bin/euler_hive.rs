@@ -58,10 +58,11 @@ use budget::{Budget, Limits};
 use frames::{Frame, MemoryFrame, ProblemFrame, ToolCallFrame, TurnFrame, TurnUsageFrame};
 use tools::{Action, SeatScope, Services};
 
-/// The default model: a reasoning model with native tool calls, priced so a
-/// fourteen-seat hive stays well inside a few dollars. `OPENROUTER_MODEL`
-/// or `--model` overrides it.
-const DEFAULT_MODEL: &str = "deepseek/deepseek-v4-pro";
+/// The default model: a reasoning model with native tool calls that is fast
+/// enough (about 100 tokens a second) for a pipeline of desks to finish
+/// inside the wall-clock limit, and priced so a fourteen-seat hive stays
+/// inside a few dollars. `OPENROUTER_MODEL` or `--model` overrides it.
+const DEFAULT_MODEL: &str = "google/gemini-3.8-flash";
 const OPENROUTER: &str = "https://openrouter.ai/api/v1";
 
 /// The protocol every seat's system prompt ends with.
@@ -71,7 +72,7 @@ Each turn you are given the problem (on your first turn), what your memory recal
 End EVERY turn with exactly one hive action:
 - hive_complete: your finished work for your desk. Give `candidate` when you hold an exact answer in the problem's requested format, and `verdict` (support or object) when you judged one.
 - hive_broadcast: hand one specific piece of work to a named colleague on your desk.
-- hive_refer: ask a linked desk a question; its answer comes back to your desk.
+- hive_refer: ask a linked desk a question; its answer comes back to your desk. Ask only when you cannot finish without that desk's answer: your desk's report already travels down the pipeline on its own when your desk completes.
 Use hive_remember for durable findings, one fact per note; verify-desk seats publish what they reproduced with verified=true. hive_recall searches your memory and the verified pool.
 Text outside tool calls is never delivered. Keep messages under 1500 characters and prefer program output to prose.
 Never state a number or answer you did not compute or check yourself. A web page's claimed answer is a lead, never evidence.";
