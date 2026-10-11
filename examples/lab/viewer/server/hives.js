@@ -17,6 +17,57 @@ export const KNOBS = {
   seeds: { flag: "--seeds", min: 1, max: 200 },
 };
 
+/** The model a live run uses when the request names none. */
+export const LIVE_MODEL_DEFAULT = "openai/gpt-oss-120b:nitro";
+/** The server's own cap on model calls per live run (the binary allows 1..=2000). */
+export const LIVE_MAX_CALLS = 300;
+/** A live run is killed after this long; offline runs have no cap. */
+export const LIVE_TIMEOUT_MS = 30 * 60 * 1000;
+const MODEL = /^[A-Za-z0-9][A-Za-z0-9._\-/]{0,99}(:[A-Za-z0-9._-]{1,30})?$/;
+
+/** True when the server's own env carries a non-empty OPENROUTER_API_KEY. Never returns the key. */
+export function liveAvailable(env) {
+  return typeof env.OPENROUTER_API_KEY === "string" && env.OPENROUTER_API_KEY.trim() !== "";
+}
+
+/**
+ * A model id safe to pass as one argv element: plain characters, an optional
+ * `:variant`, and nothing that turns on web search (`online` anywhere, or a
+ * `:web` variant), since a live run must stay offline apart from the model.
+ */
+export function validModel(id) {
+  return typeof id === "string" && MODEL.test(id) && !/online/i.test(id) && !/:web/i.test(id);
+}
+
+/** The default model a live run offers: OPENROUTER_MODEL when it is valid, else LIVE_MODEL_DEFAULT. */
+export function liveModelDefault(env) {
+  return validModel(env.OPENROUTER_MODEL) ? env.OPENROUTER_MODEL : LIVE_MODEL_DEFAULT;
+}
+
+/**
+ * The live knobs of a run request. `live` absent (or `0`) is an offline run;
+ * `live=1` needs `liveAvailable(env)`, a `validModel` (default
+ * `liveModelDefault(env)`) and `max_calls` within 1..LIVE_MAX_CALLS (default
+ * LIVE_MAX_CALLS). Returns `{ ok: true, value: null | {model, max_calls} }`
+ * or `{ ok: false, error }`.
+ */
+export function parseLive(query, env) {
+  const raw = query.get("live");
+  if (raw == null || raw === "" || raw === "0") return { ok: true, value: null };
+  if (raw !== "1") return { ok: false, error: "live must be 1 or 0" };
+  if (!liveAvailable(env)) return { ok: false, error: "live runs are unavailable: OPENROUTER_API_KEY is not set in the server's environment" };
+  const model = query.get("model") || liveModelDefault(env);
+  if (!validModel(model)) return { ok: false, error: "bad model id (plain characters only; web-search variants such as :online are refused)" };
+  const calls = query.get("max_calls");
+  let max_calls = LIVE_MAX_CALLS;
+  if (calls != null && calls !== "") {
+    if (!/^\d{1,10}$/.test(calls)) return { ok: false, error: "max_calls must be an integer" };
+    max_calls = Number(calls);
+    if (max_calls < 1 || max_calls > LIVE_MAX_CALLS) return { ok: false, error: `max_calls must be within 1..${LIVE_MAX_CALLS}` };
+  }
+  return { ok: true, value: { model, max_calls } };
+}
+
 /** The repository root, four levels above `examples/lab/viewer/server`. */
 export function repoRoot(serverDir) {
   return path.resolve(serverDir, "../../../..");
@@ -78,9 +129,12 @@ export function jsonArgs(dir) {
   return [dir, "--json"];
 }
 
-/** argv for one framed episode run. */
-export function runArgs(dir, knobs = {}, problem = null) {
-  return [dir, "--run", "--frames", ...knobArgs(knobs), ...(problem ? ["--problem", problem] : [])];
+/** argv for one framed episode run; `live` is `parseLive`'s value (the key never goes in argv). */
+export function runArgs(dir, knobs = {}, problem = null, live = null) {
+  return [
+    dir, "--run", "--frames", ...knobArgs(knobs), ...(problem ? ["--problem", problem] : []),
+    ...(live ? ["--live", "--model", live.model, "--max-calls", String(live.max_calls)] : []),
+  ];
 }
 
 /** argv for a compare stream over `packages` (directories), first one positional. */
@@ -139,8 +193,10 @@ export function card(name, structure) {
 /**
  * Runs `hive_view`: builds it once (one shared promise, so concurrent first
  * requests wait on one cargo), caches structures by package mtime, and spawns
- * runs with an argv array and no shell. HIVE_VIEW_BIN swaps the binary (a
- * `.mjs` runs under node), which skips the build; tests and fixtures use it.
+ * runs with an argv array and no shell. Children get `env` as their whole
+ * environment, which is how a live run's OPENROUTER_API_KEY reaches the
+ * binary (never through argv). HIVE_VIEW_BIN swaps the binary (a `.mjs` runs
+ * under node), which skips the build; tests and fixtures use it.
  */
 export function hiveRunner({ repo, env = process.env, log = () => {} }) {
   const override = env.HIVE_VIEW_BIN;
@@ -171,7 +227,7 @@ export function hiveRunner({ repo, env = process.env, log = () => {} }) {
   function capture(args) {
     return new Promise((resolve, reject) => {
       const [cmd, argv] = command(args);
-      const child = spawn(cmd, argv, { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(cmd, argv, { cwd: repo, env, stdio: ["ignore", "pipe", "pipe"] });
       let out = "", err = "";
       child.stdout.on("data", (d) => { out += d; });
       child.stderr.on("data", (d) => { err = (err + d).slice(-STDERR_TAIL); });
@@ -190,25 +246,32 @@ export function hiveRunner({ repo, env = process.env, log = () => {} }) {
     return parsed;
   }
 
-  /** Spawn `args` and call `onLine` per stdout line; resolves to {code, stderr}. Returns {done, kill}. */
-  function stream(args, onLine) {
+  /**
+   * Spawn `args` and call `onLine` per stdout line as each one arrives;
+   * resolves to {code, stderr, timedOut}. `maxMs` (0 = none) kills a child
+   * that runs longer. Returns {done, kill}.
+   */
+  function stream(args, onLine, { maxMs = 0 } = {}) {
     let child = null;
     let killed = false;
     const done = ensureBuilt().then(
       () =>
         new Promise((resolve) => {
-          if (killed) return resolve({ code: null, stderr: "" });
+          if (killed) return resolve({ code: null, stderr: "", timedOut: false });
           const [cmd, argv] = command(args);
-          child = spawn(cmd, argv, { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
+          child = spawn(cmd, argv, { cwd: repo, env, stdio: ["ignore", "pipe", "pipe"] });
           const lines = lineSplitter();
           let err = "";
+          let timedOut = false;
+          const timer = maxMs > 0 ? setTimeout(() => { timedOut = true; child.kill("SIGTERM"); }, maxMs) : null;
           child.stdout.setEncoding("utf8");
           child.stdout.on("data", (d) => lines.push(d).forEach(onLine));
           child.stderr.on("data", (d) => { err = (err + d).slice(-STDERR_TAIL); });
-          child.on("error", (e) => resolve({ code: -1, stderr: e.message }));
+          child.on("error", (e) => { clearTimeout(timer); resolve({ code: -1, stderr: e.message, timedOut }); });
           child.on("close", (code) => {
+            clearTimeout(timer);
             lines.flush().forEach(onLine);
-            resolve({ code, stderr: err.trim() });
+            resolve({ code, stderr: err.trim(), timedOut });
           });
         }),
     );
