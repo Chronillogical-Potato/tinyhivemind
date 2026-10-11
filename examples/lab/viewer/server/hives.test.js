@@ -4,8 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { hiveApi } from "./hive-api.js";
 import {
-  card, compareArgs, findPackage, hiveRunner, lineSplitter, listPackageDirs, packagesRoot, parseKnobs, repoRoot, runArgs, sse,
+  LIVE_MODEL_DEFAULT, card, compareArgs, findPackage, hiveRunner, lineSplitter, listPackageDirs, liveAvailable, liveModelDefault,
+  packagesRoot, parseKnobs, parseLive, repoRoot, runArgs, sse, validModel,
 } from "./hives.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -125,5 +127,128 @@ test("killing a stream stops the child before it finishes", async () => {
   });
   const { code } = await run.done;
   assert.notEqual(code, 0);
-  assert.ok(lines.length < 9, `got ${lines.length} of 9 frames`);
+  assert.ok(lines.length < 9, `got ${lines.length} of the stream's frames`);
+});
+
+// A stand-in for the key: tests never see or need a real one.
+const KEYED = { OPENROUTER_API_KEY: "test-placeholder" };
+
+test("live is available only when the server's env carries a non-empty key", () => {
+  assert.equal(liveAvailable({}), false);
+  assert.equal(liveAvailable({ OPENROUTER_API_KEY: "" }), false);
+  assert.equal(liveAvailable({ OPENROUTER_API_KEY: "   " }), false);
+  assert.equal(liveAvailable(KEYED), true);
+  assert.equal(liveModelDefault({}), LIVE_MODEL_DEFAULT);
+  assert.equal(liveModelDefault({ OPENROUTER_MODEL: "anthropic/claude-x" }), "anthropic/claude-x");
+  assert.equal(liveModelDefault({ OPENROUTER_MODEL: "x/y:online" }), LIVE_MODEL_DEFAULT, "a web-search default is not offered");
+});
+
+test("accepts plain model ids and refuses web-search variants and flag-like ids", () => {
+  for (const ok of ["openai/gpt-oss-120b:nitro", "anthropic/claude-3.5-sonnet", "meta-llama/llama-3.1-8b-instruct:free", "x"]) {
+    assert.equal(validModel(ok), true, ok);
+  }
+  for (const bad of ["openai/gpt-4o:online", "openai/gpt-4o:ONLINE", "perplexity/sonar-online", "x/y:web", "--help", "-m", "a b", "a;rm", "a:b:c", "", null, "a".repeat(101), "a/b:" + "c".repeat(31)]) {
+    assert.equal(validModel(bad), false, String(bad));
+  }
+});
+
+test("parses the live knobs, bounding max_calls and refusing live without a key", () => {
+  const q = (s) => new URLSearchParams(s);
+  assert.deepEqual(parseLive(q(""), KEYED), { ok: true, value: null });
+  assert.deepEqual(parseLive(q("live=0&model=x:online"), {}), { ok: true, value: null }, "offline ignores the model");
+  assert.equal(parseLive(q("live=1"), {}).ok, false);
+  assert.match(parseLive(q("live=1"), {}).error, /unavailable/);
+  assert.deepEqual(parseLive(q("live=1"), KEYED).value, { model: LIVE_MODEL_DEFAULT, max_calls: 300 });
+  assert.deepEqual(parseLive(q("live=1&model=a/b&max_calls=1"), KEYED).value, { model: "a/b", max_calls: 1 });
+  assert.equal(parseLive(q("live=1&max_calls=300"), KEYED).value.max_calls, 300);
+  for (const bad of ["live=1&max_calls=0", "live=1&max_calls=301", "live=1&max_calls=2000", "live=1&max_calls=-1", "live=1&max_calls=1.5",
+    "live=1&model=openai/gpt-4o:online", "live=1&model=--max-calls", "live=yes"]) {
+    assert.equal(parseLive(q(bad), KEYED).ok, false, bad);
+  }
+});
+
+test("puts live knobs in separate argv elements and never the key", () => {
+  const args = runArgs("/p/ms", { seed: 2 }, null, { model: "a/b:nitro", max_calls: 50 });
+  assert.deepEqual(args, ["/p/ms", "--run", "--frames", "--seed", "2", "--live", "--model", "a/b:nitro", "--max-calls", "50"]);
+  assert.ok(!args.some((a) => a.includes("test-placeholder")));
+});
+
+test("a multi-desk run streams desk-tagged rounds, referrals and desk endings", async () => {
+  const root = gallery("math-swarm");
+  const runner = hiveRunner({ repo: here, env: { HIVE_VIEW_BIN: FAKE } });
+  const frames = [];
+  const { code } = await runner.stream(runArgs(path.join(root, "math-swarm")), (l) => frames.push(JSON.parse(l))).done;
+  assert.equal(code, 0);
+  assert.ok(frames.filter((f) => f.type === "round").every((f) => f.desk && f.desk_round >= 1));
+  const refs = frames.filter((f) => f.type === "referral");
+  assert.ok(refs.some((r) => r.accepted) && refs.some((r) => !r.accepted && r.reason));
+  assert.equal(frames.filter((f) => f.type === "desk_end").length, 5);
+  assert.equal(frames.at(-1).desk, "synthesis");
+  assert.ok(!frames.some((f) => f.type === "usage"), "usage is live only");
+});
+
+test("a live run gets the key through env only and ends with a usage frame", async () => {
+  const root = gallery("review-board");
+  const dir = path.join(root, "review-board");
+  const live = parseLive(new URLSearchParams("live=1&max_calls=20"), KEYED).value;
+  const keyed = hiveRunner({ repo: here, env: { HIVE_VIEW_BIN: FAKE, ...KEYED } });
+  const frames = [];
+  const { code } = await keyed.stream(runArgs(dir, {}, null, live), (l) => frames.push(JSON.parse(l))).done;
+  assert.equal(code, 0);
+  assert.equal(frames[0].live, true);
+  assert.equal(frames[0].model, LIVE_MODEL_DEFAULT);
+  assert.equal(frames.at(-2).type, "usage");
+  const bare = hiveRunner({ repo: here, env: { HIVE_VIEW_BIN: FAKE } });
+  const refused = await bare.stream(runArgs(dir, {}, null, live), () => {}).done;
+  assert.notEqual(refused.code, 0);
+  assert.match(refused.stderr, /OPENROUTER_API_KEY/);
+});
+
+test("a stream past its time cap is killed and reported as timed out", async () => {
+  const root = gallery("math-swarm");
+  const runner = hiveRunner({ repo: here, env: { HIVE_VIEW_BIN: FAKE } });
+  const { code, timedOut } = await runner.stream(runArgs(path.join(root, "math-swarm")), () => {}, { maxMs: 30 }).done;
+  assert.notEqual(code, 0);
+  assert.equal(timedOut, true);
+});
+
+/** A just-enough ServerResponse: records status, headers and body. */
+function fakeRes() {
+  const res = { statusCode: 200, headers: {}, body: "", ended: null, handlers: {} };
+  res.setHeader = (k, v) => { res.headers[k] = v; };
+  res.writeHead = (code, h) => { res.statusCode = code; Object.assign(res.headers, h); };
+  res.write = (chunk) => { res.body += chunk; };
+  res.on = (ev, fn) => { res.handlers[ev] = fn; };
+  res.ended = new Promise((resolve) => { res.end = (chunk = "") => { res.body += chunk; resolve(res); }; });
+  return res;
+}
+
+test("the listing reports live availability and the default model, never the key", async () => {
+  const root = gallery("review-board");
+  for (const [env, available] of [[{}, false], [KEYED, true]]) {
+    const api = hiveApi({ repo: here, env: { HIVE_VIEW_BIN: FAKE, HIVE_PACKAGES: root, OPENROUTER_MODEL: "a/b:nitro", ...env } });
+    const res = fakeRes();
+    await api.handle("/hives", new URLSearchParams(), {}, res);
+    const body = JSON.parse((await res.ended).body);
+    assert.equal(body.live_available, available);
+    assert.equal(body.live_model_default, "a/b:nitro");
+    assert.ok(!JSON.stringify(body).includes("test-placeholder"));
+  }
+});
+
+test("the run route refuses live without a key and bad live knobs with a 400", async () => {
+  const root = gallery("review-board");
+  const run = async (env, qs) => {
+    const api = hiveApi({ repo: here, env: { HIVE_VIEW_BIN: FAKE, HIVE_PACKAGES: root, ...env } });
+    const res = fakeRes();
+    await api.handle("/hives/review-board/run", new URLSearchParams(qs), {}, res);
+    return res.ended;
+  };
+  assert.equal((await run({}, "live=1")).statusCode, 400);
+  assert.equal((await run(KEYED, "live=1&model=openai/gpt-4o:online")).statusCode, 400);
+  assert.equal((await run(KEYED, "live=1&max_calls=301")).statusCode, 400);
+  const ok = await run(KEYED, "live=1&max_calls=5");
+  assert.equal(ok.statusCode, 200);
+  assert.match(ok.body, /"type":"usage"/);
+  assert.match(ok.body, /event: done/);
 });
