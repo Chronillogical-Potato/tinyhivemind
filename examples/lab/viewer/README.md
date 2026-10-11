@@ -180,7 +180,8 @@ and problem in the player.
   `hive_view ... --live --model <id> --max-calls <n>`. It is a 400 unless
   `live_available`, unless the model matches
   `^[A-Za-z0-9][A-Za-z0-9._\-/]{0,99}(:[A-Za-z0-9._-]{1,30})?$` and contains
-  no `online` (any case) or `:web`, and unless `max_calls` is 1..300 (default
+  none of `online`, `search`, `sonar` or `web` (any case, anywhere; the same
+  list `hive_view --live` refuses), and unless `max_calls` is 1..300 (default
   300). A live run is stopped after 30 minutes; offline runs have no cap.
 - `GET /api/compare?packages=a,b&seeds=N` streams `seed` events and a final
   `summary`, then `done` or `error`.
@@ -205,8 +206,8 @@ is a 400. A problem id must be short and alphanumeric. The child is killed
 when the client disconnects. A live run spends money on the server's
 OpenRouter key, so anyone who can reach the port can spend it, up to 300
 calls a run. The key reaches `hive_view` only through the environment it
-inherits, never argv, a response or a log; web-search model variants are
-refused so a live run cannot browse. Bind to localhost, or keep the port off untrusted
+inherits, never argv, a response or a log; model ids naming `online`, `search`,
+`sonar` or `web` are refused so a live run cannot browse. Bind to localhost, or keep the port off untrusted
 networks.
 
 ## Checks

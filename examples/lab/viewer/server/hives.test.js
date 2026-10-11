@@ -152,6 +152,15 @@ test("accepts plain model ids and refuses web-search variants and flag-like ids"
   }
 });
 
+test("refuses every model id hive_view's check_model refuses: online, search, sonar or web anywhere", () => {
+  for (const bad of ["perplexity/sonar", "perplexity/Sonar-pro", "openai/gpt-4o-search-preview", "x/websurfer", "x/y:Web",
+    "google/gemini-2.0-flash:online", "x/research-SEARCH:nitro", "acme/online-model"]) {
+    assert.equal(validModel(bad), false, bad);
+  }
+  assert.equal(parseLive(new URLSearchParams("live=1&model=perplexity/sonar"), KEYED).ok, false);
+  assert.equal(validModel("openai/gpt-oss-120b:nitro"), true, "the default model is still accepted");
+});
+
 test("parses the live knobs, bounding max_calls and refusing live without a key", () => {
   const q = (s) => new URLSearchParams(s);
   assert.deepEqual(parseLive(q(""), KEYED), { ok: true, value: null });
